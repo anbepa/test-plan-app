@@ -1,6 +1,11 @@
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { ApplicationConfig } from '@angular/core';
+// Importa 'withFetch' junto con provideHttpClient y withInterceptorsFromDi
+import { provideHttpClient, withInterceptorsFromDi, withFetch } from '@angular/common/http';
 
 export const appConfig: ApplicationConfig = {
-  providers: [provideZoneChangeDetection({ eventCoalescing: true }), provideClientHydration(withEventReplay())]
+  providers: [
+    // Configura provideHttpClient para usar withInterceptorsFromDi y AHORA también withFetch()
+    provideHttpClient(withInterceptorsFromDi(), withFetch())
+    // provideHttpClient() puede recibir varias opciones, withInterceptorsFromDi() y withFetch() son dos de ellas
+  ]
 };
