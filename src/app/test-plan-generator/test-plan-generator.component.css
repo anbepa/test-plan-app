@@ -1,46 +1,44 @@
 /* src/app/test-plan-generator/test-plan-generator.component.css */
 
 /* PALETA DE COLORES SOBRIOS */
-/* Primary: #4a6d7c (Un gris azulado oscuro) */
-/* Secondary: #8a9b8c (Un verde grisáceo suave) */
-/* Accent/Highlight: #c8a2c8 (Un lavanda/malva suave) - Usado con moderación */
-/* Neutrals: #f8f9fa (Gris muy claro), #e9ecef (Gris claro), #dee2e6 (Gris medio), #adb5bd (Gris oscuro) */
-/* Error: #dc3545 (Rojo, se mantiene para errores claros) */
+/* Ya definida en comentarios, no ocupa espacio en el bundle final */
 
-
-/* Estilos generales para el cuerpo de la página */
+/* Estilos generales para el cuerpo de la página (se aplican a 'body' en el HTML, pero este CSS está en un componente) */
+/* Es posible que estos estilos de 'body' no estén siendo aplicados al body global si se usa encapsulación de estilos. */
+/* Si este CSS es solo para el componente, mover 'body' a styles.css global reduciría su tamaño aquí. */
+/* Asumo que se mantiene aquí por ahora si hay una razón específica de encapsulación. */
 body {
-    background-color: #f8f9fa; /* Gris muy claro */
+    background-color: #f8f9fa;
     margin: 0;
     padding: 0;
     font-family: 'Segoe UI', Calibri, Arial, sans-serif;
     line-height: 1.6;
-    color: #343a40; /* Texto oscuro */
+    color: #343a40;
 }
 
 /* Contenedor principal de la aplicación */
 .container {
-    max-width: 960px; /* Aumentado para dar más espacio a las textareas */
+    max-width: 960px;
     margin: 30px auto;
     padding: 30px;
-    border: 1px solid #dee2e6; /* Borde gris medio */
+    border: 1px solid #dee2e6;
     border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Sombra más pronunciada */
-    background-color: #ffffff; /* Fondo blanco puro dentro del contenedor */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    background-color: #fff; /* Abreviado #ffffff a #fff */
 }
 
 /* Estilos para títulos */
 h1 {
-    color: #4a6d7c; /* Primary */
+    color: #4a6d7c;
     text-align: center;
     margin-bottom: 25px;
-    border-bottom: 2px solid #e9ecef; /* Línea suave bajo el título principal */
+    border-bottom: 2px solid #e9ecef;
     padding-bottom: 15px;
     font-size: 2.2em;
 }
 
 h2 {
-    color: #4a6d7c; /* Primary */
+    color: #4a6d7c;
     margin-bottom: 20px;
     font-size: 1.8em;
     padding-bottom: 5px;
@@ -59,22 +57,21 @@ h2 {
 .form-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 20px; /* Espacio entre los grupos de formulario */
+    gap: 20px;
 }
 
 @media (min-width: 768px) {
     .form-grid {
-        grid-template-columns: repeat(2, 1fr); /* Dos columnas en pantallas más grandes */
+        grid-template-columns: repeat(2, 1fr);
     }
-    /* Extender la descripción y criterios de aceptación a lo ancho completo */
-    .form-group:nth-child(4), /* Descripción */
-    .form-group:nth-child(5) { /* Criterios de Aceptación */
+    .form-group:nth-child(4),
+    .form-group:nth-child(5) {
         grid-column: span 2;
     }
 }
 
 .form-group {
-    margin-bottom: 0; /* Eliminado el margen inferior para usar el gap de grid */
+    margin-bottom: 0;
 }
 
 .form-group label {
@@ -92,25 +89,25 @@ h2 {
     border: 1px solid #ced4da;
     border-radius: 5px;
     font-size: 1em;
-    box-sizing: border-box; /* Incluye padding y borde en el ancho total */
+    box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-group input[type="text"]:focus,
 .form-group textarea:focus,
 .form-group select:focus {
-    border-color: #8a9b8c; /* Secondary on focus */
-    box-shadow: 0 0 0 0.2rem rgba(138, 155, 140, 0.25); /* Sombra suave */
+    border-color: #8a9b8c;
+    box-shadow: 0 0 0 0.2rem rgba(138, 155, 140, 0.25);
     outline: none;
 }
 
 .form-group textarea {
-    resize: vertical; /* Permite redimensionar verticalmente */
-    min-height: 100px; /* Altura mínima para textareas */
+    resize: vertical;
+    min-height: 100px;
 }
 
 .required-indicator {
-    color: #dc3545; /* Rojo para el asterisco de requerido */
+    color: #dc3545;
     margin-left: 4px;
 }
 
@@ -133,32 +130,32 @@ h2 {
     font-size: 1em;
     font-weight: 600;
     transition: background-color 0.2s ease, transform 0.1s ease;
-    display: inline-flex; /* Permite al spinner y texto alinearse */
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    text-decoration: none; /* En caso de que se usen en enlaces */
+    text-decoration: none;
 }
 
 .button-primary {
-    background-color: #4a6d7c; /* Primary */
-    color: white;
+    background-color: #4a6d7c;
+    color: #fff; /* Abreviado white a #fff */
     margin-top: 25px;
-    width: 100%; /* Ocupa todo el ancho en el formulario */
+    width: 100%;
 }
 
 .button-primary:hover {
-    background-color: #3b5a6b; /* Un poco más oscuro */
+    background-color: #3b5a6b;
     transform: translateY(-1px);
 }
 
 .button-primary:disabled {
-    background-color: #adb5bd; /* Gris para deshabilitado */
+    background-color: #adb5bd;
     cursor: not-allowed;
     transform: none;
 }
 
 .button-secondary {
-    background-color: #e9ecef; /* Gris claro */
+    background-color: #e9ecef;
     color: #343a40;
     margin-top: 15px;
     padding: 8px 15px;
@@ -171,11 +168,11 @@ h2 {
 }
 
 .button-edit {
-    background-color: #c8a2c8; /* Accent color */
-    color: white;
+    background-color: #c8a2c8;
+    color: #fff; /* Abreviado white a #fff */
     padding: 8px 15px;
     font-size: 0.9em;
-    margin-right: 10px; /* Espacio entre Editar y Regenerar */
+    margin-right: 10px;
 }
 
 .button-edit:hover {
@@ -183,8 +180,8 @@ h2 {
 }
 
 .button-generate {
-    background-color: #8a9b8c; /* Secondary color */
-    color: white;
+    background-color: #8a9b8c;
+    color: #fff; /* Abreviado white a #fff */
     padding: 8px 15px;
     font-size: 0.9em;
 }
@@ -194,11 +191,11 @@ h2 {
 }
 
 .button-cancel {
-    background-color: #dc3545; /* Error color */
-    color: white;
+    background-color: #dc3545;
+    color: #fff; /* Abreviado white a #fff */
     padding: 8px 15px;
     font-size: 0.9em;
-    margin-left: 10px; /* Espacio entre confirmar y cancelar */
+    margin-left: 10px;
 }
 
 .button-cancel:hover {
@@ -207,9 +204,9 @@ h2 {
 
 /* --- Mensajes de Error --- */
 .error-message {
-    background-color: #ffebe8; /* Fondo rojo claro */
-    color: #dc3545; /* Texto rojo */
-    border: 1px solid #f0b4b4; /* Borde rojo claro */
+    background-color: #ffebe8;
+    color: #dc3545;
+    border: 1px solid #f0b4b4;
     padding: 12px;
     margin-top: 20px;
     border-radius: 5px;
@@ -233,11 +230,11 @@ h2 {
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    margin-bottom: 25px; /* Espacio entre cada HU */
-    position: relative; /* Para posicionar el botón de eliminar */
+    margin-bottom: 25px;
+    position: relative;
     display: flex;
-    flex-direction: column; /* Organiza el contenido en columna */
-    gap: 15px; /* Espacio entre los elementos directos del bloque */
+    flex-direction: column;
+    gap: 15px;
 }
 
 .hu-header {
@@ -256,8 +253,8 @@ h2 {
 }
 
 .sprint-badge {
-    background-color: #8a9b8c; /* Secondary color */
-    color: white;
+    background-color: #8a9b8c;
+    color: #fff; /* Abreviado white a #fff */
     padding: 5px 10px;
     border-radius: 4px;
     font-size: 0.85em;
@@ -267,99 +264,96 @@ h2 {
 .hu-content-block {
     display: flex;
     flex-direction: column;
-    gap: 20px; /* Espacio entre las secciones de Alcance y Casos de Prueba */
+    gap: 20px;
 }
 
 details {
     border: 1px solid #e9ecef;
     border-radius: 6px;
     padding: 10px;
-    background-color: #ffffff;
+    background-color: #fff; /* Abreviado #ffffff a #fff */
     box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-    transition: all 0.3s ease-in-out; /* Transición suave para la apertura/cierre */
+    transition: all 0.3s ease-in-out;
 }
 
 details[open] {
-    padding-bottom: 20px; /* Más padding cuando está abierto */
+    padding-bottom: 20px;
 }
 
 details summary {
     font-weight: 600;
     color: #4a6d7c;
     cursor: pointer;
-    padding: 5px; /* Espacio alrededor del texto del summary */
+    padding: 5px;
     display: flex;
     align-items: center;
-    list-style: none; /* Elimina el marcador por defecto */
+    list-style: none;
     position: relative;
 }
 
 details summary::-webkit-details-marker {
-    display: none; /* Oculta el marcador en WebKit */
+    display: none;
 }
 
 details summary::before {
-    content: '▶'; /* Triángulo de play */
+    content: '▶';
     margin-right: 10px;
     transition: transform 0.2s ease;
     display: inline-block;
 }
 
 details[open] summary::before {
-    content: '▼'; /* Triángulo hacia abajo cuando abierto */
-    transform: rotate(0deg); /* No rotar, solo cambiar icono */
+    content: '▼';
+    transform: rotate(0deg);
 }
-
 
 .editable-block {
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px dashed #e9ecef; /* Línea de división para el contenido editable */
+    border-top: 1px dashed #e9ecef;
 }
 
 .edit-controls {
     display: flex;
-    gap: 10px; /* Espacio entre los botones de control */
+    gap: 10px;
     margin-bottom: 15px;
-    flex-wrap: wrap; /* Permite que los botones se envuelvan en pantallas pequeñas */
+    flex-wrap: wrap;
 }
 
 /* Common style for preformatted and textarea content */
 .generated-text,
 textarea.scrollable-content {
-    white-space: pre-wrap; /* Mantiene saltos de línea y envuelve el texto */
-    word-wrap: break-word; /* Rompe palabras largas para evitar desbordamiento */
-    background-color: #f8f9fa; /* Fondo suave para el texto */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background-color: #f8f9fa;
     border: 1px solid #e9ecef;
     padding: 15px;
     border-radius: 5px;
-    font-family: monospace; /* Fuente monoespaciada para código/texto estructurado */
+    font-family: monospace;
     font-size: 0.95em;
     line-height: 1.5;
     color: #343a40;
-    overflow-x: auto; /* Permite desplazamiento horizontal si es absolutamente necesario (raro con word-wrap) */
-    max-height: 300px; /* Altura máxima con scroll si el contenido es muy largo */
-    width: 100%; /* Asegura que ocupe todo el ancho disponible */
-    box-sizing: border-box; /* Incluye padding y border en el ancho/alto */
+    overflow-x: auto;
+    max-height: 300px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 textarea.scrollable-content {
-    min-height: 200px; /* Altura mínima para el área de edición, se puede ajustar */
-    /* width: 100%; already handled by general textarea style, but good to reinforce */
+    min-height: 200px;
 }
-
 
 /* Regenerate with Technique Section */
 .regen-picker-inline {
-    background-color: #f0f4f7; /* Un fondo ligeramente diferente para destacar */
+    background-color: #f0f4f7;
     border: 1px solid #d0dbe2;
     border-radius: 6px;
     padding: 15px;
     margin-top: 15px;
     display: flex;
-    flex-direction: column; /* Stack elements vertically by default */
-    gap: 10px; /* Space between label, select, and buttons */
-    align-items: flex-start; /* Align items to the start */
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
 }
 
 .regen-picker-inline label {
@@ -368,7 +362,7 @@ textarea.scrollable-content {
 }
 
 .regen-technique-select {
-    width: 100%; /* Ocupa todo el ancho disponible en su contenedor */
+    width: 100%;
     padding: 10px;
     border: 1px solid #ced4da;
     border-radius: 5px;
@@ -377,17 +371,17 @@ textarea.scrollable-content {
 
 .regen-buttons-container {
     display: flex;
-    gap: 10px; /* Espacio entre los botones */
-    margin-top: 5px; /* Ajuste para separar del select */
-    width: 100%; /* Ensure buttons container takes full width */
-    justify-content: flex-start; /* Align buttons to the start */
-    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+    gap: 10px;
+    margin-top: 5px;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
 }
 
 /* Spinner */
 .spinner {
-    border: 3px solid #f3f3f3; /* Light grey */
-    border-top: 3px solid #4a6d7c; /* Blue */
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #4a6d7c;
     border-radius: 50%;
     width: 16px;
     height: 16px;
@@ -427,11 +421,11 @@ textarea.scrollable-content {
 .preview-section {
     margin-bottom: 30px;
     padding: 20px;
-    border: 1px solid #adb5bd; /* Borde gris más oscuro */
+    border: 1px solid #adb5bd;
     border-radius: 6px;
     background-color: #fcfcfc;
     box-shadow: 0 1px 5px rgba(0,0,0,0.04);
-    text-align: left; /* Alinea el contenido interno a la izquierda */
+    text-align: left;
 }
 
 /* Estilo para el título de la sección de previsualización */
@@ -446,17 +440,17 @@ textarea.scrollable-content {
 
 /* Estilo para el área de texto de previsualización */
 .download-preview {
-    background-color: #f0f4f7; /* Un gris azulado más claro */
+    background-color: #f0f4f7;
     border: 1px solid #d0dbe2;
     padding: 20px;
     border-radius: 5px;
-    font-family: 'Consolas', 'Courier New', monospace; /* Fuente monoespaciada para previsualización */
+    font-family: 'Consolas', 'Courier New', monospace;
     font-size: 0.9em;
     color: #343a40;
     min-height: 250px;
-    overflow: auto; /* Scroll si el contenido es demasiado grande */
-    white-space: pre-wrap; /* Muy importante para que el texto se envuelva */
-    word-wrap: break-word; /* Rompe palabras largas */
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .button-download {
@@ -490,7 +484,7 @@ textarea.scrollable-content {
     font-size: 0.95em;
     line-height: 1.6;
     color: #555;
-    margin-top: 15px; /* Espacio debajo del summary */
+    margin-top: 15px;
 }
 
 /* Botón flotante para añadir HU (móviles) */
@@ -499,12 +493,12 @@ textarea.scrollable-content {
     bottom: 20px;
     right: 20px;
     z-index: 1000;
-    display: none; /* Oculto por defecto, se muestra en móviles */
+    display: none;
     padding: 15px 25px;
-    border-radius: 50px; /* Botón circular o con bordes muy redondeados */
+    border-radius: 50px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     font-size: 1.1em;
-    width: auto; /* Ancho automático */
+    width: auto;
 }
 
 /* Ayuda del icono */
@@ -541,40 +535,37 @@ textarea.scrollable-content {
     }
 
     .form-grid {
-        grid-template-columns: 1fr; /* Una columna en pantallas pequeñas */
+        grid-template-columns: 1fr;
     }
 
-    .form-group:nth-child(4), /* Descripción */
-    .form-group:nth-child(5) { /* Criterios de Aceptación */
-        grid-column: span 1; /* Reset a una columna */
+    .form-group:nth-child(4),
+    .form-group:nth-child(5) {
+        grid-column: span 1;
     }
 
     .button-primary {
         margin-top: 20px;
     }
 
-    /* Mostrar botón fijo para añadir HU en móviles */
     .add-hu-fixed-button {
         display: block;
     }
 
-    /* Ajustes para los controles de edición */
     .edit-controls {
         flex-direction: column;
-        align-items: stretch; /* Estira los botones para ocupar el ancho */
+        align-items: stretch;
     }
 
     .edit-controls button {
         width: 100%;
         margin-right: 0;
-        margin-bottom: 10px; /* Espacio vertical entre botones */
+        margin-bottom: 10px;
     }
 
     .edit-controls button:last-child {
         margin-bottom: 0;
     }
 
-    /* Ajustes para la sección de regeneración con técnica */
     .regen-picker-inline {
         flex-direction: column;
         align-items: stretch;
