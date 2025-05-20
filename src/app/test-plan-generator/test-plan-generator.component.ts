@@ -7,7 +7,10 @@ import { catchError, finalize, tap } from 'rxjs/operators';
 import { of, Subscription } from 'rxjs';
 import { saveAs } from 'file-saver';
 
-import { HUData } from '../models/hu-data.model';
+import { HUData } from '../models/hu-data.model'; // Ensure this path is correct
+
+// Define the type for the base names of static sections passed from the template
+type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
 
 @Component({
@@ -40,14 +43,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   loadingScenarios: boolean = false;
   scenariosError: string | null = null;
 
-  // --- Estado de Visibilidad del Formulario ---
-  // showForm: boolean = true; // Se quita la propiedad ya que el botón de ocultar se elimina
-
   // --- Propiedad para el estado de validez del formulario ---
   isFormInvalid: boolean = true; // Inicialmente el formulario es inválido
 
   // --- Propiedad para el Título del Plan ---
-  testPlanTitle: string = ''; // Esta propiedad se generará y mostrará en el HTML y el documento
+  testPlanTitle: string = '';
 
   // --- Propiedades para el contenido editable de secciones estáticas ---
   repositoryLink: string = 'https://dev.azure.com/YOUR_ORG/YOUR_PROJECT/_git/NU0139001_SAF_MR_Test - Repos (visualstudio.com)';
@@ -65,41 +65,39 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   editingAssumptions: boolean = false;
   editingTeam: boolean = false;
 
+  // --- Propiedades para el estado de apertura/cierre de <details> en secciones estáticas ---
+  isRepositoryLinkDetailsOpen: boolean = true;
+  isOutOfScopeDetailsOpen: boolean = true;
+  isStrategyDetailsOpen: boolean = true;
+  isLimitationsDetailsOpen: boolean = true;
+  isAssumptionsDetailsOpen: boolean = true;
+  isTeamDetailsOpen: boolean = true;
+
+
   // --- Referencia al formulario en el template ---
   @ViewChild('huForm') huFormDirective!: NgForm;
-  private formStatusSubscription!: Subscription; // Para manejar la suscripción
+  private formStatusSubscription!: Subscription;
 
-  // --- Constructor ---
   constructor(private geminiService: GeminiService) { }
 
-  // --- Ciclos de Vida ---
-
   ngAfterViewInit(): void {
-      // Nos suscribimos a los cambios de estado del formulario después de que la vista se haya inicializado
       if (this.huFormDirective && this.huFormDirective.statusChanges) {
-          // Usamos setTimeout para evitar el error ExpressionChangedAfterItHasBeenCheckedError
-          // porque estamos actualizando una propiedad que afecta la vista después de que ha sido verificada.
           this.formStatusSubscription = this.huFormDirective.statusChanges.subscribe(status => {
               setTimeout(() => {
-                this.isFormInvalid = status !== 'VALID'; // 'INVALID' o 'PENDING' o 'DISABLED' -> inválido
+                this.isFormInvalid = status !== 'VALID';
               });
           });
       }
   }
 
   ngOnDestroy(): void {
-      // Asegurarse de desuscribirse para evitar fugas de memoria
       if (this.formStatusSubscription) {
           this.formStatusSubscription.unsubscribe();
       }
   }
 
-  // --- Métodos de Gestión de HU y Generación ---
-
-  // Método llamado al enviar el formulario para añadir una nueva HU
   addHuAndGenerateData(): void {
     if (this.huFormDirective.invalid) {
-      // Si el formulario no es válido, marca los campos como tocados para mostrar errores.
       Object.keys(this.huFormDirective.controls).forEach(key => {
         this.huFormDirective.controls[key].markAsTouched();
       });
@@ -110,7 +108,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     const huId = this.currentHuId.trim();
     const huTitle = this.currentHuTitle.trim();
 
-    // Crear el objeto HUData para la nueva HU
     const newHu: HUData = {
         originalInput: {
            id: this.currentHuId,
@@ -123,59 +120,48 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         id: huId,
         title: huTitle,
         sprint: this.currentSprint.trim(),
-
-        // Inicializar datos generados y estados
         generatedScope: '',
         generatedScenarios: [],
         generatedTestCaseTitles: '',
-
         editingScope: false,
         editingScenarios: false,
-
-        loadingScope: true, // Inicia carga del alcance
+        loadingScope: true,
         errorScope: null,
-        loadingScenarios: true, // Inicia carga de escenarios
+        loadingScenarios: true,
         errorScenarios: null,
-
         showRegenTechniquePicker: false,
-        regenSelectedTechnique: ''
+        regenSelectedTechnique: '',
+        isScopeDetailsOpen: true, // Default to open
+        isScenariosDetailsOpen: true // Default to open
     };
 
-     // Añadir la nueva HU a la lista
      this.huList.push(newHu);
-
-     // Iniciar indicadores de carga globales
      this.loadingSections = true; this.sectionsError = null;
      this.loadingScenarios = true; this.scenariosError = null;
 
-     // *** LLAMADA API: Generar Alcance inicial ***
-     // Asumo que generateTestPlanSections devuelve el alcance.
      this.geminiService.generateTestPlanSections(newHu.originalInput.description, newHu.originalInput.acceptanceCriteria)
          .pipe(
              tap(scopeText => {
                  newHu.generatedScope = scopeText;
-                 newHu.loadingScope = false; // Finaliza carga específica
+                 newHu.loadingScope = false;
              }),
              catchError(error => {
                  console.error(`Error generating scope for HU ${newHu.id}:`, error);
-                 newHu.errorScope = error || 'Error al generar alcance.';
+                 newHu.errorScope = (typeof error === 'string' ? error : error?.message) || 'Error al generar alcance.';
                  newHu.loadingScope = false;
                  this.sectionsError = 'Error al generar el alcance para una HU.';
-                 return of(''); // Continúa el observable
+                 return of('');
              }),
              finalize(() => {
-               // Ya no se finaliza this.loadingSections aquí directamente, se usa checkOverallLoadingStatus
                this.checkOverallLoadingStatus();
-               this.updateTestPlanTitle(); // Actualizar el título del plan
-               this.updatePreview(); // Actualiza la previsualización
-               // *** DISPARAR GENERACIÓN DE ESCENARIOS DESPUÉS DEL ALCANCE ***
+               this.updateTestPlanTitle();
+               this.updatePreview();
                this.generateInitialScenarios(newHu);
              })
          )
-         .subscribe(); // Ejecuta el observable
+         .subscribe();
   }
 
-  // Método para generar escenarios iniciales (separado para claridad)
   private generateInitialScenarios(hu: HUData): void {
       hu.loadingScenarios = true;
       hu.errorScenarios = null;
@@ -183,42 +169,38 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       this.geminiService.generateScenarios(
           hu.originalInput.description,
           hu.originalInput.acceptanceCriteria,
-          hu.originalInput.selectedTechnique // Usar la técnica seleccionada en el formulario principal
+          hu.originalInput.selectedTechnique
       )
       .pipe(
           tap(scenarios => {
               hu.generatedScenarios = scenarios;
               hu.generatedTestCaseTitles = this.formatScenarioTitles(scenarios);
-              hu.loadingScenarios = false; // Finaliza carga específica
+              hu.loadingScenarios = false;
           }),
           catchError(error => {
               console.error(`Error generating scenarios for HU ${hu.id}:`, error);
-              hu.errorScenarios = error || 'Error al generar escenarios.';
+              hu.errorScenarios = (typeof error === 'string' ? error : error?.message) || 'Error al generar escenarios.';
               hu.loadingScenarios = false;
               this.scenariosError = 'Error al generar los escenarios para una HU.';
-              return of([]); // Continúa el observable
+              return of([]);
           }),
           finalize(() => {
-              this.checkOverallLoadingStatus(); // Revisa el estado global de carga
-              this.resetCurrentInputs(); // Limpia el formulario principal
-              this.updatePreview(); // Actualiza la previsualización
+              this.checkOverallLoadingStatus();
+              this.resetCurrentInputs();
+              this.updatePreview();
           })
       )
-      .subscribe(); // Ejecuta el observable
+      .subscribe();
   }
 
   private checkOverallLoadingStatus(): void {
-    // Verifica si alguna HU aún está cargando su alcance o escenarios
     this.loadingSections = this.huList.some(hu => hu.loadingScope);
     this.loadingScenarios = this.huList.some(hu => hu.loadingScenarios);
   }
 
-  // --- Métodos de Edición y Regeneración por Bloque ---
-
-  // Alterna el modo de edición para un bloque (alcance o escenarios)
   toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
       if (section === 'scenarios' && hu.showRegenTechniquePicker) {
-           this.cancelScenarioRegeneration(hu);
+           this.cancelScenarioRegeneration(hu); // Exit regen mode if active
       }
 
       const wasEditingScope = hu.editingScope;
@@ -226,74 +208,89 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
       if (section === 'scope') {
           hu.editingScope = !hu.editingScope;
+          if (hu.editingScope) hu.isScopeDetailsOpen = true; // Ensure details open when starting edit
       } else if (section === 'scenarios') {
           hu.editingScenarios = !hu.editingScenarios;
+          if (hu.editingScenarios) hu.isScenariosDetailsOpen = true; // Ensure details open when starting edit
       }
 
-      // Si salió del modo edición, actualiza la previsualización
+      // If exited edit mode, update preview
       if ((section === 'scope' && wasEditingScope && !hu.editingScope) ||
           (section === 'scenarios' && wasEditingScenarios && !hu.editingScenarios)) {
            this.updatePreview();
       }
   }
 
-  // Alterna el modo de edición para una sección estática
-  toggleStaticEdit(section: string): void {
-    switch (section) {
-      case 'repositoryLink':
-        this.editingRepositoryLink = !this.editingRepositoryLink;
-        break;
-      case 'outOfScope':
-        this.editingOutOfScope = !this.editingOutOfScope;
-        break;
-      case 'strategy':
-        this.editingStrategy = !this.editingStrategy;
-        break;
-      case 'limitations':
-        this.editingLimitations = !this.editingLimitations;
-        break;
-      case 'assumptions':
-        this.editingAssumptions = !this.editingAssumptions;
-        break;
-      case 'team':
-        this.editingTeam = !this.editingTeam;
-        break;
-    }
-    // Si se sale del modo de edición, actualiza la previsualización
-    if (
-        (!this.editingRepositoryLink && section === 'repositoryLink') ||
-        (!this.editingOutOfScope && section === 'outOfScope') ||
-        (!this.editingStrategy && section === 'strategy') ||
-        (!this.editingLimitations && section === 'limitations') ||
-        (!this.editingAssumptions && section === 'assumptions') ||
-        (!this.editingTeam && section === 'team')
-    ) {
-        this.updatePreview(); // Actualiza la previsualización
-    }
-  }
+  toggleStaticEdit(baseName: StaticSectionBaseName): void {
+    let editingProp: keyof TestPlanGeneratorComponent;
+    let detailsOpenProp: keyof TestPlanGeneratorComponent;
 
-  // Inicia el proceso de regeneración de escenarios mostrando el selector de técnica
+    switch (baseName) {
+        case 'repositoryLink':
+            editingProp = 'editingRepositoryLink';
+            detailsOpenProp = 'isRepositoryLinkDetailsOpen';
+            break;
+        case 'outOfScope':
+            editingProp = 'editingOutOfScope';
+            detailsOpenProp = 'isOutOfScopeDetailsOpen';
+            break;
+        case 'strategy':
+            editingProp = 'editingStrategy';
+            detailsOpenProp = 'isStrategyDetailsOpen';
+            break;
+        case 'limitations':
+            editingProp = 'editingLimitations';
+            detailsOpenProp = 'isLimitationsDetailsOpen';
+            break;
+        case 'assumptions':
+            editingProp = 'editingAssumptions';
+            detailsOpenProp = 'isAssumptionsDetailsOpen';
+            break;
+        case 'team':
+            editingProp = 'editingTeam';
+            detailsOpenProp = 'isTeamDetailsOpen';
+            break;
+        default:
+            // This case should ideally not be reached if baseName is correctly typed
+            const exhaustiveCheck: never = baseName;
+            console.error('Invalid static section base name:', exhaustiveCheck);
+            return;
+    }
+
+    // Type assertion is needed here because TypeScript can't infer that editingProp
+    // will always be a boolean property based on the switch cases alone without more complex mapped types.
+    const wasEditing = this[editingProp] as boolean;
+    (this[editingProp] as any) = !wasEditing; // Use 'as any' for assignment if direct boolean typing is tricky
+
+    if (this[editingProp]) { // If starting to edit
+        (this[detailsOpenProp] as any) = true; // Ensure details open
+    }
+
+    if (wasEditing && !(this[editingProp] as boolean)) { // If stopped editing
+        this.updatePreview();
+    }
+}
+
+
   startScenarioRegeneration(hu: HUData): void {
-      hu.editingScenarios = false; // Ocultar edición si estaba activa
-      hu.showRegenTechniquePicker = true; // Mostrar picker
-      hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; // Sugiere la técnica original por defecto
-      hu.errorScenarios = null; // Limpiar error específico
-      this.scenariosError = null; // Limpiar error global si aplica
+      hu.editingScenarios = false; // Ensure not in text edit mode
+      hu.showRegenTechniquePicker = true;
+      hu.isScenariosDetailsOpen = true; // Ensure details open for picker
+      hu.regenSelectedTechnique = hu.originalInput.selectedTechnique;
+      hu.errorScenarios = null;
+      this.scenariosError = null;
   }
 
-  // Cancela el proceso de regeneración de escenarios
   cancelScenarioRegeneration(hu: HUData): void {
-      hu.showRegenTechniquePicker = false; // Ocultar picker
-      hu.regenSelectedTechnique = ''; // Limpiar selección
-      hu.errorScenarios = null; // Limpiar error específico
-      this.scenariosError = null; // Limpiar error global si aplica
+      hu.showRegenTechniquePicker = false;
+      hu.regenSelectedTechnique = '';
+      hu.errorScenarios = null;
   }
 
-  // Confirma la regeneración de escenarios con la técnica seleccionada
   confirmRegenerateScenarios(hu: HUData): void {
       if (!hu.regenSelectedTechnique) {
           console.warn('Debes seleccionar una técnica para regenerar los escenarios.');
-          // Aquí podrías mostrar un mensaje visual en la UI si lo deseas
+          hu.errorScenarios = 'Selecciona una técnica para regenerar.';
           return;
       }
 
@@ -303,16 +300,15 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
            return;
        }
 
-      hu.loadingScenarios = true; // Iniciar carga específica
+      hu.loadingScenarios = true;
       hu.errorScenarios = null;
-      this.loadingScenarios = true; // Iniciar carga global (aunque solo sea una HU, el spinner global podría indicar actividad)
+      this.loadingScenarios = this.huList.some(h => h.loadingScenarios || h.id === hu.id);
       this.scenariosError = null;
 
-      // *** LLAMADA API: Regenerar Escenarios con la nueva técnica ***
       this.geminiService.generateScenarios(
            hu.originalInput.description,
            hu.originalInput.acceptanceCriteria,
-           hu.regenSelectedTechnique // <-- Usar la técnica del picker
+           hu.regenSelectedTechnique
       )
       .pipe(
           tap(scenarios => {
@@ -322,22 +318,20 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
           }),
           catchError(error => {
                console.error(`Error regenerating scenarios for HU ${hu.id}:`, error);
-               hu.errorScenarios = error || 'Error al regenerar escenarios.';
-               this.scenariosError = 'Error al regenerar los escenarios para una HU.';
+               hu.errorScenarios = (typeof error === 'string' ? error : error?.message) || 'Error al regenerar escenarios.';
+               this.scenariosError = `Error al regenerar escenarios para HU ${hu.id}.`;
                return of([]);
           }),
           finalize(() => {
-              hu.loadingScenarios = false; // Finaliza carga específica
-              this.checkOverallLoadingStatus(); // Revisa el estado global de carga
-              hu.showRegenTechniquePicker = false; // Ocultar picker
-              hu.regenSelectedTechnique = ''; // Limpiar selección
-              this.updatePreview(); // Actualiza previsualización
+              hu.loadingScenarios = false;
+              this.checkOverallLoadingStatus();
+              hu.showRegenTechniquePicker = false;
+              this.updatePreview();
           })
       )
-      .subscribe(); // Ejecuta el observable
+      .subscribe();
   }
 
-  // Regenera el alcance de una HU específica
   regenerateScope(hu: HUData): void {
        if (!hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
            console.error('Faltan datos originales para regenerar alcance.');
@@ -345,14 +339,13 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
            return;
        }
 
-       hu.editingScope = false; // Ocultar edición si estaba activa
-       hu.loadingScope = true; // Iniciar carga específica
+       hu.editingScope = false;
+       hu.isScopeDetailsOpen = true; // Ensure details open
+       hu.loadingScope = true;
        hu.errorScope = null;
-       this.loadingSections = true; // Iniciar carga global
+       this.loadingSections = this.huList.some(h => h.loadingScope || h.id === hu.id);
        this.sectionsError = null;
 
-       // *** LLAMADA API: Regenerar Alcance ***
-       // Asumo que generateTestPlanSections devuelve el alcance.
        this.geminiService.generateTestPlanSections(hu.originalInput.description, hu.originalInput.acceptanceCriteria)
            .pipe(
                tap(scopeText => {
@@ -361,33 +354,29 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                }),
                catchError(error => {
                    console.error(`Error regenerating scope for HU ${hu.id}:`, error);
-                    hu.errorScope = error || 'Error al regenerar alcance.';
-                    this.sectionsError = 'Error al regenerar el alcance.';
+                    hu.errorScope = (typeof error === 'string' ? error : error?.message) || 'Error al regenerar alcance.';
+                    this.sectionsError = `Error al regenerar el alcance para HU ${hu.id}.`;
                     return of('');
                }),
                finalize(() => {
-                   hu.loadingScope = false; // Finaliza carga específica
-                   this.checkOverallLoadingStatus(); // Revisa el estado global de carga
-                   this.updatePreview(); // Actualiza previsualización
+                   hu.loadingScope = false;
+                   this.checkOverallLoadingStatus();
+                   this.updatePreview();
                })
            )
-           .subscribe(); // Ejecuta el observable
+           .subscribe();
    }
 
-   // --- Métodos de Utilidad ---
-
-   // Formatea los escenarios generados a una lista enumerada
    formatScenarioTitles(scenarios: string[]): string {
       if (!scenarios || scenarios.length === 0) {
         return 'No se generaron escenarios.';
       }
       return scenarios.map((scenario, index) => {
-          const firstLine = scenario.split('\n')[0].replace(/^- /, '').trim(); // Limpiar el guion inicial
+          const firstLine = scenario.split('\n')[0].replace(/^- /, '').trim();
           return `${index + 1}. ${firstLine}`;
       }).join('\n');
    }
 
-   // Limpia los campos del formulario principal
    private resetCurrentInputs(): void {
        this.currentHuId = '';
        this.currentHuTitle = '';
@@ -395,34 +384,28 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
        this.currentDescription = '';
        this.currentAcceptanceCriteria = '';
        this.currentSelectedTechnique = '';
-       // Asegurar que el formulario se resetee completamente
        if (this.huFormDirective) {
            this.huFormDirective.resetForm();
+           setTimeout(() => {
+             this.isFormInvalid = this.huFormDirective.invalid ?? true;
+           });
+       } else {
+        this.isFormInvalid = true;
        }
    }
 
-  // --- Métodos de Visibilidad del Formulario ---
-  // toggleFormVisibility(): void { // Se quita el método ya que el botón de ocultar se elimina
-  //     this.showForm = !this.showForm;
-  // }
-
-  // --- Métodos de Previsualización y Descarga ---
-
-  // Nuevo método para actualizar el título del plan
   updateTestPlanTitle(): void {
       if (this.huList.length > 0) {
-          // Seleccionar la última HU añadida para el ID y Sprint, o puedes tener otra lógica
           const latestHu = this.huList[this.huList.length - 1];
           const huIdForTitle = latestHu.id;
           const sprintForTitle = latestHu.sprint;
           this.testPlanTitle = `TEST PLAN EVC00057_ ${huIdForTitle} SPRINT ${sprintForTitle}`;
       } else {
-          this.testPlanTitle = ''; // Si no hay HUs, el título está vacío
+          this.testPlanTitle = '';
       }
   }
 
 
-  // Genera la cadena de texto completa del plan para previsualización y descarga
   generatePlanContentString(): string {
      if (this.huList.length === 0) {
        return '';
@@ -430,57 +413,46 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
      let fullPlanContent = '';
 
-     // Título del Plan (basado en la propiedad testPlanTitle)
      if (this.testPlanTitle) {
         fullPlanContent += `Título del Plan de Pruebas: ${this.testPlanTitle}\n\n`;
      }
 
-     // Repositorio VSTS (ahora usa la propiedad editable)
      fullPlanContent += `Repositorio pruebas VSTS: ${this.repositoryLink}\n\n`;
 
-     // ALCANCE CONSOLIDADO (Refactorizado para incluir la HU al final)
      fullPlanContent += `ALCANCE:\n\n`;
      this.huList.forEach((hu) => {
-         fullPlanContent += `HU ${hu.id}: ${hu.title}\n`; // Título de la HU aquí
+         fullPlanContent += `HU ${hu.id}: ${hu.title}\n`;
          fullPlanContent += `${hu.generatedScope}\n\n`;
      });
 
-     // FUERA DEL ALCANCE (ahora usa la propiedad editable)
      fullPlanContent += `FUERA DEL ALCANCE:\n\n`;
      fullPlanContent += `${this.outOfScopeContent}\n\n`;
 
-     // ESTRATEGIA (ahora usa la propiedad editable)
      fullPlanContent += `ESTRATEGIA:\n\n`;
      fullPlanContent += `${this.strategyContent}\n\n`;
 
-     // CASOS DE PRUEBA CONSOLIDADO (Refactorizado para incluir la HU al final)
      fullPlanContent += `CASOS DE PRUEBA:\n\n`;
      this.huList.forEach((hu) => {
-        fullPlanContent += `HU ${hu.id} ${hu.title}\n`; // Título de la HU aquí
+        fullPlanContent += `HU ${hu.id} ${hu.title}\n`;
         fullPlanContent += `${hu.generatedTestCaseTitles}\n\n`;
     });
 
-     // LIMITACIONES (ahora usa la propiedad editable)
      fullPlanContent += `LIMITACIONES:\n\n`;
      fullPlanContent += `${this.limitationsContent}\n\n`;
 
-     // SUPUESTOS (ahora usa la propiedad editable)
      fullPlanContent += `SUPUESTOS:\n\n`;
      fullPlanContent += `${this.assumptionsContent}\n\n`;
 
-     // Equipo de Trabajo (ahora usa la propiedad editable)
      fullPlanContent += `Equipo de Trabajo:\n\n`;
      fullPlanContent += `${this.teamContent}\n\n`;
 
      return fullPlanContent;
   }
 
-  // Actualiza la propiedad de previsualización
   updatePreview(): void {
       this.downloadPreviewContent = this.generatePlanContentString();
   }
 
-  // Descarga el plan como archivo .doc (texto plano)
   downloadWord(): void {
     const fullPlanContent = this.generatePlanContentString();
     if (!fullPlanContent) {
@@ -493,7 +465,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     saveAs(blob, `PlanDePruebas_Completo_${date}.doc`);
   }
 
-  // --- Método trackBy para *ngFor ---
   trackHuById(index: number, hu: HUData): string {
     return hu.id;
   }

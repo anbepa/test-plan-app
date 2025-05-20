@@ -453,6 +453,21 @@ textarea.scrollable-content {
     word-wrap: break-word;
 }
 
+/* ESTILOS PARA TÍTULOS EN LA PREVISUALIZACIÓN (ya estaban incluidos) */
+.download-preview .preview-section-title {
+    font-weight: bold;
+    color: #333; /* Un color un poco más oscuro para el título de sección */
+    /* display: block; */ /* Descomenta si quieres que cada título de sección ocupe su propia línea y luego el contenido */
+    /* margin-bottom: 5px; */
+}
+
+.download-preview .preview-hu-title {
+    font-weight: bold;
+    color: #4a6d7c; /* Un color que combine con tus otros títulos H2/H3 */
+    display: block; /* Para que el título de la HU esté en su propia línea */
+    margin-top: 10px; /* Espacio antes del título de una HU */
+}
+
 .button-download {
     margin-top: 20px;
     padding: 12px 25px;
@@ -485,6 +500,9 @@ textarea.scrollable-content {
     line-height: 1.6;
     color: #555;
     margin-top: 15px;
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+    overflow-x: auto; 
 }
 
 /* Botón flotante para añadir HU (móviles) */
@@ -591,7 +609,7 @@ textarea.scrollable-content {
 @media (max-width: 576px) {
     .container {
         padding: 15px;
-        padding-bottom: 80px;
+        padding-bottom: 80px; 
     }
 
     h1 {
@@ -605,43 +623,37 @@ textarea.scrollable-content {
         margin-bottom: 10px;
     }
 
-    .form-section, .plan-section {
-        padding: 10px;
+    .form-section, .plan-section-block { 
+        padding: 15px; 
     }
-
+    
     .plan-section-block {
-        padding: 15px;
         gap: 10px;
     }
 
     .hu-header {
         flex-direction: column;
         align-items: flex-start;
-        margin-bottom: 5px;
-        padding-bottom: 5px;
+        gap: 5px; 
+        margin-bottom: 10px; 
+        padding-bottom: 8px; 
     }
 
     .hu-header h3 {
-        margin-bottom: 5px;
-        font-size: 1em;
+        margin-bottom: 5px; 
+        font-size: 1.1em; 
     }
 
     .sprint-badge {
-        font-size: 0.8em;
+        font-size: 0.8em; 
     }
 
     .editable-block {
-        padding: 10px;
-    }
-
-    .edit-controls {
-        flex-direction: column;
-        align-items: flex-start;
+        padding-top: 10px; 
+        margin-top: 10px; 
     }
 
     .edit-controls button {
-        width: 100%;
-        margin-right: 0;
         margin-bottom: 8px;
         text-align: center;
     }

@@ -56,7 +56,10 @@
 
         <div class="form-group full-width">
           <label for="currentAcceptanceCriteria">Criterios de Aceptación:</label>
-          <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: &#10;- Dado que...&#10;- Cuando...&#10;- Entonces..." #acceptanceCriteriaInput="ngModel"></textarea>
+          <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: 
+- Dado que...
+- Cuando...
+- Entonces..." #acceptanceCriteriaInput="ngModel"></textarea>
           <div *ngIf="acceptanceCriteriaInput.invalid && (acceptanceCriteriaInput.dirty || acceptanceCriteriaInput.touched)" class="validation-error" role="alert">
             Criterios de Aceptación son requeridos.
           </div>
@@ -92,7 +95,9 @@
           <h3>HU {{ hu.id }}: {{ hu.title }} (Sprint: {{ hu.sprint }})</h3>
         </div>
 
-        <details class="plan-section-block" [open]="!hu.editingScope">
+        <details class="plan-section-block" #scopeDetailsElement 
+                 [open]="hu.editingScope || hu.isScopeDetailsOpen" 
+                 (toggle)="!hu.editingScope && (hu.isScopeDetailsOpen = scopeDetailsElement.open)">
           <summary>Alcance
             <span *ngIf="hu.loadingScope" class="spinner-small"></span>
             <span *ngIf="hu.errorScope" class="error-status-icon" title="{{ hu.errorScope }}">⚠️</span>
@@ -116,7 +121,9 @@
           </div>
         </details>
 
-        <details class="plan-section-block" [open]="!hu.editingScenarios && !hu.showRegenTechniquePicker">
+        <details class="plan-section-block" #scenariosDetailsElement
+                 [open]="(hu.editingScenarios || hu.showRegenTechniquePicker) || hu.isScenariosDetailsOpen"
+                 (toggle)="!(hu.editingScenarios || hu.showRegenTechniquePicker) && (hu.isScenariosDetailsOpen = scenariosDetailsElement.open)">
           <summary>Casos de Prueba
             <span *ngIf="hu.loadingScenarios" class="spinner-small"></span>
             <span *ngIf="hu.errorScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span>
@@ -165,7 +172,9 @@
 
     <div class="static-plan-sections" *ngIf="huList.length > 0">
 
-        <details class="plan-section-block static-block" [open]="!editingRepositoryLink">
+        <details class="plan-section-block static-block" #repoDetailsElement
+                 [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen"
+                 (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)">
             <summary>Repositorio Pruebas VSTS</summary>
             <div class="content">
               <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock">
@@ -184,7 +193,9 @@
             </div>
         </details>
 
-        <details class="plan-section-block static-block" [open]="!editingOutOfScope">
+        <details class="plan-section-block static-block" #outOfScopeDetailsElement
+                 [open]="editingOutOfScope || isOutOfScopeDetailsOpen"
+                 (toggle)="!editingOutOfScope && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)">
             <summary>Fuera del Alcance</summary>
             <div class="content">
               <div *ngIf="!editingOutOfScope; else editOutOfScopeBlock">
@@ -201,7 +212,9 @@
             </div>
         </details>
 
-        <details class="plan-section-block static-block" [open]="!editingStrategy">
+        <details class="plan-section-block static-block" #strategyDetailsElement
+                 [open]="editingStrategy || isStrategyDetailsOpen"
+                 (toggle)="!editingStrategy && (isStrategyDetailsOpen = strategyDetailsElement.open)">
             <summary>Estrategia</summary>
             <div class="content">
               <div *ngIf="!editingStrategy; else editStrategyBlock">
@@ -218,13 +231,15 @@
             </div>
         </details>
 
-        <details class="plan-section-block static-block" [open]="!editingLimitations">
+        <details class="plan-section-block static-block" #limitationsDetailsElement
+                 [open]="editingLimitations || isLimitationsDetailsOpen"
+                 (toggle)="!editingLimitations && (isLimitationsDetailsOpen = limitationsDetailsElement.open)">
             <summary>Limitaciones</summary>
             <div class="content">
-              <div *ngIf="!editingLimitations; else editLimitatiopnsBlock">
+              <div *ngIf="!editingLimitations; else editLimitationsBlock">
                 <pre class="static-text">{{ limitationsContent }}</pre>
               </div>
-              <ng-template #editLimitatiopnsBlock>
+              <ng-template #editLimitationsBlock>
                 <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea>
               </ng-template>
               <div class="actions">
@@ -235,7 +250,9 @@
             </div>
         </details>
 
-        <details class="plan-section-block static-block" [open]="!editingAssumptions">
+        <details class="plan-section-block static-block" #assumptionsDetailsElement
+                 [open]="editingAssumptions || isAssumptionsDetailsOpen"
+                 (toggle)="!editingAssumptions && (isAssumptionsDetailsOpen = assumptionsDetailsElement.open)">
             <summary>Supuestos</summary>
             <div class="content">
               <div *ngIf="!editingAssumptions; else editAssumptionsBlock">
@@ -252,7 +269,9 @@
             </div>
         </details>
 
-        <details class="plan-section-block static-block" [open]="!editingTeam">
+        <details class="plan-section-block static-block" #teamDetailsElement
+                 [open]="editingTeam || isTeamDetailsOpen"
+                 (toggle)="!editingTeam && (isTeamDetailsOpen = teamDetailsElement.open)">
             <summary>Equipo de Trabajo</summary>
             <div class="content">
               <div *ngIf="!editingTeam; else editTeamBlock">
