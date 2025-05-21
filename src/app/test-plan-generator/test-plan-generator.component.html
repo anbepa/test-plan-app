@@ -5,7 +5,6 @@
 
   <section class="form-section" aria-labelledby="form-section-title">
     <h2 id="form-section-title">Datos de la Historia de Usuario (HU)</h2>
-
     <form (ngSubmit)="addHuAndGenerateData()" #huForm="ngForm">
       <div class="form-grid">
         <div class="form-group scenario-input-section">
@@ -21,7 +20,6 @@
             Debes seleccionar una técnica ISTQB.
           </div>
         </div>
-
         <div class="form-group">
           <label for="currentHuId">ID de la HU:</label>
           <input id="currentHuId" type="text" name="currentHuId" [(ngModel)]="currentHuId" required placeholder="Ej: HU_1234" #huIdInput="ngModel">
@@ -29,7 +27,6 @@
             ID de la HU es requerido.
           </div>
         </div>
-
         <div class="form-group">
           <label for="currentHuTitle">Título de la HU:</label>
           <input id="currentHuTitle" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required placeholder="Ej: Como usuario, quiero..." #huTitleInput="ngModel">
@@ -37,7 +34,6 @@
             Título de la HU es requerido.
           </div>
         </div>
-
         <div class="form-group">
           <label for="currentSprint">Sprint:</label>
           <input id="currentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required placeholder="Ej: Sprint 1" #sprintInput="ngModel">
@@ -45,7 +41,6 @@
             Sprint es requerido.
           </div>
         </div>
-
         <div class="form-group full-width">
           <label for="currentDescription">Descripción de la HU:</label>
           <textarea id="currentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4" required placeholder="Ej: La HU describe la funcionalidad de la siguiente manera..." #descriptionInput="ngModel"></textarea>
@@ -53,7 +48,6 @@
             Descripción de la HU es requerida.
           </div>
         </div>
-
         <div class="form-group full-width">
           <label for="currentAcceptanceCriteria">Criterios de Aceptación:</label>
           <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: 
@@ -65,14 +59,12 @@
           </div>
         </div>
       </div>
-
       <div class="form-actions">
         <button type="submit" class="button-primary" [disabled]="isFormInvalid || loadingSections || loadingScenarios">
           <span *ngIf="loadingSections || loadingScenarios" class="spinner"></span>
           {{ loadingSections || loadingScenarios ? 'Generando...' : 'Añadir HU y Generar Datos' }}
         </button>
       </div>
-
       <div *ngIf="sectionsError || scenariosError" class="error-message" role="alert">
         <p *ngIf="sectionsError">{{ sectionsError }}</p>
         <p *ngIf="scenariosError">{{ scenariosError }}</p>
@@ -83,7 +75,7 @@
   <section class="results-section">
     <div class="section-header">
       <h2>Plan de Pruebas: {{ testPlanTitle || 'Sin Título' }}</h2>
-      </div>
+    </div>
 
     <div *ngIf="huList.length === 0 && !(loadingSections || loadingScenarios)" class="no-content-message">
       <p>Añade una Historia de Usuario para empezar a generar el plan de pruebas.</p>
@@ -95,8 +87,8 @@
           <h3>HU {{ hu.id }}: {{ hu.title }} (Sprint: {{ hu.sprint }})</h3>
         </div>
 
-        <details class="plan-section-block" #scopeDetailsElement 
-                 [open]="hu.editingScope || hu.isScopeDetailsOpen" 
+        <details class="plan-section-block" #scopeDetailsElement
+                 [open]="hu.editingScope || hu.isScopeDetailsOpen"
                  (toggle)="!hu.editingScope && (hu.isScopeDetailsOpen = scopeDetailsElement.open)">
           <summary>Alcance
             <span *ngIf="hu.loadingScope" class="spinner-small"></span>
@@ -125,20 +117,56 @@
                  [open]="(hu.editingScenarios || hu.showRegenTechniquePicker) || hu.isScenariosDetailsOpen"
                  (toggle)="!(hu.editingScenarios || hu.showRegenTechniquePicker) && (hu.isScenariosDetailsOpen = scenariosDetailsElement.open)">
           <summary>Casos de Prueba
-            <span *ngIf="hu.loadingScenarios" class="spinner-small"></span>
+            <span *ngIf="hu.loadingScenarios && !hu.showRegenTechniquePicker" class="spinner-small"></span>
             <span *ngIf="hu.errorScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span>
           </summary>
           <div class="content">
-            <div *ngIf="!hu.editingScenarios; else editScenariosBlock">
-              <pre class="generated-text">{{ hu.generatedTestCaseTitles || 'No se han generado escenarios.' }}</pre>
+            <!-- SECCIÓN MODIFICADA PARA MOSTRAR TABLA DE CASOS DETALLADOS -->
+            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0; else editScenariosBlockOrNoData">
+              <div class="detailed-test-cases-table-container">
+                <table class="detailed-test-cases-table">
+                  <thead>
+                    <tr>
+                      <th>ID Caso</th>
+                      <th>Escenario de Prueba (Título)</th>
+                      <th>Precondiciones</th>
+                      <th>Paso a Paso</th>
+                      <th>Resultado Esperado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
+                      <td>{{ hu.id }}_CP{{ i + 1 }}</td>
+                      <td>{{ tc.title }}</td>
+                      <td><pre class="table-pre">{{ tc.preconditions }}</pre></td>
+                      <td><pre class="table-pre">{{ tc.steps }}</pre></td>
+                      <td><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <ng-template #editScenariosBlock>
-              <textarea [(ngModel)]="hu.generatedTestCaseTitles" rows="10" class="scrollable-content"></textarea>
+            <ng-template #editScenariosBlockOrNoData>
+              <div *ngIf="hu.editingScenarios; else noScenariosData">
+                <!-- Si se mantiene la edición de texto, se puede dejar el textarea para generatedTestCaseTitles -->
+                <!-- O se puede implementar edición en la tabla o modal para detailedTestCases -->
+                <p><strong>Editando Títulos de Casos de Prueba (para previsualización del plan):</strong></p>
+                <textarea [(ngModel)]="hu.generatedTestCaseTitles" rows="10" class="scrollable-content" #scenariosTextarea></textarea>
+                <small>Nota: Esta edición afecta solo los títulos mostrados en la previsualización del plan general. Los detalles completos se gestionan con la regeneración.</small>
+              </div>
+              <ng-template #noScenariosData>
+                <pre class="generated-text" *ngIf="!hu.loadingScenarios">{{ hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga.' }}</pre>
+                <div *ngIf="hu.loadingScenarios && hu.showRegenTechniquePicker" class="loading-message">
+                    <span class="spinner-inline"></span> Regenerando casos de prueba...
+                </div>
+              </ng-template>
             </ng-template>
+            <!-- FIN SECCIÓN MODIFICADA -->
 
+            <!-- Dentro de la sección de Casos de Prueba, en el .regen-picker-inline -->
             <div *ngIf="hu.showRegenTechniquePicker" class="regen-picker-inline">
               <label for="regenTechnique-{{hu.id}}">Regenerar con técnica:</label>
-              <select id="regenTechnique-{{hu.id}}" [(ngModel)]="hu.regenSelectedTechnique" name="regenTechnique-{{hu.id}}" class="regen-technique-select">
+              <select id="regenTechnique-{{hu.id}}" [(ngModel)]="hu.regenSelectedTechnique" name="regenTechnique-{{hu.id}}" class="regen-technique-select" [disabled]="hu.loadingScenarios">
                 <option value="">Selecciona una técnica</option>
                 <option value="Equivalent Partitioning">Partición Equivalente</option>
                 <option value="Boundary Value Analysis">Análisis de Valor Límite</option>
@@ -146,23 +174,34 @@
                 <option value="State Transition Testing">Pruebas de Transición de Estados</option>
               </select>
               <div class="regen-buttons-container">
-                <button (click)="confirmRegenerateScenarios(hu)" class="button-generate" [disabled]="!hu.regenSelectedTechnique || hu.loadingScenarios">
+                <!-- BOTÓN "Confirmar Regeneración" MODIFICADO -->
+                <button (click)="confirmRegenerateScenarios(hu)" class="button-generate"
+                        [disabled]="!hu.regenSelectedTechnique || hu.loadingScenarios">
                   <span *ngIf="hu.loadingScenarios" class="spinner-inline"></span>
-                  Confirmar Regeneración
+                  {{ hu.loadingScenarios ? 'Procesando...' : 'Confirmar Regeneración' }}
                 </button>
-                <button (click)="cancelScenarioRegeneration(hu)" class="button-cancel">Cancelar</button>
+                <button (click)="cancelScenarioRegeneration(hu)" class="button-cancel" [disabled]="hu.loadingScenarios">Cancelar</button>
               </div>
-              <div *ngIf="!hu.regenSelectedTechnique && (hu.loadingScenarios === false)" class="validation-error" role="alert">
+              <div *ngIf="hu.errorScenarios && hu.showRegenTechniquePicker && !hu.loadingScenarios" class="validation-error" role="alert">
+                {{ hu.errorScenarios }}
+              </div>
+              <div *ngIf="!hu.regenSelectedTechnique && !hu.errorScenarios && hu.showRegenTechniquePicker && !hu.loadingScenarios" class="validation-error" role="alert">
                 Debes seleccionar una técnica para regenerar.
               </div>
             </div>
 
             <div class="actions">
+              <!-- BOTÓN MODIFICADO/NUEVO -->
               <button (click)="toggleEdit(hu, 'scenarios')" class="button-edit" [disabled]="hu.showRegenTechniquePicker">
-                {{ hu.editingScenarios ? 'Guardar Casos' : 'Editar Casos' }}
+                {{ hu.editingScenarios ? 'Guardar Títulos (Preview)' : 'Editar Títulos (Preview)' }}
               </button>
               <button (click)="startScenarioRegeneration(hu)" class="button-generate" [disabled]="hu.loadingScenarios || hu.showRegenTechniquePicker">
                 Regenerar Casos
+              </button>
+              <!-- NUEVO BOTÓN DE EXPORTAR MATRIZ -->
+              <button (click)="exportExecutionMatrix(hu)" class="button-secondary"
+                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente'">
+                Exportar Matriz (.csv)
               </button>
             </div>
           </div>
@@ -170,8 +209,8 @@
       </div>
     </div>
 
+    <!-- Secciones estáticas del plan (sin cambios aquí) -->
     <div class="static-plan-sections" *ngIf="huList.length > 0">
-
         <details class="plan-section-block static-block" #repoDetailsElement
                  [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen"
                  (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)">
@@ -192,7 +231,6 @@
               </div>
             </div>
         </details>
-
         <details class="plan-section-block static-block" #outOfScopeDetailsElement
                  [open]="editingOutOfScope || isOutOfScopeDetailsOpen"
                  (toggle)="!editingOutOfScope && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)">
@@ -211,7 +249,6 @@
               </div>
             </div>
         </details>
-
         <details class="plan-section-block static-block" #strategyDetailsElement
                  [open]="editingStrategy || isStrategyDetailsOpen"
                  (toggle)="!editingStrategy && (isStrategyDetailsOpen = strategyDetailsElement.open)">
@@ -230,7 +267,6 @@
               </div>
             </div>
         </details>
-
         <details class="plan-section-block static-block" #limitationsDetailsElement
                  [open]="editingLimitations || isLimitationsDetailsOpen"
                  (toggle)="!editingLimitations && (isLimitationsDetailsOpen = limitationsDetailsElement.open)">
@@ -249,7 +285,6 @@
               </div>
             </div>
         </details>
-
         <details class="plan-section-block static-block" #assumptionsDetailsElement
                  [open]="editingAssumptions || isAssumptionsDetailsOpen"
                  (toggle)="!editingAssumptions && (isAssumptionsDetailsOpen = assumptionsDetailsElement.open)">
@@ -268,7 +303,6 @@
               </div>
             </div>
         </details>
-
         <details class="plan-section-block static-block" #teamDetailsElement
                  [open]="editingTeam || isTeamDetailsOpen"
                  (toggle)="!editingTeam && (isTeamDetailsOpen = teamDetailsElement.open)">
@@ -290,14 +324,13 @@
     </div>
 
     <div class="preview-download-section">
-        <div class="preview-section" *ngIf="downloadPreviewContent">
+        <div class="preview-section" *ngIf="downloadPreviewHtmlContent"> <!-- Usa la propiedad para el HTML -->
           <h2>Previsualización del Plan Descargable (.doc)</h2>
-          <pre class="download-preview">{{ downloadPreviewContent }}</pre>
+          <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre> <!-- Usa [innerHTML] -->
         </div>
         <button (click)="downloadWord()" class="button-primary button-download" [disabled]="huList.length === 0">
           Descargar Plan Completo (.doc)
         </button>
     </div>
-
   </section>
 </div>

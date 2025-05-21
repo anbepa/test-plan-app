@@ -134,6 +134,7 @@ h2 {
     align-items: center;
     justify-content: center;
     text-decoration: none;
+    margin-bottom: 5px; /* Pequeño margen para botones en la misma línea */
 }
 
 .button-primary {
@@ -157,7 +158,7 @@ h2 {
 .button-secondary {
     background-color: #e9ecef;
     color: #343a40;
-    margin-top: 15px;
+    /* margin-top: 15px; quitado para mejor alineación en .actions */
     padding: 8px 15px;
     font-size: 0.9em;
 }
@@ -313,12 +314,14 @@ details[open] summary::before {
     border-top: 1px dashed #e9ecef;
 }
 
-.edit-controls {
+.edit-controls,
+.actions { /* Aplicar a ambos contenedores de botones */
     display: flex;
     gap: 10px;
-    margin-bottom: 15px;
-    flex-wrap: wrap;
+    margin-top: 15px; /* Espacio arriba de los botones */
+    flex-wrap: wrap; /* Para que los botones pasen a la siguiente línea si no caben */
 }
+
 
 /* Common style for preformatted and textarea content */
 .generated-text,
@@ -340,7 +343,7 @@ textarea.scrollable-content {
 }
 
 textarea.scrollable-content {
-    min-height: 200px;
+    min-height: 150px; /* Reducido un poco para la edición de títulos */
 }
 
 /* Regenerate with Technique Section */
@@ -397,6 +400,7 @@ textarea.scrollable-content {
     width: 12px;
     height: 12px;
     margin-left: 8px;
+    vertical-align: middle; /* Asegurar alineación vertical */
 }
 
 /* Definición de la animación de giro */
@@ -453,20 +457,85 @@ textarea.scrollable-content {
     word-wrap: break-word;
 }
 
-/* ESTILOS PARA TÍTULOS EN LA PREVISUALIZACIÓN (ya estaban incluidos) */
 .download-preview .preview-section-title {
     font-weight: bold;
-    color: #333; /* Un color un poco más oscuro para el título de sección */
-    /* display: block; */ /* Descomenta si quieres que cada título de sección ocupe su propia línea y luego el contenido */
-    /* margin-bottom: 5px; */
+    color: #333;
+    display: block;
+    margin-bottom: 5px;
 }
 
 .download-preview .preview-hu-title {
     font-weight: bold;
-    color: #4a6d7c; /* Un color que combine con tus otros títulos H2/H3 */
-    display: block; /* Para que el título de la HU esté en su propia línea */
-    margin-top: 10px; /* Espacio antes del título de una HU */
+    color: #4a6d7c;
+    display: block;
+    margin-top: 10px;
 }
+
+/* --- ESTILOS PARA LA TABLA DE CASOS DE PRUEBA DETALLADOS --- */
+.detailed-test-cases-table-container {
+    width: 100%;
+    overflow-x: auto; /* Para scroll horizontal si la tabla es muy ancha */
+    margin-top: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+
+.detailed-test-cases-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    table-layout: auto; /* Permite que el navegador ajuste los anchos */
+}
+
+.detailed-test-cases-table th,
+.detailed-test-cases-table td {
+    border: 1px solid #e0e0e0;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.detailed-test-cases-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #343a40;
+    position: sticky; /* Para que los encabezados se queden fijos al hacer scroll vertical si la tabla es muy larga */
+    top: 0; /* Necesario para position: sticky */
+    z-index: 1; /* Para que esté por encima del contenido scrolleable */
+}
+
+.detailed-test-cases-table tbody tr:nth-child(even) {
+    background-color: #fdfdfd;
+}
+
+.detailed-test-cases-table tbody tr:hover {
+    background-color: #f0f4f8;
+}
+
+.detailed-test-cases-table .table-pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    max-height: none;
+    line-height: 1.5; /* Mejorar legibilidad de texto multilínea */
+}
+
+/* Mensaje de carga dentro del contenedor de la tabla o picker */
+.loading-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-style: italic;
+    color: #555;
+}
+
 
 .button-download {
     margin-top: 20px;
@@ -500,9 +569,9 @@ textarea.scrollable-content {
     line-height: 1.6;
     color: #555;
     margin-top: 15px;
-    white-space: pre-wrap; 
-    word-wrap: break-word; 
-    overflow-x: auto; 
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-x: auto;
 }
 
 /* Botón flotante para añadir HU (móviles) */
@@ -569,18 +638,22 @@ textarea.scrollable-content {
         display: block;
     }
 
-    .edit-controls {
+    .edit-controls,
+    .actions {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .edit-controls button {
+    .edit-controls button,
+    .actions button { /* Aplicar a botones dentro de .actions también */
         width: 100%;
         margin-right: 0;
+        margin-left: 0; /* Asegurar que no haya margen lateral */
         margin-bottom: 10px;
     }
 
-    .edit-controls button:last-child {
+    .edit-controls button:last-child,
+    .actions button:last-child {
         margin-bottom: 0;
     }
 
@@ -603,13 +676,20 @@ textarea.scrollable-content {
         width: 100%;
         margin-left: 0;
     }
+
+    /* Ajustes para la tabla en móviles */
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td {
+        padding: 8px 10px; /* Reducir padding en celdas */
+        font-size: 0.85em; /* Reducir fuente ligeramente */
+    }
 }
 
 /* Para pantallas muy pequeñas */
 @media (max-width: 576px) {
     .container {
         padding: 15px;
-        padding-bottom: 80px; 
+        padding-bottom: 80px;
     }
 
     h1 {
@@ -623,10 +703,10 @@ textarea.scrollable-content {
         margin-bottom: 10px;
     }
 
-    .form-section, .plan-section-block { 
-        padding: 15px; 
+    .form-section, .plan-section-block {
+        padding: 15px;
     }
-    
+
     .plan-section-block {
         gap: 10px;
     }
@@ -634,31 +714,44 @@ textarea.scrollable-content {
     .hu-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 5px; 
-        margin-bottom: 10px; 
-        padding-bottom: 8px; 
+        gap: 5px;
+        margin-bottom: 10px;
+        padding-bottom: 8px;
     }
 
     .hu-header h3 {
-        margin-bottom: 5px; 
-        font-size: 1.1em; 
+        margin-bottom: 5px;
+        font-size: 1.1em;
     }
 
     .sprint-badge {
-        font-size: 0.8em; 
+        font-size: 0.8em;
     }
 
     .editable-block {
-        padding-top: 10px; 
-        margin-top: 10px; 
+        padding-top: 10px;
+        margin-top: 10px;
     }
 
-    .edit-controls button {
+    /* Los botones ya son full-width desde el breakpoint anterior */
+    .edit-controls button,
+    .actions button {
         margin-bottom: 8px;
         text-align: center;
     }
 
-    .edit-controls button:last-child {
+    .edit-controls button:last-child,
+    .actions button:last-child {
         margin-bottom: 0;
+    }
+
+     /* Ajustes adicionales para la tabla en pantallas muy pequeñas */
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td {
+        padding: 6px 8px;
+        font-size: 0.8em;
+    }
+     .detailed-test-cases-table .table-pre {
+        line-height: 1.4;
     }
 }

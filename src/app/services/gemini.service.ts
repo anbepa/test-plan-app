@@ -28,14 +28,13 @@ interface GeminiCandidate {
   content: GeminiContent;
   finishReason?: string;
   safetyRatings?: any[];
-  [key: string]: any; // Para otras propiedades que puedan venir
+  [key: string]: any;
 }
 interface GeminiResponse {
   candidates?: GeminiCandidate[];
   promptFeedback?: any;
-  [key: string]: any; // Para otras propiedades que puedan venir
+  [key: string]: any;
 }
-// Interfaz para manejar la estructura de error de la API de Gemini
 interface GeminiErrorDetail {
   '@type'?: string;
   reason?: string;
@@ -54,6 +53,15 @@ interface GeminiErrorResponse {
   error?: GeminiError;
 }
 
+// NUEVA INTERFAZ para la estructura detallada de un escenario
+export interface DetailedTestCase {
+  title: string;
+  preconditions: string;
+  steps: string; // Podría ser un string con saltos de línea o string[] si se parsean los pasos
+  expectedResults: string;
+}
+
+
 @Injectable({
   providedIn: 'root'
 })
@@ -61,8 +69,6 @@ export class GeminiService {
 
   private apiUrl = environment.geminiApiUrl;
   private apiKey = environment.geminiApiKey;
-
-  // --- Prompts Optimizados ---
 
   private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string) => `
 Eres un analista de QA experimentado.
@@ -82,148 +88,156 @@ Criterios de Aceptación:
 ${acceptanceCriteria}
 `;
 
-private readonly PROMPT_SCENARIOS = (description: string, acceptanceCriteria: string, technique: string) => `
+// PROMPT_SCENARIOS MODIFICADO para solicitar detalles adicionales
+private readonly PROMPT_SCENARIOS_DETAILED = (description: string, acceptanceCriteria: string, technique: string) => `
 Eres un Ingeniero de QA experto en el diseño de pruebas de caja negra.
-Tu tarea es generar escenarios de prueba CLAROS, CONCISOS y ACCIONABLES.
+Tu tarea es generar casos de prueba detallados, claros, concisos y accionables.
 
 **ENTRADA PROPORCIONADA:**
 1.  **Historia de Usuario (HU):** ${description}
 2.  **Criterios de Aceptación (CA):** ${acceptanceCriteria}
 3.  **Técnica de Diseño de Pruebas de Caja Negra a Aplicar:** "${technique}"
 
-**INSTRUCCIONES FUNDAMENTALES PARA EL DISEÑO DE ESCENARIOS:**
+**INSTRUCCIONES FUNDAMENTALES PARA EL DISEÑO DE CASOS DE PRUEBA DETALLADOS:**
 
-1.  **COMPRENSIÓN PROFUNDA:** Analiza minuciosamente la HU y CADA UNO de los CA. Los escenarios deben cubrir los aspectos funcionales descritos.
+1.  **COMPRENSIÓN PROFUNDA:** Analiza minuciosamente la HU y CADA UNO de los CA. Los casos de prueba deben cubrir los aspectos funcionales descritos.
 2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":**
-    *   Debes basar tu razonamiento y la generación de escenarios DIRECTAMENTE en los principios de la técnica "${technique}".
-    *   Considera lo siguiente según la técnica:
-        *   Si la técnica es **"Partición de Equivalencia"**: Identifica los diferentes conjuntos de datos de entrada/salida (válidos e inválidos) mencionados o implícitos en los CA. Crea escenarios que prueben al menos un valor representativo de cada partición identificada. Busca condiciones o rangos en los CA.
-        *   Si la técnica es **"Análisis de Valores Límite"**: Enfócate en los bordes o límites de los rangos de datos numéricos o conjuntos ordenados definidos o implícitos en los CA. Genera escenarios para los valores en el límite, inmediatamente por debajo del límite inferior válido, e inmediatamente por encima del límite superior válido.
-        *   Si la técnica es **"Tablas de Decisión"**: Identifica las condiciones lógicas y las acciones resultantes descritas en los CA. Si múltiples condiciones interactúan para producir diferentes resultados, diseña escenarios que cubran las combinaciones significativas de estas condiciones (reglas de la tabla de decisión).
-        *   Si la técnica es **"Transición de Estados"**: Identifica los diferentes estados del sistema o de un objeto, y los eventos o acciones (descritos en los CA) que causan transiciones entre estos estados. Crea escenarios para probar secuencias válidas e inválidas de transiciones de estado.
-        *   Si la técnica es **"Casos de Uso"**: Considera la HU como el flujo principal. Deriva escenarios directamente de los CA, cubriendo tanto el flujo exitoso como los flujos alternativos o de error especificados en ellos.
-        *   Si la técnica es **"Adivinación de Errores"**: Basándote en tu experiencia y en la HU/CA, identifica áreas propensas a errores comunes que podrían no estar explícitamente cubiertas por otras técnicas (ej., entradas vacías si los CA no lo especifican, formatos de datos inesperados, secuencias de acciones inusuales, uso de caracteres especiales). Sé específico sobre el error potencial.
-        *   Si la técnica es **"Pruebas de Pares (Pairwise Testing)"**: Si los CA describen múltiples parámetros de entrada o configuraciones independientes que pueden combinarse, genera escenarios que prueben todas las interacciones entre *pares* de valores de estos parámetros de la forma más eficiente posible, en lugar de todas las combinaciones exhaustivas.
-    *   Los escenarios DEBEN ser una consecuencia lógica de aplicar "${technique}" a la HU y CA. NO inventes funcionalidad que no esté descrita.
-3.  **DERIVACIÓN DIRECTA:** CADA escenario generado debe poder rastrearse y justificarse EXCLUSIVAMENTE a partir de la HU, los CA y la aplicación de la técnica "${technique}". NO añadas escenarios basados en suposiciones externas.
-4.  **FORMATO DE SALIDA ESTRICTO (SIN EXCEPCIONES):**
-    *   Cada escenario debe iniciar en una **NUEVA LÍNEA**.
-    *   Precede cada escenario **ÚNICAMENTE con un guion y un espacio** (ej: "- Verificar el inicio de sesión exitoso con credenciales válidas.").
-    *   **El título de cada escenario DEBE COMENZAR con un verbo en infinitivo o imperativo** (ej: "Verificar", "Validar", "Asegurar", "Intentar", "Comprobar", "Realizar").
-    *   La respuesta debe contener **SOLAMENTE** la lista de escenarios.
-    *   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** numeración adicional (ej: "1.", "a)"), introducciones, explicaciones previas o posteriores, conclusiones, resúmenes, saludos, despedidas, títulos generales (como "ESCENARIOS DE PRUEBA:"), o cualquier otro texto que no sea la lista de escenarios con el formato especificado.
-5.  **CONCISIÓN Y ACCIÓN:** Los escenarios deben ser breves, directos al punto y describir una acción verificable o una condición a probar.
-6.  **COBERTURA ADECUADA:** Intenta generar un conjunto de escenarios que cubran razonablemente los CA a través de la lente de la técnica "${technique}", evitando la redundancia excesiva. Busca escenarios *distintos* y *significativos*. Prioriza la calidad sobre la cantidad si es necesario.
-7.  **CASO DE NO APLICABILIDAD / INFORMACIÓN INSUFICIENTE:** Si consideras que la técnica "${technique}" no es genuinamente aplicable a la HU/CA proporcionadas para generar escenarios significativos, o si la información es claramente insuficiente para aplicar la técnica de forma efectiva, responde **EXACTAMENTE** y ÚNICAMENTE con el siguiente texto:
-    "No se pudieron generar escenarios con la información proporcionada y la técnica especificada."
+    *   Basa tu razonamiento y la generación de casos de prueba DIRECTAMENTE en los principios de la técnica "${technique}".
+    *   Considera lo siguiente según la técnica (ejemplos):
+        *   **Partición de Equivalencia:** Identifica conjuntos de datos válidos e inválidos.
+        *   **Análisis de Valores Límite:** Enfócate en bordes de rangos.
+        *   **Tablas de Decisión:** Condiciones lógicas y acciones resultantes.
+        *   **Transición de Estados:** Estados del sistema y eventos que causan transiciones.
+    *   Los casos de prueba DEBEN ser una consecuencia lógica de aplicar "${technique}" a la HU y CA. NO inventes funcionalidad.
+3.  **DERIVACIÓN DIRECTA:** CADA caso de prueba generado debe poder rastrearse y justificarse EXCLUSIVAMENTE a partir de la HU, los CA y la aplicación de la técnica "${technique}".
+4.  **FORMATO DE SALIDA ESTRICTO JSON (SIN EXCEPCIONES):**
+    *   La respuesta DEBE ser un array JSON válido.
+    *   Cada elemento del array debe ser un objeto JSON representando un caso de prueba con las siguientes propiedades EXACTAS: "title", "preconditions", "steps", "expectedResults".
+    *   Ejemplo de un elemento del array:
+        {
+          "title": "Verificar inicio de sesión exitoso con credenciales válidas",
+          "preconditions": "El usuario existe en el sistema con credenciales correctas.\nEl sistema de autenticación está operativo.",
+          "steps": "1. Navegar a la página de inicio de sesión.\n2. Ingresar nombre de usuario válido en el campo 'Usuario'.\n3. Ingresar contraseña válida en el campo 'Contraseña'.\n4. Hacer clic en el botón 'Iniciar Sesión'.",
+          "expectedResults": "El usuario es redirigido al dashboard.\nSe muestra un mensaje de bienvenida personalizado."
+        }
+    *   Los valores de "preconditions", "steps", y "expectedResults" pueden ser strings con múltiples líneas separadas por '\\n'.
+    *   El valor de "title" DEBE COMENZAR con un verbo en infinitivo o imperativo (ej: "Verificar", "Validar").
+    *   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON, comentarios, explicaciones, introducciones, conclusiones, saludos, despedidas, o cualquier texto que no sea el array JSON de casos de prueba. La respuesta debe ser *únicamente* el array JSON.
+5.  **CONCISIÓN Y ACCIÓN:**
+    *   **Title:** Breve y descriptivo.
+    *   **Preconditions:** Condiciones necesarias ANTES de ejecutar los pasos. Claras y concisas. Si no hay precondiciones específicas aparte de las generales del sistema, indicar "N/A" o una precondición general.
+    *   **Steps:** Secuencia numerada de acciones detalladas y claras que el tester debe realizar. Usa saltos de línea '\\n' para separar cada paso.
+    *   **ExpectedResults:** Resultado observable y verificable DESPUÉS de ejecutar los pasos. Claro y específico. Usa saltos de línea '\\n' para separar múltiples resultados esperados si aplica.
+6.  **COBERTURA ADECUADA:** Genera un conjunto de casos de prueba que cubran razonablemente los CA a través de la lente de la técnica "${technique}".
+7.  **CASO DE NO APLICABILIDAD / INFORMACIÓN INSUFICIENTE:** Si consideras que la técnica "${technique}" no es genuinamente aplicable a la HU/CA proporcionadas para generar casos de prueba significativos, o si la información es claramente insuficiente, responde **EXACTAMENTE** y ÚNICAMENTE con el siguiente array JSON:
+    [
+      {
+        "title": "Información Insuficiente",
+        "preconditions": "N/A",
+        "steps": "No se pudieron generar casos de prueba detallados con la información proporcionada y la técnica especificada.",
+        "expectedResults": "N/A"
+      }
+    ]
 
 ---
-PROCEDE A GENERAR LA LISTA DE ESCENARIOS BASADA EN LA HU, LOS CA Y LA TÉCNICA "${technique}":
+PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LA HU, LOS CA Y LA TÉCNICA "${technique}":
 `;
 
   constructor(private http: HttpClient) { }
 
-  // *** Método para generar la sección de Alcance ***
   generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
     const promptText = this.PROMPT_SCOPE(description, acceptanceCriteria);
     const body: GeminiRequestBody = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        maxOutputTokens: 100, // Reducido para forzar la concisión de 4 líneas.
-        temperature: 0.4 // Más bajo para una respuesta más directa y menos "creativa"
+        maxOutputTokens: 1500, // Aumentado ligeramente por si acaso
+        temperature: 0.4
       }
-      // Considera añadir safetySettings si es necesario para tu caso de uso
-      // safetySettings: [
-      //   { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      //   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-      //   // ... otros ajustes de seguridad
-      // ]
     };
-
     const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
-
     return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
       map(response => {
         const text = response?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        // El prompt ya pide un máximo de 4 líneas, pero como una salvaguarda adicional:
         return text.trim().split('\n').slice(0, 4).join('\n');
       }),
       catchError(this.handleError)
     );
   }
 
-  // *** Método para generar la lista de Escenarios ***
-  generateScenarios(description: string, acceptanceCriteria: string, technique: string): Observable<string[]> {
-    const promptText = this.PROMPT_SCENARIOS(description, acceptanceCriteria, technique);
+  // MÉTODO MODIFICADO para generar Casos de Prueba Detallados
+  generateDetailedTestCases(description: string, acceptanceCriteria: string, technique: string): Observable<DetailedTestCase[]> {
+    const promptText = this.PROMPT_SCENARIOS_DETAILED(description, acceptanceCriteria, technique);
     const body: GeminiRequestBody = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        maxOutputTokens: 500, // Ajustado para permitir más escenarios sin ser excesivo
-        temperature: 0.7 // Mantiene un equilibrio entre creatividad y adherencia
-      }
-      // Considera añadir safetySettings aquí también si es necesario
+        maxOutputTokens: 2048, // Aumentado para permitir respuestas JSON más largas
+        temperature: 0.6, // Ligeramente ajustado para el formato JSON
+        // responseMimeType: "application/json" // Si la API lo soporta, esto es ideal.
+      },
+      // safetySettings: [...] // Añadir si es necesario
     };
-
     const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
 
     return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
       map(response => {
-        const fullText = response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-
-        if (fullText === "No se pudieron generar escenarios con la información proporcionada.") {
-          return [fullText]; // Devuelve el mensaje específico como un único ítem
+        const rawText = response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        if (!rawText) {
+          console.warn("La API no devolvió contenido para los casos de prueba detallados.");
+          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API.", steps: "N/A", expectedResults: "N/A" }];
         }
 
-        const scenarios = fullText
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.startsWith('- '))
-          .map(line => line.substring(2).trim()) // Elimina "- " del inicio
-          .filter(line => line.length > 0);
+        try {
+          // Intentar limpiar el texto si viene con ```json ... ```
+          let jsonText = rawText;
+          if (jsonText.startsWith("```json")) {
+            jsonText = jsonText.substring(7); // Quita ```json
+          }
+          if (jsonText.endsWith("```")) {
+            jsonText = jsonText.substring(0, jsonText.length - 3); // Quita ```
+          }
+          jsonText = jsonText.trim();
 
-        if (scenarios.length === 0 && fullText.length > 0 && !fullText.includes("No se pudieron generar escenarios")) {
-          // Si no se pudieron parsear escenarios pero hubo texto, devuelve el texto como fallback.
-          // Esto puede pasar si el modelo no sigue el formato al 100%.
-          console.warn("Los escenarios no pudieron ser parseados como una lista con '- '. Devolviendo el texto crudo como un único escenario.");
-          return [fullText];
+          const testCases: DetailedTestCase[] = JSON.parse(jsonText);
+          if (!Array.isArray(testCases) || testCases.length === 0) {
+            console.warn("La respuesta de la API para casos de prueba detallados no es un array JSON válido o está vacío, o el parsing falló después de la limpieza.", rawText);
+            return [{ title: "Error de Formato", preconditions: "La respuesta de la API no tuvo el formato JSON esperado.", steps: rawText, expectedResults: "N/A" }];
+          }
+          // Validar estructura mínima de cada caso
+          return testCases.map(tc => ({
+            title: tc.title || "Título no proporcionado",
+            preconditions: tc.preconditions || "N/A",
+            steps: tc.steps || "Pasos no proporcionados",
+            expectedResults: tc.expectedResults || "Resultados no proporcionados"
+          }));
+        } catch (e) {
+          console.error("Error al parsear la respuesta JSON de casos de prueba detallados:", e, "\nRespuesta cruda:", rawText);
+          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar la respuesta de la API.", steps: rawText, expectedResults: "Verificar la consola para detalles del error." }];
         }
-
-        if (scenarios.length === 0) {
-          // Si no hay escenarios y no es el mensaje específico, devuelve un mensaje genérico.
-          console.warn("La API no devolvió escenarios o el formato fue inesperado.");
-          return ['No se pudieron generar escenarios o la respuesta no tuvo el formato esperado.'];
-        }
-
-        return scenarios;
       }),
       catchError(this.handleError)
     );
   }
 
-  // *** Manejador de errores centralizado ***
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage = 'Ocurrió un error desconocido en la comunicación con la API de Gemini.';
     console.error('Error de API capturado:', error);
 
     if (error.error instanceof ErrorEvent) {
-      // Error del lado del cliente o de red
       errorMessage = `Error del cliente o de red: ${error.error.message}`;
     } else {
-      // Error del lado del servidor (HTTP)
       const geminiApiError = error.error as GeminiErrorResponse;
       if (geminiApiError?.error?.message) {
         errorMessage = `Error de la API de Gemini (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
         if (geminiApiError.error.details && geminiApiError.error.details.length > 0) {
           errorMessage += ` Detalles: ${geminiApiError.error.details.map(d => d.reason || JSON.stringify(d)).join(', ')}`;
         }
-      } else if (typeof error.error === 'string' && error.error.length > 0 && error.error.length < 500) { // Evitar mensajes de error HTML muy largos
-        // A veces la API puede devolver un error como string simple
+      } else if (typeof error.error === 'string' && error.error.length > 0 && error.error.length < 500) {
         errorMessage = `Error HTTP (${error.status}): ${error.statusText} - Respuesta: ${error.error}`;
       }
       else {
         errorMessage = `Error HTTP (${error.status}): ${error.statusText}. No se pudo obtener un mensaje detallado del cuerpo del error.`;
       }
     }
-    return throwError(() => new Error(errorMessage)); // Devolver un objeto Error
+    return throwError(() => new Error(errorMessage));
   }
 }

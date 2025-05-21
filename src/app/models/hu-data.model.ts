@@ -1,41 +1,37 @@
 // src/app/models/hu-data.model.ts
 
+// Importar la nueva interfaz
+import { DetailedTestCase } from '../services/gemini.service';
+
 export interface HUData {
-  // Datos de entrada originales tal como se ingresaron en el formulario
   originalInput: {
-    id: string; // ID de la HU ingresado originalmente
-    title: string; // Título de la HU ingresado originalmente
+    id: string;
+    title: string;
     sprint: string;
     description: string;
     acceptanceCriteria: string;
-    selectedTechnique: string; // Técnica seleccionada cuando se AÑADIÓ la HU inicialmente
+    selectedTechnique: string;
   };
-  // Datos principales de la HU que se usarán en el plan consolidado
-  id: string; // ID de la HU
-  title: string; // Título de la HU
-  sprint: string; // Sprint de la HU
+  id: string;
+  title: string;
+  sprint: string;
 
-  // Datos generados por IA para esta HU
-  generatedScope: string; // Texto del alcance
-  generatedScenarios: string[]; // Lista de textos completos de escenarios (ej: "Given ... When ... Then ...")
-  generatedTestCaseTitles: string; // Texto formateado de títulos para el plan (ej: 1. Scenario Title\n2. Another Title)
+  generatedScope: string;
+  // generatedScenarios: string[]; // Ya no se usa esta, se reemplaza por detailedTestCases
+  generatedTestCaseTitles: string; // Se seguirá usando para la previsualización del plan
+  detailedTestCases: DetailedTestCase[]; // NUEVA propiedad para los casos de prueba detallados
 
-  // Estado de edición para la UI (si el usuario está editando manualmente el texto generado)
-  editingScope: boolean; // Indica si el alcance está en edición
-  editingScenarios: boolean; // Indica si los escenarios (su representación formateada) están en edición
+  editingScope: boolean;
+  editingScenarios: boolean; // Se puede mantener para la edición del texto general de casos
 
-  // Estados de carga/error específicos por sección para las llamadas a la IA (regeneración)
-  loadingScope: boolean; // Indica si se está regenerando el alcance de esta HU
-  errorScope: string | null; // Error específico para la regeneración del alcance de esta HU
-  loadingScenarios: boolean; // Indica si se están regenerando los escenarios de esta HU
-  errorScenarios: string | null; // Error específico para la regeneración de escenarios de esta HU
+  loadingScope: boolean;
+  errorScope: string | null;
+  loadingScenarios: boolean; // Se usará para la carga de detailedTestCases
+  errorScenarios: string | null; // Error para detailedTestCases
 
-  // --- Propiedades adicionales para la funcionalidad de regeneración de escenarios CON SELECCIÓN DE TÉCNICA ---
-  showRegenTechniquePicker: boolean; // Controla si se muestra el selector de técnica para regeneración de escenarios en la UI de esta HU
-  regenSelectedTechnique: string; // Almacena la técnica seleccionada en el picker para la regeneración actual de esta HU
-  // --- Fin Propiedades para regeneración ---
+  showRegenTechniquePicker: boolean;
+  regenSelectedTechnique: string;
 
-  // ***** NUEVAS PROPIEDADES AÑADIDAS *****
-  isScopeDetailsOpen: boolean; // Controla si la sección <details> de Alcance está abierta (independiente de la edición)
-  isScenariosDetailsOpen: boolean; // Controla si la sección <details> de Casos de Prueba está abierta (independiente de la edición/regeneración)
+  isScopeDetailsOpen: boolean;
+  isScenariosDetailsOpen: boolean;
 }
