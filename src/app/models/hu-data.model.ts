@@ -1,33 +1,35 @@
 // src/app/models/hu-data.model.ts
+import { DetailedTestCase } from '../services/gemini.service'; // Asegúrate que la ruta es correcta
 
-// Importar la nueva interfaz
-import { DetailedTestCase } from '../services/gemini.service';
+export type GenerationMode = 'text' | 'image';
 
 export interface HUData {
   originalInput: {
     id: string;
-    title: string;
+    title: string; // El título siempre es requerido, ya sea ingresado o por defecto para imagen
     sprint: string;
-    description: string;
-    acceptanceCriteria: string;
+    description?: string; // Opcional, solo para modo 'text'
+    acceptanceCriteria?: string; // Opcional, solo para modo 'text'
     selectedTechnique: string;
+    generationMode: GenerationMode;
+    imageBase64?: string; // Solo para modo 'image'
+    imageMimeType?: string; // Solo para modo 'image'
   };
-  id: string;
-  title: string;
+  id: string; // ID final de la HU
+  title: string; // Título final de la HU
   sprint: string;
 
-  generatedScope: string;
-  // generatedScenarios: string[]; // Ya no se usa esta, se reemplaza por detailedTestCases
-  generatedTestCaseTitles: string; // Se seguirá usando para la previsualización del plan
-  detailedTestCases: DetailedTestCase[]; // NUEVA propiedad para los casos de prueba detallados
+  generatedScope: string; // Solo relevante para modo 'text'
+  detailedTestCases: DetailedTestCase[];
+  generatedTestCaseTitles: string; // Para previsualización del plan descargable y edición de títulos
 
   editingScope: boolean;
-  editingScenarios: boolean; // Se puede mantener para la edición del texto general de casos
+  editingScenarios: boolean; // Para la edición del textarea de generatedTestCaseTitles
 
   loadingScope: boolean;
   errorScope: string | null;
-  loadingScenarios: boolean; // Se usará para la carga de detailedTestCases
-  errorScenarios: string | null; // Error para detailedTestCases
+  loadingScenarios: boolean;
+  errorScenarios: string | null;
 
   showRegenTechniquePicker: boolean;
   regenSelectedTechnique: string;

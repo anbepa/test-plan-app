@@ -4,9 +4,67 @@
   </header>
 
   <section class="form-section" aria-labelledby="form-section-title">
-    <h2 id="form-section-title">Datos de la Historia de Usuario (HU)</h2>
+    <h2 id="form-section-title">Datos de Entrada</h2>
+
     <form (ngSubmit)="addHuAndGenerateData()" #huForm="ngForm">
+      <div class="form-group generation-mode-selector-group">
+        <label for="generationMode">Método de Generación de Casos de Prueba:</label>
+        <select id="generationMode" name="generationMode" [(ngModel)]="currentGenerationMode" (ngModelChange)="onGenerationModeChange()" required>
+          <option value="text" selected>Por Descripción de HU y Criterios</option>
+          <option value="image">Por Imagen Cargada</option>
+        </select>
+      </div>
+
       <div class="form-grid">
+        <ng-container *ngIf="currentGenerationMode === 'text'">
+          <div class="form-group">
+            <label for="currentHuId">ID de la HU:</label>
+            <input id="currentHuId" type="text" name="currentHuId" [(ngModel)]="currentHuId" [required]="currentGenerationMode === 'text'" placeholder="Ej: HU_1234">
+            <div *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted) && currentGenerationMode === 'text'" class="validation-error" role="alert">
+              ID de la HU es requerido.
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="currentHuTitle">Título de la HU:</label>
+            <input id="currentHuTitle" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" [required]="currentGenerationMode === 'text'" placeholder="Ej: Como usuario, quiero...">
+            <div *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted) && currentGenerationMode === 'text'" class="validation-error" role="alert">
+              Título de la HU es requerido.
+            </div>
+          </div>
+           <div class="form-group full-width">
+            <label for="currentDescription">Descripción de la HU:</label>
+            <textarea id="currentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4" [required]="currentGenerationMode === 'text'" placeholder="Ej: La HU describe la funcionalidad..."></textarea>
+            <div *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted) && currentGenerationMode === 'text'" class="validation-error" role="alert">
+              Descripción de la HU es requerida.
+            </div>
+          </div>
+          <div class="form-group full-width">
+            <label for="currentAcceptanceCriteria">Criterios de Aceptación:</label>
+            <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" [required]="currentGenerationMode === 'text'" placeholder="Ej: 
+- Dado que..."></textarea>
+            <div *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted) && currentGenerationMode === 'text'" class="validation-error" role="alert">
+              Criterios de Aceptación son requeridos.
+            </div>
+          </div>
+        </ng-container>
+
+         <div class="form-group" *ngIf="currentGenerationMode === 'image'">
+            <label for="currentHuIdImage">ID (Autogenerado para Imagen):</label>
+            <input id="currentHuIdImage" type="text" name="currentHuIdImage" [(ngModel)]="currentHuId" readonly placeholder="Autogenerado">
+          </div>
+          <div class="form-group" *ngIf="currentGenerationMode === 'image'">
+            <label for="currentHuTitleImage">Título (Autogenerado para Imagen):</label>
+            <input id="currentHuTitleImage" type="text" name="currentHuTitleImage" [(ngModel)]="currentHuTitle" readonly placeholder="Autogenerado">
+          </div>
+
+        <div class="form-group">
+          <label for="currentSprint">Sprint:</label>
+          <input id="currentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required placeholder="Ej: Sprint 1">
+          <div *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)" class="validation-error" role="alert">
+            Sprint es requerido.
+          </div>
+        </div>
+
         <div class="form-group scenario-input-section">
           <label for="currentSelectedTechnique">Técnica ISTQB para escenarios:</label>
           <select id="currentSelectedTechnique" name="currentSelectedTechnique" [(ngModel)]="currentSelectedTechnique" required>
@@ -16,54 +74,37 @@
             <option value="Decision Table Testing">Tabla de Decisión</option>
             <option value="State Transition Testing">Pruebas de Transición de Estados</option>
           </select>
-          <div *ngIf="huForm.submitted && !currentSelectedTechnique" class="validation-error" role="alert">
+          <div *ngIf="huForm.controls['currentSelectedTechnique']?.invalid && (huForm.controls['currentSelectedTechnique']?.dirty || huForm.controls['currentSelectedTechnique']?.touched || huForm.submitted)" class="validation-error" role="alert">
             Debes seleccionar una técnica ISTQB.
           </div>
         </div>
-        <div class="form-group">
-          <label for="currentHuId">ID de la HU:</label>
-          <input id="currentHuId" type="text" name="currentHuId" [(ngModel)]="currentHuId" required placeholder="Ej: HU_1234" #huIdInput="ngModel">
-          <div *ngIf="huIdInput.invalid && (huIdInput.dirty || huIdInput.touched)" class="validation-error" role="alert">
-            ID de la HU es requerido.
+
+        <div class="form-group full-width" *ngIf="currentGenerationMode === 'image'">
+          <label for="imageFile">Cargar Imagen del Flujo (JPG, PNG - Máx. 4MB):</label>
+          <input type="file" id="imageFile" name="imageFile" (change)="onFileSelected($event)" accept="image/jpeg, image/png" [required]="currentGenerationMode === 'image'">
+          <div *ngIf="imageUploadError" class="validation-error" role="alert">
+            {{ imageUploadError }}
           </div>
-        </div>
-        <div class="form-group">
-          <label for="currentHuTitle">Título de la HU:</label>
-          <input id="currentHuTitle" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required placeholder="Ej: Como usuario, quiero..." #huTitleInput="ngModel">
-          <div *ngIf="huTitleInput.invalid && (huTitleInput.dirty || huTitleInput.touched)" class="validation-error" role="alert">
-            Título de la HU es requerido.
+           <div *ngIf="huForm.controls['imageFile']?.invalid && (huForm.controls['imageFile']?.dirty || huForm.controls['imageFile']?.touched || huForm.submitted) && currentGenerationMode === 'image' && !selectedFile" class="validation-error" role="alert">
+            Debes seleccionar una imagen.
           </div>
-        </div>
-        <div class="form-group">
-          <label for="currentSprint">Sprint:</label>
-          <input id="currentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required placeholder="Ej: Sprint 1" #sprintInput="ngModel">
-          <div *ngIf="sprintInput.invalid && (sprintInput.dirty || sprintInput.touched)" class="validation-error" role="alert">
-            Sprint es requerido.
-          </div>
-        </div>
-        <div class="form-group full-width">
-          <label for="currentDescription">Descripción de la HU:</label>
-          <textarea id="currentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4" required placeholder="Ej: La HU describe la funcionalidad de la siguiente manera..." #descriptionInput="ngModel"></textarea>
-          <div *ngIf="descriptionInput.invalid && (descriptionInput.dirty || descriptionInput.touched)" class="validation-error" role="alert">
-            Descripción de la HU es requerida.
-          </div>
-        </div>
-        <div class="form-group full-width">
-          <label for="currentAcceptanceCriteria">Criterios de Aceptación:</label>
-          <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: 
-- Dado que...
-- Cuando...
-- Entonces..." #acceptanceCriteriaInput="ngModel"></textarea>
-          <div *ngIf="acceptanceCriteriaInput.invalid && (acceptanceCriteriaInput.dirty || acceptanceCriteriaInput.touched)" class="validation-error" role="alert">
-            Criterios de Aceptación son requeridos.
+
+          <div *ngIf="currentImagePreview" class="image-preview-container">
+            <p>Previsualización:</p>
+            <img [src]="currentImagePreview" alt="Previsualización de imagen cargada" class="image-preview">
           </div>
         </div>
       </div>
+
       <div class="form-actions">
-        <button type="submit" class="button-primary" [disabled]="isFormInvalid || loadingSections || loadingScenarios">
+        <button type="submit" class="button-primary" [disabled]="isFormInvalidForCurrentMode() || loadingSections || loadingScenarios">
           <span *ngIf="loadingSections || loadingScenarios" class="spinner"></span>
-          {{ loadingSections || loadingScenarios ? 'Generando...' : 'Añadir HU y Generar Datos' }}
+          {{ loadingSections || loadingScenarios ? 'Generando...' : 'Añadir y Generar Datos' }}
         </button>
+      </div>
+
+      <div *ngIf="formError" class="error-message" role="alert">
+        <p>{{ formError }}</p>
       </div>
       <div *ngIf="sectionsError || scenariosError" class="error-message" role="alert">
         <p *ngIf="sectionsError">{{ sectionsError }}</p>
@@ -76,20 +117,18 @@
     <div class="section-header">
       <h2>Plan de Pruebas: {{ testPlanTitle || 'Sin Título' }}</h2>
     </div>
-
     <div *ngIf="huList.length === 0 && !(loadingSections || loadingScenarios)" class="no-content-message">
       <p>Añade una Historia de Usuario para empezar a generar el plan de pruebas.</p>
     </div>
-
     <div class="hu-list-container">
       <div *ngFor="let hu of huList; trackBy: trackHuById" class="hu-card">
         <div class="hu-header">
-          <h3>HU {{ hu.id }}: {{ hu.title }} (Sprint: {{ hu.sprint }})</h3>
+          <h3>HU {{ hu.id }}: {{ hu.title }} (Sprint: {{ hu.sprint }}) <span *ngIf="hu.originalInput.generationMode === 'image'" class="mode-indicator">(Generado desde Imagen)</span></h3>
         </div>
-
         <details class="plan-section-block" #scopeDetailsElement
                  [open]="hu.editingScope || hu.isScopeDetailsOpen"
-                 (toggle)="!hu.editingScope && (hu.isScopeDetailsOpen = scopeDetailsElement.open)">
+                 (toggle)="!hu.editingScope && (hu.isScopeDetailsOpen = scopeDetailsElement.open)"
+                 *ngIf="hu.originalInput.generationMode === 'text'">
           <summary>Alcance
             <span *ngIf="hu.loadingScope" class="spinner-small"></span>
             <span *ngIf="hu.errorScope" class="error-status-icon" title="{{ hu.errorScope }}">⚠️</span>
@@ -106,23 +145,20 @@
                 {{ hu.editingScope ? 'Guardar Alcance' : 'Editar Alcance' }}
               </button>
               <button (click)="regenerateScope(hu)" class="button-generate" [disabled]="hu.loadingScope">
-                <span *ngIf="hu.loadingScope" class="spinner-inline"></span>
-                Regenerar Alcance
+                <span *ngIf="hu.loadingScope" class="spinner-inline"></span> Regenerar Alcance
               </button>
             </div>
           </div>
         </details>
-
         <details class="plan-section-block" #scenariosDetailsElement
                  [open]="(hu.editingScenarios || hu.showRegenTechniquePicker) || hu.isScenariosDetailsOpen"
                  (toggle)="!(hu.editingScenarios || hu.showRegenTechniquePicker) && (hu.isScenariosDetailsOpen = scenariosDetailsElement.open)">
           <summary>Casos de Prueba
             <span *ngIf="hu.loadingScenarios && !hu.showRegenTechniquePicker" class="spinner-small"></span>
-            <span *ngIf="hu.errorScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span>
+            <span *ngIf="hu.errorScenarios && !hu.loadingScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span>
           </summary>
           <div class="content">
-            <!-- SECCIÓN MODIFICADA PARA MOSTRAR TABLA DE CASOS DETALLADOS -->
-            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0; else editScenariosBlockOrNoData">
+            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.title !== 'Error de API' && hu.detailedTestCases[0]?.title !== 'Error de Formato' && hu.detailedTestCases[0]?.title !== 'Error de Parsing JSON' && hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && hu.detailedTestCases[0]?.title !== 'Imagen no interpretable o técnica no aplicable'; else editScenariosBlockOrNoData">
               <div class="detailed-test-cases-table-container">
                 <table class="detailed-test-cases-table">
                   <thead>
@@ -147,23 +183,25 @@
               </div>
             </div>
             <ng-template #editScenariosBlockOrNoData>
-              <div *ngIf="hu.editingScenarios; else noScenariosData">
-                <!-- Si se mantiene la edición de texto, se puede dejar el textarea para generatedTestCaseTitles -->
-                <!-- O se puede implementar edición en la tabla o modal para detailedTestCases -->
+              <div *ngIf="hu.editingScenarios; else noScenariosDataOrError">
                 <p><strong>Editando Títulos de Casos de Prueba (para previsualización del plan):</strong></p>
                 <textarea [(ngModel)]="hu.generatedTestCaseTitles" rows="10" class="scrollable-content" #scenariosTextarea></textarea>
-                <small>Nota: Esta edición afecta solo los títulos mostrados en la previsualización del plan general. Los detalles completos se gestionan con la regeneración.</small>
+                <small>Nota: Esta edición afecta solo los títulos mostrados en la previsualización del plan general y descarga .doc.</small>
               </div>
-              <ng-template #noScenariosData>
-                <pre class="generated-text" *ngIf="!hu.loadingScenarios">{{ hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga.' }}</pre>
-                <div *ngIf="hu.loadingScenarios && hu.showRegenTechniquePicker" class="loading-message">
-                    <span class="spinner-inline"></span> Regenerando casos de prueba...
+              <ng-template #noScenariosDataOrError>
+                <div *ngIf="hu.loadingScenarios && !hu.showRegenTechniquePicker" class="loading-message">
+                    <span class="spinner-inline"></span> Cargando casos de prueba...
                 </div>
+                <pre class="generated-text" *ngIf="!hu.loadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON' || hu.detailedTestCases[0]?.title === 'Información Insuficiente' || hu.detailedTestCases[0]?.title === 'Imagen no interpretable o técnica no aplicable')">
+                  {{ hu.errorScenarios ? 'Error: ' + hu.errorScenarios : (hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga.') }}
+                  <span *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.steps !== 'N/A' && (hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON') ">
+                    <br>--- Respuesta Recibida (puede contener detalles del error) ---<br>
+                    {{ hu.detailedTestCases[0].steps }}
+                  </span>
+                </pre>
               </ng-template>
             </ng-template>
-            <!-- FIN SECCIÓN MODIFICADA -->
 
-            <!-- Dentro de la sección de Casos de Prueba, en el .regen-picker-inline -->
             <div *ngIf="hu.showRegenTechniquePicker" class="regen-picker-inline">
               <label for="regenTechnique-{{hu.id}}">Regenerar con técnica:</label>
               <select id="regenTechnique-{{hu.id}}" [(ngModel)]="hu.regenSelectedTechnique" name="regenTechnique-{{hu.id}}" class="regen-technique-select" [disabled]="hu.loadingScenarios">
@@ -174,7 +212,6 @@
                 <option value="State Transition Testing">Pruebas de Transición de Estados</option>
               </select>
               <div class="regen-buttons-container">
-                <!-- BOTÓN "Confirmar Regeneración" MODIFICADO -->
                 <button (click)="confirmRegenerateScenarios(hu)" class="button-generate"
                         [disabled]="!hu.regenSelectedTechnique || hu.loadingScenarios">
                   <span *ngIf="hu.loadingScenarios" class="spinner-inline"></span>
@@ -191,16 +228,14 @@
             </div>
 
             <div class="actions">
-              <!-- BOTÓN MODIFICADO/NUEVO -->
               <button (click)="toggleEdit(hu, 'scenarios')" class="button-edit" [disabled]="hu.showRegenTechniquePicker">
                 {{ hu.editingScenarios ? 'Guardar Títulos (Preview)' : 'Editar Títulos (Preview)' }}
               </button>
               <button (click)="startScenarioRegeneration(hu)" class="button-generate" [disabled]="hu.loadingScenarios || hu.showRegenTechniquePicker">
                 Regenerar Casos
               </button>
-              <!-- NUEVO BOTÓN DE EXPORTAR MATRIZ -->
               <button (click)="exportExecutionMatrix(hu)" class="button-secondary"
-                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente'">
+                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente' || hu.detailedTestCases[0].title === 'Imagen no interpretable o técnica no aplicable'">
                 Exportar Matriz (.csv)
               </button>
             </div>
@@ -209,124 +244,50 @@
       </div>
     </div>
 
-    <!-- Secciones estáticas del plan (sin cambios aquí) -->
     <div class="static-plan-sections" *ngIf="huList.length > 0">
         <details class="plan-section-block static-block" #repoDetailsElement
                  [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen"
                  (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)">
             <summary>Repositorio Pruebas VSTS</summary>
-            <div class="content">
-              <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock">
-                <pre class="static-text">
-                    <a [href]="repositoryLink.split(' ')[0]" target="_blank">{{ repositoryLink }}</a>
-                </pre>
-              </div>
-              <ng-template #editRepositoryLinkBlock>
-                <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary">
-                  {{ editingRepositoryLink ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock"> <pre class="static-text"> <a [href]="repositoryLink.split(' ')[0]" target="_blank">{{ repositoryLink }}</a> </pre> </div> <ng-template #editRepositoryLinkBlock> <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary"> {{ editingRepositoryLink ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
         <details class="plan-section-block static-block" #outOfScopeDetailsElement
                  [open]="editingOutOfScope || isOutOfScopeDetailsOpen"
-                 (toggle)="!editingOutOfScope && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)">
+                 (toggle)="!editingOutOfScope && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)"
+                  *ngIf="isAnyHuTextBased()">
             <summary>Fuera del Alcance</summary>
-            <div class="content">
-              <div *ngIf="!editingOutOfScope; else editOutOfScopeBlock">
-                <pre class="static-text">{{ outOfScopeContent }}</pre>
-              </div>
-              <ng-template #editOutOfScopeBlock>
-                <textarea [(ngModel)]="outOfScopeContent" rows="4" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary">
-                  {{ editingOutOfScope ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingOutOfScope; else editOutOfScopeBlock"> <pre class="static-text">{{ outOfScopeContent }}</pre> </div> <ng-template #editOutOfScopeBlock> <textarea [(ngModel)]="outOfScopeContent" rows="4" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary"> {{ editingOutOfScope ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
         <details class="plan-section-block static-block" #strategyDetailsElement
                  [open]="editingStrategy || isStrategyDetailsOpen"
                  (toggle)="!editingStrategy && (isStrategyDetailsOpen = strategyDetailsElement.open)">
             <summary>Estrategia</summary>
-            <div class="content">
-              <div *ngIf="!editingStrategy; else editStrategyBlock">
-                <pre class="static-text">{{ strategyContent }}</pre>
-              </div>
-              <ng-template #editStrategyBlock>
-                <textarea [(ngModel)]="strategyContent" rows="8" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('strategy')" class="button-secondary">
-                  {{ editingStrategy ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingStrategy; else editStrategyBlock"> <pre class="static-text">{{ strategyContent }}</pre> </div> <ng-template #editStrategyBlock> <textarea [(ngModel)]="strategyContent" rows="8" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('strategy')" class="button-secondary"> {{ editingStrategy ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
         <details class="plan-section-block static-block" #limitationsDetailsElement
                  [open]="editingLimitations || isLimitationsDetailsOpen"
                  (toggle)="!editingLimitations && (isLimitationsDetailsOpen = limitationsDetailsElement.open)">
             <summary>Limitaciones</summary>
-            <div class="content">
-              <div *ngIf="!editingLimitations; else editLimitationsBlock">
-                <pre class="static-text">{{ limitationsContent }}</pre>
-              </div>
-              <ng-template #editLimitationsBlock>
-                <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('limitations')" class="button-secondary">
-                  {{ editingLimitations ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingLimitations; else editLimitationsBlock"> <pre class="static-text">{{ limitationsContent }}</pre> </div> <ng-template #editLimitationsBlock> <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('limitations')" class="button-secondary"> {{ editingLimitations ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
         <details class="plan-section-block static-block" #assumptionsDetailsElement
                  [open]="editingAssumptions || isAssumptionsDetailsOpen"
                  (toggle)="!editingAssumptions && (isAssumptionsDetailsOpen = assumptionsDetailsElement.open)">
             <summary>Supuestos</summary>
-            <div class="content">
-              <div *ngIf="!editingAssumptions; else editAssumptionsBlock">
-                <pre class="static-text">{{ assumptionsContent }}</pre>
-              </div>
-              <ng-template #editAssumptionsBlock>
-                <textarea [(ngModel)]="assumptionsContent" rows="8" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('assumptions')" class="button-secondary">
-                  {{ editingAssumptions ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingAssumptions; else editAssumptionsBlock"> <pre class="static-text">{{ assumptionsContent }}</pre> </div> <ng-template #editAssumptionsBlock> <textarea [(ngModel)]="assumptionsContent" rows="8" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('assumptions')" class="button-secondary"> {{ editingAssumptions ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
         <details class="plan-section-block static-block" #teamDetailsElement
                  [open]="editingTeam || isTeamDetailsOpen"
                  (toggle)="!editingTeam && (isTeamDetailsOpen = teamDetailsElement.open)">
             <summary>Equipo de Trabajo</summary>
-            <div class="content">
-              <div *ngIf="!editingTeam; else editTeamBlock">
-                <pre class="static-text">{{ teamContent }}</pre>
-              </div>
-              <ng-template #editTeamBlock>
-                <textarea [(ngModel)]="teamContent" rows="8" class="scrollable-content"></textarea>
-              </ng-template>
-              <div class="actions">
-                <button (click)="toggleStaticEdit('team')" class="button-secondary">
-                  {{ editingTeam ? 'Guardar' : 'Editar' }}
-                </button>
-              </div>
-            </div>
+            <div class="content"> <div *ngIf="!editingTeam; else editTeamBlock"> <pre class="static-text">{{ teamContent }}</pre> </div> <ng-template #editTeamBlock> <textarea [(ngModel)]="teamContent" rows="8" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('team')" class="button-secondary"> {{ editingTeam ? 'Guardar' : 'Editar' }} </button> </div> </div>
         </details>
     </div>
 
     <div class="preview-download-section">
-        <div class="preview-section" *ngIf="downloadPreviewHtmlContent"> <!-- Usa la propiedad para el HTML -->
+        <div class="preview-section" *ngIf="downloadPreviewHtmlContent">
           <h2>Previsualización del Plan Descargable (.doc)</h2>
-          <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre> <!-- Usa [innerHTML] -->
+          <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre>
         </div>
         <button (click)="downloadWord()" class="button-primary button-download" [disabled]="huList.length === 0">
           Descargar Plan Completo (.doc)
