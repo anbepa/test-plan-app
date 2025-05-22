@@ -5,6 +5,13 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// --- INICIO DE LA MODIFICACIÓN ---
+// Usar require para node-fetch v2.x
+// Asegúrate de haber instalado node-fetch@2 (ej. npm install node-fetch@2.6.7)
+// y @types/node-fetch@^2 si usas TypeScript intensivamente con sus tipos.
+const fetch = require('node-fetch');
+// --- FIN DE LA MODIFICACIÓN ---
+
 // Tipos que tu frontend (GeminiService) envía al proxy
 interface ProxyRequestBody {
   action: string; // Permite cualquier string, pero tu servicio usará valores específicos
@@ -40,21 +47,12 @@ interface GeminiApiErrorResponse {
   error?: GeminiApiError;
 }
 
-
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse
 ) {
-    let fetch;
-    try {
-      // Importación dinámica de node-fetch
-      const nodeFetch = await import('node-fetch');
-      fetch = nodeFetch.default; // node-fetch v3+ exporta su función principal como 'default'
-    } catch (err) {
-      console.error('Failed to dynamically import node-fetch:', err);
-      return response.status(500).json({ error: 'Server configuration error: Could not load fetch module.' });
-    }
-
+  // El bloque try-catch para la importación de fetch ya no es necesario aquí,
+  // ya que require() es síncrono y está en el scope del módulo.
 
   if (request.method !== 'POST') {
     console.warn(`Method Not Allowed: ${request.method} for /api/gemini-proxy`);
@@ -62,7 +60,6 @@ export default async function handler(
   }
 
   const GEMINI_API_KEY = process.env['GEMINI_API_KEY'];
-  // GEMINI_MODEL_ENDPOINT_URL se espera que sea la URL completa del endpoint del modelo desde las variables de entorno
   const GEMINI_MODEL_ENDPOINT_URL = process.env['GEMINI_API_URL_BACKEND'];
 
   if (!GEMINI_API_KEY) {
@@ -75,30 +72,37 @@ export default async function handler(
   }
 
   try {
-    const { action, payload } = request.body as ProxyRequestBody;
+    // Es buena práctica parsear el body dentro del try-catch si no estás seguro de que Vercel siempre lo haga
+    // y para manejar errores de JSON malformado.
+    let parsedBody: ProxyRequestBody;
+    if (typeof request.body === 'string' && request.body.length > 0) { // Comprobar si es un string no vacío
+        try {
+            parsedBody = JSON.parse(request.body);
+        } catch (parseError: any) {
+            console.warn('Bad Request: Could not parse request body as JSON.', { body: request.body, error: parseError.message });
+            return response.status(400).json({ error: 'Bad Request: Invalid JSON body.' });
+        }
+    } else if (typeof request.body === 'object' && request.body !== null) {
+        parsedBody = request.body as ProxyRequestBody;
+    } else {
+        console.warn('Bad Request: Request body is empty or not a recognized type.', { body: request.body });
+        return response.status(400).json({ error: 'Bad Request: Missing or invalid request body.' });
+    }
 
-    if (!action || payload === undefined) { // Comprobar payload !== undefined si puede ser null o 0
-      console.warn('Bad Request: Missing action or payload in request body.', request.body);
+    const { action, payload } = parsedBody;
+
+    if (!action || payload === undefined) {
+      console.warn('Bad Request: Missing action or payload in request body.', { action, payloadExists: payload !== undefined });
       return response.status(400).json({ error: 'Bad Request: Missing action or payload.' });
     }
 
-    const geminiRequestBody = payload; // El payload ya es el cuerpo que Gemini espera
-
-    // Como GEMINI_MODEL_ENDPOINT_URL ya es la URL completa del modelo,
-    // no necesitamos un 'switch' para construir la ruta del modelo aquí.
-    // Sin embargo, la 'action' podría usarse para otra lógica si fuera necesario.
-    // Si diferentes acciones DEBEN ir a diferentes URLs de modelo, este enfoque
-    // de una única GEMINI_API_URL_BACKEND con la URL completa no será suficiente.
-    // En ese caso, deberías volver al enfoque donde GEMINI_API_URL_BACKEND es solo
-    // la base (https://generativelanguage.googleapis.com) y el 'switch'
-    // construye el resto de la ruta del modelo.
-
+    const geminiRequestBody = payload;
     const fullGeminiUrl = `${GEMINI_MODEL_ENDPOINT_URL}?key=${GEMINI_API_KEY}`;
 
     console.log(`Proxying action "${action}" to Gemini URL: ${fullGeminiUrl}`);
-    // console.log('Gemini Request Body:', JSON.stringify(geminiRequestBody, null, 2));
+    // console.log('Gemini Request Body:', JSON.stringify(geminiRequestBody, null, 2)); // Descomentar para depuración detallada
 
-    const geminiApiResponse = await fetch(fullGeminiUrl, {
+    const geminiApiResponse = await fetch(fullGeminiUrl, { // 'fetch' aquí es la constante definida con require()
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -121,7 +125,7 @@ export default async function handler(
             errorDetails = parsedError.error;
         }
       } catch (e) {
-        // No era JSON
+        // No era JSON o no tenía la estructura esperada
       }
       return response.status(geminiApiResponse.status).json({
         error: `Error from Gemini API (HTTP ${geminiApiResponse.status})`,
@@ -147,7 +151,8 @@ export default async function handler(
     }
 
   } catch (error: any) {
-    console.error(`Unhandled exception in proxy function for request body:`, request.body, error);
+    // Este catch general es para errores inesperados en tu lógica del proxy.
+    console.error(`Unhandled exception in proxy function:`, { requestBody: request.body, error: error.message, stack: error.stack });
     let errorMessage = 'Internal Server Error in proxy.';
     if (error instanceof Error) {
         errorMessage = error.message;
@@ -157,7 +162,7 @@ export default async function handler(
     return response.status(500).json({
         error: 'Internal Server Error in proxy.',
         details: errorMessage,
-        action: (request.body as ProxyRequestBody)?.action || 'unknown'
+        action: (request.body as ProxyRequestBody)?.action || 'unknown' // Intenta obtener la acción si es posible
     });
   }
 }
