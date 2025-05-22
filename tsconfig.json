@@ -10,18 +10,32 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
-    "isolatedModules": true,
+    // "isolatedModules": true, // A menudo no es necesario o puede causar problemas con la transpilación a CommonJS para el backend
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true, // Ayuda con la interoperabilidad de módulos
     "experimentalDecorators": true,
-    "moduleResolution": "bundler",
+    "moduleResolution": "node", // CAMBIO: Para mejor compatibilidad con Node.js y @vercel/node
     "importHelpers": true,
-    "target": "ES2022",
-    "module": "ES2022"
+    "target": "ES2022", // Mantenemos el target moderno
+    "module": "commonjs", // CAMBIO: Para compilar las funciones serverless a CommonJS
+    "resolveJsonModule": true // Buena práctica, especialmente para backend
+    // "baseUrl": "./", // Descomentar si usas paths, aunque no parece ser el caso aquí
+    // "paths": {}
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
     "strictInputAccessModifiers": true,
     "strictTemplates": true
-  }
+  },
+  "include": [ // Asegúrate de que los "include" y "exclude" sean correctos para tu proyecto
+    "src/**/*.ts",
+    "api/**/*.ts" // Incluye tus funciones API en la compilación
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+    // "src/test.ts", // Angular CLI suele tener su propio tsconfig para tests
+    // "**/*.spec.ts"
+  ]
 }

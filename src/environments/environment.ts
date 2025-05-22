@@ -1,7 +1,7 @@
+// src/environments/environment.ts
 export const environment = {
-    production: false,
-    // URL base de la API proporcionada (sin el parámetro key)
-    geminiApiUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    // Tu clave de API específica proporcionada (¡solo para desarrollo!)
-    geminiApiKey: 'AIzaSyAY2rW8AvGHlpbvrJISvXUkBLR42vk-tzg', // <-- ¡RECUERDA CAMBIAR ESTO O USAR UN BACKEND PARA PRODUCCIÓN!
-  };
+  production: false,
+  // Apunta a la ruta de tu proxy que `vercel dev` servirá localmente
+  geminiApiUrl: 'http://localhost:3000/api/gemini-proxy', // El puerto puede variar
+  // geminiApiKey: '', // Ya no se usa en el frontend
+};

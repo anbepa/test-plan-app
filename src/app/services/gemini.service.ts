@@ -5,7 +5,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
-// --- Definiciones de Tipos para la API de Gemini ---
+// --- Definiciones de Tipos para la API de Gemini (SIN CAMBIOS AQUÍ) ---
 interface GeminiTextPart { text: string; }
 interface GeminiInlineDataPart { inlineData: { mimeType: string; data: string; }; }
 interface GeminiContent { parts: (GeminiTextPart | GeminiInlineDataPart)[]; }
@@ -20,10 +20,10 @@ interface GeminiSafetySetting {
   category: string;
   threshold: string;
 }
-interface GeminiRequestBody {
-  contents: GeminiContent[];
-  generationConfig?: GeminiGenerationConfig;
-  safetySettings?: GeminiSafetySetting[];
+// ESTE TIPO AHORA REPRESENTA EL BODY QUE TU FRONTEND ENVÍA A TU PROXY
+interface ProxyRequestBody {
+  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection'; // Para que el proxy sepa qué hacer
+  payload: any; // El contenido específico para esa acción
 }
 interface GeminiCandidate {
   content: GeminiContent;
@@ -31,7 +31,7 @@ interface GeminiCandidate {
   safetyRatings?: any[];
   [key: string]: any;
 }
-interface GeminiResponse {
+interface GeminiResponse { // Esta es la respuesta que ESPERAMOS DEL PROXY (que será la respuesta de Gemini)
   candidates?: GeminiCandidate[];
   promptFeedback?: any;
   [key: string]: any;
@@ -66,9 +66,11 @@ export interface DetailedTestCase {
 })
 export class GeminiService {
 
-  private apiUrl = environment.geminiApiUrl;
-  private apiKey = environment.geminiApiKey;
+  // La URL del proxy se toma de environment.ts
+  private proxyApiUrl = environment.geminiApiUrl;
+  // apiKey YA NO SE USA AQUÍ
 
+  // --- PROMPTS (SIN CAMBIOS AQUÍ) ---
   private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string) => `
 Eres un analista de QA experimentado.
 Genera la sección de ALCANCE para un plan de pruebas.
@@ -163,7 +165,7 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
   private getTextFromParts(parts: (GeminiTextPart | GeminiInlineDataPart)[] | undefined): string {
     if (parts && parts.length > 0) {
       const firstPart = parts[0];
-      if (firstPart && 'text' in firstPart) { // Comprobación de existencia de firstPart
+      if (firstPart && 'text' in firstPart) {
         return (firstPart as GeminiTextPart).text;
       }
     }
@@ -172,12 +174,19 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
 
   generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
     const promptText = this.PROMPT_SCOPE(description, acceptanceCriteria);
-    const body: GeminiRequestBody = {
+    // Este es el cuerpo que el proxy espera
+    const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: { maxOutputTokens: 200, temperature: 0.4 }
     };
-    const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
-    return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
+
+    const requestToProxy: ProxyRequestBody = {
+        action: 'generateScope',
+        payload: geminiPayload
+    };
+
+    // La URL es ahora la del proxy, sin apiKey
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
       map(response => {
         const text = this.getTextFromParts(response?.candidates?.[0]?.content?.parts);
         return text.trim().split('\n').slice(0, 4).join('\n');
@@ -188,16 +197,21 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
 
   generateDetailedTestCasesTextBased(description: string, acceptanceCriteria: string, technique: string): Observable<DetailedTestCase[]> {
     const promptText = this.PROMPT_SCENARIOS_DETAILED_TEXT_BASED(description, acceptanceCriteria, technique);
-    const body: GeminiRequestBody = {
+    const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: { maxOutputTokens: 2048, temperature: 0.6 }
     };
-    return this.sendGenerationRequest(body);
+
+    const requestToProxy: ProxyRequestBody = {
+        action: 'generateTextCases',
+        payload: geminiPayload
+    };
+    return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
   generateDetailedTestCasesImageBased(imageBase64: string, mimeType: string, technique: string): Observable<DetailedTestCase[]> {
     const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique);
-    const body: GeminiRequestBody = {
+    const geminiPayload = {
       contents: [
         {
           parts: [
@@ -214,17 +228,22 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
         { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
       ]
     };
-    return this.sendGenerationRequest(body);
+    const requestToProxy: ProxyRequestBody = {
+        action: 'generateImageCases',
+        payload: geminiPayload
+    };
+    return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
-  private sendGenerationRequest(body: GeminiRequestBody): Observable<DetailedTestCase[]> {
-    const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
-    return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
+  // Método refactorizado para enviar al proxy
+  private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
+    // La URL es ahora la del proxy, sin apiKey
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
       map(response => {
         const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
         if (!rawText) {
-          console.warn("API did not return content for detailed test cases.");
-          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API.", steps: "N/A", expectedResults: "N/A" }];
+          console.warn("API (via proxy) did not return content for detailed test cases.");
+          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API (via proxy).", steps: "N/A", expectedResults: "N/A" }];
         }
         try {
           let jsonText = rawText;
@@ -234,8 +253,8 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
 
           const testCases: DetailedTestCase[] = JSON.parse(jsonText);
           if (!Array.isArray(testCases) || testCases.length === 0) {
-            console.warn("API response for detailed test cases is not a valid JSON array or is empty.", rawText);
-            return [{ title: "Error de Formato", preconditions: "La respuesta de la API no tuvo el formato JSON esperado.", steps: rawText, expectedResults: "N/A" }];
+            console.warn("API response (via proxy) for detailed test cases is not a valid JSON array or is empty.", rawText);
+            return [{ title: "Error de Formato", preconditions: "La respuesta de la API (via proxy) no tuvo el formato JSON esperado.", steps: rawText, expectedResults: "N/A" }];
           }
           return testCases.map(tc => ({
             title: tc.title || "Título no proporcionado",
@@ -244,8 +263,8 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
             expectedResults: tc.expectedResults || "Resultados no proporcionados"
           }));
         } catch (e) {
-          console.error("Error parsing JSON response for detailed test cases:", e, "\nRaw response:", rawText);
-          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar la respuesta de la API.", steps: rawText, expectedResults: "Verificar consola." }];
+          console.error("Error parsing JSON response (via proxy) for detailed test cases:", e, "\nRaw response:", rawText);
+          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar la respuesta de la API (via proxy).", steps: rawText, expectedResults: "Verificar consola." }];
         }
       }),
       catchError(this.handleError)
@@ -254,12 +273,17 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
 
   generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
     const promptText = this.PROMPT_STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
-    const body: GeminiRequestBody = {
+    const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 300, temperature: 0.5 } // Adjusted for concise additions
+      generationConfig: { maxOutputTokens: 300, temperature: 0.5 }
     };
-    const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
-    return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
+    const requestToProxy: ProxyRequestBody = {
+        action: 'enhanceStaticSection',
+        payload: geminiPayload
+    };
+
+    // La URL es ahora la del proxy, sin apiKey
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
       map(response => {
         const text = this.getTextFromParts(response?.candidates?.[0]?.content?.parts);
         return text.trim();
@@ -269,21 +293,30 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
-    let errorMessage = 'Ocurrió un error desconocido en la comunicación con la API.';
-    console.error('Error de API capturado:', error);
+    let errorMessage = 'Ocurrió un error desconocido en la comunicación con el API (via proxy).';
+    console.error('Error de API (via proxy) capturado:', error);
+    // El error.error ahora será lo que tu proxy devuelva en caso de error
     if (error.error instanceof ErrorEvent) {
       errorMessage = `Error del cliente o de red: ${error.error.message}`;
-    } else {
-      const geminiApiError = error.error as GeminiErrorResponse;
+    } else if (error.error && error.error.error && typeof error.error.error === 'string') { // Asumiendo que tu proxy devuelve { error: "mensaje" }
+        errorMessage = `Error del proxy (${error.status}): ${error.error.error}`;
+        if (error.error.details) {
+            errorMessage += ` Detalles: ${error.error.details}`;
+        }
+    } else if (error.error && typeof error.error === 'string') {
+        errorMessage = `Error del proxy (${error.status}): ${error.error}`;
+    }
+    else {
+      const geminiApiError = error.error as GeminiErrorResponse; // Esto es si el proxy devuelve la estructura de error de Gemini
       if (geminiApiError?.error?.message) {
-        errorMessage = `Error de API (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
+        errorMessage = `Error de API (via proxy) (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
         if (geminiApiError.error.details?.length) {
           errorMessage += ` Detalles: ${geminiApiError.error.details.map(d => d.reason || JSON.stringify(d)).join(', ')}`;
         }
       } else if (typeof error.error === 'string' && error.error.length > 0 && error.error.length < 500) {
-        errorMessage = `Error HTTP (${error.status}): ${error.statusText} - Respuesta: ${error.error}`;
+        errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText} - Respuesta: ${error.error}`;
       } else {
-        errorMessage = `Error HTTP (${error.status}): ${error.statusText}.`;
+        errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText}.`;
       }
     }
     return throwError(() => new Error(errorMessage));
