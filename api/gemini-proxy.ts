@@ -45,7 +45,16 @@ export default async function handler(
   request: VercelRequest,
   response: VercelResponse
 ) {
-  const { default: fetch } = await import('node-fetch');
+    let fetch;
+    try {
+      // Importación dinámica de node-fetch
+      const nodeFetch = await import('node-fetch');
+      fetch = nodeFetch.default; // node-fetch v3+ exporta su función principal como 'default'
+    } catch (err) {
+      console.error('Failed to dynamically import node-fetch:', err);
+      return response.status(500).json({ error: 'Server configuration error: Could not load fetch module.' });
+    }
+
 
   if (request.method !== 'POST') {
     console.warn(`Method Not Allowed: ${request.method} for /api/gemini-proxy`);
