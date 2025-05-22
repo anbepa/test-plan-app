@@ -34,7 +34,10 @@
             "prerender": true,
             "ssr": {
               "entry": "src/server.ts"
-            }
+            },
+            "allowedCommonJsDependencies": [  
+              "file-saver"
+            ]                                 
           },
           "configurations": {
             "production": {
@@ -46,8 +49,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "8kB",
-                  "maximumError": "11kB"
+                  "maximumWarning": "15kB",    
+                  "maximumError": "18kB"     
                 }
               ],
               "outputHashing": "all"
@@ -56,6 +59,7 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+
             }
           },
           "defaultConfiguration": "production"

@@ -142,6 +142,22 @@ Tu tarea es analizar la imagen proporcionada, que representa un flujo de interfa
 7.  **CASO DE IMAGEN NO CLARA / NO APLICABILIDAD:** Responde EXACTAMENTE y ÚNICAMENTE con: [{"title": "Imagen no interpretable o técnica no aplicable", "preconditions": "N/A", "steps": "No se pudieron generar casos detallados...", "expectedResults": "N/A"}]
 `;
 
+private readonly PROMPT_STATIC_SECTION_ENHANCEMENT = (sectionName: string, existingContent: string, huSummary: string) => `
+Eres un analista de QA experimentado. Revisa la sección "${sectionName}" actual de un plan de pruebas y el resumen de las Historias de Usuario (HUs) involucradas.
+Tu tarea es generar texto ADICIONAL, CONCISO y relevante para ENRIQUECER la sección "${sectionName}".
+NO repitas la información ya existente en la sección actual.
+La respuesta debe ser ÚNICAMENTE el texto adicional sugerido, listo para ser añadido. Evita introducciones como "Aquí tienes algunas sugerencias:" o similares. Solo el texto a añadir.
+
+Sección Actual de "${sectionName}":
+${existingContent}
+
+Resumen de Historias de Usuario (HUs) Involucradas:
+${huSummary}
+
+---
+Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO PÁRRAFO CONCISO, MÁXIMO 4 LÍNEAS, sin enumeraciones, viñetas, encabezados ni saludos. Solo el texto a añadir.):`;
+
+
   constructor(private http: HttpClient) { }
 
   private getTextFromParts(parts: (GeminiTextPart | GeminiInlineDataPart)[] | undefined): string {
@@ -231,6 +247,22 @@ Tu tarea es analizar la imagen proporcionada, que representa un flujo de interfa
           console.error("Error parsing JSON response for detailed test cases:", e, "\nRaw response:", rawText);
           return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar la respuesta de la API.", steps: rawText, expectedResults: "Verificar consola." }];
         }
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
+    const promptText = this.PROMPT_STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
+    const body: GeminiRequestBody = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { maxOutputTokens: 300, temperature: 0.5 } // Adjusted for concise additions
+    };
+    const urlWithKey = `${this.apiUrl}?key=${this.apiKey}`;
+    return this.http.post<GeminiResponse>(urlWithKey, body).pipe(
+      map(response => {
+        const text = this.getTextFromParts(response?.candidates?.[0]?.content?.parts);
+        return text.trim();
       }),
       catchError(this.handleError)
     );

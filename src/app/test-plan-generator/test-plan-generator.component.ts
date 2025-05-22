@@ -19,7 +19,7 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
 })
 export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
-  currentGenerationMode: GenerationMode = 'text';
+  currentGenerationMode: GenerationMode | null = null;
   selectedFile: File | null = null;
   currentImagePreview: string | ArrayBuffer | null = null;
   imageBase64: string | null = null;
@@ -58,12 +58,22 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   editingAssumptions: boolean = false;
   editingTeam: boolean = false;
 
-  isRepositoryLinkDetailsOpen: boolean = true;
-  isOutOfScopeDetailsOpen: boolean = true;
-  isStrategyDetailsOpen: boolean = true;
-  isLimitationsDetailsOpen: boolean = true;
-  isAssumptionsDetailsOpen: boolean = true;
-  isTeamDetailsOpen: boolean = true;
+  loadingOutOfScopeAI: boolean = false;
+  errorOutOfScopeAI: string | null = null;
+  loadingStrategyAI: boolean = false;
+  errorStrategyAI: string | null = null;
+  loadingLimitationsAI: boolean = false;
+  errorLimitationsAI: string | null = null;
+  loadingAssumptionsAI: boolean = false;
+  errorAssumptionsAI: string | null = null;
+
+  // Default static sections to closed
+  isRepositoryLinkDetailsOpen: boolean = false;
+  isOutOfScopeDetailsOpen: boolean = false;
+  isStrategyDetailsOpen: boolean = false;
+  isLimitationsDetailsOpen: boolean = false;
+  isAssumptionsDetailsOpen: boolean = false;
+  isTeamDetailsOpen: boolean = false;
 
   @ViewChild('huForm') huFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
@@ -73,19 +83,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
-    if (isPlatformBrowser(this.platformId)) {
-      this.onGenerationModeChange();
-    } else {
-      this.currentGenerationMode = 'text';
-      this.currentHuId = '';
-      this.currentHuTitle = '';
-    }
   }
 
   ngAfterViewInit(): void {
     if (this.huFormDirective && this.huFormDirective.statusChanges) {
       this.formStatusSubscription = this.huFormDirective.statusChanges.subscribe(() => {
-        // No se necesita lógica aquí
       });
     }
   }
@@ -96,15 +98,67 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  onGenerationModeChange(): void {
+  selectInitialMode(mode: GenerationMode): void {
+    this.currentGenerationMode = mode;
+    this.onGenerationModeChange();
+  }
+
+  resetToInitialSelection(): void {
+    const keptSprint = this.currentSprint;
+    const keptTechnique = this.currentSelectedTechnique;
+
+    this.currentGenerationMode = null;
     this.formError = null;
     this.imageUploadError = null;
     this.selectedFile = null;
     this.currentImagePreview = null;
     this.imageBase64 = null;
     this.imageMimeType = null;
+
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
+    this.currentHuId = '';
+    this.currentHuTitle = '';
+
+
+    if (isPlatformBrowser(this.platformId)) {
+      const imageInput = document.getElementById('imageFile') as HTMLInputElement;
+      if (imageInput) imageInput.value = '';
+    }
+
+    if (this.huFormDirective && this.huFormDirective.form) {
+        this.huFormDirective.resetForm({
+            currentSprint: keptSprint,
+            currentSelectedTechnique: keptTechnique
+        });
+        this.currentSprint = keptSprint;
+        this.currentSelectedTechnique = keptTechnique;
+
+        setTimeout(() => {
+            if (this.huFormDirective && this.huFormDirective.form) {
+                this.huFormDirective.form.markAsPristine();
+                this.huFormDirective.form.markAsUntouched();
+                this.huFormDirective.form.updateValueAndValidity();
+            }
+        },0);
+    }
+  }
+
+
+  onGenerationModeChange(): void {
+    if (!this.currentGenerationMode) {
+        return;
+    }
+    this.formError = null;
+    this.imageUploadError = null;
+    this.selectedFile = null;
+    this.currentImagePreview = null;
+    this.imageBase64 = null;
+    this.imageMimeType = null;
+
+    this.currentDescription = '';
+    this.currentAcceptanceCriteria = '';
+
 
     if (isPlatformBrowser(this.platformId)) {
       const imageInput = document.getElementById('imageFile') as HTMLInputElement;
@@ -114,26 +168,27 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     if (this.currentGenerationMode === 'text') {
       this.currentHuId = '';
       this.currentHuTitle = '';
-    } else {
+    } else { 
       this.currentHuId = `IMG_${new Date().getTime().toString().slice(-5)}`;
       this.currentHuTitle = `Análisis de Flujo Visual ${this.huList.length + 1}`;
     }
     if (this.huFormDirective && this.huFormDirective.form) {
         setTimeout(() => {
             this.huFormDirective.form.markAsPristine();
+            this.huFormDirective.form.markAsUntouched(); 
             this.huFormDirective.form.updateValueAndValidity();
         },0);
     }
   }
 
   isFormInvalidForCurrentMode(): boolean {
-    if (!this.huFormDirective || !this.huFormDirective.form) {
+    if (!this.huFormDirective || !this.huFormDirective.form || !this.currentGenerationMode) {
       return true;
     }
     const commonRequired = !this.currentSprint || !this.currentSelectedTechnique;
     if (this.currentGenerationMode === 'text') {
       return commonRequired || !this.currentHuId || !this.currentHuTitle || !this.currentDescription || !this.currentAcceptanceCriteria;
-    } else {
+    } else { // 'image'
       return commonRequired || !this.selectedFile || !this.imageBase64 || !this.currentHuId || !this.currentHuTitle;
     }
   }
@@ -182,6 +237,10 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   addHuAndGenerateData(): void {
     this.formError = null;
+    if (!this.currentGenerationMode) { 
+        this.formError = "Por favor, selecciona un método de generación primero.";
+        return;
+    }
     if (this.isFormInvalidForCurrentMode()) {
       this.formError = "Por favor, completa todos los campos requeridos.";
        if (this.huFormDirective && this.huFormDirective.form) {
@@ -206,7 +265,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       loadingScope: this.currentGenerationMode === 'text', errorScope: null,
       loadingScenarios: true, errorScenarios: null,
       showRegenTechniquePicker: false, regenSelectedTechnique: '',
-      isScopeDetailsOpen: true, isScenariosDetailsOpen: true
+      isScopeDetailsOpen: true, isScenariosDetailsOpen: true // HU specific sections open by default
     };
     this.huList.push(newHu);
     if (newHu.loadingScope) { this.loadingSections = true; this.sectionsError = null; }
@@ -312,7 +371,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       default: const exhaustiveCheck: never = baseName; console.error('Invalid static name:', exhaustiveCheck); return;
     }
     const wasEditing = this[editingProp] as boolean; (this[editingProp] as any) = !wasEditing;
-    if (this[editingProp]) { (this[detailsOpenProp] as any) = true; }
+    if (this[editingProp]) { (this[detailsOpenProp] as any) = true; } // Open if starting to edit
     if (wasEditing && !(this[editingProp] as boolean)) { this.updatePreview(); }
   }
 
@@ -347,6 +406,88 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       ).subscribe();
   }
 
+  private getHuSummaryForStaticAI(): string {
+    if (this.huList.length === 0) {
+      return "No hay Historias de Usuario definidas aún.";
+    }
+    let summary = this.huList.map(hu => {
+      let huDesc = `HU ${hu.id} (${hu.title}): Modo ${hu.originalInput.generationMode}.`;
+      if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
+        huDesc += ` Descripción (inicio): ${hu.originalInput.description.substring(0, 70)}...`;
+      } else if (hu.originalInput.generationMode === 'image') {
+        huDesc += ` (Generada desde imagen, título: ${hu.title})`;
+      }
+      return `- ${huDesc}`;
+    }).join('\n');
+
+    if (summary.length > 1500) { 
+        summary = summary.substring(0, 1500) + "\n... (resumen truncado por longitud)";
+    }
+    return summary;
+  }
+
+  regenerateStaticSectionWithAI(section: 'outOfScope' | 'strategy' | 'limitations' | 'assumptions'): void {
+    let sectionNameDisplay: string = '';
+    let currentContent: string = '';
+    let loadingFlag: keyof TestPlanGeneratorComponent | null = null;
+    let errorFlag: keyof TestPlanGeneratorComponent | null = null;
+    let detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
+
+
+    switch (section) {
+      case 'outOfScope':
+        sectionNameDisplay = 'Fuera del Alcance'; currentContent = this.outOfScopeContent;
+        loadingFlag = 'loadingOutOfScopeAI'; errorFlag = 'errorOutOfScopeAI'; detailsOpenFlag = 'isOutOfScopeDetailsOpen';
+        break;
+      case 'strategy':
+        sectionNameDisplay = 'Estrategia'; currentContent = this.strategyContent;
+        loadingFlag = 'loadingStrategyAI'; errorFlag = 'errorStrategyAI'; detailsOpenFlag = 'isStrategyDetailsOpen';
+        break;
+      case 'limitations':
+        sectionNameDisplay = 'Limitaciones'; currentContent = this.limitationsContent;
+        loadingFlag = 'loadingLimitationsAI'; errorFlag = 'errorLimitationsAI'; detailsOpenFlag = 'isLimitationsDetailsOpen';
+        break;
+      case 'assumptions':
+        sectionNameDisplay = 'Supuestos'; currentContent = this.assumptionsContent;
+        loadingFlag = 'loadingAssumptionsAI'; errorFlag = 'errorAssumptionsAI'; detailsOpenFlag = 'isAssumptionsDetailsOpen';
+        break;
+    }
+
+    if (loadingFlag) (this[loadingFlag] as any) = true;
+    if (errorFlag) (this[errorFlag] as any) = null;
+    if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true; // Open on AI generation start
+
+    const huSummary = this.getHuSummaryForStaticAI();
+
+    this.geminiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, huSummary)
+      .pipe(
+        finalize(() => {
+          if (loadingFlag) (this[loadingFlag] as any) = false;
+          this.updatePreview();
+        })
+      )
+      .subscribe({
+        next: (aiResponse: string) => {
+          if (aiResponse && aiResponse.trim() !== '') {
+            const newContent = (currentContent.trim() === '' || currentContent.trim().toLowerCase().startsWith('no se probarán') && section === 'outOfScope' || currentContent.trim().toLowerCase().startsWith('no tener los permisos') && section === 'limitations'
+                ? aiResponse.trim() // Replace default placeholder if it's the only content
+                : currentContent + '\n\n' + aiResponse.trim()); // Append otherwise
+            switch (section) {
+              case 'outOfScope': this.outOfScopeContent = newContent; break;
+              case 'strategy': this.strategyContent = newContent; break;
+              case 'limitations': this.limitationsContent = newContent; break;
+              case 'assumptions': this.assumptionsContent = newContent; break;
+            }
+          } else {
+            if (errorFlag) (this[errorFlag] as any) = 'La IA no generó contenido adicional.';
+          }
+        },
+        error: (err: Error) => {
+          if (errorFlag) (this[errorFlag] as any) = err.message || `Error al regenerar "${sectionNameDisplay}" con IA.`;
+        }
+      });
+  }
+
   formatSimpleScenarioTitles(titles: string[]): string {
     if (!titles || titles.length === 0) { return 'No se generaron escenarios.'; }
     return titles.map((title, index) => `${index + 1}. ${title}`).join('\n');
@@ -359,7 +500,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
     if (this.huFormDirective) {
         this.huFormDirective.resetForm({
-            currentGenerationMode: keptMode,
             currentSelectedTechnique: keptTechnique,
             currentSprint: keptSprint
         });
@@ -369,13 +509,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.currentSelectedTechnique = keptTechnique;
     this.currentSprint = keptSprint;
 
-    if (this.currentGenerationMode === 'image') {
-      this.currentHuId = `IMG_${new Date().getTime().toString().slice(-5)}`;
-      this.currentHuTitle = `Análisis de Flujo Visual ${this.huList.length + 1}`;
-    } else {
-      this.currentHuId = '';
-      this.currentHuTitle = '';
-    }
+
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
     this.selectedFile = null;
@@ -385,11 +519,20 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.imageUploadError = null;
     this.formError = null;
 
+    if (this.currentGenerationMode === 'image') {
+      this.currentHuId = `IMG_${new Date().getTime().toString().slice(-5)}`;
+      this.currentHuTitle = `Análisis de Flujo Visual ${this.huList.length + 1}`;
+    } else { 
+      this.currentHuId = '';
+      this.currentHuTitle = '';
+    }
+
+
     if (isPlatformBrowser(this.platformId)) {
       const imageInput = document.getElementById('imageFile') as HTMLInputElement;
       if (imageInput) imageInput.value = '';
     }
-     setTimeout(() => {
+     setTimeout(() => { 
         if (this.huFormDirective && this.huFormDirective.form) {
             this.huFormDirective.form.updateValueAndValidity();
         }
@@ -416,9 +559,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
             fullPlanContent += `${hu.generatedScope || 'Alcance no generado.'}\n\n`;
           }
         });
-        fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\n`;
     }
+    // Always include these sections as they can be manually edited or AI generated
+    fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\n`;
     fullPlanContent += `ESTRATEGIA:\n\n${this.strategyContent}\n\n`;
+
     fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
     this.huList.forEach((hu) => {
       fullPlanContent += `HU ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? '(Generada desde imagen)' : ''}\n`;
@@ -433,7 +578,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   generatePlanContentHtmlString(): string {
     if (this.huList.length === 0) { return ''; }
     let fullPlanHtmlContent = '';
-    // VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV ESTA ES LA FUNCIÓN escapeHtml CORRECTA VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
     const escapeHtml = (unsafe: string): string => {
         if (typeof unsafe !== 'string') {
             return '';
@@ -446,10 +590,12 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         safe = safe.replace(/'/g, `'`); // Usando comilla invertida para la cadena de reemplazo
         return safe;
     };
-    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ ESTA ES LA FUNCIÓN escapeHtml CORRECTA ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     if (this.testPlanTitle) { fullPlanHtmlContent += `<span class="preview-section-title">Título del Plan de Pruebas:</span> ${escapeHtml(this.testPlanTitle)}\n\n`; }
-    fullPlanHtmlContent += `<span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${this.repositoryLink.split(' ')[0]}" target="_blank">${escapeHtml(this.repositoryLink)}</a>\n\n`;
+    
+    const repoLinkUrl = this.repositoryLink.split(' ')[0];
+    fullPlanHtmlContent += `<span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${escapeHtml(repoLinkUrl)}" target="_blank">${escapeHtml(this.repositoryLink)}</a>\n\n`;
+    
     if (this.isAnyHuTextBased()) {
         fullPlanHtmlContent += `<span class="preview-section-title">ALCANCE:</span>\n\n`;
         this.huList.forEach((hu) => {
@@ -458,8 +604,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
             fullPlanHtmlContent += `${escapeHtml(hu.generatedScope) || 'Alcance no generado.'}\n\n`;
           }
         });
-        fullPlanHtmlContent += `<span class="preview-section-title">FUERA DEL ALCANCE:</span>\n\n${escapeHtml(this.outOfScopeContent)}\n\n`;
     }
+    fullPlanHtmlContent += `<span class="preview-section-title">FUERA DEL ALCANCE:</span>\n\n${escapeHtml(this.outOfScopeContent)}\n\n`;
     fullPlanHtmlContent += `<span class="preview-section-title">ESTRATEGIA:</span>\n\n${escapeHtml(this.strategyContent)}\n\n`;
     fullPlanHtmlContent += `<span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span>\n\n`;
     this.huList.forEach((hu) => {
@@ -474,6 +620,26 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   updatePreview(): void {
     this.downloadPreviewHtmlContent = this.generatePlanContentHtmlString();
+  }
+
+  copyPreviewToClipboard(): void {
+    const plainTextContent = this.generatePlanContentString();
+    if (!plainTextContent) {
+      alert('No hay contenido para copiar.');
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(plainTextContent)
+        .then(() => {
+          alert('¡Plan de pruebas copiado al portapapeles!');
+        })
+        .catch(err => {
+          console.error('Error al copiar al portapapeles: ', err);
+          alert('Error al copiar. Puede que necesites hacerlo manualmente.');
+        });
+    } else {
+      alert('La copia al portapapeles no es compatible o no está permitida en este navegador/contexto. Intenta copiar manualmente desde la previsualización.');
+    }
   }
 
   downloadWord(): void {
@@ -504,7 +670,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   private escapeCsvField(field: string): string {
     if (field === null || field === undefined) { return ''; }
     let result = field.toString();
-    result = result.replace(/"/g, '""');
+    result = result.replace(/"/g, '""'); 
     return result;
   }
 

@@ -3,20 +3,15 @@
 /* PALETA DE COLORES SOBRIOS */
 /* Ya definida en comentarios, no ocupa espacio en el bundle final */
 
-/* Estilos generales para el cuerpo de la página (se aplican a 'body' en el HTML, pero este CSS está en un componente) */
-/* Es posible que estos estilos de 'body' no estén siendo aplicados al body global si se usa encapsulación de estilos. */
-/* Si este CSS es solo para el componente, mover 'body' a styles.css global reduciría su tamaño aquí. */
-/* Asumo que se mantiene aquí por ahora si hay una razón específica de encapsulación. */
 body {
     background-color: #f8f9fa;
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif; /* Consistent modern sans-serif stack */
     line-height: 1.6;
-    color: #343a40;
+    color: #343a40; /* Default text color */
 }
 
-/* Contenedor principal de la aplicación */
 .container {
     max-width: 960px;
     margin: 30px auto;
@@ -24,17 +19,17 @@ body {
     border: 1px solid #dee2e6;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    background-color: #fff; /* Abreviado #ffffff a #fff */
+    background-color: #fff;
 }
 
-/* Estilos para títulos */
-h1 {
-    color: #4a6d7c;
+h1 { /* Generador de Plan de Pruebas y Escenarios */
+    color: #3b5a6b; /* Darker, prominent blue-grey for main title for more impact */
     text-align: center;
     margin-bottom: 25px;
     border-bottom: 2px solid #e9ecef;
     padding-bottom: 15px;
     font-size: 2.2em;
+    font-weight: 600; /* Ensure good weight */
 }
 
 h2 {
@@ -45,13 +40,129 @@ h2 {
     border-bottom: 1px solid #e9ecef;
 }
 
+/* --- Sección de Selección Inicial --- */
+.initial-selection-section {
+    text-align: center;
+    padding: 20px 0;
+    margin-bottom: 30px;
+}
+
+.welcome-text-container {
+    margin-bottom: 40px; /* Increased space after subtitle container, before "Selecciona un método" */
+}
+
+.welcome-title { /* Not currently used, but kept for potential future use */
+    color: #3b5a6b; 
+    font-size: 2em; 
+    margin-bottom: 10px;
+    border-bottom: none; 
+    text-align: center;
+}
+
+.welcome-subtitle { /* "Agiliza la generación..." */
+    font-size: 1.1em;
+    color: #555; 
+    margin-bottom: 0; /* Margin handled by its container now */
+    line-height: 1.5;
+    max-width: 700px; 
+    margin-left: auto;
+    margin-right: auto;
+    font-weight: 400; /* Standard weight for subtitle */
+}
+
+.selection-prompt-title { /* "Selecciona un Método..." */
+    color: #4a6d7c; /* Consistent with other secondary titles/accents */
+    font-size: 1.6em;
+    margin-top: 0; /* Ensure no extra top margin if container handles spacing */
+    margin-bottom: 30px; /* Increased space before cards */
+    text-align: center;
+    font-weight: 600; 
+}
+
+
+.initial-selection-cards-container {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.mode-card {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 25px 20px; 
+    width: 300px; 
+    min-height: 220px; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.07); /* Subtle shadow */
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; 
+    text-align: center;
+}
+
+.mode-card:hover,
+.mode-card:focus {
+    transform: translateY(-4px); /* Slightly more subtle lift */
+    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    border-color: #8a9b8c; 
+    outline: none;
+}
+
+.mode-card-icon {
+    width: 56px; 
+    height: 56px;
+    margin-bottom: 15px;
+    color: #4a6d7c; /* Consistent icon color with prompt title */
+}
+
+.mode-card-title { 
+    font-size: 1.15em;
+    font-weight: 600; /* Clear and bold for card title */
+    color: #343a40; /* Dark text for readability */
+    margin-bottom: 10px; 
+    line-height: 1.4;
+}
+
+.mode-card-description { 
+    font-size: 0.9em;
+    color: #5c6770; /* Slightly darker grey for better readability */
+    line-height: 1.5;
+    margin-top: 5px;
+    padding: 0 10px; 
+}
+
+
 /* --- Formulario de Entrada --- */
 .form-section {
     background-color: #fcfcfc;
     padding: 25px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    margin-bottom: 5px;
+    margin-bottom: 30px; 
+}
+
+.form-header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px; 
+}
+.form-header-actions h2 {
+    margin-bottom: 0; 
+    border-bottom: none;
+}
+.button-small { 
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+
+.generation-mode-selector-group { 
+    margin-bottom: 25px !important;
 }
 
 .form-grid {
@@ -64,8 +175,7 @@ h2 {
     .form-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    .form-group:nth-child(4),
-    .form-group:nth-child(5) {
+    .form-group.full-width {
         grid-column: span 2;
     }
 }
@@ -106,54 +216,68 @@ h2 {
     min-height: 100px;
 }
 
-
-.form-group input[type="file"] { /* Estilo para el input de archivo mismo */
+.form-group input[type="file"] {
+    width: 100%;
+    box-sizing: border-box;
     padding: 10px;
     border: 1px solid #ced4da;
     border-radius: 5px;
-    display: block; /* Para que ocupe el ancho y permita margen superior */
-    margin-top: 5px;
-    background-color: #fff; /* Fondo blanco */
+    display: block;
+    background-color: #fff;
     cursor: pointer;
-  }
+    font-size: 1em;
+    line-height: 1.4;
+}
+
+.form-group input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 15px;
+    border: none;
+    background-color: #e9ecef;
+    color: #343a40;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-weight: 500;
+}
+
+.form-group input[type="file"]::file-selector-button:hover {
+    background-color: #dee2e6;
+}
   
-  .image-preview-container {
-    margin-top: 15px; /* Espacio entre el input de archivo y la previsualización */
-    border: 1px dashed #ced4da; /* Borde discontinuo para el contenedor */
+.image-preview-container {
+    margin-top: 15px;
+    border: 1px dashed #ced4da;
     padding: 15px;
     border-radius: 5px;
-    background-color: #f8f9fa; /* Fondo ligeramente diferente para el contenedor */
-    /* display: flex; */ /* Descomentar si quieres centrar una imagen PEQUEÑA */
-    /* flex-direction: column; */ /* Descomentar si quieres centrar una imagen PEQUEÑA */
-    /* align-items: center; */ /* Descomentar si quieres centrar una imagen PEQUEÑA */
-    overflow: hidden; /* Para asegurar que nada se desborde del contenedor */
-  }
+    background-color: #f8f9fa;
+    overflow: hidden;
+}
   
-  .image-preview-container p { /* Texto "Previsualización:" */
+.image-preview-container p {
     margin-bottom: 10px;
-    font-weight: 600; /* Hacerlo un poco más prominente */
+    font-weight: 600;
     color: #343a40;
-    text-align: left; /* O center si lo prefieres */
-  }
+    text-align: left;
+}
   
-  .image-preview { /* La etiqueta <img> */
-    display: block; /* Necesario para que margin: auto funcione para centrar */
-    max-width: 100%;   /* CRUCIAL: La imagen no será más ancha que su contenedor */
-    max-height: 400px; /* CRUCIAL: Limita la altura máxima. AJUSTA ESTE VALOR */
-    height: auto;      /* Mantiene la proporción cuando max-width es el limitante */
-    width: auto;       /* Mantiene la proporción cuando max-height es el limitante */
+.image-preview {
+    display: block;
+    max-width: 100%;
+    max-height: 400px;
+    height: auto;
+    width: auto;
     border-radius: 4px;
-    border: 1px solid #dee2e6; /* Borde sutil para la imagen misma */
-    margin-left: auto;   /* Centra la imagen horizontalmente si es más estrecha que el contenedor */
-    margin-right: auto;  /* Centra la imagen horizontalmente si es más estrecha que el contenedor */
-    object-fit: scale-down; /* Asegura que la imagen se escale para caber, manteniendo proporción */
-  }
-
-  
+    border: 1px solid #dee2e6;
+    margin-left: auto;
+    margin-right: auto;
+    object-fit: scale-down;
+}
 
 .required-indicator {
     color: #dc3545;
     margin-left: 4px;
+    font-weight: bold;
 }
 
 .validation-error {
@@ -179,12 +303,12 @@ h2 {
     align-items: center;
     justify-content: center;
     text-decoration: none;
-    margin-bottom: 5px; /* Pequeño margen para botones en la misma línea */
+    margin-bottom: 5px;
 }
 
 .button-primary {
     background-color: #4a6d7c;
-    color: #fff; /* Abreviado white a #fff */
+    color: #fff;
     margin-top: 25px;
     width: 100%;
 }
@@ -203,7 +327,6 @@ h2 {
 .button-secondary {
     background-color: #e9ecef;
     color: #343a40;
-    /* margin-top: 15px; quitado para mejor alineación en .actions */
     padding: 8px 15px;
     font-size: 0.9em;
 }
@@ -214,8 +337,8 @@ h2 {
 }
 
 .button-edit {
-    background-color: #c8a2c8;
-    color: #fff; /* Abreviado white a #fff */
+    background-color: #c8a2c8; 
+    color: #fff;
     padding: 8px 15px;
     font-size: 0.9em;
     margin-right: 10px;
@@ -226,8 +349,8 @@ h2 {
 }
 
 .button-generate {
-    background-color: #8a9b8c;
-    color: #fff; /* Abreviado white a #fff */
+    background-color: #8a9b8c; 
+    color: #fff;
     padding: 8px 15px;
     font-size: 0.9em;
 }
@@ -237,8 +360,8 @@ h2 {
 }
 
 .button-cancel {
-    background-color: #dc3545;
-    color: #fff; /* Abreviado white a #fff */
+    background-color: #dc3545; 
+    color: #fff;
     padding: 8px 15px;
     font-size: 0.9em;
     margin-left: 10px;
@@ -260,115 +383,173 @@ h2 {
     font-weight: 500;
 }
 
-.inline-error {
-    color: #dc3545;
-    font-size: 0.85em;
-    margin-top: 10px;
-}
-
-/* --- Secciones del Plan --- */
-.plan-section {
+/* --- Sección de Resultados del Plan --- */
+.results-section {
     margin-top: 40px;
+    padding-top: 20px;
+    border-top: 2px solid #e9ecef;
 }
 
-.plan-section-block {
-    background-color: #fcfcfc;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+.results-section .section-header h2 { 
+    font-size: 2em; 
+    color: #3b5a6b; 
+    border-bottom: none; 
     margin-bottom: 25px;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+}
+
+.no-content-message {
+    text-align: center;
+    color: #6c757d;
+    padding: 30px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.hu-list-container {
+    margin-bottom: 30px;
+}
+
+.hu-card {
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.07);
+    overflow: hidden; 
 }
 
 .hu-header {
+    background-color: #f1f5f9; 
+    padding: 15px 20px;
+    border-bottom: 1px solid #dee2e6;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #e9ecef;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
+    flex-wrap: wrap; 
 }
 
 .hu-header h3 {
-    margin: 0;
-    color: #343a40;
-    font-size: 1.3em;
+    margin: 0 0 5px 0; 
+    color: #3b5a6b; 
+    font-size: 1.4em;
+    flex-grow: 1; 
+}
+
+.hu-meta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-top: 5px; 
 }
 
 .sprint-badge {
-    background-color: #8a9b8c;
-    color: #fff; /* Abreviado white a #fff */
-    padding: 5px 10px;
-    border-radius: 4px;
+    background-color: #e0e7ff; 
+    color: #4338ca; 
+    padding: 5px 12px;
+    border-radius: 16px; 
     font-size: 0.85em;
-    font-weight: 500;
+    font-weight: 600;
 }
 
-.hu-content-block {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+.mode-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: #d1fae5; 
+    color: #065f46; 
+    padding: 5px 12px;
+    border-radius: 16px;
+    font-size: 0.85em;
+    font-weight: 600;
 }
 
-details {
-    border: 1px solid #e9ecef;
-    border-radius: 6px;
-    padding: 10px;
-    background-color: #fff; /* Abreviado #ffffff a #fff */
-    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-    transition: all 0.3s ease-in-out;
+.mode-indicator .mode-icon { 
+    width: 16px;
+    height: 16px;
 }
 
-details[open] {
-    padding-bottom: 20px;
+/* Estilos para Details/Summary (Acordeones) */
+.plan-section-details {
+    border: none;
+    background-color: #fff;
 }
 
-details summary {
+.hu-card > .plan-section-details {
+    margin: 15px 20px 15px 20px; 
+}
+.hu-card > .plan-section-details:last-of-type {
+    margin-bottom: 10px; 
+}
+
+
+.plan-section-summary {
     font-weight: 600;
     color: #4a6d7c;
     cursor: pointer;
-    padding: 5px;
+    padding: 12px 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
     display: flex;
     align-items: center;
-    list-style: none;
-    position: relative;
+    list-style: none; 
+    transition: background-color 0.2s ease;
+    text-align: left; 
 }
 
-details summary::-webkit-details-marker {
-    display: none;
+.plan-section-summary::-webkit-details-marker {
+    display: none; 
 }
 
-details summary::before {
+.plan-section-summary::before { 
     content: '▶';
     margin-right: 10px;
-    transition: transform 0.2s ease;
+    font-size: 0.8em;
+    color: #6c757d;
+    transition: transform 0.2s ease-in-out;
     display: inline-block;
 }
 
-details[open] summary::before {
-    content: '▼';
-    transform: rotate(0deg);
+.plan-section-details[open] > .plan-section-summary::before {
+    transform: rotate(90deg);
 }
 
-.editable-block {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px dashed #e9ecef;
+.plan-section-details[open] > .plan-section-summary {
+    background-color: #e9ecef;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
 }
 
-.edit-controls,
-.actions { /* Aplicar a ambos contenedores de botones */
+.summary-indicators {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto; 
+}
+
+.error-status-icon {
+    font-size: 1.1em; 
+}
+
+.plan-section-content {
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-top: none;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background-color: #fff;
+}
+
+.actions {
     display: flex;
     gap: 10px;
-    margin-top: 15px; /* Espacio arriba de los botones */
-    flex-wrap: wrap; /* Para que los botones pasen a la siguiente línea si no caben */
+    margin-top: 20px;
+    flex-wrap: wrap;
+    padding-top: 15px;
+    border-top: 1px solid #f0f0f0; 
 }
 
-
-/* Common style for preformatted and textarea content */
 .generated-text,
 textarea.scrollable-content {
     white-space: pre-wrap;
@@ -385,19 +566,20 @@ textarea.scrollable-content {
     max-height: 300px;
     width: 100%;
     box-sizing: border-box;
+    margin-bottom: 15px; 
 }
 
 textarea.scrollable-content {
-    min-height: 150px; /* Reducido un poco para la edición de títulos */
+    min-height: 150px;
 }
 
-/* Regenerate with Technique Section */
 .regen-picker-inline {
     background-color: #f0f4f7;
     border: 1px solid #d0dbe2;
     border-radius: 6px;
     padding: 15px;
     margin-top: 15px;
+    margin-bottom: 15px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -426,7 +608,6 @@ textarea.scrollable-content {
     flex-wrap: wrap;
 }
 
-/* Spinner */
 .spinner {
     border: 3px solid #f3f3f3;
     border-top: 3px solid #4a6d7c;
@@ -439,16 +620,21 @@ textarea.scrollable-content {
     vertical-align: middle;
 }
 
-.spinner-inline {
+.spinner-small, .spinner-inline { 
     border: 2px solid #f3f3f3;
     border-top: 2px solid #4a6d7c;
-    width: 12px;
-    height: 12px;
-    margin-left: 8px;
-    vertical-align: middle; /* Asegurar alineación vertical */
+    border-radius: 50%;
+    width: 14px; 
+    height: 14px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+}
+.spinner-inline {
+  margin-left: 8px;
 }
 
-/* Definición de la animación de giro */
+
 @-webkit-keyframes spin {
   0% { -webkit-transform: rotate(0deg); }
   100% { -webkit-transform: rotate(360deg); }
@@ -459,12 +645,53 @@ textarea.scrollable-content {
   100% { transform: rotate(360deg); }
 }
 
-/* --- ESTILOS PARA LA SECCIÓN DE PREVISUALIZACIÓN --- */
+/* --- Secciones Estáticas del Plan --- */
+.static-plan-sections-container {
+    margin-top: 40px;
+    padding: 20px;
+    background-color: #f8f9fa; 
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.static-plan-sections-container .section-header h2 {
+    font-size: 1.6em; 
+    color: #4a6d7c;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+}
+
+.static-block { 
+    margin-bottom: 15px; 
+}
+.static-block:last-of-type {
+    margin-bottom: 0;
+}
+
+.static-block .static-text {
+    background-color: #fff; 
+    border: 1px solid #e0e0e0;
+    padding: 15px;
+    border-radius: 5px;
+    font-size: 0.95em;
+    line-height: 1.6;
+    color: #343a40;
+    margin-top: 0; 
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-x: auto;
+}
+.static-block textarea.scrollable-content {
+    background-color: #fff;
+}
+
+/* --- Previsualización y Descarga --- */
 .preview-download-section {
     margin-top: 40px;
     padding-top: 20px;
     border-top: 1px solid #e9ecef;
-    text-align: center;
+    text-align: center; 
 }
 
 .preview-section {
@@ -477,7 +704,6 @@ textarea.scrollable-content {
     text-align: left;
 }
 
-/* Estilo para el título de la sección de previsualización */
 .preview-section h2 {
     color: #4a6d7c;
     border-bottom: 1px solid #e9ecef;
@@ -487,7 +713,6 @@ textarea.scrollable-content {
     text-align: left;
 }
 
-/* Estilo para el área de texto de previsualización */
 .download-preview {
     background-color: #f0f4f7;
     border: 1px solid #d0dbe2;
@@ -516,12 +741,21 @@ textarea.scrollable-content {
     margin-top: 10px;
 }
 
-/* --- ESTILOS PARA LA TABLA DE CASOS DE PRUEBA DETALLADOS --- */
+.download-actions-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+
+/* --- Tabla de Casos Detallados --- */
 .detailed-test-cases-table-container {
     width: 100%;
-    overflow-x: auto; /* Para scroll horizontal si la tabla es muy ancha */
-    margin-top: 15px;
-    margin-bottom: 15px;
+    overflow-x: auto;
+    margin-top: 0; 
+    margin-bottom: 0;
     border: 1px solid #e0e0e0;
     border-radius: 6px;
 }
@@ -530,7 +764,7 @@ textarea.scrollable-content {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9em;
-    table-layout: auto; /* Permite que el navegador ajuste los anchos */
+    table-layout: auto;
 }
 
 .detailed-test-cases-table th,
@@ -545,9 +779,9 @@ textarea.scrollable-content {
     background-color: #f8f9fa;
     font-weight: 600;
     color: #343a40;
-    position: sticky; /* Para que los encabezados se queden fijos al hacer scroll vertical si la tabla es muy larga */
-    top: 0; /* Necesario para position: sticky */
-    z-index: 1; /* Para que esté por encima del contenido scrolleable */
+    position: sticky;
+    top: 0;
+    z-index: 1;
 }
 
 .detailed-test-cases-table tbody tr:nth-child(even) {
@@ -568,10 +802,9 @@ textarea.scrollable-content {
     border: none;
     padding: 0;
     max-height: none;
-    line-height: 1.5; /* Mejorar legibilidad de texto multilínea */
+    line-height: 1.5;
 }
 
-/* Mensaje de carga dentro del contenedor de la tabla o picker */
 .loading-message {
     display: flex;
     align-items: center;
@@ -581,73 +814,9 @@ textarea.scrollable-content {
     color: #555;
 }
 
-
-.button-download {
-    margin-top: 20px;
+.button-download { 
     padding: 12px 25px;
     font-size: 1.1em;
-}
-
-/* Separador entre HUs */
-.hu-separator {
-    border: 0;
-    height: 1px;
-    background-color: #e9ecef;
-    margin: 30px 0;
-}
-
-/* Sección de texto estático (Consideraciones, Equipo) */
-.static-sections {
-    margin-top: 40px;
-}
-
-.static-block {
-    margin-bottom: 25px;
-}
-
-.static-block .static-text {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    padding: 15px;
-    border-radius: 5px;
-    font-size: 0.95em;
-    line-height: 1.6;
-    color: #555;
-    margin-top: 15px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-x: auto;
-}
-
-/* Botón flotante para añadir HU (móviles) */
-.add-hu-fixed-button {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-    display: none;
-    padding: 15px 25px;
-    border-radius: 50px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    font-size: 1.1em;
-    width: auto;
-}
-
-/* Ayuda del icono */
-.help-icon {
-    font-size: 0.8em;
-    color: #6c757d;
-    text-decoration: none;
-    margin-left: 5px;
-    border: 1px solid #ced4da;
-    border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    cursor: help;
 }
 
 /* --- Adaptación Responsive --- */
@@ -657,148 +826,103 @@ textarea.scrollable-content {
         padding: 20px;
     }
 
-    h1 {
-        font-size: 1.8em;
-        margin-bottom: 20px;
-    }
+    h1 { font-size: 1.8em; margin-bottom: 20px; }
+    h2 { font-size: 1.5em; }
+    .welcome-title { font-size: 1.7em; }
+    .welcome-subtitle { font-size: 1em; }
+    .selection-prompt-title { font-size: 1.4em; }
 
-    h2 {
-        font-size: 1.5em;
-    }
+    .form-header-actions { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .form-header-actions .button-small { align-self: flex-start; }
 
-    .form-grid {
-        grid-template-columns: 1fr;
-    }
+    .results-section .section-header h2 { font-size: 1.7em; }
+    .static-plan-sections-container .section-header h2 { font-size: 1.4em; }
+    .hu-header h3 { font-size: 1.2em; }
 
-    .form-group:nth-child(4),
-    .form-group:nth-child(5) {
-        grid-column: span 1;
-    }
 
-    .button-primary {
-        margin-top: 20px;
-    }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full-width { grid-column: span 1; }
 
-    .add-hu-fixed-button {
-        display: block;
-    }
+    .button-primary { margin-top: 20px; }
 
-    .edit-controls,
     .actions {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .edit-controls button,
-    .actions button { /* Aplicar a botones dentro de .actions también */
+    .actions button {
         width: 100%;
         margin-right: 0;
-        margin-left: 0; /* Asegurar que no haya margen lateral */
-        margin-bottom: 10px;
-    }
-
-    .edit-controls button:last-child,
-    .actions button:last-child {
-        margin-bottom: 0;
-    }
-
-    .regen-picker-inline {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .regen-technique-select {
-        margin-bottom: 10px;
-    }
-
-    .regen-buttons-container {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
-
-    .regen-buttons-container button {
-        width: 100%;
         margin-left: 0;
+        margin-bottom: 10px;
+    }
+    .actions button:last-child { margin-bottom: 0; }
+
+    .regen-picker-inline { flex-direction: column; align-items: stretch; }
+    .regen-technique-select { margin-bottom: 10px; }
+    .regen-buttons-container { flex-direction: column; align-items: stretch; gap: 10px; }
+    .regen-buttons-container button { width: 100%; margin-left: 0; }
+
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td { padding: 8px 10px; font-size: 0.85em; }
+
+    .hu-header { flex-direction: column; align-items: flex-start; }
+    .hu-meta { margin-top: 10px; width: 100%; justify-content: flex-start;}
+    .mode-card { width: 100%; max-width: 300px; min-height: auto; padding-bottom: 20px; } 
+    .mode-card-title { font-size: 1.1em; }
+    .mode-card-description { font-size: 0.85em; }
+
+    .hu-card > .plan-section-details { 
+      margin-left: 10px;
+      margin-right: 10px;
+    }
+    .download-actions-container {
+        flex-direction: column;
+    }
+    .download-actions-container button {
+        width: 100%;
+        max-width: 300px; 
+        margin-left: auto;
+        margin-right: auto;
     }
 
-    /* Ajustes para la tabla en móviles */
-    .detailed-test-cases-table th,
-    .detailed-test-cases-table td {
-        padding: 8px 10px; /* Reducir padding en celdas */
-        font-size: 0.85em; /* Reducir fuente ligeramente */
-    }
 }
 
-/* Para pantallas muy pequeñas */
 @media (max-width: 576px) {
-    .container {
-        padding: 15px;
-        padding-bottom: 80px;
-    }
+    .container { padding: 15px; padding-bottom: 80px; }
 
-    h1 {
-        font-size: 1.5em;
-        margin-bottom: 15px;
-        padding-bottom: 8px;
-    }
+    h1 { font-size: 1.5em; margin-bottom: 15px; padding-bottom: 8px; }
+    h2 { font-size: 1.2em; margin-bottom: 10px; }
+    .welcome-title { font-size: 1.5em; }
+    .welcome-subtitle { font-size: 0.9em; } /* Removed margin-bottom as it's on container */
+    .selection-prompt-title { font-size: 1.2em; margin-bottom: 20px;} /* Adjusted margin */
+    .welcome-text-container { margin-bottom: 25px; } /* Adjusted margin for smaller screens */
 
-    h2 {
-        font-size: 1.2em;
-        margin-bottom: 10px;
-    }
 
-    .form-section, .plan-section-block {
-        padding: 15px;
-    }
+    .results-section .section-header h2 { font-size: 1.4em; }
+    .static-plan-sections-container .section-header h2 { font-size: 1.2em; }
+    .hu-header h3 { font-size: 1.1em; }
 
-    .plan-section-block {
-        gap: 10px;
-    }
 
-    .hu-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-        margin-bottom: 10px;
-        padding-bottom: 8px;
-    }
-
-    .hu-header h3 {
-        margin-bottom: 5px;
-        font-size: 1.1em;
-    }
-
-    .sprint-badge {
-        font-size: 0.8em;
-    }
-
-    .editable-block {
-        padding-top: 10px;
-        margin-top: 10px;
-    }
-
-    /* Los botones ya son full-width desde el breakpoint anterior */
-    .edit-controls button,
-    .actions button {
-        margin-bottom: 8px;
-        text-align: center;
-    }
-
-    .edit-controls button:last-child,
-    .actions button:last-child {
-        margin-bottom: 0;
-    }
-
-     /* Ajustes adicionales para la tabla en pantallas muy pequeñas */
-    .detailed-test-cases-table th,
-    .detailed-test-cases-table td {
-        padding: 6px 8px;
-        font-size: 0.8em;
-    }
-     .detailed-test-cases-table .table-pre {
-        line-height: 1.4;
-    }
-
+    .form-section, .hu-card, .plan-section-content, .static-plan-sections-container { padding: 15px; }
+    .hu-header { padding: 10px 15px; }
     
+    .hu-card > .plan-section-details { 
+      margin-left: 0; 
+      margin-right: 0; 
+      margin-top:10px;
+    }
+
+
+    .actions button { margin-bottom: 8px; text-align: center; }
+    .actions button:last-child { margin-bottom: 0; }
+
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td { padding: 6px 8px; font-size: 0.8em; }
+    .detailed-test-cases-table .table-pre { line-height: 1.4; }
+    .initial-selection-cards-container { gap: 15px; }
+    .mode-card { min-height: auto; padding: 20px 15px;} 
+    .mode-card-icon { width: 48px; height: 48px; margin-bottom: 10px;}
+    .mode-card-title { font-size: 1em; margin-bottom: 8px; }
+    .mode-card-description { font-size: 0.8em; }
 }
