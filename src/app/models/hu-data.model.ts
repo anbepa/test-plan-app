@@ -12,8 +12,8 @@ export interface HUData {
     acceptanceCriteria?: string; // Opcional, solo para modo 'text'
     selectedTechnique: string;
     generationMode: GenerationMode;
-    imageBase64?: string; // Solo para modo 'image'
-    imageMimeType?: string; // Solo para modo 'image'
+    imagesBase64?: string[]; // Solo para modo 'image' - CHANGED
+    imageMimeTypes?: string[]; // Solo para modo 'image' - CHANGED
   };
   id: string; // ID final de la HU
   title: string; // Título final de la HU

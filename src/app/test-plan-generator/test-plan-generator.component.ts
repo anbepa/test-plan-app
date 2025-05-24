@@ -4,7 +4,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { GeminiService, DetailedTestCase } from '../services/gemini.service';
 import { catchError, finalize, tap, switchMap } from 'rxjs/operators';
-import { Observable, of, Subscription } from 'rxjs';
+import { Observable, of, Subscription, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { HUData, GenerationMode } from '../models/hu-data.model';
 
@@ -20,10 +20,10 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
 export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   currentGenerationMode: GenerationMode | null = null;
-  selectedFile: File | null = null;
-  currentImagePreview: string | ArrayBuffer | null = null;
-  imageBase64: string | null = null;
-  imageMimeType: string | null = null;
+  selectedFiles: File[] = [];
+  currentImagePreviews: (string | ArrayBuffer)[] = [];
+  imagesBase64: string[] = [];
+  imageMimeTypes: string[] = [];
   imageUploadError: string | null = null;
   formError: string | null = null;
 
@@ -67,7 +67,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   loadingAssumptionsAI: boolean = false;
   errorAssumptionsAI: string | null = null;
 
-  // Default static sections to closed
   isRepositoryLinkDetailsOpen: boolean = false;
   isOutOfScopeDetailsOpen: boolean = false;
   isStrategyDetailsOpen: boolean = false;
@@ -78,6 +77,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('huForm') huFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
   @ViewChild('scenariosTextarea') scenariosTextarea: ElementRef | undefined;
+  @ViewChild('imageFilesInput') imageFilesInputRef: ElementRef<HTMLInputElement> | undefined;
+
 
   constructor(
     private geminiService: GeminiService,
@@ -110,10 +111,10 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.currentGenerationMode = null;
     this.formError = null;
     this.imageUploadError = null;
-    this.selectedFile = null;
-    this.currentImagePreview = null;
-    this.imageBase64 = null;
-    this.imageMimeType = null;
+    this.selectedFiles = [];
+    this.currentImagePreviews = [];
+    this.imagesBase64 = [];
+    this.imageMimeTypes = [];
 
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
@@ -122,8 +123,9 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
 
     if (isPlatformBrowser(this.platformId)) {
-      const imageInput = document.getElementById('imageFile') as HTMLInputElement;
-      if (imageInput) imageInput.value = '';
+      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
+        this.imageFilesInputRef.nativeElement.value = '';
+      }
     }
 
     if (this.huFormDirective && this.huFormDirective.form) {
@@ -151,32 +153,35 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
     this.formError = null;
     this.imageUploadError = null;
-    this.selectedFile = null;
-    this.currentImagePreview = null;
-    this.imageBase64 = null;
-    this.imageMimeType = null;
+    this.selectedFiles = [];
+    this.currentImagePreviews = [];
+    this.imagesBase64 = [];
+    this.imageMimeTypes = [];
 
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
 
 
     if (isPlatformBrowser(this.platformId)) {
-      const imageInput = document.getElementById('imageFile') as HTMLInputElement;
-      if (imageInput) imageInput.value = '';
+      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
+        this.imageFilesInputRef.nativeElement.value = '';
+      }
     }
 
     if (this.currentGenerationMode === 'text') {
       this.currentHuId = '';
       this.currentHuTitle = '';
-    } else { 
-      this.currentHuId = `IMG_${new Date().getTime().toString().slice(-5)}`;
-      this.currentHuTitle = `Análisis de Flujo Visual ${this.huList.length + 1}`;
+    } else {
+      this.currentHuId = `IMG_SET_${new Date().getTime().toString().slice(-5)}`;
+      this.currentHuTitle = `Análisis de Flujo Visual Múltiple ${this.huList.length + 1}`;
     }
     if (this.huFormDirective && this.huFormDirective.form) {
         setTimeout(() => {
-            this.huFormDirective.form.markAsPristine();
-            this.huFormDirective.form.markAsUntouched(); 
-            this.huFormDirective.form.updateValueAndValidity();
+            if (this.huFormDirective?.form) {
+              this.huFormDirective.form.markAsPristine();
+              this.huFormDirective.form.markAsUntouched();
+              this.huFormDirective.form.updateValueAndValidity();
+            }
         },0);
     }
   }
@@ -189,60 +194,106 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     if (this.currentGenerationMode === 'text') {
       return commonRequired || !this.currentHuId || !this.currentHuTitle || !this.currentDescription || !this.currentAcceptanceCriteria;
     } else { // 'image'
-      return commonRequired || !this.selectedFile || !this.imageBase64 || !this.currentHuId || !this.currentHuTitle;
+      return commonRequired || this.selectedFiles.length === 0 || this.imagesBase64.length === 0 || !this.currentHuId || !this.currentHuTitle;
     }
   }
 
   onFileSelected(event: Event): void {
     this.imageUploadError = null;
     this.formError = null;
-    this.selectedFile = null;
-    this.currentImagePreview = null;
-    this.imageBase64 = null;
-    this.imageMimeType = null;
+    this.selectedFiles = [];
+    this.currentImagePreviews = [];
+    this.imagesBase64 = [];
+    this.imageMimeTypes = [];
 
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
 
-    if (fileList && fileList[0]) {
-      const file = fileList[0];
-      if (file.size > 4 * 1024 * 1024) {
-        this.imageUploadError = "El archivo es demasiado grande. Máximo 4MB.";
+    if (fileList && fileList.length > 0) {
+      if (fileList.length > 5) { // Limit number of files
+        this.imageUploadError = "Puedes seleccionar un máximo de 5 imágenes.";
         element.value = ""; return;
       }
-      if (!['image/jpeg', 'image/png'].includes(file.type)) {
-        this.imageUploadError = "Formato de archivo no válido. Solo se permiten JPG y PNG.";
-        element.value = ""; return;
-      }
-      this.selectedFile = file;
-      this.imageMimeType = file.type;
-      const reader = new FileReader();
-      reader.onload = e => {
-        this.currentImagePreview = reader.result;
-        if (typeof reader.result === 'string') {
-          this.imageBase64 = reader.result.split(',')[1];
+
+      const fileProcessingObservables: Observable<void>[] = [];
+
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        if (file.size > 4 * 1024 * 1024) {
+          this.imageUploadError = `El archivo "${file.name}" es demasiado grande (Máx. 4MB). Se omitirán todos los archivos.`;
+          element.value = ""; this.selectedFiles = []; this.currentImagePreviews = []; this.imagesBase64 = []; this.imageMimeTypes = []; return;
         }
+        if (!['image/jpeg', 'image/png'].includes(file.type)) {
+          this.imageUploadError = `Formato inválido para "${file.name}" (Solo JPG, PNG). Se omitirán todos los archivos.`;
+          element.value = ""; this.selectedFiles = []; this.currentImagePreviews = []; this.imagesBase64 = []; this.imageMimeTypes = []; return;
+        }
+        
+        this.selectedFiles.push(file); // Add validated file to the list first
+
+        const readerObservable = new Observable<void>(observer => {
+          const reader = new FileReader();
+          reader.onload = e => {
+            this.currentImagePreviews.push(reader.result as string | ArrayBuffer);
+            if (typeof reader.result === 'string') {
+              this.imagesBase64.push(reader.result.split(',')[1]);
+              this.imageMimeTypes.push(file.type); // Add mimeType here, after successful read and base64 conversion
+            }
+            observer.next();
+            observer.complete();
+          };
+          reader.onerror = error => {
+            this.imageUploadError = `Error al leer el archivo "${file.name}".`;
+            console.error(`FileReader error for ${file.name}: `, error);
+            // Since we are aborting on any error, we might not need to remove specific files here
+            // but it's good practice if we were to allow partial success.
+            observer.error(error);
+          };
+          reader.readAsDataURL(file);
+        });
+        fileProcessingObservables.push(readerObservable);
+      }
+
+      if (fileProcessingObservables.length > 0) {
+        forkJoin(fileProcessingObservables).subscribe({
+          next: () => { /* All files processed successfully so far */ },
+          complete: () => {
+            if (this.huFormDirective && this.huFormDirective.form) {
+              this.huFormDirective.form.updateValueAndValidity();
+            }
+          },
+          error: () => {
+            // An error occurred in one of the file readings.
+            // imageUploadError is already set by the failing reader.
+            // Clear all selections as per the individual error handling logic.
+            element.value = "";
+            this.selectedFiles = [];
+            this.currentImagePreviews = [];
+            this.imagesBase64 = [];
+            this.imageMimeTypes = [];
+            if (this.huFormDirective && this.huFormDirective.form) {
+              this.huFormDirective.form.updateValueAndValidity();
+            }
+          }
+        });
+      }
+    } else { // No files selected
         if (this.huFormDirective && this.huFormDirective.form) {
             this.huFormDirective.form.updateValueAndValidity();
         }
-      };
-      reader.onerror = error => {
-        this.imageUploadError = "Error al leer el archivo.";
-        console.error("FileReader error: ", error);
-        element.value = "";
-      };
-      reader.readAsDataURL(file);
     }
   }
 
   addHuAndGenerateData(): void {
     this.formError = null;
-    if (!this.currentGenerationMode) { 
+    if (!this.currentGenerationMode) {
         this.formError = "Por favor, selecciona un método de generación primero.";
         return;
     }
     if (this.isFormInvalidForCurrentMode()) {
       this.formError = "Por favor, completa todos los campos requeridos.";
+      if (this.currentGenerationMode === 'image' && this.selectedFiles.length === 0) {
+        this.formError = "Por favor, selecciona al menos una imagen.";
+      }
        if (this.huFormDirective && this.huFormDirective.form) {
         Object.values(this.huFormDirective.form.controls).forEach(control => {
           if (control.invalid) control.markAsTouched();
@@ -256,8 +307,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         description: this.currentGenerationMode === 'text' ? this.currentDescription : undefined,
         acceptanceCriteria: this.currentGenerationMode === 'text' ? this.currentAcceptanceCriteria : undefined,
         selectedTechnique: this.currentSelectedTechnique, generationMode: this.currentGenerationMode,
-        imageBase64: this.currentGenerationMode === 'image' ? this.imageBase64 || undefined : undefined,
-        imageMimeType: this.currentGenerationMode === 'image' ? this.imageMimeType || undefined : undefined
+        imagesBase64: this.currentGenerationMode === 'image' ? this.imagesBase64 : undefined,
+        imageMimeTypes: this.currentGenerationMode === 'image' ? this.imageMimeTypes : undefined
       },
       id: this.currentHuId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
       generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
@@ -265,7 +316,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       loadingScope: this.currentGenerationMode === 'text', errorScope: null,
       loadingScenarios: true, errorScenarios: null,
       showRegenTechniquePicker: false, regenSelectedTechnique: '',
-      isScopeDetailsOpen: true, isScenariosDetailsOpen: true // HU specific sections open by default
+      isScopeDetailsOpen: true, isScenariosDetailsOpen: true
     };
     this.huList.push(newHu);
     if (newHu.loadingScope) { this.loadingSections = true; this.sectionsError = null; }
@@ -303,9 +354,9 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         this.loadingScenarios = true;
     }
     let generationObservable$: Observable<DetailedTestCase[]>;
-    if (hu.originalInput.generationMode === 'image' && hu.originalInput.imageBase64 && hu.originalInput.imageMimeType) {
+    if (hu.originalInput.generationMode === 'image' && hu.originalInput.imagesBase64 && hu.originalInput.imagesBase64.length > 0 && hu.originalInput.imageMimeTypes && hu.originalInput.imageMimeTypes.length > 0) {
       generationObservable$ = this.geminiService.generateDetailedTestCasesImageBased(
-        hu.originalInput.imageBase64, hu.originalInput.imageMimeType, technique
+        hu.originalInput.imagesBase64, hu.originalInput.imageMimeTypes, technique
       );
     } else if (hu.originalInput.generationMode === 'text' && hu.originalInput.description && hu.originalInput.acceptanceCriteria) {
       generationObservable$ = this.geminiService.generateDetailedTestCasesTextBased(
@@ -415,12 +466,12 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
         huDesc += ` Descripción (inicio): ${hu.originalInput.description.substring(0, 70)}...`;
       } else if (hu.originalInput.generationMode === 'image') {
-        huDesc += ` (Generada desde imagen, título: ${hu.title})`;
+        huDesc += ` (Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es), título: ${hu.title})`;
       }
       return `- ${huDesc}`;
     }).join('\n');
 
-    if (summary.length > 1500) { 
+    if (summary.length > 1500) {
         summary = summary.substring(0, 1500) + "\n... (resumen truncado por longitud)";
     }
     return summary;
@@ -470,8 +521,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         next: (aiResponse: string) => {
           if (aiResponse && aiResponse.trim() !== '') {
             const newContent = (currentContent.trim() === '' || currentContent.trim().toLowerCase().startsWith('no se probarán') && section === 'outOfScope' || currentContent.trim().toLowerCase().startsWith('no tener los permisos') && section === 'limitations'
-                ? aiResponse.trim() // Replace default placeholder if it's the only content
-                : currentContent + '\n\n' + aiResponse.trim()); // Append otherwise
+                ? aiResponse.trim()
+                : currentContent + '\n\n' + aiResponse.trim());
             switch (section) {
               case 'outOfScope': this.outOfScopeContent = newContent; break;
               case 'strategy': this.strategyContent = newContent; break;
@@ -512,27 +563,28 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
-    this.selectedFile = null;
-    this.currentImagePreview = null;
-    this.imageBase64 = null;
-    this.imageMimeType = null;
+    this.selectedFiles = [];
+    this.currentImagePreviews = [];
+    this.imagesBase64 = [];
+    this.imageMimeTypes = [];
     this.imageUploadError = null;
     this.formError = null;
 
     if (this.currentGenerationMode === 'image') {
-      this.currentHuId = `IMG_${new Date().getTime().toString().slice(-5)}`;
-      this.currentHuTitle = `Análisis de Flujo Visual ${this.huList.length + 1}`;
-    } else { 
+      this.currentHuId = `IMG_SET_${new Date().getTime().toString().slice(-5)}`;
+      this.currentHuTitle = `Análisis de Flujo Visual Múltiple ${this.huList.length + 1}`;
+    } else {
       this.currentHuId = '';
       this.currentHuTitle = '';
     }
 
 
     if (isPlatformBrowser(this.platformId)) {
-      const imageInput = document.getElementById('imageFile') as HTMLInputElement;
-      if (imageInput) imageInput.value = '';
+      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
+        this.imageFilesInputRef.nativeElement.value = '';
+      }
     }
-     setTimeout(() => { 
+     setTimeout(() => {
         if (this.huFormDirective && this.huFormDirective.form) {
             this.huFormDirective.form.updateValueAndValidity();
         }
@@ -560,13 +612,12 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
           }
         });
     }
-    // Always include these sections as they can be manually edited or AI generated
     fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\n`;
     fullPlanContent += `ESTRATEGIA:\n\n${this.strategyContent}\n\n`;
 
     fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
     this.huList.forEach((hu) => {
-      fullPlanContent += `HU ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? '(Generada desde imagen)' : ''}\n`;
+      fullPlanContent += `HU ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es))` : ''}\n`;
       fullPlanContent += `${hu.generatedTestCaseTitles}\n\n`;
     });
     fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\n`;
@@ -583,19 +634,19 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
             return '';
         }
         let safe = unsafe;
-        safe = safe.replace(/&/g, `&`);
-        safe = safe.replace(/</g, `<`);
-        safe = safe.replace(/>/g, `>`);
-        safe = safe.replace(/"/g, `"`); // Usando comilla invertida para la cadena de reemplazo
-        safe = safe.replace(/'/g, `'`); // Usando comilla invertida para la cadena de reemplazo
+        safe = safe.replace(/&/g, `&amp;`);
+        safe = safe.replace(/</g, `&lt;`);
+        safe = safe.replace(/>/g, `&gt;`);
+        safe = safe.replace(/"/g, `&quot;`);
+        safe = safe.replace(/'/g, `&#39;`);
         return safe;
     };
 
     if (this.testPlanTitle) { fullPlanHtmlContent += `<span class="preview-section-title">Título del Plan de Pruebas:</span> ${escapeHtml(this.testPlanTitle)}\n\n`; }
-    
+
     const repoLinkUrl = this.repositoryLink.split(' ')[0];
     fullPlanHtmlContent += `<span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${escapeHtml(repoLinkUrl)}" target="_blank">${escapeHtml(this.repositoryLink)}</a>\n\n`;
-    
+
     if (this.isAnyHuTextBased()) {
         fullPlanHtmlContent += `<span class="preview-section-title">ALCANCE:</span>\n\n`;
         this.huList.forEach((hu) => {
@@ -609,7 +660,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     fullPlanHtmlContent += `<span class="preview-section-title">ESTRATEGIA:</span>\n\n${escapeHtml(this.strategyContent)}\n\n`;
     fullPlanHtmlContent += `<span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span>\n\n`;
     this.huList.forEach((hu) => {
-      fullPlanHtmlContent += `<span class="preview-hu-title">HU ${escapeHtml(hu.id)} ${escapeHtml(hu.title)} ${hu.originalInput.generationMode === 'image' ? '(Generada desde imagen)' : ''}</span>\n`;
+      fullPlanHtmlContent += `<span class="preview-hu-title">HU ${escapeHtml(hu.id)} ${escapeHtml(hu.title)} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es))` : ''}</span>\n`;
       fullPlanHtmlContent += `${escapeHtml(hu.generatedTestCaseTitles)}\n\n`;
     });
     fullPlanHtmlContent += `<span class="preview-section-title">LIMITACIONES:</span>\n\n${escapeHtml(this.limitationsContent)}\n\n`;
@@ -651,7 +702,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   exportExecutionMatrix(hu: HUData): void {
-    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imagen no interpretable o técnica no aplicable")) {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imagen no interpretable o técnica no aplicable" || tc.title === "Imágenes no interpretables o técnica no aplicable")) {
       alert('No hay casos de prueba válidos para exportar.'); return;
     }
     const csvHeader = ["Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
@@ -670,7 +721,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   private escapeCsvField(field: string): string {
     if (field === null || field === undefined) { return ''; }
     let result = field.toString();
-    result = result.replace(/"/g, '""'); 
+    result = result.replace(/"/g, '""');
     return result;
   }
 

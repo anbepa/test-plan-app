@@ -70,7 +70,7 @@ export class GeminiService {
   private proxyApiUrl = environment.geminiApiUrl;
   // apiKey YA NO SE USA AQUÍ
 
-  // --- PROMPTS (SIN CAMBIOS AQUÍ) ---
+  // --- PROMPTS ---
   private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string) => `
 Eres un analista de QA experimentado.
 Genera la sección de ALCANCE para un plan de pruebas.
@@ -115,33 +115,33 @@ PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LA HU, L
 
 private readonly PROMPT_SCENARIOS_DETAILED_IMAGE_BASED = (technique: string) => `
 Eres un Ingeniero de QA experto en diseño de pruebas de caja negra y en la interpretación de interfaces de usuario a partir de imágenes.
-Tu tarea es analizar la imagen proporcionada, que representa un flujo de interfaz de usuario, y generar casos de prueba detallados, claros, concisos y accionables basados en la técnica de prueba especificada.
+Tu tarea es analizar LAS IMÁGENES proporcionadas, que representan un flujo de interfaz de usuario, y generar casos de prueba detallados, claros, concisos y accionables basados en la técnica de prueba especificada.
 **ENTRADA PROPORCIONADA:**
-1.  **Imagen del Flujo de Interfaz de Usuario:** (La imagen adjunta en base64 en la solicitud).
+1.  **Imágenes del Flujo de Interfaz de Usuario:** (Las imágenes adjuntas en base64 en la solicitud).
 2.  **Técnica de Diseño de Pruebas de Caja Negra a Aplicar:** "${technique}"
 **INSTRUCCIONES FUNDAMENTALES PARA EL DISEÑO DE CASOS DE PRUEBA:**
 1.  **INTERPRETACIÓN VISUAL DETALLADA:**
-    * Analiza la imagen minuciosamente. Identifica elementos (botones, campos, etc.), flujo de navegación, acciones y resultados visuales.
-    * Infiere criterios de aceptación o reglas de negocio.
-    * Considera el texto en la imagen como crucial.
+    * Analiza LAS IMÁGENES minuciosamente. Identifica elementos (botones, campos, etc.), el flujo de navegación general que representan en conjunto, acciones y resultados visuales.
+    * Infiere criterios de aceptación o reglas de negocio a partir de la secuencia de imágenes si aplica.
+    * Considera el texto en CADA imagen como crucial.
 2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":**
-    * Basa la generación de casos en tu interpretación de la imagen y los principios de "${technique}".
-    * Aplica la técnica a elementos y flujos visuales (Partición Equivalencia, Valores Límite, etc.).
-    * Los casos DEBEN ser consecuencia lógica de aplicar "${technique}" a la funcionalidad inferida. NO inventes funcionalidad.
-3.  **DERIVACIÓN DIRECTA DE LA IMAGEN:** CADA caso debe justificarse por la imagen y la aplicación de "${technique}".
+    * Basa la generación de casos en tu interpretación de las imágenes y los principios de "${technique}".
+    * Aplica la técnica a elementos y flujos visuales (Partición Equivalencia, Valores Límite, etc.) considerando el conjunto de imágenes.
+    * Los casos DEBEN ser consecuencia lógica de aplicar "${technique}" a la funcionalidad inferida del conjunto de imágenes. NO inventes funcionalidad no soportada por las imágenes.
+3.  **DERIVACIÓN DIRECTA DE LAS IMÁGENES:** CADA caso debe justificarse por el contenido de las imágenes y la aplicación de "${technique}".
 4.  **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
     * La respuesta DEBE ser un array JSON válido.
     * Cada elemento: objeto JSON con propiedades EXACTAS: **"title"**, **"preconditions"**, **"steps"**, **"expectedResults"**.
-    * Ejemplo: {"title": "Verificar navegación...", "preconditions": "Pantalla principal visible...", "steps": "1. Observar...", "expectedResults": "Sistema navega..."}
+    * Ejemplo: {"title": "Verificar navegación a través de múltiples pantallas...", "preconditions": "Usuario en la pantalla inicial del flujo...", "steps": "1. Observar imagen1 y hacer X.\\n2. Observar imagen2 y hacer Y.", "expectedResults": "Sistema navega correctamente a través del flujo y muestra Z."}
     * Valores pueden ser strings multilínea (separados por '\\n'). "title" DEBE comenzar con verbo.
     * **ABSOLUTAMENTE PROHIBIDO TEXTO FUERA del array JSON.** Respuesta: *únicamente* el array JSON.
-5.  **CONCISIÓN Y ACCIÓN (ENFOCADO EN LA IMAGEN):**
-    * **Title:** Breve, descriptivo.
-    * **Preconditions:** Estado ANTES de pasos, inferido de imagen.
-    * **Steps:** Acciones CLARAS sobre elementos VISIBLES. Sé específico.
-    * **ExpectedResults:** Resultado observable DESPUÉS de pasos.
-6.  **COBERTURA ADECUADA:** Cubre funcionalidad principal e interacciones clave inferidas, a través de "${technique}".
-7.  **CASO DE IMAGEN NO CLARA / NO APLICABILIDAD:** Responde EXACTAMENTE y ÚNICAMENTE con: [{"title": "Imagen no interpretable o técnica no aplicable", "preconditions": "N/A", "steps": "No se pudieron generar casos detallados...", "expectedResults": "N/A"}]
+5.  **CONCISIÓN Y ACCIÓN (ENFOCADO EN LAS IMÁGENES):**
+    * **Title:** Breve, descriptivo, reflejando el objetivo del caso a través del flujo de imágenes.
+    * **Preconditions:** Estado ANTES de pasos, inferido del conjunto de imágenes o la imagen inicial del flujo.
+    * **Steps:** Acciones CLARAS sobre elementos VISIBLES en las imágenes. Sé específico y referencia las imágenes si es necesario para la claridad del flujo (ej. "En la pantalla de login (imagen1)...").
+    * **ExpectedResults:** Resultado observable DESPUÉS de pasos, posiblemente en la última imagen del flujo o como un estado final esperado.
+6.  **COBERTURA ADECUADA:** Cubre funcionalidad principal e interacciones clave inferidas del conjunto de imágenes, a través de "${technique}". Prioriza escenarios que demuestren la correcta transición y funcionalidad a lo largo del flujo visual.
+7.  **CASO DE IMÁGENES NO CLARAS / NO APLICABILIDAD:** Responde EXACTAMENTE y ÚNICAMENTE con: [{"title": "Imágenes no interpretables o técnica no aplicable", "preconditions": "N/A", "steps": "No se pudieron generar casos detallados a partir del conjunto de imágenes proporcionadas.", "expectedResults": "N/A"}]
 `;
 
 private readonly PROMPT_STATIC_SECTION_ENHANCEMENT = (sectionName: string, existingContent: string, huSummary: string) => `
@@ -209,14 +209,19 @@ Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO P
     return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
-  generateDetailedTestCasesImageBased(imageBase64: string, mimeType: string, technique: string): Observable<DetailedTestCase[]> {
+  generateDetailedTestCasesImageBased(imagesBase64: string[], mimeTypes: string[], technique: string): Observable<DetailedTestCase[]> {
     const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique);
+
+    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
+      inlineData: { mimeType: mimeTypes[index], data: base64 }
+    }));
+
     const geminiPayload = {
       contents: [
         {
           parts: [
             { text: promptText },
-            { inlineData: { mimeType: mimeType, data: imageBase64 } }
+            ...imageParts // Spread the array of image parts
           ]
         }
       ],

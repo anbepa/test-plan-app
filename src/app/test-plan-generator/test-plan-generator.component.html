@@ -18,12 +18,12 @@
         <p class="mode-card-title">Por Descripción de HU y Criterios</p>
         <p class="mode-card-description">¿Recibiste una Historia de Usuario (HU) y necesitas apoyo para elaborar el plan de pruebas?</p>
       </div>
-      <div class="mode-card" (click)="selectInitialMode('image')" tabindex="0" role="button" aria-label="Generar por Imagen Cargada">
+      <div class="mode-card" (click)="selectInitialMode('image')" tabindex="0" role="button" aria-label="Generar por Imágenes Cargadas">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-card-icon">
           <path fill-rule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-3.69l-2.72-2.72a.75.75 0 00-1.06 0L11 12.19l-2.47-2.47a.75.75 0 00-1.06 0L1.5 11.06zM9.25 7.5a1.25 1.25 0 112.5 0 1.25 1.25 0 01-2.5 0z" clip-rule="evenodd" />
         </svg>
-        <p class="mode-card-title">Por Imagen Cargada</p>
-        <p class="mode-card-description">Si tienes un flujo representado en una imagen o captura de pantalla...</p>
+        <p class="mode-card-title">Por Imágenes Cargadas</p>
+        <p class="mode-card-description">Si tienes un flujo representado en varias imágenes o capturas de pantalla...</p>
       </div>
     </div>
   </section>
@@ -72,25 +72,30 @@
 
         <ng-container *ngIf="currentGenerationMode === 'image'">
           <div class="form-group">
-            <label for="currentHuIdImage">ID (Autogenerado para Imagen):</label>
+            <label for="currentHuIdImage">ID (Autogenerado para Conjunto de Imágenes):</label>
             <input id="currentHuIdImage" type="text" name="currentHuIdImage" [(ngModel)]="currentHuId" readonly placeholder="Autogenerado">
           </div>
           <div class="form-group">
-            <label for="currentHuTitleImage">Título (Autogenerado para Imagen):</label>
+            <label for="currentHuTitleImage">Título (Autogenerado para Conjunto de Imágenes):</label>
             <input id="currentHuTitleImage" type="text" name="currentHuTitleImage" [(ngModel)]="currentHuTitle" readonly placeholder="Autogenerado">
           </div>
           <div class="form-group full-width">
-            <label for="imageFile">Cargar Imagen del Flujo (JPG, PNG - Máx. 4MB):<span class="required-indicator">*</span></label>
-            <input type="file" id="imageFile" name="imageFile" (change)="onFileSelected($event)" accept="image/jpeg, image/png" [required]="currentGenerationMode === 'image'">
+            <label for="imageFiles">Cargar Imágenes del Flujo (JPG, PNG - Máx. 4MB por imagen, Máx. 5 imágenes):<span class="required-indicator">*</span></label>
+            <input type="file" id="imageFiles" name="imageFiles" (change)="onFileSelected($event)" accept="image/jpeg, image/png" 
+                   [required]="currentGenerationMode === 'image'" multiple #imageFilesInput>
             <div *ngIf="imageUploadError" class="validation-error" role="alert">
               {{ imageUploadError }}
             </div>
-            <div *ngIf="huForm.controls['imageFile']?.invalid && (huForm.controls['imageFile']?.dirty || huForm.controls['imageFile']?.touched || huForm.submitted) && currentGenerationMode === 'image' && !selectedFile" class="validation-error" role="alert">
-              Debes seleccionar una imagen.
+            <div *ngIf="huForm.submitted && currentGenerationMode === 'image' && selectedFiles.length === 0" class="validation-error" role="alert">
+              Debes seleccionar al menos una imagen.
             </div>
-            <div *ngIf="currentImagePreview" class="image-preview-container">
-              <p>Previsualización:</p>
-              <img [src]="currentImagePreview" alt="Previsualización de imagen cargada" class="image-preview">
+            
+            <div *ngIf="currentImagePreviews.length > 0" class="image-preview-container multiple-previews">
+              <p>Previsualización de Imágenes Cargadas ({{ currentImagePreviews.length }}):</p>
+              <div *ngFor="let preview of currentImagePreviews; let i = index" class="image-preview-item">
+                <img [src]="preview" [alt]="'Previsualización de imagen cargada ' + (i+1)" class="image-preview">
+                <span class="image-filename" title="{{ selectedFiles[i]?.name }}">{{ selectedFiles[i]?.name }}</span>
+              </div>
             </div>
           </div>
         </ng-container>
@@ -152,7 +157,7 @@
             <span class="sprint-badge">Sprint: {{ hu.sprint }}</span>
             <span *ngIf="hu.originalInput.generationMode === 'image'" class="mode-indicator">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-icon"><path fill-rule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-3.69l-2.72-2.72a.75.75 0 00-1.06 0L11 12.19l-2.47-2.47a.75.75 0 00-1.06 0L1.5 11.06zM9.25 7.5a1.25 1.25 0 112.5 0 1.25 1.25 0 01-2.5 0z" clip-rule="evenodd" /></svg>
-              Imagen
+              {{ hu.originalInput.imagesBase64?.length || 0 }} Imagen(es)
             </span>
           </div>
         </div>
@@ -196,7 +201,7 @@
             </span>
           </summary>
           <div class="plan-section-content">
-            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.title !== 'Error de API' && hu.detailedTestCases[0]?.title !== 'Error de Formato' && hu.detailedTestCases[0]?.title !== 'Error de Parsing JSON' && hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && hu.detailedTestCases[0]?.title !== 'Imagen no interpretable o técnica no aplicable'; else editScenariosBlockOrNoData">
+            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.title !== 'Error de API' && hu.detailedTestCases[0]?.title !== 'Error de Formato' && hu.detailedTestCases[0]?.title !== 'Error de Parsing JSON' && hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && hu.detailedTestCases[0]?.title !== 'Imagen no interpretable o técnica no aplicable' && hu.detailedTestCases[0]?.title !== 'Imágenes no interpretables o técnica no aplicable'; else editScenariosBlockOrNoData">
               <div class="detailed-test-cases-table-container">
                 <table class="detailed-test-cases-table">
                   <thead>
@@ -230,7 +235,7 @@
                 <div *ngIf="hu.loadingScenarios && !hu.showRegenTechniquePicker" class="loading-message">
                     <span class="spinner-inline"></span> Cargando casos de prueba...
                 </div>
-                <pre class="generated-text" *ngIf="!hu.loadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON' || hu.detailedTestCases[0]?.title === 'Información Insuficiente' || hu.detailedTestCases[0]?.title === 'Imagen no interpretable o técnica no aplicable')">
+                <pre class="generated-text" *ngIf="!hu.loadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON' || hu.detailedTestCases[0]?.title === 'Información Insuficiente' || hu.detailedTestCases[0]?.title === 'Imagen no interpretable o técnica no aplicable' || hu.detailedTestCases[0]?.title === 'Imágenes no interpretables o técnica no aplicable')">
                   {{ hu.errorScenarios ? 'Error: ' + hu.errorScenarios : (hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga.') }}
                   <span *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.steps !== 'N/A' && (hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON') ">
                     <br>--- Respuesta Recibida (puede contener detalles del error) ---<br>
@@ -273,7 +278,7 @@
                 Regenerar Casos
               </button>
               <button (click)="exportExecutionMatrix(hu)" class="button-secondary"
-                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente' || hu.detailedTestCases[0].title === 'Imagen no interpretable o técnica no aplicable'">
+                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente' || hu.detailedTestCases[0].title === 'Imagen no interpretable o técnica no aplicable' || hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable'">
                 Exportar Matriz (.csv)
               </button>
             </div>
