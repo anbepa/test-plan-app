@@ -1,7 +1,7 @@
-// src/app/models/hu-data.model.ts
 import { DetailedTestCase } from '../services/gemini.service'; 
 
-export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison'; // Asegurarse que flowComparison está aquí
+// MODIFIED: Added 'flowComparison'
+export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison'; 
 
 export interface FlowAnalysisStep {
   numero_paso: number;
@@ -20,11 +20,13 @@ export interface FlowAnalysisReportItem {
   Conclusion_General_Flujo: string;
 }
 
+// NEW: BugReportStep interface
 export interface BugReportStep {
   numero_paso: number;
   descripcion: string;
 }
 
+// NEW: BugReportItem interface
 export interface BugReportItem {
   titulo_bug: string;
   id_bug: string; 
@@ -41,8 +43,8 @@ export interface BugReportItem {
   pasos_para_reproducir: BugReportStep[];
   resultado_esperado: string;
   resultado_actual: string;
-  imagen_referencia_flujo_a?: string; 
-  imagen_referencia_flujo_b?: string; 
+  imagen_referencia_flujo_a?: string; // e.g., "Imagen A.1"
+  imagen_referencia_flujo_b?: string; // e.g., "Imagen B.1"
   descripcion_diferencia_general?: string;
 }
 
@@ -56,8 +58,16 @@ export interface HUData {
     acceptanceCriteria?: string; 
     selectedTechnique: string; 
     generationMode: GenerationMode;
+    
+    // For 'image' and 'flowAnalysis'
     imagesBase64?: string[]; 
     imageMimeTypes?: string[]; 
+
+    // NEW: For 'flowComparison'
+    imagesBase64FlowA?: string[]; 
+    imageMimeTypesFlowA?: string[]; 
+    imagesBase64FlowB?: string[]; 
+    imageMimeTypesFlowB?: string[]; 
   };
   id: string; 
   title: string; 
@@ -85,4 +95,10 @@ export interface HUData {
   loadingFlowAnalysis?: boolean;
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
+
+  // NEW: For 'flowComparison' results
+  bugComparisonReport?: BugReportItem[];
+  loadingBugComparison?: boolean;
+  errorBugComparison?: string | null;
+  isBugComparisonDetailsOpen?: boolean;
 }

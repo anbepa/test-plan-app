@@ -4,6 +4,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+// MODIFIED: Added BugReportItem
 import { FlowAnalysisReportItem, BugReportItem } from '../models/hu-data.model';
 
 interface GeminiTextPart { text: string; }
@@ -20,6 +21,7 @@ interface GeminiSafetySetting {
   category: string;
   threshold: string;
 }
+// MODIFIED: Added 'compareImageFlows'
 interface ProxyRequestBody {
   action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows';
   payload: any; 
@@ -172,7 +174,7 @@ ${huSummary}
 Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO PÁRRAFO CONCISO, MÁXIMO 4 LÍNEAS, sin enumeraciones, viñetas, encabezados ni saludos. Solo el texto a añadir.):`;
 private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = () => `
 Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de interfaces de usuario a partir de secuencias de imágenes.
-Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecución de un flujo de interfaz de usuario. Debes generar un informe detallado de dicha ejecución.
+Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecución de un flujo de interfaz de usuario. Debes generar un informe detallado de dicha ejecución, identificando **uno o más escenarios posibles** que la secuencia podría representar, incluyendo flujos exitosos y flujos con errores o desviaciones.
 
 **ENTRADA PROPORCIONADA:**
 1.  **Imágenes del Flujo de Ejecución (Screenshots):** Una secuencia de imágenes en base64. Estas imágenes están en el ORDEN CRONOLÓGICO ESTRICTO de la ejecución. Considera la primera imagen en la secuencia que recibes como "Imagen 1", la segunda como "Imagen 2", y así sucesivamente hasta la "Imagen N".
@@ -183,21 +185,24 @@ Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecuc
     *   Analiza CADA IMAGEN y la SECUENCIA COMPLETA minuciosamente, SIGUIENDO ESTRICTAMENTE el orden numérico en que se te proporcionan (Imagen 1, luego Imagen 2, ..., hasta Imagen N). Tu análisis de un paso DEBE basarse en la imagen o imágenes que corresponden a ese punto en la secuencia.
     *   Identifica elementos de la UI, su estado, datos visibles y cambios entre imágenes CONSECUTIVAS.
 
-2.  **DEDUCCIÓN DEL ESCENARIO EJECUTADO (Nombre del Escenario):**
-    *   Basándote en el flujo COMPLETO (analizado en orden), infiere el propósito general.
+2.  **DEDUCCIÓN DE POSIBLES ESCENARIOS EJECUTADOS (Nombre del Escenario):**
+    *   Basándote en el flujo COMPLETO (analizado en orden), infiere el propósito general de **cada posible escenario**.
+    *   Debes ser capaz de identificar y reportar **múltiples escenarios** si la secuencia de imágenes lo permite. Por ejemplo, un escenario podría ser el flujo "ideal" o "positivo", mientras que otro podría ser un "flujo con error" o un "camino alternativo no exitoso" que también sea consistente con las imágenes.
+    *   Cada escenario identificado debe ser un objeto JSON completo dentro del array de salida.
 
-3.  **EXTRACCIÓN DEL PASO A PASO DETALLADO (Pasos Analizados):**
-    *   Describe cronológicamente las acciones y observaciones.
-    *   Para cada paso identificado:
+3.  **EXTRACCIÓN DEL PASO A PASO DETALLADO (Pasos Analizados) PARA CADA ESCENARIO:**
+    *   Para cada escenario deducido, describe cronológicamente las acciones y observaciones que lo constituyen.
+    *   Para cada paso identificado dentro de un escenario:
         *   **REFERENCIA DE IMAGEN OBLIGATORIA Y PRECISA:** En el campo "imagen_referencia_entrada" del JSON, DEBES indicar la imagen (o rango de imágenes consecutivas) de la secuencia de entrada que es MÁS RELEVANTE para este paso. Usa el formato "Imagen X" (ej: "Imagen 1", "Imagen 3") o "Imagen X a Imagen Y" (ej: "Imagen 2 a Imagen 3") donde X e Y son los números de las imágenes según su orden de entrada.
         *   **NO INFIERAS UN ORDEN DIFERENTE AL DE ENTRADA PARA LAS REFERENCIAS.** Si el paso 1 del flujo ocurre en la primera imagen de entrada, la referencia debe ser "Imagen 1". Si el paso 2 ocurre en la segunda imagen de entrada, la referencia debe ser "Imagen 2".
         *   Describe la acción/estado.
         *   Identifica el elemento clave y su ubicación DENTRO de la imagen referenciada (ej: "botón 'Login' en Imagen 1").
         *   **DATO DE ENTRADA (Si aplica):** Si el paso implica la entrada de datos por parte del usuario (ej: escribir en un campo de texto, seleccionar una opción), describe el dato que se infiere fue ingresado. Si no hay entrada de datos directa por el usuario en este paso (ej: solo observación o clic en botón sin datos), indica "N/A".
 
-4.  **INFERENCIA DEL RESULTADO ESPERADO.**
-5.  **DETERMINACIÓN DEL RESULTADO OBTENIDO (Concluyendo 'Exitosa', 'Fallida (describir fallo)', o 'Exitosa con desviaciones').**
-6.  **CASO DE IMÁGENES NO INTERPRETABLES / FLUJO INCOMPRENSIBLE:** Si la secuencia de imágenes es demasiado ambigua o no permite una deducción razonable, responde EXACTAMENTE y ÚNICAMENTE con el siguiente JSON:
+4.  **INFERENCIA DEL RESULTADO ESPERADO (PARA CADA PASO Y ESCENARIO).**
+5.  **DETERMINACIÓN DEL RESULTADO OBTENIDO (PARA CADA PASO Y ESCENARIO) (Concluyendo 'Exitosa', 'Fallida (describir fallo)', o 'Exitosa con desviaciones').**
+
+6.  **CASO DE IMÁGENES NO INTERPRETABLES / FLUJO INCOMPRENSIBLE:** Si la secuencia de imágenes es demasiado ambigua o no permite una deducción razonable de NINGÚN escenario completo, responde EXACTAMENTE y ÚNICAMENTE con el siguiente JSON (un array conteniendo un único objeto de escenario no interpretable):
     \`\`\`json
     [
       {
@@ -205,7 +210,7 @@ Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecuc
         "Pasos_Analizados": [
           {
             "numero_paso": 1,
-            "descripcion_accion_observada": "Las imágenes proporcionadas no permiten una deducción clara de los pasos ejecutados.",
+            "descripcion_accion_observada": "Las imágenes proporcionadas no permiten una deducción clara de los pasos ejecutados para ningún escenario.",
             "imagen_referencia_entrada": "N/A",
             "elemento_clave_y_ubicacion_aproximada": "N/A",
             "dato_de_entrada_paso": "N/A",
@@ -221,13 +226,82 @@ Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecuc
 
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
 *   La respuesta DEBE ser un array JSON válido. Tu respuesta debe comenzar con '[' y terminar con ']'.
-*   El objeto JSON principal debe tener las siguientes propiedades: "Nombre_del_Escenario", "Pasos_Analizados", "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
+*   **Cada elemento del array raíz será un objeto JSON que representa un escenario deducido.**
+*   Cada objeto de escenario debe tener las siguientes propiedades: "Nombre_del_Escenario", "Pasos_Analizados" (que es un array de objetos de paso), "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
 *   Cada objeto en "Pasos_Analizados" debe tener: "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada" (CRÍTICO: "Imagen X" o "Imagen X a Imagen Y" según orden de entrada), "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" (string, puede ser "N/A"), "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
 *   **ABSOLUTAMENTE PROHIBIDO TEXTO FUERA del array JSON.** No incluyas explicaciones, introducciones, saludos, despedidas, ni ningún texto conversacional. Tu ÚNICA respuesta debe ser el array JSON.
+
+**Ejemplo de estructura de salida si se deducen DOS escenarios:**
+\`\`\`json
+[
+  {
+    "Nombre_del_Escenario": "Ejemplo: Flujo de Login Exitoso",
+    "Pasos_Analizados": [
+      {
+        "numero_paso": 1,
+        "descripcion_accion_observada": "Se visualiza la pantalla de login.",
+        "imagen_referencia_entrada": "Imagen 1",
+        "elemento_clave_y_ubicacion_aproximada": "Formulario de login completo en Imagen 1",
+        "dato_de_entrada_paso": "N/A",
+        "resultado_esperado_paso": "Visualizar campos de usuario y contraseña.",
+        "resultado_obtenido_paso_y_estado": "Exitosa"
+      },
+      {
+        "numero_paso": 2,
+        "descripcion_accion_observada": "Se ingresa el nombre de usuario 'testuser'.",
+        "imagen_referencia_entrada": "Imagen 2",
+        "elemento_clave_y_ubicacion_aproximada": "Campo 'username' en Imagen 2",
+        "dato_de_entrada_paso": "testuser",
+        "resultado_esperado_paso": "El campo 'username' debe contener 'testuser'.",
+        "resultado_obtenido_paso_y_estado": "Exitosa"
+      }
+      // ... más pasos para este escenario
+    ],
+    "Resultado_Esperado_General_Flujo": "El usuario debe poder iniciar sesión exitosamente.",
+    "Conclusion_General_Flujo": "Exitosa"
+  },
+  {
+    "Nombre_del_Escenario": "Ejemplo: Flujo de Login Fallido por Contraseña Incorrecta",
+    "Pasos_Analizados": [
+      {
+        "numero_paso": 1,
+        "descripcion_accion_observada": "Se visualiza la pantalla de login.",
+        "imagen_referencia_entrada": "Imagen 1",
+        "elemento_clave_y_ubicacion_aproximada": "Formulario de login completo en Imagen 1",
+        "dato_de_entrada_paso": "N/A",
+        "resultado_esperado_paso": "Visualizar campos de usuario y contraseña.",
+        "resultado_obtenido_paso_y_estado": "Exitosa"
+      },
+      {
+        "numero_paso": 2,
+        "descripcion_accion_observada": "Se ingresa el nombre de usuario 'testuser'.",
+        "imagen_referencia_entrada": "Imagen 2",
+        "elemento_clave_y_ubicacion_aproximada": "Campo 'username' en Imagen 2",
+        "dato_de_entrada_paso": "testuser",
+        "resultado_esperado_paso": "El campo 'username' debe contener 'testuser'.",
+        "resultado_obtenido_paso_y_estado": "Exitosa"
+      },
+      {
+        "numero_paso": 3,
+        "descripcion_accion_observada": "Se ingresa una contraseña y se presiona 'Login', pero aparece un mensaje de error 'Contraseña incorrecta'.",
+        "imagen_referencia_entrada": "Imagen 4 a Imagen 5",
+        "elemento_clave_y_ubicacion_aproximada": "Mensaje de error 'Contraseña incorrecta' en Imagen 5",
+        "dato_de_entrada_paso": "password_incorrecta (inferido)",
+        "resultado_esperado_paso": "El sistema debe mostrar un mensaje de error indicando contraseña incorrecta.",
+        "resultado_obtenido_paso_y_estado": "Exitosa (el error esperado se manifestó)"
+      }
+      // ... más pasos para este escenario de error
+    ],
+    "Resultado_Esperado_General_Flujo": "El sistema debe impedir el inicio de sesión y mostrar un error.",
+    "Conclusion_General_Flujo": "Fallida (según el intento de login, pero el manejo del error fue correcto)"
+  }
+]
+\`\`\`
 ---
-PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu salida JSON debe corresponder estrictamente a la X-ésima imagen en la secuencia de entrada que has recibido. Incluye el campo "dato_de_entrada_paso" en cada paso.
+PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu salida JSON debe corresponder estrictamente a la X-ésima imagen en la secuencia de entrada que has recibido. Incluye el campo "dato_de_entrada_paso" en cada paso de cada escenario. Si solo un escenario es claramente deducible, el array de salida contendrá un único objeto de escenario.
 `;
 
+// NEW: Prompt for comparing image flows
 private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = () => `
 Eres un Ingeniero de QA experto en la detección de diferencias visuales y funcionales entre dos flujos de interfaz de usuario representados por secuencias de imágenes.
 Se te proporcionarán dos conjuntos de imágenes: "Imágenes Flujo A" (representa el diseño esperado o la versión de referencia) y "Imágenes Flujo B" (representa la implementación actual o la versión a comparar). Ambas secuencias de imágenes están ordenadas cronológicamente por el usuario antes de ser enviadas.
@@ -240,22 +314,31 @@ Se te proporcionarán dos conjuntos de imágenes: "Imágenes Flujo A" (represent
 Compara el Flujo A con el Flujo B, imagen por imagen o paso a paso según corresponda, asumiendo que el usuario ha intentado alinear los flujos para que "Imagen A.X" se corresponda conceptualmente con "Imagen B.X" en la medida de lo posible.
 Identifica cualquier diferencia visual significativa (colores, fuentes, alineación, elementos faltantes/adicionales, texto incorrecto) o inferencias de diferencias funcionales.
 Para CADA diferencia significativa que constituya un posible bug o desviación, genera un objeto JSON con el formato especificado abajo. Si no encuentras diferencias significativas, devuelve un array JSON vacío: [].
+Intenta rellenar los campos opcionales como 'reportado_por', 'fecha_reporte', 'version_entorno' con valores genéricos si no son inferibles. Por ejemplo, 'reportado_por': 'Sistema de Análisis IA', 'fecha_reporte': 'Fecha Actual (AAAA-MM-DD)'.
 
 **FORMATO DE SALIDA ESTRICTO (ARRAY DE REPORTES DE BUG EN JSON):**
 Tu ÚNICA salida debe ser un array JSON. Cada elemento del array debe ser un objeto con las siguientes propiedades EXACTAS:
 {
   "titulo_bug": "string", 
-  "id_bug": "string", 
-  "prioridad": "string", 
-  "severidad": "string", 
-  "descripcion_diferencia_general": "string", 
-  "pasos_para_reproducir": [ 
+  "id_bug": "string", /* Ej: FEAT-UI-001 */
+  "prioridad": "string", /* Valores: 'Baja', 'Media', 'Alta', 'Crítica' */
+  "severidad": "string", /* Valores: 'Menor', 'Moderada', 'Mayor', 'Crítica' */
+  "reportado_por": "string", /* Opcional, si no inferible, usar 'Sistema IA' */
+  "fecha_reporte": "string", /* Opcional, formato AAAA-MM-DD */
+  "version_entorno": { /* Opcional */
+    "aplicacion": "string", /* Ej: E-commerce v1.0 */
+    "sistema_operativo": "string", /* Ej: N/A (visual) */
+    "navegador": "string", /* Ej: N/A (visual) */
+    "ambiente": "string" /* Ej: Comparación Visual */
+  },
+  "pasos_para_reproducir": [ /* Array de objetos */
     { "numero_paso": "integer", "descripcion": "string" } 
   ],
-  "resultado_esperado": "string", 
-  "resultado_actual": "string", 
-  "imagen_referencia_flujo_a": "string", 
-  "imagen_referencia_flujo_b": "string"
+  "resultado_esperado": "string", /* Descripción basada en Flujo A */
+  "resultado_actual": "string", /* Descripción basada en Flujo B */
+  "imagen_referencia_flujo_a": "string", /* Ej: "Imagen A.1", "Imagen A.2". SIEMPRE referenciar la imagen de Flujo A. */
+  "imagen_referencia_flujo_b": "string", /* Ej: "Imagen B.1", "Imagen B.2". SIEMPRE referenciar la imagen de Flujo B. */
+  "descripcion_diferencia_general": "string" /* Descripción concisa de la diferencia principal. */
 }
 **ABSOLUTAMENTE NINGÚN TEXTO FUERA del array JSON.** Comienza con '[' y termina con ']'. Si no hay bugs, devuelve [].
 
@@ -266,9 +349,15 @@ EJEMPLO DE UN REPORTE DE BUG (si se encuentra uno):
     "id_bug": "HOME-BTN-CLR-01",
     "prioridad": "Media",
     "severidad": "Menor",
+    "reportado_por": "Sistema IA",
+    "fecha_reporte": "2024-05-26",
+    "version_entorno": {
+        "aplicacion": "WebApp v1.2",
+        "ambiente": "Comparación Visual"
+    },
     "descripcion_diferencia_general": "El botón 'Comenzar' en la pantalla de inicio (Flujo B) es de color azul, pero en el diseño (Flujo A) se esperaba que fuera verde.",
     "pasos_para_reproducir": [
-      { "numero_paso": 1, "descripcion": "Observar la pantalla de inicio correspondiente a Imagen A.1 y Imagen B.1." }
+      { "numero_paso": 1, "descripcion": "Observar la pantalla de inicio correspondiente a Imagen A.1 (referencia) y Imagen B.1 (actual)." }
     ],
     "resultado_esperado": "El botón 'Comenzar' debe ser de color verde (#34A853) como se muestra en la Imagen A.1.",
     "resultado_actual": "El botón 'Comenzar' es de color azul (#4285F4) como se observa en la Imagen B.1.",
@@ -279,6 +368,7 @@ EJEMPLO DE UN REPORTE DE BUG (si se encuentra uno):
 ---
 PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
 `;
+
 
   constructor(private http: HttpClient) { }
 
@@ -477,6 +567,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     );
   }
 
+  // NEW: Method to compare image flows and report bugs
   public compareImageFlows(
     flowAImagesBase64: string[], flowAMimeTypes: string[],
     flowBImagesBase64: string[], flowBMimeTypes: string[]
@@ -490,11 +581,14 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
           inlineData: { mimeType: flowBMimeTypes[index], data: base64 }
       }));
 
+      // Construct parts ensuring Flow A images come before Flow B images in the prompt.
+      // The prompt itself instructs Gemini how to interpret "Imagen A.X" and "Imagen B.X".
       const geminiPayload = {
           contents: [
               {
                   parts: [
                       { text: promptText },
+                      // Markers for the LLM, as per the prompt instructions
                       { text: "\n--- IMÁGENES FLUJO A ---" }, 
                       ...flowAParts,
                       { text: "\n--- IMÁGENES FLUJO B ---" },
@@ -502,7 +596,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
                   ]
               }
           ],
-          generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 }, // Increased maxOutputTokens
           safetySettings: [
               { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
               { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -521,6 +615,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
               const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
               if (!rawText) {
                   console.warn("[GeminiService] API para compareImageFlows no retornó contenido.");
+                  // Return a single bug item indicating an API error, as per the example BugReportItem structure
                   return [{titulo_bug: "Error de API (Respuesta Vacía)", id_bug:"ERR-API-EMPTY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: "La API no devolvió contenido.", resultado_esperado:"Un reporte de bugs en JSON."} as BugReportItem];
               }
               
@@ -540,6 +635,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
                        console.warn("[GeminiService] Respuesta JSON para compareImageFlows no es un array.", rawText);
                        return [{titulo_bug: "Error de Formato (No Array)", id_bug:"ERR-FORMAT-NOARRAY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
                   }
+                  // Ensure pasos_para_reproducir is always an array
                   return bugReports.map(bug => ({ 
                     ...bug,
                     pasos_para_reproducir: Array.isArray(bug.pasos_para_reproducir) ? bug.pasos_para_reproducir : []

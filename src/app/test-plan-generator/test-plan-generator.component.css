@@ -1075,4 +1075,71 @@ textarea.scrollable-content {
     .image-preview-item .image-preview {
         height: 100px; 
     }
+
+
+    .flow-comparison-subtitle {
+        font-size: 1.1em;
+        color: #4a6d7c;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .bug-report-item-card {
+        background-color: #fdfdfd;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .bug-report-item-card h4 {
+        color: #c0392b; /* Rojo oscuro para títulos de bug */
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-size: 1.2em;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 8px;
+    }
+    
+    .bug-report-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 10px 20px; /* row-gap column-gap */
+    }
+    
+    .bug-report-field {
+        margin-bottom: 8px;
+        font-size: 0.9em;
+    }
+    
+    .bug-report-field strong {
+        display: block;
+        color: #555;
+        margin-bottom: 3px;
+    }
+    .bug-report-field ul {
+        padding-left: 20px;
+        margin-top: 0;
+        margin-bottom: 5px;
+    }
+    .bug-report-field ol {
+        padding-left: 25px;
+        margin-top: 3px;
+    }
+    
+    .bug-report-field.full-width {
+        grid-column: 1 / -1; /* Span all columns */
+    }
+    .bug-report-field pre.generated-text.report-field { /* Especifidad aumentada */
+        font-size: 0.9em;
+        padding: 8px 10px;
+        margin-top: 3px;
+        background-color: #f0f4f7;
+        border-color: #d0dbe2;
+        max-height: 200px; /* Para que no sean demasiado largos */
+    }
+
 }
