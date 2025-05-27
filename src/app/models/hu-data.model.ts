@@ -1,14 +1,14 @@
-import { DetailedTestCase } from '../services/gemini.service'; 
+import { DetailedTestCase } from '../services/gemini.service';
 
 // MODIFIED: Added 'flowComparison'
-export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison'; 
+export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
 
 export interface FlowAnalysisStep {
   numero_paso: number;
   descripcion_accion_observada: string;
   imagen_referencia_entrada: string;
   elemento_clave_y_ubicacion_aproximada: string;
-  dato_de_entrada_paso?: string; 
+  dato_de_entrada_paso?: string;
   resultado_esperado_paso: string;
   resultado_obtenido_paso_y_estado: string;
 }
@@ -29,11 +29,11 @@ export interface BugReportStep {
 // NEW: BugReportItem interface
 export interface BugReportItem {
   titulo_bug: string;
-  id_bug: string; 
-  prioridad: 'Baja' | 'Media' | 'Alta' | 'Crítica' | string; 
+  id_bug: string;
+  prioridad: 'Baja' | 'Media' | 'Alta' | 'Crítica' | string;
   severidad: 'Menor' | 'Moderada' | 'Mayor' | 'Crítica' | string;
-  reportado_por?: string; 
-  fecha_reporte?: string; 
+  reportado_por?: string;
+  fecha_reporte?: string;
   version_entorno?: {
     aplicacion?: string;
     sistema_operativo?: string;
@@ -52,41 +52,41 @@ export interface BugReportItem {
 export interface HUData {
   originalInput: {
     id: string;
-    title: string; 
+    title: string;
     sprint: string;
-    description?: string; 
-    acceptanceCriteria?: string; 
-    selectedTechnique: string; 
+    description?: string;
+    acceptanceCriteria?: string;
+    selectedTechnique: string;
     generationMode: GenerationMode;
-    
+
     // For 'image' and 'flowAnalysis'
-    imagesBase64?: string[]; 
-    imageMimeTypes?: string[]; 
+    imagesBase64?: string[];
+    imageMimeTypes?: string[];
 
     // NEW: For 'flowComparison'
-    imagesBase64FlowA?: string[]; 
-    imageMimeTypesFlowA?: string[]; 
-    imagesBase64FlowB?: string[]; 
-    imageMimeTypesFlowB?: string[]; 
+    imagesBase64FlowA?: string[];
+    imageMimeTypesFlowA?: string[];
+    imagesBase64FlowB?: string[];
+    imageMimeTypesFlowB?: string[];
   };
-  id: string; 
-  title: string; 
+  id: string;
+  title: string;
   sprint: string;
 
-  generatedScope: string; 
-  detailedTestCases: DetailedTestCase[]; 
-  generatedTestCaseTitles: string; 
+  generatedScope: string;
+  detailedTestCases: DetailedTestCase[];
+  generatedTestCaseTitles: string;
 
-  editingScope: boolean; 
-  editingScenarios: boolean; 
+  editingScope: boolean;
+  editingScenarios: boolean;
 
-  loadingScope: boolean; 
-  errorScope: string | null; 
-  loadingScenarios: boolean; 
-  errorScenarios: string | null; 
+  loadingScope: boolean;
+  errorScope: string | null;
+  loadingScenarios: boolean;
+  errorScenarios: string | null;
 
-  showRegenTechniquePicker: boolean; 
-  regenSelectedTechnique: string; 
+  showRegenTechniquePicker: boolean;
+  regenSelectedTechnique: string;
 
   isScopeDetailsOpen: boolean;
   isScenariosDetailsOpen: boolean;
@@ -95,6 +95,7 @@ export interface HUData {
   loadingFlowAnalysis?: boolean;
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
+  isEditingFlowReportDetails?: boolean; // MODIFIED: Added for editing state
 
   // NEW: For 'flowComparison' results
   bugComparisonReport?: BugReportItem[];

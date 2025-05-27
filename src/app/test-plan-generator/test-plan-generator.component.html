@@ -38,7 +38,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-card-icon">
           <path d="M3 3.5A1.5 1.5 0 014.5 2h1.148a1.5 1.5 0 011.06.44l7.102 7.101a1.5 1.5 0 01.328 1.323l-1.262 4.418a1.5 1.5 0 01-2.786.726L10 15.414V17.5a1.5 1.5 0 01-3 0V2.5a.5.5 0 00-1 0V10c0 .828-.672 1.5-1.5 1.5H3V3.5zM5.5 7c0-.828.672-1.5 1.5-1.5H9V7H5.5z" />
           <path d="M12.5 2h1.148A1.5 1.5 0 0114.707 2.44l2.141 2.142a1.5 1.5 0 01.44 1.06V10h-2.5V5.5A1.5 1.5 0 0013.5 4h-2V2.5c0-.193.037-.379.105-.55A1.5 1.5 0 0112.5 2zM12 12.5a.5.5 0 00-1 0V15a.5.5 0 001 0v-2.5z" />
-        </svg>          
+        </svg>
         <p class="mode-card-title">Comparación Visual de Flujos</p>
         <p class="mode-card-description">Carga dos conjuntos de imágenes (Flujo A vs Flujo B) para identificar diferencias y generar un reporte de bugs.</p>
       </div>
@@ -49,7 +49,7 @@
   <section class="form-section" aria-labelledby="form-section-title" *ngIf="currentGenerationMode">
     <div class="form-header-actions">
         <h2 id="form-section-title">
-            Datos de Entrada para: 
+            Datos de Entrada para:
             <span *ngIf="currentGenerationMode === 'text'">HU por Descripción</span>
             <span *ngIf="currentGenerationMode === 'image'">Casos por Imágenes</span>
             <span *ngIf="currentGenerationMode === 'flowAnalysis'">Análisis de Flujo por Imágenes</span>
@@ -86,7 +86,7 @@
           </div>
           <div class="form-group full-width">
             <label for="currentAcceptanceCriteria">Criterios de Aceptación:<span class="required-indicator">*</span></label>
-            <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" [required]="currentGenerationMode === 'text'" placeholder="Ej: 
+            <textarea id="currentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" [required]="currentGenerationMode === 'text'" placeholder="Ej:
 - Dado que..."></textarea>
             <div *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted) && currentGenerationMode === 'text'" class="validation-error" role="alert">
               Criterios de Aceptación son requeridos.
@@ -108,8 +108,8 @@
             </div>
           </div>
           <div class="form-group full-width">
-            <label for="imageFiles">Cargar Imágenes del Flujo (JPG, PNG - Máx. 4MB por imagen, Máx. {{ currentGenerationMode === 'flowAnalysis' ? 10 : 5 }} imágenes):<span class="required-indicator">*</span></label>
-            <input type="file" id="imageFiles" name="imageFiles" (change)="onFileSelected($event)" accept="image/jpeg, image/png" 
+            <label for="imageFiles">Cargar Imágenes del Flujo (JPG, PNG - Máx. 4MB por imagen, Máx. {{ currentGenerationMode === 'flowAnalysis' ? 20 : 5 }} imágenes):<span class="required-indicator">*</span></label>
+            <input type="file" id="imageFiles" name="imageFiles" (change)="onFileSelected($event)" accept="image/jpeg, image/png"
                    [required]="currentGenerationMode === 'image' || currentGenerationMode === 'flowAnalysis'" multiple #imageFilesInput>
             <div *ngIf="imageUploadError" class="validation-error" role="alert">
               {{ imageUploadError }}
@@ -117,18 +117,18 @@
             <div *ngIf="huForm.submitted && (currentGenerationMode === 'image' || currentGenerationMode === 'flowAnalysis') && draggableImages.length === 0" class="validation-error" role="alert">
               Debes seleccionar al menos una imagen.
             </div>
-            
-            <div *ngIf="draggableImages.length > 0" class="image-preview-container multiple-previews" 
+
+            <div *ngIf="draggableImages.length > 0" class="image-preview-container multiple-previews"
                  (dragover)="onImageDragOver($event)" (dragleave)="onImageDragLeave($event)">
               <p>Previsualización de Imágenes Cargadas ({{ draggableImages.length }}). Arrastra para reordenar:</p>
-              <div *ngFor="let imgItem of draggableImages; let i = index" 
+              <div *ngFor="let imgItem of draggableImages; let i = index"
                    class="image-preview-item"
                    [class.drag-over-element]="dragOverImageId === imgItem.id"
                    draggable="true"
                    (dragstart)="onImageDragStart($event, imgItem)"
                    (drop)="onImageDrop($event, imgItem)"
                    (dragend)="onImageDragEnd($event)"
-                   (dragover)="onImageDragOver($event, imgItem)"> 
+                   (dragover)="onImageDragOver($event, imgItem)">
                 <span class="image-order-badge">{{i + 1}}</span>
                 <img [src]="imgItem.preview" [alt]="'Previsualización de imagen ' + imgItem.file.name" class="image-preview">
                 <span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
@@ -154,18 +154,18 @@
             <div class="form-group full-width">
                 <h3 class="flow-comparison-subtitle">Flujo A (Referencia/Esperado)</h3>
                 <label for="imageFilesFlowA">Cargar Imágenes Flujo A (JPG, PNG - Máx. 4MB c/u, Máx. 10):<span class="required-indicator">*</span></label>
-                <input type="file" id="imageFilesFlowA" name="imageFilesFlowA" (change)="onFileSelected($event, 'A')" accept="image/jpeg, image/png" 
+                <input type="file" id="imageFilesFlowA" name="imageFilesFlowA" (change)="onFileSelected($event, 'A')" accept="image/jpeg, image/png"
                        [required]="currentGenerationMode === 'flowComparison'" multiple #imageFilesInputFlowA>
                 <div *ngIf="imageUploadErrorFlowA" class="validation-error" role="alert">{{ imageUploadErrorFlowA }}</div>
                 <div *ngIf="huForm.submitted && currentGenerationMode === 'flowComparison' && draggableImagesFlowA.length === 0" class="validation-error" role="alert">
                     Debes seleccionar imágenes para Flujo A.
                 </div>
-                <div *ngIf="draggableImagesFlowA.length > 0" class="image-preview-container multiple-previews" 
+                <div *ngIf="draggableImagesFlowA.length > 0" class="image-preview-container multiple-previews"
                      (dragover)="onImageDragOver($event, undefined, 'A')" (dragleave)="onImageDragLeave($event, 'A')">
                     <p>Imágenes Flujo A ({{ draggableImagesFlowA.length }}). Arrastra para reordenar:</p>
-                    <div *ngFor="let imgItem of draggableImagesFlowA; let i = index" 
+                    <div *ngFor="let imgItem of draggableImagesFlowA; let i = index"
                          class="image-preview-item" [class.drag-over-element]="dragOverImageIdFlowA === imgItem.id"
-                         draggable="true" (dragstart)="onImageDragStart($event, imgItem, 'A')" (drop)="onImageDrop($event, imgItem, 'A')" 
+                         draggable="true" (dragstart)="onImageDragStart($event, imgItem, 'A')" (drop)="onImageDrop($event, imgItem, 'A')"
                          (dragend)="onImageDragEnd($event, 'A')" (dragover)="onImageDragOver($event, imgItem, 'A')">
                         <span class="image-order-badge">{{i + 1}}</span>
                         <img [src]="imgItem.preview" [alt]="'Previsualización Flujo A: ' + imgItem.file.name" class="image-preview">
@@ -210,7 +210,7 @@
 
         <div class="form-group scenario-input-section" *ngIf="currentGenerationMode === 'text' || currentGenerationMode === 'image'">
           <label for="currentSelectedTechnique">Técnica ISTQB para escenarios:<span class="required-indicator">*</span></label>
-          <select id="currentSelectedTechnique" name="currentSelectedTechnique" [(ngModel)]="currentSelectedTechnique" 
+          <select id="currentSelectedTechnique" name="currentSelectedTechnique" [(ngModel)]="currentSelectedTechnique"
                   [required]="currentGenerationMode === 'text' || currentGenerationMode === 'image'">
             <option value="" disabled>Selecciona una técnica</option>
             <option value="Equivalent Partitioning">Partición Equivalente</option>
@@ -290,7 +290,7 @@
             </span>
           </div>
         </div>
-        
+
         <!-- Alcance (Solo para modo 'text') -->
         <details class="plan-section-details" #scopeDetailsElement
                  [open]="hu.isScopeDetailsOpen"
@@ -335,7 +335,7 @@
             </span>
           </summary>
           <div class="plan-section-content">
-            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.title !== 'Error de API' && hu.detailedTestCases[0]?.title !== 'Error de Formato' && hu.detailedTestCases[0]?.title !== 'Error de Parsing JSON' && hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && hu.detailedTestCases[0]?.title !== 'Imagen no interpretable o técnica no aplicable' && hu.detailedTestCases[0]?.title !== 'Imágenes no interpretables o técnica no aplicable'  && hu.detailedTestCases[0]?.title !== 'Error Crítico'; else editScenariosBlockOrNoData">
+            <div *ngIf="!hu.editingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.title !== 'Error de API' && hu.detailedTestCases[0]?.title !== 'Error de Formato' && hu.detailedTestCases[0]?.title !== 'Error de Parsing JSON' && hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && hu.detailedTestCases[0]?.title !== 'Imágenes no interpretables o técnica no aplicable'  && hu.detailedTestCases[0]?.title !== 'Error Crítico'; else editScenariosBlockOrNoData">
               <div class="detailed-test-cases-table-container">
                 <table class="detailed-test-cases-table">
                   <thead>
@@ -370,7 +370,7 @@
                     <span class="spinner-inline"></span> Cargando casos de prueba...
                 </div>
                 <div *ngIf="!hu.loadingScenarios">
-                    <pre class="generated-text" *ngIf="hu.errorScenarios || (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON' || hu.detailedTestCases[0]?.title === 'Información Insuficiente' || hu.detailedTestCases[0]?.title === 'Imagen no interpretable o técnica no aplicable' || hu.detailedTestCases[0]?.title === 'Imágenes no interpretables o técnica no aplicable' || hu.detailedTestCases[0]?.title === 'Error Crítico')">
+                    <pre class="generated-text" *ngIf="hu.errorScenarios || (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON' || hu.detailedTestCases[0]?.title === 'Información Insuficiente' || hu.detailedTestCases[0]?.title === 'Imágenes no interpretables o técnica no aplicable' || hu.detailedTestCases[0]?.title === 'Error Crítico')">
                     {{ hu.errorScenarios ? 'Error: ' + hu.errorScenarios : (hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga.') }}
                     <span *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0 && hu.detailedTestCases[0]?.steps !== 'N/A' && (hu.detailedTestCases[0]?.title === 'Error de API' || hu.detailedTestCases[0]?.title === 'Error de Formato' || hu.detailedTestCases[0]?.title === 'Error de Parsing JSON') ">
                         <br>--- Respuesta Recibida (puede contener detalles del error) ---<br>
@@ -414,7 +414,7 @@
                 Regenerar Casos
               </button>
               <button (click)="exportExecutionMatrix(hu)" class="button-secondary"
-                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente' || hu.detailedTestCases[0].title === 'Imagen no interpretable o técnica no aplicable' || hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable' || hu.detailedTestCases[0].title === 'Error Crítico'">
+                      [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases[0].title === 'Error de API' || hu.detailedTestCases[0].title === 'Error de Formato' || hu.detailedTestCases[0].title === 'Error de Parsing JSON' || hu.detailedTestCases[0].title === 'Información Insuficiente' || hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable' || hu.detailedTestCases[0].title === 'Error Crítico'">
                 Exportar Matriz (.csv)
               </button>
             </div>
@@ -424,7 +424,7 @@
         <!-- Análisis de Flujo (Solo para modo 'flowAnalysis') -->
         <details class="plan-section-details" #flowAnalysisDetailsElement
                  [open]="hu.isFlowAnalysisDetailsOpen"
-                 (toggle)="hu.isFlowAnalysisDetailsOpen = flowAnalysisDetailsElement.open"
+                 (toggle)="!hu.isEditingFlowReportDetails && (hu.isFlowAnalysisDetailsOpen = flowAnalysisDetailsElement.open)"
                  *ngIf="hu.originalInput.generationMode === 'flowAnalysis'">
             <summary class="plan-section-summary">
                 Informe de Análisis de Flujo Inverso
@@ -439,7 +439,7 @@
                 </div>
                 <div *ngIf="hu.errorFlowAnalysis && !hu.loadingFlowAnalysis" class="error-message" role="alert">
                     <p><strong>Error en el Análisis:</strong> {{ hu.errorFlowAnalysis }}</p>
-                     <ng-container *ngIf="hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && 
+                     <ng-container *ngIf="hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 &&
                                        isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0]) &&
                                        hu.flowAnalysisReport[0].Pasos_Analizados && hu.flowAnalysisReport[0].Pasos_Analizados.length > 0 &&
                                        hu.flowAnalysisReport[0].Pasos_Analizados[0].elemento_clave_y_ubicacion_aproximada?.includes('Respuesta')">
@@ -450,49 +450,80 @@
                 <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])">
                     <div class="flow-analysis-report">
                         <h4>Nombre del Escenario:</h4>
-                        <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Nombre_del_Escenario }}</pre>
+                        <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editNombreEscenario">
+                            <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Nombre_del_Escenario }}</pre>
+                        </ng-container>
+                        <ng-template #editNombreEscenario>
+                            <input type="text" class="form-control full-width-input" [(ngModel)]="hu.flowAnalysisReport[0].Nombre_del_Escenario" placeholder="Nombre del Escenario">
+                        </ng-template>
 
-                        <h4>Pasos Analizados (Arrastra las filas para reordenar):</h4>
-                        <div *ngIf="hu.flowAnalysisReport[0].Pasos_Analizados && hu.flowAnalysisReport[0].Pasos_Analizados.length > 0; else noStepsAnalyzed" 
+                        <h4>Pasos Analizados <span *ngIf="!hu.isEditingFlowReportDetails">(Arrastra las filas para reordenar)</span>:</h4>
+                        <div *ngIf="hu.flowAnalysisReport[0].Pasos_Analizados && hu.flowAnalysisReport[0].Pasos_Analizados.length > 0; else noStepsAnalyzed"
                              class="detailed-test-cases-table-container"
-                             (dragover)="onFlowStepDragOver($event)" 
+                             (dragover)="onFlowStepDragOver($event)"
                              (dragleave)="onFlowStepDragLeave($event)">
                             <table class="detailed-test-cases-table flow-analysis-steps-table">
                                 <thead>
                                     <tr>
-                                        <th>Paso (Orden)</th>
+                                        <th>Paso N°</th>
                                         <th>Acción/Observación</th>
                                         <th>Imagen Ref. (IA)</th>
                                         <th>Elemento Clave y Ubicación</th>
                                         <th>Dato de Entrada (Paso)</th>
                                         <th>Resultado Esperado (Paso)</th>
                                         <th>Resultado Obtenido y Estado (Paso)</th>
-                                        <th>Imagen del Paso (Según Orden de Entrada)</th>
+                                        <th>Imagen del Paso</th>
+                                        <th *ngIf="hu.isEditingFlowReportDetails">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr *ngFor="let paso of hu.flowAnalysisReport[0].Pasos_Analizados; let i = index" 
-                                        draggable="true"
+                                    <tr *ngFor="let paso of hu.flowAnalysisReport[0].Pasos_Analizados; let i = index"
+                                        [attr.draggable]="!hu.isEditingFlowReportDetails"
                                         (dragstart)="onFlowStepDragStart($event, paso, hu)"
                                         (drop)="onFlowStepDrop($event, paso, hu)"
                                         (dragend)="onFlowStepDragEnd($event)"
                                         (dragover)="onFlowStepDragOver($event, paso)"
-                                        (dragleave)="onFlowStepDragLeave($event)" 
+                                        (dragleave)="onFlowStepDragLeave($event)"
                                         [class.drag-over-flow-step]="dragOverFlowStepId === getFlowStepDragId(paso)"
                                         [ngClass]="getFlowStepStatusClass(paso)">
-                                        <td>{{ i + 1 }}</td> 
-                                        <td><pre class="table-pre">{{ paso.descripcion_accion_observada }}</pre></td>
-                                        <td><pre class="table-pre">{{ paso.imagen_referencia_entrada }}</pre></td>
-                                        <td><pre class="table-pre">{{ paso.elemento_clave_y_ubicacion_aproximada }}</pre></td>
-                                        <td><pre class="table-pre">{{ paso.dato_de_entrada_paso || 'N/A' }}</pre></td>
-                                        <td><pre class="table-pre">{{ paso.resultado_esperado_paso }}</pre></td>
-                                        <td><pre class="table-pre">{{ paso.resultado_obtenido_paso_y_estado }}</pre></td>
+
+                                        <td>{{ i + 1 }}</td> <!-- Visual Step Number -->
+
                                         <td>
-                                            <img *ngIf="getFlowStepImage(hu, paso)" 
-                                                 [src]="getFlowStepImage(hu, paso)" 
-                                                 alt="Imagen para paso original {{paso.numero_paso}}" 
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editDescAccion"> {{ paso.descripcion_accion_observada }} </ng-container>
+                                            <ng-template #editDescAccion> <textarea class="form-control table-input" [(ngModel)]="paso.descripcion_accion_observada" rows="3"></textarea> </ng-template>
+                                        </td>
+                                        <td>
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editImgRef"> {{ paso.imagen_referencia_entrada }} </ng-container>
+                                            <ng-template #editImgRef> <input type="text" class="form-control table-input" [(ngModel)]="paso.imagen_referencia_entrada"> </ng-template>
+                                        </td>
+                                        <td>
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editElemClave"> {{ paso.elemento_clave_y_ubicacion_aproximada }} </ng-container>
+                                            <ng-template #editElemClave> <textarea class="form-control table-input" [(ngModel)]="paso.elemento_clave_y_ubicacion_aproximada" rows="3"></textarea> </ng-template>
+                                        </td>
+                                        <td>
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editDatoEntrada"> {{ paso.dato_de_entrada_paso || 'N/A' }} </ng-container>
+                                            <ng-template #editDatoEntrada> <input type="text" class="form-control table-input" [(ngModel)]="paso.dato_de_entrada_paso"> </ng-template>
+                                        </td>
+                                        <td>
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editResEsperadoPaso"> {{ paso.resultado_esperado_paso }} </ng-container>
+                                            <ng-template #editResEsperadoPaso> <textarea class="form-control table-input" [(ngModel)]="paso.resultado_esperado_paso" rows="3"></textarea> </ng-template>
+                                        </td>
+                                        <td>
+                                            <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editResObtenidoPaso"> {{ paso.resultado_obtenido_paso_y_estado }} </ng-container>
+                                            <ng-template #editResObtenidoPaso> <input type="text" class="form-control table-input" [(ngModel)]="paso.resultado_obtenido_paso_y_estado"> </ng-template>
+                                        </td>
+                                        <td>
+                                            <img *ngIf="getFlowStepImage(hu, paso)"
+                                                 [src]="getFlowStepImage(hu, paso)"
+                                                 [alt]="'Imagen para paso original ' + paso.numero_paso"
                                                  class="flow-step-image">
                                             <span *ngIf="!getFlowStepImage(hu, paso)">N/A</span>
+                                        </td>
+                                        <td *ngIf="hu.isEditingFlowReportDetails">
+                                            <button (click)="deleteFlowAnalysisStep(hu, 0, i)" class="button-cancel button-small-icon" title="Eliminar este paso">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:1em; height:1em;"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H14A2.75 2.75 0 0011.25 1H8.75zM10 4.75a.75.75 0 01.75.75V15.5a.75.75 0 01-1.5 0V5.5A.75.75 0 0110 4.75zM7.515 7.31l-.53 7.422a.75.75 0 101.49.107l.53-7.422a.75.75 0 00-1.49-.107zM12.485 7.31a.75.75 0 00-1.49.107l.53 7.422a.75.75 0 101.49-.107l-.53-7.422z" clip-rule="evenodd" /></svg>
+                                            </button>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -503,20 +534,28 @@
                         </ng-template>
 
                         <h4>Resultado Esperado General del Flujo:</h4>
-                        <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo }}</pre>
+                         <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editResEsperadoGeneral">
+                            <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo }}</pre>
+                        </ng-container>
+                        <ng-template #editResEsperadoGeneral>
+                            <textarea class="form-control full-width-input" [(ngModel)]="hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo" rows="3" placeholder="Resultado Esperado General del Flujo"></textarea>
+                        </ng-template>
 
-                        <h4>Conclusión General del Flujo:</h4>
+                        <h4>Conclusión General del Flujo (Generada por IA):</h4>
                         <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Conclusion_General_Flujo }}</pre>
                     </div>
                     <div class="actions">
-                        <button (click)="regenerateFlowAnalysis(hu)" class="button-generate" [disabled]="hu.loadingFlowAnalysis">
+                        <button (click)="toggleEditFlowReportDetails(hu)" class="button-edit" [disabled]="hu.loadingFlowAnalysis">
+                            {{ hu.isEditingFlowReportDetails ? 'Finalizar Edición' : 'Editar Informe' }}
+                        </button>
+                        <button (click)="regenerateFlowAnalysis(hu)" class="button-generate" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
                             <span *ngIf="hu.loadingFlowAnalysis" class="spinner-inline"></span> Re-Analizar Flujo
                         </button>
-                        <button (click)="exportFlowAnalysisReportToCsv(hu)" class="button-secondary" 
+                        <button (click)="exportFlowAnalysisReportToCsv(hu)" class="button-secondary"
                                 [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
                             Exportar Datos (.csv)
                         </button>
-                        <button (click)="exportFlowAnalysisReportToHtml(hu)" class="button-secondary" 
+                        <button (click)="exportFlowAnalysisReportToHtml(hu)" class="button-secondary"
                                 [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
                             Exportar Informe con Imágenes (.html)
                         </button>
@@ -552,71 +591,56 @@
                     </ng-container>
                 </div>
 
-                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && hu.bugComparisonReport.length > 0 && !isBugReportInErrorState(hu.bugComparisonReport)">
+                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && !isBugReportInErrorState(hu.bugComparisonReport)">
                     <div *ngIf="hu.bugComparisonReport.length === 0" class="no-content-message">
                         <p>No se encontraron diferencias significativas que ameriten un reporte de bug.</p>
                     </div>
-                    <div *ngFor="let bug of hu.bugComparisonReport; let i = index" class="bug-report-item-card">
-                        <h4>Bug #{{ i + 1 }}: {{ bug.titulo_bug }}</h4>
-                        <div class="bug-report-grid">
-                            <!-- REMOVED: ID del Bug (IA) -->
-                            <!-- <div class="bug-report-field"><strong>ID Bug (IA):</strong> {{ bug.id_bug }}</div> -->
-                            <div class="bug-report-field"><strong>Prioridad:</strong> {{ bug.prioridad }}</div>
-                            <div class="bug-report-field"><strong>Severidad:</strong> {{ bug.severidad }}</div>
-                            <!-- REMOVED: Reportado por -->
-                            <!-- <div class="bug-report-field" *ngIf="bug.reportado_por"><strong>Reportado por:</strong> {{ bug.reportado_por }}</div> -->
-                            <div class="bug-report-field" *ngIf="bug.fecha_reporte"><strong>Fecha:</strong> {{ bug.fecha_reporte }}</div>
-                            
-                            <!-- REMOVED: Versión/Entorno -->
-                            <!--
-                            <div class="bug-report-field full-width" *ngIf="bug.version_entorno">
-                                <strong>Versión/Entorno:</strong>
-                                <ul>
-                                    <li *ngIf="bug.version_entorno.aplicacion">App: {{ bug.version_entorno.aplicacion }}</li>
-                                    <li *ngIf="bug.version_entorno.sistema_operativo">SO: {{ bug.version_entorno.sistema_operativo }}</li>
-                                    <li *ngIf="bug.version_entorno.navegador">Navegador: {{ bug.version_entorno.navegador }}</li>
-                                    <li *ngIf="bug.version_entorno.ambiente">Ambiente: {{ bug.version_entorno.ambiente }}</li>
-                                </ul>
-                            </div>
-                            -->
+                    <div *ngIf="hu.bugComparisonReport.length > 0">
+                        <div *ngFor="let bug of hu.bugComparisonReport; let i = index" class="bug-report-item-card">
+                            <h4>Bug #{{ i + 1 }}: {{ bug.titulo_bug }}</h4>
+                            <div class="bug-report-grid">
+                                <div class="bug-report-field"><strong>Prioridad:</strong> {{ bug.prioridad }}</div>
+                                <div class="bug-report-field"><strong>Severidad:</strong> {{ bug.severidad }}</div>
+                                <div class="bug-report-field" *ngIf="bug.fecha_reporte"><strong>Fecha:</strong> {{ bug.fecha_reporte }}</div>
 
-                            <div class="bug-report-field full-width" *ngIf="bug.descripcion_diferencia_general">
-                                <strong>Descripción General Diferencia:</strong>
-                                <pre class="generated-text report-field">{{ bug.descripcion_diferencia_general }}</pre>
-                            </div>
-                            
-                            <div class="bug-report-field full-width">
-                                <strong>Pasos para Reproducir:</strong>
-                                <ol><li *ngFor="let paso of bug.pasos_para_reproducir">{{ paso.numero_paso }}. {{ paso.descripcion }}</li></ol>
-                                <p *ngIf="!bug.pasos_para_reproducir || bug.pasos_para_reproducir.length === 0">N/A</p>
-                            </div>
-                            <div class="bug-report-field full-width">
-                                <strong>Resultado Esperado:</strong> <small>(Ref. A: {{bug.imagen_referencia_flujo_a || 'N/A'}})</small>
-                                <pre class="generated-text report-field">{{ bug.resultado_esperado }}</pre>
-                                <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" 
-                                     [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" 
-                                     alt="Imagen Esperada {{bug.imagen_referencia_flujo_a}}" class="flow-step-image">
-                            </div>
-                             <div class="bug-report-field full-width">
-                                <strong>Resultado Actual:</strong> <small>(Ref. B: {{bug.imagen_referencia_flujo_b || 'N/A'}})</small>
-                                <pre class="generated-text report-field">{{ bug.resultado_actual }}</pre>
-                                <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" 
-                                     [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" 
-                                     alt="Imagen Actual {{bug.imagen_referencia_flujo_b}}" class="flow-step-image">
+                                <div class="bug-report-field full-width" *ngIf="bug.descripcion_diferencia_general">
+                                    <strong>Descripción General Diferencia:</strong>
+                                    <pre class="generated-text report-field">{{ bug.descripcion_diferencia_general }}</pre>
+                                </div>
+
+                                <div class="bug-report-field full-width">
+                                    <strong>Pasos para Reproducir:</strong>
+                                    <ol><li *ngFor="let paso of bug.pasos_para_reproducir">{{ paso.numero_paso }}. {{ paso.descripcion }}</li></ol>
+                                    <p *ngIf="!bug.pasos_para_reproducir || bug.pasos_para_reproducir.length === 0">N/A</p>
+                                </div>
+                                <div class="bug-report-field full-width">
+                                    <strong>Resultado Esperado:</strong> <small>(Ref. A: {{bug.imagen_referencia_flujo_a || 'N/A'}})</small>
+                                    <pre class="generated-text report-field">{{ bug.resultado_esperado }}</pre>
+                                    <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')"
+                                         [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')"
+                                         alt="Imagen Esperada {{bug.imagen_referencia_flujo_a}}" class="flow-step-image">
+                                </div>
+                                 <div class="bug-report-field full-width">
+                                    <strong>Resultado Actual:</strong> <small>(Ref. B: {{bug.imagen_referencia_flujo_b || 'N/A'}})</small>
+                                    <pre class="generated-text report-field">{{ bug.resultado_actual }}</pre>
+                                    <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')"
+                                         [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')"
+                                         alt="Imagen Actual {{bug.imagen_referencia_flujo_b}}" class="flow-step-image">
+                                </div>
                             </div>
                         </div>
-                    </div>
-                     <div class="actions">
-                        <button (click)="regenerateBugComparison(hu)" class="button-generate" [disabled]="hu.loadingBugComparison">
-                            <span *ngIf="hu.loadingBugComparison" class="spinner-inline"></span> Re-Analizar Comparación
-                        </button>
-                        <button (click)="exportBugComparisonReportToHtml(hu)" class="button-secondary" 
-                                [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport)">
-                            Exportar Reporte Bugs (.html)
-                        </button>
+                         <div class="actions">
+                            <button (click)="regenerateBugComparison(hu)" class="button-generate" [disabled]="hu.loadingBugComparison">
+                                <span *ngIf="hu.loadingBugComparison" class="spinner-inline"></span> Re-Analizar Comparación
+                            </button>
+                            <button (click)="exportBugComparisonReportToHtml(hu)" class="button-secondary"
+                                    [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || hu.bugComparisonReport.length === 0">
+                                Exportar Reporte Bugs (.html)
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && (!hu.bugComparisonReport || hu.bugComparisonReport.length === 0 || isBugReportInErrorState(hu.bugComparisonReport))" class="no-content-message">
+                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && (!hu.bugComparisonReport || isBugReportInErrorState(hu.bugComparisonReport)) && hu.bugComparisonReport?.length === 0" class="no-content-message">
                     <p *ngIf="!hu.bugComparisonReport || hu.bugComparisonReport.length === 0">No se generó el reporte de comparación o no se encontraron diferencias.</p>
                      <p *ngIf="isBugReportInErrorState(hu.bugComparisonReport)">El reporte de comparación contiene errores de la API.</p>
                 </div>
@@ -631,7 +655,7 @@
             <h2>Secciones Generales del Plan</h2>
         </div>
         <details class="plan-section-details static-block" #repoDetailsElement
-                 [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen" 
+                 [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen"
                  (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)">
             <summary class="plan-section-summary">Repositorio Pruebas VSTS</summary>
             <div class="plan-section-content"> <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock"> <pre class="static-text"> <a [href]="repositoryLink.split(' ')[0]" target="_blank">{{ repositoryLink }}</a> </pre> </div> <ng-template #editRepositoryLinkBlock> <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary"> {{ editingRepositoryLink ? 'Guardar' : 'Editar' }} </button> </div> </div>

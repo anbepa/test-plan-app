@@ -526,14 +526,21 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public getFlowStepDragId(paso: FlowAnalysisStep): string {
-    return `${paso.numero_paso}-${paso.descripcion_accion_observada.substring(0, 20).replace(/\s/g, '_')}-${Math.random().toString(36).substr(2, 5)}`;
+    // Ensure a unique ID even if steps are identical initially or become identical after edits
+    return `${paso.numero_paso}-${(paso.descripcion_accion_observada || '').substring(0, 10).replace(/\s/g, '_')}-${Math.random().toString(16).slice(2, 8)}`;
   }
 
+
   public onFlowStepDragStart(event: DragEvent, paso: FlowAnalysisStep, hu: HUData): void {
+    if (hu.isEditingFlowReportDetails) {
+      event.preventDefault(); // Prevent dragging when editing to avoid conflicts
+      return;
+    }
     this.draggedFlowStep = paso;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', this.getFlowStepDragId(paso));
+      // Use the original numero_paso for identification during drag, as it's more stable before re-indexing
+      event.dataTransfer.setData('text/plain', paso.numero_paso.toString());
       const targetElement = event.target as HTMLElement;
       const rowElement = targetElement.closest('tr');
       if (rowElement) {
@@ -544,7 +551,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   public onFlowStepDragOver(event: DragEvent, targetPaso?: FlowAnalysisStep): void {
     event.preventDefault();
-    if (event.dataTransfer) {
+     if (this.draggedFlowStep && event.dataTransfer) { // Check if a drag operation is in progress
       event.dataTransfer.dropEffect = 'move';
     }
     this.dragOverFlowStepId = targetPaso ? this.getFlowStepDragId(targetPaso) : null;
@@ -561,15 +568,13 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]')
       .forEach(el => (el as HTMLElement).style.opacity = '1');
 
-    if (!this.draggedFlowStep || !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0) {
+    if (!this.draggedFlowStep || !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 || hu.flowAnalysisReport[0].Pasos_Analizados.length === 0) {
       this.draggedFlowStep = null;
       return;
     }
 
-    const currentDraggedStepId = this.getFlowStepDragId(this.draggedFlowStep);
-    const currentTargetStepId = this.getFlowStepDragId(targetPaso);
-
-    if(currentDraggedStepId === currentTargetStepId && this.draggedFlowStep === targetPaso) {
+    // If dragged and target are the same, do nothing
+    if(this.draggedFlowStep === targetPaso) {
         this.draggedFlowStep = null;
         return;
     }
@@ -582,9 +587,13 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       const itemToMove = pasosAnalizados.splice(fromIndex, 1)[0];
       pasosAnalizados.splice(toIndex, 0, itemToMove);
 
+      // Re-index numero_paso based on the new visual order
+      pasosAnalizados.forEach((paso, index) => {
+        paso.numero_paso = index + 1;
+      });
+
       hu.flowAnalysisReport = [{ ...hu.flowAnalysisReport[0], Pasos_Analizados: [...pasosAnalizados] }];
       this.cdr.detectChanges();
-
       this.updatePreview();
     }
     this.draggedFlowStep = null;
@@ -678,6 +687,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       loadingFlowAnalysis: this.currentGenerationMode === 'flowAnalysis',
       errorFlowAnalysis: null,
       isFlowAnalysisDetailsOpen: this.currentGenerationMode === 'flowAnalysis',
+      isEditingFlowReportDetails: false, // Initialize editing state
       bugComparisonReport: undefined,
       loadingBugComparison: this.currentGenerationMode === 'flowComparison',
       errorBugComparison: null,
@@ -923,9 +933,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       ).subscribe();
   }
 
-  public regenerateFlowAnalysis(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0) {
-        alert("Solo se puede re-analizar un flujo si es de tipo 'Análisis de Flujo' y tiene imágenes cargadas.");
+public regenerateFlowAnalysis(hu: HUData): void {
+    if (hu.originalInput.generationMode !== 'flowAnalysis' ||
+        !hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0 ||
+        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0) { // Ensure report exists for context
+        alert("Solo se puede re-analizar un flujo si es de tipo 'Análisis de Flujo', tiene imágenes y un informe previo para contextualizar.");
         return;
     }
     hu.loadingFlowAnalysis = true;
@@ -933,20 +945,28 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.loadingFlowAnalysisGlobal = true;
     this.flowAnalysisErrorGlobal = null;
 
-    this.geminiService.generateFlowAnalysisFromImages(hu.originalInput.imagesBase64!, hu.originalInput.imageMimeTypes!).pipe(
+    // Pass the current (potentially edited) flowAnalysisReport[0] as context
+    this.geminiService.refineFlowAnalysisFromImagesAndContext(
+        hu.originalInput.imagesBase64!,
+        hu.originalInput.imageMimeTypes!,
+        hu.flowAnalysisReport[0] // This now contains user edits if any
+    ).pipe(
         tap(report => {
-            hu.flowAnalysisReport = report;
+            hu.flowAnalysisReport = report; // Update with the refined report
             hu.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
                 hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
-                 this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
+                this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
             }
+            hu.isEditingFlowReportDetails = false; // Exit editing mode after successful regeneration
         }),
         catchError(error => {
-            hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis de flujo.';
+            hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis de flujo con contexto.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
-            hu.flowAnalysisReport = [{
-                Nombre_del_Escenario: "Error Crítico en Re-Generación",
+            // Optionally, revert to a safe error state for the report if needed
+            // For now, keep the existing (edited) report displayed with the error message
+            hu.flowAnalysisReport = hu.flowAnalysisReport || [{ // Ensure report exists
+                Nombre_del_Escenario: "Error Crítico en Re-Generación (Contextualizada)",
                 Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
                 Resultado_Esperado_General_Flujo: "N/A",
                 Conclusion_General_Flujo: "El re-análisis de flujo no pudo completarse."
@@ -960,6 +980,35 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         })
     ).subscribe();
 }
+
+public toggleEditFlowReportDetails(hu: HUData): void {
+    hu.isEditingFlowReportDetails = !hu.isEditingFlowReportDetails;
+    if (!hu.isEditingFlowReportDetails) {
+        // If finishing editing, ensure steps are re-numbered visually if any were deleted.
+        // The actual re-numbering for the AI prompt happens in the service/regenerate function.
+        if (hu.flowAnalysisReport && hu.flowAnalysisReport[0] && hu.flowAnalysisReport[0].Pasos_Analizados) {
+            hu.flowAnalysisReport[0].Pasos_Analizados.forEach((paso, index) => {
+                paso.numero_paso = index + 1;
+            });
+        }
+        this.updatePreview();
+    }
+}
+
+public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number): void {
+    if (hu.flowAnalysisReport && hu.flowAnalysisReport[reportIndex] && hu.flowAnalysisReport[reportIndex].Pasos_Analizados) {
+        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.splice(stepIndex, 1);
+        // Re-number steps after deletion for immediate visual consistency if not in edit mode,
+        // or rely on the loop index for display when editing.
+        // The final re-numbering for the prompt will happen before sending to AI.
+        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.forEach((paso, idx) => {
+            paso.numero_paso = idx + 1;
+        });
+        this.updatePreview();
+        this.cdr.detectChanges(); // Ensure view updates with new array
+    }
+}
+
 
   public regenerateBugComparison(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'flowComparison' ||
@@ -1391,7 +1440,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public exportExecutionMatrix(hu: HUData): void {
-    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imagen no interpretable o técnica no aplicable" || tc.title === "Imágenes no interpretables o técnica no aplicable")) {
+    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable")) {
       alert('No hay casos de prueba válidos para exportar para esta HU o el tipo de HU no genera matriz de ejecución.'); return;
     }
     const csvHeader = ["Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
@@ -1431,7 +1480,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                 this.escapeCsvField(hu.title),
                 this.escapeCsvField(hu.sprint),
                 this.escapeCsvField(report.Nombre_del_Escenario),
-                this.escapeCsvField(index + 1),
+                this.escapeCsvField(index + 1), // Use visual order
                 this.escapeCsvField(paso.descripcion_accion_observada),
                 this.escapeCsvField(paso.imagen_referencia_entrada),
                 this.escapeCsvField(paso.elemento_clave_y_ubicacion_aproximada),
@@ -1501,7 +1550,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       </tr></thead><tbody>`;
 
       report.Pasos_Analizados.forEach((paso, index) => {
-        const imgSrc = this.getFlowStepImage(hu, paso);
+        const imgSrc = this.getFlowStepImage(hu, paso); // Uses original paso.numero_paso to find image if that's the intent for images.
         const statusClass = this.getFlowStepStatusClass(paso);
         htmlContent += `<tr class="${statusClass}">
           <td>${index + 1}</td>
@@ -1608,7 +1657,7 @@ private escapeFilename(filename: string): string {
 }
 
     public isFlowAnalysisReportInErrorState(reportItem?: FlowAnalysisReportItem): boolean {
-        if (!reportItem) return true;
+        if (!reportItem) return true; // Treat no report as an error state for display logic
         const errorScenarioNames = [
             "Error de API",
             "Error de Formato de Respuesta",
@@ -1618,7 +1667,9 @@ private escapeFilename(filename: string): string {
             "Error de Parsing JSON",
             "Secuencia de imágenes no interpretable",
             "Error Crítico en Generación",
-            "Error Crítico en Re-Generación"
+            "Error Crítico en Re-Generación",
+            "Error Crítico en Re-Generación (Contextualizada)",
+            "Respuesta Vacía de IA"
         ];
         return errorScenarioNames.includes(reportItem.Nombre_del_Escenario);
     }
@@ -1658,9 +1709,11 @@ private escapeFilename(filename: string): string {
     if (!hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0 || !hu.originalInput.imageMimeTypes) {
       return null;
     }
+    // The paso.imagen_referencia_entrada can be "Imagen X" or "Imagen X a Imagen Y"
+    // For simplicity, we'll try to show the first image mentioned if it's a range.
     const match = paso.imagen_referencia_entrada.match(/Imagen (\d+)/i);
     if (match && match[1]) {
-      const imageIndex = parseInt(match[1], 10) - 1;
+      const imageIndex = parseInt(match[1], 10) - 1; // Input images are 1-indexed in prompt.
       if (imageIndex >= 0 && imageIndex < hu.originalInput.imagesBase64.length) {
         const mimeType = hu.originalInput.imageMimeTypes[imageIndex];
         const base64Data = hu.originalInput.imagesBase64[imageIndex];
@@ -1682,6 +1735,7 @@ private escapeFilename(filename: string): string {
         imagesArray = hu.originalInput.imagesBase64FlowB;
         mimeTypesArray = hu.originalInput.imageMimeTypesFlowB;
     } else {
+        // This case might not be used if flowType A/B is always specified for bug reports.
         imagesArray = hu.originalInput.imagesBase64;
         mimeTypesArray = hu.originalInput.imageMimeTypes;
     }
@@ -1690,9 +1744,10 @@ private escapeFilename(filename: string): string {
         return null;
     }
 
+    // Match "Imagen A.1", "Imagen B.1", or "Imagen 1"
     const match = imageRefString.match(/Imagen (?:[AB]\.)?(\d+)/i);
     if (match && match[1]) {
-        const imageIndex = parseInt(match[1], 10) - 1;
+        const imageIndex = parseInt(match[1], 10) - 1; // Input images are 1-indexed in prompt.
         if (imageIndex >= 0 && imageIndex < imagesArray.length) {
             const mimeType = mimeTypesArray[imageIndex];
             const base64Data = imagesArray[imageIndex];
@@ -1704,7 +1759,7 @@ private escapeFilename(filename: string): string {
 
 
   public getFlowStepStatusClass(paso: FlowAnalysisStep): string {
-    const statusText = paso.resultado_obtenido_paso_y_estado.toLowerCase();
+    const statusText = (paso.resultado_obtenido_paso_y_estado || '').toLowerCase();
     if (statusText.includes('exitosa con desviaciones')) {
         return 'status-deviation';
     } else if (statusText.includes('exitosa')) {
@@ -1716,7 +1771,7 @@ private escapeFilename(filename: string): string {
   }
 
   public isBugReportInErrorState(bugReport?: BugReportItem[]): boolean {
-    if (!bugReport || bugReport.length === 0) return false;
+    if (!bugReport || bugReport.length === 0) return false; // No report is not an error in itself for this check
     return bugReport.some(bug =>
         bug.titulo_bug.startsWith("Error de API") ||
         bug.titulo_bug.startsWith("Error de Formato") ||

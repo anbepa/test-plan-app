@@ -5,7 +5,7 @@ import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 // MODIFIED: Added BugReportItem
-import { FlowAnalysisReportItem, BugReportItem } from '../models/hu-data.model';
+import { FlowAnalysisReportItem, BugReportItem, FlowAnalysisStep } from '../models/hu-data.model';
 
 interface GeminiTextPart { text: string; }
 interface GeminiInlineDataPart { inlineData: { mimeType: string; data: string; }; }
@@ -21,10 +21,10 @@ interface GeminiSafetySetting {
   category: string;
   threshold: string;
 }
-// MODIFIED: Added 'compareImageFlows'
+// MODIFIED: Added 'compareImageFlows', 'refineFlowAnalysis'
 interface ProxyRequestBody {
-  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows';
-  payload: any; 
+  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis';
+  payload: any;
 }
 interface GeminiCandidate {
   content: GeminiContent;
@@ -32,7 +32,7 @@ interface GeminiCandidate {
   safetyRatings?: any[];
   [key: string]: any;
 }
-interface GeminiResponse { 
+interface GeminiResponse {
   candidates?: GeminiCandidate[];
   promptFeedback?: any;
   [key: string]: any;
@@ -172,6 +172,7 @@ ${huSummary}
 
 ---
 Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO PÁRRAFO CONCISO, MÁXIMO 4 LÍNEAS, sin enumeraciones, viñetas, encabezados ni saludos. Solo el texto a añadir.):`;
+
 private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = () => `
 Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de interfaces de usuario a partir de secuencias de imágenes.
 Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecución de un flujo de interfaz de usuario. Debes generar un informe detallado de dicha ejecución, identificando **uno o más escenarios posibles** que la secuencia podría representar, incluyendo flujos exitosos y flujos con errores o desviaciones.
@@ -301,6 +302,46 @@ Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecuc
 PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu salida JSON debe corresponder estrictamente a la X-ésima imagen en la secuencia de entrada que has recibido. Incluye el campo "dato_de_entrada_paso" en cada paso de cada escenario. Si solo un escenario es claramente deducible, el array de salida contendrá un único objeto de escenario.
 `;
 
+// NEW: Prompt for refining flow analysis based on user edits
+private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
+Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de UI a partir de imágenes.
+Se te proporcionó una secuencia de imágenes y generaste un análisis inicial. El usuario ha revisado y editado algunas partes de ese análisis para proveer más contexto o corregir interpretaciones.
+
+**IMÁGENES ORIGINALES DEL FLUJO DE EJECUCIÓN (PROPORCIONADAS EN LA SOLICITUD):**
+(Las imágenes se adjuntarán en la solicitud en el mismo orden cronológico estricto: la primera es "Imagen 1", la segunda "Imagen 2", ..., "Imagen N")
+
+**CONTEXTO EDITADO POR EL USUARIO (BASADO EN TU ANÁLISIS ANTERIOR):**
+\`\`\`json
+${editedReportContextJSON}
+\`\`\`
+(El JSON anterior contiene el "Nombre_del_Escenario", los "Pasos_Analizados" editados/revisados por el usuario, y el "Resultado_Esperado_General_Flujo" según el usuario. Los "Pasos_Analizados" pueden tener pasos eliminados o con campos modificados.)
+
+**TU NUEVA TAREA:**
+1.  **RE-ANALIZA CUIDADOSAMENTE LAS IMÁGENES ORIGINALES** que se adjuntan en esta nueva solicitud.
+2.  **UTILIZA EL CONTEXTO PROPORCIONADO POR EL USUARIO (EL JSON ARRIBA) COMO GUÍA PRINCIPAL.** Tu objetivo es generar un nuevo informe de análisis que incorpore las correcciones y el entendimiento del usuario, siempre que sea consistente con la evidencia visual de las imágenes.
+    *   **Nombre del Escenario:** Utiliza el "Nombre_del_Escenario" del JSON proporcionado por el usuario.
+    *   **Pasos Analizados:**
+        *   Toma los "Pasos_Analizados" del JSON proporcionado por el usuario como base. El usuario puede haber eliminado pasos o modificado sus campos.
+        *   Para CADA paso en el JSON del usuario:
+            *   Verifica y refina los campos "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", y "resultado_obtenido_paso_y_estado" para asegurar que sean precisos y estén completamente justificados por las IMÁGENES ORIGINALES. Prioriza la intención del usuario, pero corrige si contradice claramente la evidencia visual o las buenas prácticas de QA.
+            *   Asegúrate de que el campo "imagen_referencia_entrada" sea preciso (ej: "Imagen X", "Imagen X a Imagen Y") y se refiera a la(s) imagen(es) correcta(s) de la secuencia de entrada original.
+        *   Re-numera secuencialmente el campo "numero_paso" para los pasos resultantes en tu nuevo análisis.
+    *   **Resultado Esperado General del Flujo:** Utiliza el "Resultado_Esperado_General_Flujo" del JSON proporcionado por el usuario.
+3.  **GENERA UNA NUEVA "Conclusion_General_Flujo"** que refleje el flujo re-analizado, los pasos refinados y el contexto proporcionado por el usuario.
+4.  **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
+    *   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto de escenario (este objeto representará el escenario refinado).
+    *   El objeto de escenario debe tener EXACTAMENTE las siguientes propiedades: "Nombre_del_Escenario", "Pasos_Analizados" (que es un array de objetos de paso), "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
+    *   Cada objeto de paso en "Pasos_Analizados" debe tener EXACTAMENTE: "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" (string, puede ser "N/A"), "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
+    *   NO incluyas absolutamente NINGÚN texto fuera del array JSON. La respuesta debe comenzar con '[' y terminar con ']'.
+
+**CASO DE IMÁGENES NO INTERPRETABLES / FLUJO INCOMPRENSIBLE (Incluso con contexto):**
+Si, a pesar del contexto del usuario, la secuencia de imágenes sigue siendo demasiado ambigua para un análisis razonable, responde con el JSON de error estándar para "Secuencia de imágenes no interpretable" como se definió en prompts anteriores.
+
+---
+PROCEDE A GENERAR EL INFORME JSON REFINADO BASADO EN LAS IMÁGENES ORIGINALES Y EL CONTEXTO EDITADO POR EL USUARIO.
+`;
+
+
 // NEW: Prompt for comparing image flows
 private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = () => `
 Eres un Ingeniero de QA experto en la detección de diferencias visuales y funcionales entre dos flujos de interfaz de usuario representados por secuencias de imágenes.
@@ -319,7 +360,7 @@ Intenta rellenar los campos opcionales como 'reportado_por', 'fecha_reporte', 'v
 **FORMATO DE SALIDA ESTRICTO (ARRAY DE REPORTES DE BUG EN JSON):**
 Tu ÚNICA salida debe ser un array JSON. Cada elemento del array debe ser un objeto con las siguientes propiedades EXACTAS:
 {
-  "titulo_bug": "string", 
+  "titulo_bug": "string",
   "id_bug": "string", /* Ej: FEAT-UI-001 */
   "prioridad": "string", /* Valores: 'Baja', 'Media', 'Alta', 'Crítica' */
   "severidad": "string", /* Valores: 'Menor', 'Moderada', 'Mayor', 'Crítica' */
@@ -332,7 +373,7 @@ Tu ÚNICA salida debe ser un array JSON. Cada elemento del array debe ser un obj
     "ambiente": "string" /* Ej: Comparación Visual */
   },
   "pasos_para_reproducir": [ /* Array de objetos */
-    { "numero_paso": "integer", "descripcion": "string" } 
+    { "numero_paso": "integer", "descripcion": "string" }
   ],
   "resultado_esperado": "string", /* Descripción basada en Flujo A */
   "resultado_actual": "string", /* Descripción basada en Flujo B */
@@ -386,7 +427,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     const promptText = this.PROMPT_SCOPE(description, acceptanceCriteria);
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 250, temperature: 0.3 } 
+      generationConfig: { maxOutputTokens: 250, temperature: 0.3 }
     };
     const requestToProxy: ProxyRequestBody = { action: 'generateScope', payload: geminiPayload };
     return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
@@ -399,7 +440,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     const promptText = this.PROMPT_SCENARIOS_DETAILED_TEXT_BASED(description, acceptanceCriteria, technique);
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.2 } 
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.2 }
     };
     const requestToProxy: ProxyRequestBody = { action: 'generateTextCases', payload: geminiPayload };
     return this.sendGenerationRequestThroughProxy(requestToProxy);
@@ -412,7 +453,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     }));
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }, ...imageParts] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, topP: 0.95, topK: 40 }, 
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, topP: 0.95, topK: 40 },
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -432,7 +473,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
           console.warn(`[GeminiService] API (via proxy) para ${requestToProxy.action} no retornó contenido.`);
           return [{ title: "Error de API", preconditions: "Respuesta vacía de la API (via proxy).", steps: `Acción: ${requestToProxy.action}`, expectedResults: "N/A" }];
         }
-        
+
         let jsonText = rawText;
         if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
         if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
@@ -445,16 +486,16 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
 
         try {
           const testCases: DetailedTestCase[] = JSON.parse(jsonText);
-          if (!Array.isArray(testCases)) { 
+          if (!Array.isArray(testCases)) {
             console.warn(`[GeminiService] Respuesta JSON para ${requestToProxy.action} no es un array después de parsear.`, rawText);
              return [{ title: "Error de Formato (No Array)", preconditions: "La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado.", steps: rawText.substring(0,500), expectedResults: "N/A" }];
           }
-          if (testCases.length === 0) { 
+          if (testCases.length === 0) {
              console.info(`[GeminiService] Respuesta JSON para ${requestToProxy.action} es un array vacío (puede ser normal).`, rawText);
              return [];
           }
           if (testCases.length === 1 && (testCases[0].title === "Información Insuficiente" || testCases[0].title === "Imágenes no interpretables o técnica no aplicable")) {
-              return testCases; 
+              return testCases;
           }
 
           return testCases.map(tc => ({
@@ -472,6 +513,95 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     );
   }
 
+  private parseFlowAnalysisResponse(rawText: string, action: string): FlowAnalysisReportItem[] {
+    if (!rawText) {
+      console.warn(`[GeminiService] API (via proxy) para ${action} no retornó contenido.`);
+      return [{
+        Nombre_del_Escenario: "Error de API",
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "Respuesta vacía de la API (via proxy).", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+        Resultado_Esperado_General_Flujo: "N/A",
+        Conclusion_General_Flujo: "Error de comunicación con la API."
+      }] as FlowAnalysisReportItem[];
+    }
+
+    let jsonText = rawText;
+    if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+    if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+    jsonText = jsonText.trim();
+
+    if (!jsonText.startsWith("[")) {
+        console.warn(`[GeminiService] Respuesta no JSON (o no array) de ${action}: `, rawText);
+        return [{
+            Nombre_del_Escenario: "Error de Formato (No JSON Array)",
+            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta de la API (via proxy) no fue un array JSON válido para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+            Resultado_Esperado_General_Flujo: "N/A",
+            Conclusion_General_Flujo: "Error de formato en la API."
+        }] as FlowAnalysisReportItem[];
+    }
+
+    try {
+      const flowAnalysisReport: FlowAnalysisReportItem[] = JSON.parse(jsonText);
+      if (!Array.isArray(flowAnalysisReport)) {
+         console.warn(`[GeminiService] Respuesta JSON para ${action} no es un array después de parsear.`, rawText);
+         return [{
+            Nombre_del_Escenario: "Error de Formato (No Array)",
+            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+            Resultado_Esperado_General_Flujo: "N/A",
+            Conclusion_General_Flujo: "Error de formato en la API."
+        }] as FlowAnalysisReportItem[];
+      }
+       if (flowAnalysisReport.length === 0) { // Should ideally return one item as per prompt.
+           console.info(`[GeminiService] Respuesta JSON para ${action} es un array vacío.`, rawText);
+            return [{
+                Nombre_del_Escenario: "Respuesta Vacía de IA",
+                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La IA devolvió un array vacío inesperadamente.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+                Resultado_Esperado_General_Flujo: "N/A",
+                Conclusion_General_Flujo: "La IA no generó contenido."
+            }];
+       }
+       if (flowAnalysisReport[0].Nombre_del_Escenario === "Secuencia de imágenes no interpretable") {
+           return flowAnalysisReport;
+       }
+       // Basic validation for the first item if not an error object
+       if (!flowAnalysisReport[0].Nombre_del_Escenario || !Array.isArray(flowAnalysisReport[0].Pasos_Analizados)) {
+            console.warn(`[GeminiService] Respuesta JSON para ${action} malformado.`, rawText);
+             return [{
+                Nombre_del_Escenario: "Error de Formato (Faltan Campos)",
+                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) está malformada para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0, 200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+                Resultado_Esperado_General_Flujo: "N/A",
+                Conclusion_General_Flujo: "Error de formato en la respuesta de la API."
+            }] as FlowAnalysisReportItem[];
+       }
+
+      // Ensure 'dato_de_entrada_paso' is present and other step fields
+      flowAnalysisReport.forEach(reportItem => {
+        if (Array.isArray(reportItem.Pasos_Analizados)) {
+            reportItem.Pasos_Analizados = reportItem.Pasos_Analizados.map((paso, index) => ({
+              numero_paso: paso.numero_paso || (index + 1), // Ensure numero_paso if missing
+              descripcion_accion_observada: paso.descripcion_accion_observada || "Descripción no proporcionada",
+              imagen_referencia_entrada: paso.imagen_referencia_entrada || "N/A",
+              elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada || "N/A",
+              dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A",
+              resultado_esperado_paso: paso.resultado_esperado_paso || "N/A",
+              resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado || "Estado no determinado"
+            }));
+        } else {
+            reportItem.Pasos_Analizados = [];
+        }
+      });
+      return flowAnalysisReport;
+    } catch (e) {
+      console.error(`[GeminiService] Error parseando JSON para ${action}:`, e, "\nRespuesta Cruda:", rawText);
+      return [{
+        Nombre_del_Escenario: "Error de Parsing JSON",
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `No se pudo interpretar la respuesta JSON de la API (via proxy) para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,500) , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+        Resultado_Esperado_General_Flujo: "N/A",
+        Conclusion_General_Flujo: "Error al procesar la respuesta de la API."
+      }] as FlowAnalysisReportItem[];
+    }
+  }
+
+
   generateFlowAnalysisFromImages(imagesBase64: string[], mimeTypes: string[]): Observable<FlowAnalysisReportItem[]> {
     const promptText = this.PROMPT_FLOW_ANALYSIS_FROM_IMAGES();
     const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
@@ -479,8 +609,8 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     }));
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }, ...imageParts ]}],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.1, topP: 0.95, topK: 40 }, 
-      safetySettings: [ 
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.1, topP: 0.95, topK: 40 },
+      safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -488,84 +618,66 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
       ]
     };
     const requestToProxy: ProxyRequestBody = { action: 'generateFlowAnalysis', payload: geminiPayload };
-    
+
     return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
-      map(response => {
-        const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
-        if (!rawText) {
-          console.warn("[GeminiService] API (via proxy) para generateFlowAnalysis no retornó contenido.");
-          return [{ 
-            Nombre_del_Escenario: "Error de API",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "Respuesta vacía de la API (via proxy).", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
-            Resultado_Esperado_General_Flujo: "N/A",
-            Conclusion_General_Flujo: "Error de comunicación con la API."
-          }] as FlowAnalysisReportItem[];
-        }
-
-        let jsonText = rawText;
-        if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-        if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
-        jsonText = jsonText.trim();
-
-        if (!jsonText.startsWith("[")) {
-            console.warn(`[GeminiService] Respuesta no JSON (o no array) de generateFlowAnalysis: `, rawText);
-            return [{ 
-                Nombre_del_Escenario: "Error de Formato (No JSON Array)",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La respuesta de la API (via proxy) no fue un array JSON válido para análisis de flujo.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "Error de formato en la API."
-            }] as FlowAnalysisReportItem[];
-        }
-        
-        try {
-          const flowAnalysisReport: FlowAnalysisReportItem[] = JSON.parse(jsonText);
-          if (!Array.isArray(flowAnalysisReport)) {
-             console.warn("[GeminiService] Respuesta JSON para generateFlowAnalysis no es un array después de parsear.", rawText);
-             return [{ 
-                Nombre_del_Escenario: "Error de Formato (No Array)",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para análisis de flujo.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "Error de formato en la API."
-            }] as FlowAnalysisReportItem[];
-          }
-           if (flowAnalysisReport.length === 0) {
-               console.info("[GeminiService] Respuesta JSON para generateFlowAnalysis es un array vacío (puede ser normal si no hay pasos o errores).", rawText);
-               return []; 
-           }
-           if (flowAnalysisReport.length === 1 && flowAnalysisReport[0].Nombre_del_Escenario === "Secuencia de imágenes no interpretable") {
-               return flowAnalysisReport;
-           }
-           if (!flowAnalysisReport[0].Nombre_del_Escenario) { 
-                console.warn("[GeminiService] Respuesta JSON para generateFlowAnalysis malformado (falta Nombre_del_Escenario).", rawText);
-                 return [{ 
-                    Nombre_del_Escenario: "Error de Formato (Faltan Campos)",
-                    Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La respuesta JSON de la API (via proxy) está malformada.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0, 200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
-                    Resultado_Esperado_General_Flujo: "N/A",
-                    Conclusion_General_Flujo: "Error de formato en la respuesta de la API."
-                }] as FlowAnalysisReportItem[];
-           }
-
-          if (!Array.isArray(flowAnalysisReport[0].Pasos_Analizados)) {
-            flowAnalysisReport[0].Pasos_Analizados = [];
-          }
-          flowAnalysisReport[0].Pasos_Analizados = flowAnalysisReport[0].Pasos_Analizados.map(paso => ({
-            ...paso,
-            dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A" 
-          }));
-          return flowAnalysisReport;
-        } catch (e) {
-          console.error("[GeminiService] Error parseando JSON para generateFlowAnalysis:", e, "\nRespuesta Cruda:", rawText);
-          return [{ 
-            Nombre_del_Escenario: "Error de Parsing JSON",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "No se pudo interpretar la respuesta JSON de la API (via proxy) para análisis de flujo.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,500) , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
-            Resultado_Esperado_General_Flujo: "N/A",
-            Conclusion_General_Flujo: "Error al procesar la respuesta de la API."
-          }] as FlowAnalysisReportItem[];
-        }
-      }),
-      catchError(this.handleError) 
+      map(response => this.parseFlowAnalysisResponse(
+          this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '',
+          'generateFlowAnalysis'
+      )),
+      catchError(this.handleError)
     );
   }
+
+  // NEW: Method to refine flow analysis based on user edits
+  refineFlowAnalysisFromImagesAndContext(
+    imagesBase64: string[],
+    mimeTypes: string[],
+    editedReport: FlowAnalysisReportItem
+  ): Observable<FlowAnalysisReportItem[]> {
+    // Prepare a clean version of the report for the prompt, only including editable fields
+    // and ensuring Pasos_Analizados are correctly structured.
+    const reportContextForPrompt = {
+        Nombre_del_Escenario: editedReport.Nombre_del_Escenario,
+        Pasos_Analizados: editedReport.Pasos_Analizados.map((paso, index) => ({
+            numero_paso: index + 1, // Re-number for prompt consistency
+            descripcion_accion_observada: paso.descripcion_accion_observada,
+            imagen_referencia_entrada: paso.imagen_referencia_entrada,
+            elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada,
+            dato_de_entrada_paso: paso.dato_de_entrada_paso,
+            resultado_esperado_paso: paso.resultado_esperado_paso,
+            resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado
+        })),
+        Resultado_Esperado_General_Flujo: editedReport.Resultado_Esperado_General_Flujo
+        // Conclusion_General_Flujo is not sent as editable, AI will regenerate it
+    };
+    const editedReportContextJSON = JSON.stringify(reportContextForPrompt, null, 2);
+
+    const promptText = this.PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(editedReportContextJSON);
+    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
+      inlineData: { mimeType: mimeTypes[index], data: base64 }
+    }));
+
+    const geminiPayload = {
+      contents: [{ parts: [{ text: promptText }, ...imageParts ]}],
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 }, // Slightly higher temp for refinement
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+      ]
+    };
+    const requestToProxy: ProxyRequestBody = { action: 'refineFlowAnalysis', payload: geminiPayload };
+
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
+      map(response => this.parseFlowAnalysisResponse(
+        this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '',
+        'refineFlowAnalysis'
+      )),
+      catchError(this.handleError)
+    );
+  }
+
 
   // NEW: Method to compare image flows and report bugs
   public compareImageFlows(
@@ -581,22 +693,19 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
           inlineData: { mimeType: flowBMimeTypes[index], data: base64 }
       }));
 
-      // Construct parts ensuring Flow A images come before Flow B images in the prompt.
-      // The prompt itself instructs Gemini how to interpret "Imagen A.X" and "Imagen B.X".
       const geminiPayload = {
           contents: [
               {
                   parts: [
                       { text: promptText },
-                      // Markers for the LLM, as per the prompt instructions
-                      { text: "\n--- IMÁGENES FLUJO A ---" }, 
+                      { text: "\n--- IMÁGENES FLUJO A ---" },
                       ...flowAParts,
                       { text: "\n--- IMÁGENES FLUJO B ---" },
                       ...flowBParts
                   ]
               }
           ],
-          generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 }, // Increased maxOutputTokens
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
           safetySettings: [
               { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
               { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -606,7 +715,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
       };
 
       const requestToProxy: ProxyRequestBody = {
-          action: 'compareImageFlows', 
+          action: 'compareImageFlows',
           payload: geminiPayload
       };
 
@@ -615,10 +724,9 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
               const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
               if (!rawText) {
                   console.warn("[GeminiService] API para compareImageFlows no retornó contenido.");
-                  // Return a single bug item indicating an API error, as per the example BugReportItem structure
                   return [{titulo_bug: "Error de API (Respuesta Vacía)", id_bug:"ERR-API-EMPTY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: "La API no devolvió contenido.", resultado_esperado:"Un reporte de bugs en JSON."} as BugReportItem];
               }
-              
+
               let jsonText = rawText;
               if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
               if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
@@ -635,8 +743,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
                        console.warn("[GeminiService] Respuesta JSON para compareImageFlows no es un array.", rawText);
                        return [{titulo_bug: "Error de Formato (No Array)", id_bug:"ERR-FORMAT-NOARRAY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
                   }
-                  // Ensure pasos_para_reproducir is always an array
-                  return bugReports.map(bug => ({ 
+                  return bugReports.map(bug => ({
                     ...bug,
                     pasos_para_reproducir: Array.isArray(bug.pasos_para_reproducir) ? bug.pasos_para_reproducir : []
                   }));
@@ -645,7 +752,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
                   return [{titulo_bug: "Error de Parsing JSON", id_bug:"ERR-PARSE", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
               }
           }),
-          catchError(this.handleError) 
+          catchError(this.handleError)
       );
   }
 
@@ -668,7 +775,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     console.error('Error de API (via proxy) capturado:', error);
     if (error.error instanceof ErrorEvent) {
       errorMessage = `Error del cliente o de red: ${error.error.message}`;
-    } else if (error.error && error.error.error && typeof error.error.error === 'string') { 
+    } else if (error.error && error.error.error && typeof error.error.error === 'string') {
         errorMessage = `Error del proxy (${error.status}): ${error.error.error}`;
         if (error.error.details) {
             errorMessage += ` Detalles: ${error.error.details}`;
@@ -677,7 +784,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
         errorMessage = `Error del proxy (${error.status}): ${error.error}`;
     }
     else {
-      const geminiApiError = error.error as GeminiErrorResponse; 
+      const geminiApiError = error.error as GeminiErrorResponse;
       if (geminiApiError?.error?.message) {
         errorMessage = `Error de API (via proxy) (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
         if (geminiApiError.error.details?.length) {
