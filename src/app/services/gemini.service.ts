@@ -305,27 +305,28 @@ PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu sali
 // NEW: Prompt for refining flow analysis based on user edits
 private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
 Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de UI a partir de imágenes.
-Se te proporcionó una secuencia de imágenes y generaste un análisis inicial. El usuario ha revisado y editado algunas partes de ese análisis para proveer más contexto o corregir interpretaciones.
+Se te proporcionó una secuencia de imágenes y generaste un análisis inicial. El usuario ha revisado y editado algunas partes de ese análisis para proveer más contexto o corregir interpretaciones. El usuario también puede haber añadido nuevos pasos o eliminado pasos existentes.
 
 **IMÁGENES ORIGINALES DEL FLUJO DE EJECUCIÓN (PROPORCIONADAS EN LA SOLICITUD):**
 (Las imágenes se adjuntarán en la solicitud en el mismo orden cronológico estricto: la primera es "Imagen 1", la segunda "Imagen 2", ..., "Imagen N")
 
-**CONTEXTO EDITADO POR EL USUARIO (BASADO EN TU ANÁLISIS ANTERIOR):**
+**CONTEXTO EDITADO/AMPLIADO POR EL USUARIO (BASADO EN TU ANÁLISIS ANTERIOR Y SUS MODIFICACIONES):**
 \`\`\`json
 ${editedReportContextJSON}
 \`\`\`
-(El JSON anterior contiene el "Nombre_del_Escenario", los "Pasos_Analizados" editados/revisados por el usuario, y el "Resultado_Esperado_General_Flujo" según el usuario. Los "Pasos_Analizados" pueden tener pasos eliminados o con campos modificados.)
+(El JSON anterior contiene el "Nombre_del_Escenario", los "Pasos_Analizados" editados/revisados/añadidos por el usuario, y el "Resultado_Esperado_General_Flujo" según el usuario. Los "Pasos_Analizados" pueden tener pasos eliminados, modificados o completamente nuevos. Presta especial atención a la descripción y la "imagen_referencia_entrada" de los nuevos pasos para entender cómo se relacionan con las imágenes originales.)
 
 **TU NUEVA TAREA:**
 1.  **RE-ANALIZA CUIDADOSAMENTE LAS IMÁGENES ORIGINALES** que se adjuntan en esta nueva solicitud.
-2.  **UTILIZA EL CONTEXTO PROPORCIONADO POR EL USUARIO (EL JSON ARRIBA) COMO GUÍA PRINCIPAL.** Tu objetivo es generar un nuevo informe de análisis que incorpore las correcciones y el entendimiento del usuario, siempre que sea consistente con la evidencia visual de las imágenes.
+2.  **UTILIZA EL CONTEXTO PROPORCIONADO POR EL USUARIO (EL JSON ARRIBA) COMO GUÍA PRINCIPAL.** Tu objetivo es generar un nuevo informe de análisis que incorpore las correcciones, adiciones y el entendimiento del usuario, siempre que sea consistente con la evidencia visual de las imágenes originales.
     *   **Nombre del Escenario:** Utiliza el "Nombre_del_Escenario" del JSON proporcionado por el usuario.
     *   **Pasos Analizados:**
-        *   Toma los "Pasos_Analizados" del JSON proporcionado por el usuario como base. El usuario puede haber eliminado pasos o modificado sus campos.
-        *   Para CADA paso en el JSON del usuario:
-            *   Verifica y refina los campos "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", y "resultado_obtenido_paso_y_estado" para asegurar que sean precisos y estén completamente justificados por las IMÁGENES ORIGINALES. Prioriza la intención del usuario, pero corrige si contradice claramente la evidencia visual o las buenas prácticas de QA.
-            *   Asegúrate de que el campo "imagen_referencia_entrada" sea preciso (ej: "Imagen X", "Imagen X a Imagen Y") y se refiera a la(s) imagen(es) correcta(s) de la secuencia de entrada original.
-        *   Re-numera secuencialmente el campo "numero_paso" para los pasos resultantes en tu nuevo análisis.
+        *   Toma los "Pasos_Analizados" del JSON proporcionado por el usuario como base. Estos pasos ya reflejan el orden, contenido y posibles eliminaciones/adiciones hechas por el usuario.
+        *   Para CADA paso en el JSON del usuario (existente modificado o nuevo):
+            *   Verifica y refina los campos "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", y "resultado_obtenido_paso_y_estado" para asegurar que sean precisos y estén completamente justificados por las IMÁGENES ORIGINALES y la lógica del flujo. Prioriza la intención del usuario, pero corrige si contradice claramente la evidencia visual o las buenas prácticas de QA.
+            *   Asegúrate de que el campo "imagen_referencia_entrada" sea preciso (ej: "Imagen X", "Imagen X a Imagen Y", o la descripción textual del usuario si es un nuevo paso conceptual) y se refiera a la(s) imagen(es) correcta(s) de la secuencia de entrada original, o que sea lógicamente consistente si es un nuevo paso.
+            *   Si el usuario añadió un nuevo paso, interprétalo en el contexto del flujo general y las imágenes. Su "imagen_referencia_entrada" podría ser "Imagen 3.5" conceptualmente, o "Nueva observación después de Imagen 2".
+        *   Re-numera secuencialmente el campo "numero_paso" para los pasos resultantes en tu nuevo análisis final, partiendo desde 1.
     *   **Resultado Esperado General del Flujo:** Utiliza el "Resultado_Esperado_General_Flujo" del JSON proporcionado por el usuario.
 3.  **GENERA UNA NUEVA "Conclusion_General_Flujo"** que refleje el flujo re-analizado, los pasos refinados y el contexto proporcionado por el usuario.
 4.  **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
@@ -338,7 +339,7 @@ ${editedReportContextJSON}
 Si, a pesar del contexto del usuario, la secuencia de imágenes sigue siendo demasiado ambigua para un análisis razonable, responde con el JSON de error estándar para "Secuencia de imágenes no interpretable" como se definió en prompts anteriores.
 
 ---
-PROCEDE A GENERAR EL INFORME JSON REFINADO BASADO EN LAS IMÁGENES ORIGINALES Y EL CONTEXTO EDITADO POR EL USUARIO.
+PROCEDE A GENERAR EL INFORME JSON REFINADO BASADO EN LAS IMÁGENES ORIGINALES Y EL CONTEXTO EDITADO/AMPLIADO POR EL USUARIO.
 `;
 
 
@@ -634,12 +635,13 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     mimeTypes: string[],
     editedReport: FlowAnalysisReportItem
   ): Observable<FlowAnalysisReportItem[]> {
-    // Prepare a clean version of the report for the prompt, only including editable fields
-    // and ensuring Pasos_Analizados are correctly structured.
+
     const reportContextForPrompt = {
         Nombre_del_Escenario: editedReport.Nombre_del_Escenario,
         Pasos_Analizados: editedReport.Pasos_Analizados.map((paso, index) => ({
-            numero_paso: index + 1, // Re-number for prompt consistency
+            // numero_paso will be re-generated by AI based on final list, but we send current visual order.
+            // The prompt asks AI to re-number based on the final list it generates.
+            numero_paso: index + 1, // Current visual order
             descripcion_accion_observada: paso.descripcion_accion_observada,
             imagen_referencia_entrada: paso.imagen_referencia_entrada,
             elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada,
@@ -648,7 +650,6 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
             resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado
         })),
         Resultado_Esperado_General_Flujo: editedReport.Resultado_Esperado_General_Flujo
-        // Conclusion_General_Flujo is not sent as editable, AI will regenerate it
     };
     const editedReportContextJSON = JSON.stringify(reportContextForPrompt, null, 2);
 
@@ -659,7 +660,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
 
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }, ...imageParts ]}],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 }, // Slightly higher temp for refinement
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 },
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },

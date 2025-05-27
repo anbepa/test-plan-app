@@ -95,7 +95,7 @@ export interface HUData {
   loadingFlowAnalysis?: boolean;
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
-  isEditingFlowReportDetails?: boolean; // MODIFIED: Added for editing state
+  isEditingFlowReportDetails?: boolean;
 
   // NEW: For 'flowComparison' results
   bugComparisonReport?: BugReportItem[];

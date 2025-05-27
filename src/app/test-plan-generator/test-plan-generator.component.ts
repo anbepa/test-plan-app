@@ -115,7 +115,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
 
   draggedFlowStep: FlowAnalysisStep | null = null;
-  dragOverFlowStepId: string | null = null;
+  dragOverFlowStepId: string | null = null; // For styling drop target
 
   @ViewChild('huForm') huFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
@@ -319,7 +319,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         currentDraggableImagesRef = this.draggableImages;
         this.imageUploadError = null; // Reset general error
         currentUploadErrorProp = 'imageUploadError';
-        maxImages = this.currentGenerationMode === 'flowAnalysis' ? 20 : 5;
+        maxImages = this.currentGenerationMode === 'flowAnalysis' ? 20 : 5; // Max 20 for flow analysis
     }
     this.formError = null;
 
@@ -527,6 +527,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   public getFlowStepDragId(paso: FlowAnalysisStep): string {
     // Ensure a unique ID even if steps are identical initially or become identical after edits
+    // This ID is primarily for dragover styling.
     return `${paso.numero_paso}-${(paso.descripcion_accion_observada || '').substring(0, 10).replace(/\s/g, '_')}-${Math.random().toString(16).slice(2, 8)}`;
   }
 
@@ -539,8 +540,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.draggedFlowStep = paso;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      // Use the original numero_paso for identification during drag, as it's more stable before re-indexing
-      event.dataTransfer.setData('text/plain', paso.numero_paso.toString());
+      // Use the current visual index (paso.numero_paso which is 1-based)
+      event.dataTransfer.setData('text/plain', (paso.numero_paso - 1).toString()); // Store 0-based index
       const targetElement = event.target as HTMLElement;
       const rowElement = targetElement.closest('tr');
       if (rowElement) {
@@ -936,7 +937,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 public regenerateFlowAnalysis(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'flowAnalysis' ||
         !hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0 ||
-        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0) { // Ensure report exists for context
+        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0) {
         alert("Solo se puede re-analizar un flujo si es de tipo 'Análisis de Flujo', tiene imágenes y un informe previo para contextualizar.");
         return;
     }
@@ -945,27 +946,24 @@ public regenerateFlowAnalysis(hu: HUData): void {
     this.loadingFlowAnalysisGlobal = true;
     this.flowAnalysisErrorGlobal = null;
 
-    // Pass the current (potentially edited) flowAnalysisReport[0] as context
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
         hu.originalInput.imagesBase64!,
         hu.originalInput.imageMimeTypes!,
-        hu.flowAnalysisReport[0] // This now contains user edits if any
+        hu.flowAnalysisReport[0]
     ).pipe(
         tap(report => {
-            hu.flowAnalysisReport = report; // Update with the refined report
+            hu.flowAnalysisReport = report;
             hu.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
                 hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
                 this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
             }
-            hu.isEditingFlowReportDetails = false; // Exit editing mode after successful regeneration
+            hu.isEditingFlowReportDetails = false;
         }),
         catchError(error => {
             hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis de flujo con contexto.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
-            // Optionally, revert to a safe error state for the report if needed
-            // For now, keep the existing (edited) report displayed with the error message
-            hu.flowAnalysisReport = hu.flowAnalysisReport || [{ // Ensure report exists
+            hu.flowAnalysisReport = hu.flowAnalysisReport || [{
                 Nombre_del_Escenario: "Error Crítico en Re-Generación (Contextualizada)",
                 Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
                 Resultado_Esperado_General_Flujo: "N/A",
@@ -983,10 +981,9 @@ public regenerateFlowAnalysis(hu: HUData): void {
 
 public toggleEditFlowReportDetails(hu: HUData): void {
     hu.isEditingFlowReportDetails = !hu.isEditingFlowReportDetails;
-    if (!hu.isEditingFlowReportDetails) {
-        // If finishing editing, ensure steps are re-numbered visually if any were deleted.
-        // The actual re-numbering for the AI prompt happens in the service/regenerate function.
+    if (!hu.isEditingFlowReportDetails) { // When finishing edit
         if (hu.flowAnalysisReport && hu.flowAnalysisReport[0] && hu.flowAnalysisReport[0].Pasos_Analizados) {
+            // Ensure steps are re-numbered for visual consistency
             hu.flowAnalysisReport[0].Pasos_Analizados.forEach((paso, index) => {
                 paso.numero_paso = index + 1;
             });
@@ -998,14 +995,28 @@ public toggleEditFlowReportDetails(hu: HUData): void {
 public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number): void {
     if (hu.flowAnalysisReport && hu.flowAnalysisReport[reportIndex] && hu.flowAnalysisReport[reportIndex].Pasos_Analizados) {
         hu.flowAnalysisReport[reportIndex].Pasos_Analizados.splice(stepIndex, 1);
-        // Re-number steps after deletion for immediate visual consistency if not in edit mode,
-        // or rely on the loop index for display when editing.
-        // The final re-numbering for the prompt will happen before sending to AI.
         hu.flowAnalysisReport[reportIndex].Pasos_Analizados.forEach((paso, idx) => {
-            paso.numero_paso = idx + 1;
+            paso.numero_paso = idx + 1; // Re-number after deletion
         });
         this.updatePreview();
-        this.cdr.detectChanges(); // Ensure view updates with new array
+        this.cdr.detectChanges();
+    }
+}
+
+public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
+    if (hu.flowAnalysisReport && hu.flowAnalysisReport[reportIndex]) {
+        const newStep: FlowAnalysisStep = {
+            numero_paso: hu.flowAnalysisReport[reportIndex].Pasos_Analizados.length + 1,
+            descripcion_accion_observada: '',
+            imagen_referencia_entrada: 'Nueva (describir o sin imagen)', // User should edit this
+            elemento_clave_y_ubicacion_aproximada: '',
+            dato_de_entrada_paso: '',
+            resultado_esperado_paso: '',
+            resultado_obtenido_paso_y_estado: ''
+        };
+        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.push(newStep);
+        this.updatePreview();
+        this.cdr.detectChanges();
     }
 }
 
@@ -1255,7 +1266,8 @@ public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number
                 if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
                     fullPlanContent += `  Pasos Analizados:\n`;
                     report.Pasos_Analizados.forEach((paso, index) => {
-                        fullPlanContent += `    Paso ${index + 1} (IA N°${paso.numero_paso}): ${paso.descripcion_accion_observada} (Ref IA: ${paso.imagen_referencia_entrada})\n`;
+                        // Use index + 1 for visual numbering as paso.numero_paso might be AI's original or re-ordered.
+                        fullPlanContent += `    Paso ${index + 1}: ${paso.descripcion_accion_observada} (Ref IA: ${paso.imagen_referencia_entrada})\n`;
                         fullPlanContent += `      Elemento Clave: ${paso.elemento_clave_y_ubicacion_aproximada}\n`;
                         fullPlanContent += `      Dato de Entrada (Paso): ${paso.dato_de_entrada_paso || 'N/A'}\n`;
                         fullPlanContent += `      Resultado Esperado (Paso): ${paso.resultado_esperado_paso}\n`;
@@ -1550,7 +1562,7 @@ public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number
       </tr></thead><tbody>`;
 
       report.Pasos_Analizados.forEach((paso, index) => {
-        const imgSrc = this.getFlowStepImage(hu, paso); // Uses original paso.numero_paso to find image if that's the intent for images.
+        const imgSrc = this.getFlowStepImage(hu, paso);
         const statusClass = this.getFlowStepStatusClass(paso);
         htmlContent += `<tr class="${statusClass}">
           <td>${index + 1}</td>
