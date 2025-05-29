@@ -49,6 +49,8 @@ export interface BugReportItem {
 }
 
 
+// ... otras importaciones e interfaces ...
+
 export interface HUData {
   originalInput: {
     id: string;
@@ -96,6 +98,9 @@ export interface HUData {
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
   isEditingFlowReportDetails?: boolean;
+
+  // NEW: For user's additional context in flow re-analysis
+  userReanalysisContext?: string; // <<--- ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ PRESENTE Y SEA OPCIONAL
 
   // NEW: For 'flowComparison' results
   bugComparisonReport?: BugReportItem[];

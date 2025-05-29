@@ -549,7 +549,19 @@
 
                         <h4>Conclusión General del Flujo (Generada por IA):</h4>
                         <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Conclusion_General_Flujo }}</pre>
+                    </div> <!-- Fin de .flow-analysis-report -->
+
+                    <!-- NEW: Text input for re-analysis context -->
+                    <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0]) && hu.isEditingFlowReportDetails"
+                         class="form-group full-width" style="margin-top: 15px;">
+                        <label for="userReanalysisContext-{{hu.id}}">Contexto adicional para Re-Análisis (opcional):</label>
+                        <textarea id="userReanalysisContext-{{hu.id}}" name="userReanalysisContext-{{hu.id}}"
+                                  class="form-control" rows="3"
+                                  [(ngModel)]="hu.userReanalysisContext"
+                                  placeholder="Ej: El paso 3 debería mostrar un error específico, no el general. El objetivo era validar el login con credenciales inválidas."></textarea>
                     </div>
+
+
                     <div class="actions">
                         <button (click)="toggleEditFlowReportDetails(hu)" class="button-edit" [disabled]="hu.loadingFlowAnalysis">
                             {{ hu.isEditingFlowReportDetails ? 'Finalizar Edición' : 'Editar Informe' }}
@@ -557,13 +569,18 @@
                         <button (click)="regenerateFlowAnalysis(hu)" class="button-generate" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
                             <span *ngIf="hu.loadingFlowAnalysis" class="spinner-inline"></span> Re-Analizar Flujo
                         </button>
+                        <!-- MODIFIED: Replaced single export with two -->
+                        <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'es')" class="button-secondary"
+                                [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
+                            Exportar Informe ESP (.html)
+                        </button>
+                        <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'en')" class="button-secondary"
+                                [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
+                            Exportar Informe ENG (.html)
+                        </button>
                         <button (click)="exportFlowAnalysisReportToCsv(hu)" class="button-secondary"
                                 [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
                             Exportar Datos (.csv)
-                        </button>
-                        <button (click)="exportFlowAnalysisReportToHtml(hu)" class="button-secondary"
-                                [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)">
-                            Exportar Informe con Imágenes (.html)
                         </button>
                     </div>
                 </div>
@@ -639,10 +656,15 @@
                             <button (click)="regenerateBugComparison(hu)" class="button-generate" [disabled]="hu.loadingBugComparison">
                                 <span *ngIf="hu.loadingBugComparison" class="spinner-inline"></span> Re-Analizar Comparación
                             </button>
-                            <button (click)="exportBugComparisonReportToHtml(hu)" class="button-secondary"
-                                    [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || hu.bugComparisonReport.length === 0">
-                                Exportar Reporte Bugs (.html)
-                            </button>
+                             <!-- MODIFIED: Replaced single export with two -->
+                             <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'es')" class="button-secondary"
+                                     [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0">
+                                 Exportar Reporte ESP (.html)
+                             </button>
+                             <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'en')" class="button-secondary"
+                                     [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0">
+                                 Exportar Reporte ENG (.html)
+                             </button>
                         </div>
                     </div>
                 </div>

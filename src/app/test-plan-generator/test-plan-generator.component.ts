@@ -688,7 +688,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       loadingFlowAnalysis: this.currentGenerationMode === 'flowAnalysis',
       errorFlowAnalysis: null,
       isFlowAnalysisDetailsOpen: this.currentGenerationMode === 'flowAnalysis',
-      isEditingFlowReportDetails: false, // Initialize editing state
+      isEditingFlowReportDetails: false,
+      userReanalysisContext: '', // NEW: Initialize context field
       bugComparisonReport: undefined,
       loadingBugComparison: this.currentGenerationMode === 'flowComparison',
       errorBugComparison: null,
@@ -949,7 +950,8 @@ public regenerateFlowAnalysis(hu: HUData): void {
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
         hu.originalInput.imagesBase64!,
         hu.originalInput.imageMimeTypes!,
-        hu.flowAnalysisReport[0]
+        hu.flowAnalysisReport[0],
+        hu.userReanalysisContext // NUEVO: Pasar el contexto del usuario
     ).pipe(
         tap(report => {
             hu.flowAnalysisReport = report;
@@ -958,18 +960,19 @@ public regenerateFlowAnalysis(hu: HUData): void {
                 hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
                 this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
             }
-            hu.isEditingFlowReportDetails = false;
+            hu.isEditingFlowReportDetails = false; // Terminar edición después de re-análisis
         }),
         catchError(error => {
             hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis de flujo con contexto.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
+            // Conservar el reporte anterior o una indicación del error en el reporte
             hu.flowAnalysisReport = hu.flowAnalysisReport || [{
                 Nombre_del_Escenario: "Error Crítico en Re-Generación (Contextualizada)",
                 Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
                 Resultado_Esperado_General_Flujo: "N/A",
                 Conclusion_General_Flujo: "El re-análisis de flujo no pudo completarse."
             }];
-            return of(hu.flowAnalysisReport);
+            return of(hu.flowAnalysisReport); // Devuelve el reporte (posiblemente con error) para no romper el flujo
         }),
         finalize(() => {
             hu.loadingFlowAnalysis = false;
@@ -1521,16 +1524,17 @@ public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
     saveAs(blob, `InformeAnalisisFlujo_CSV_${hu.id}_${date}.csv`);
   }
 
-  public exportFlowAnalysisReportToHtml(hu: HUData): void {
+  public exportFlowAnalysisReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
     if (hu.originalInput.generationMode !== 'flowAnalysis' ||
         !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 ||
         this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])
       ) {
-      alert('No hay un informe de análisis de flujo válido para exportar a HTML.');
+      alert(language === 'en' ? 'No valid flow analysis report to export to HTML.' : 'No hay un informe de análisis de flujo válido para exportar a HTML.');
       return;
     }
     const report = hu.flowAnalysisReport[0];
-    let htmlContent = `<html><head><title>Informe de Flujo ${this.escapeHtmlForExport(hu.title)}</title>`;
+    const title = language === 'en' ? `Flow Report: ${this.escapeHtmlForExport(hu.title)}` : `Informe de Flujo: ${this.escapeHtmlForExport(hu.title)}`;
+    let htmlContent = `<html><head><title>${title}</title>`;
     htmlContent += `<style>
       body { font-family: Segoe UI, Calibri, Arial, sans-serif; margin: 20px; line-height: 1.6; color: #343a40; }
       h1 { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
@@ -1547,18 +1551,18 @@ public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
       .status-deviation td:first-child { border-left: 4px solid #ffc107; }
     </style></head><body>`;
 
-    htmlContent += `<h1>Informe de flujo: ${this.escapeHtmlForExport(hu.title)}</h1>`;
-    htmlContent += `<p><strong>Sprint:</strong> ${this.escapeHtmlForExport(hu.sprint)}</p>`;
-    htmlContent += `<h2>Nombre del Escenario:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Nombre_del_Escenario)}</pre>`;
+    htmlContent += `<h1>${title}</h1>`;
+    htmlContent += `<p><strong>${language === 'en' ? 'Sprint' : 'Sprint'}:</strong> ${this.escapeHtmlForExport(hu.sprint)}</p>`;
+    htmlContent += `<h2>${language === 'en' ? 'Scenario Name' : 'Nombre del Escenario'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Nombre_del_Escenario)}</pre>`;
 
     if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
-      htmlContent += `<h2>Pasos</h2><table><thead><tr>
-        <th>Paso N° (Ordenado)</th>
-        <th>Acción/Observación</th>
-        <th>Dato de Entrada (Paso)</th>
-        <th>Resultado Esperado (Paso)</th>
-        <th>Resultado Obtenido y Estado (Paso)</th>
-        <th>Imagen del Paso</th>
+      htmlContent += `<h2>${language === 'en' ? 'Steps' : 'Pasos'}</h2><table><thead><tr>
+        <th>${language === 'en' ? 'Step #' : 'Paso N°'} (Ordered)</th>
+        <th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th>
+        <th>${language === 'en' ? 'Input Data (Step)' : 'Dato de Entrada (Paso)'}</th>
+        <th>${language === 'en' ? 'Expected Result (Step)' : 'Resultado Esperado (Paso)'}</th>
+        <th>${language === 'en' ? 'Actual Result & Status (Step)' : 'Resultado Obtenido y Estado (Paso)'}</th>
+        <th>${language === 'en' ? 'Step Image' : 'Imagen del Paso'}</th>
       </tr></thead><tbody>`;
 
       report.Pasos_Analizados.forEach((paso, index) => {
@@ -1567,44 +1571,46 @@ public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
         htmlContent += `<tr class="${statusClass}">
           <td>${index + 1}</td>
           <td><pre>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</pre></td>
-          <td><pre>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || 'N/A')}</pre></td>
+          <td><pre>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || (language === 'en' ? 'N/A' : 'N/A'))}</pre></td>
           <td><pre>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</pre></td>
           <td><pre>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</pre></td>
-          <td>${imgSrc ? `<img src="${imgSrc}" alt="Imagen para paso original ${paso.numero_paso}" class="flow-step-image">` : 'N/A'}</td>
+          <td>${imgSrc ? `<img src="${imgSrc}" alt="${language === 'en' ? 'Image for original step' : 'Imagen para paso original'} ${paso.numero_paso}" class="flow-step-image">` : (language === 'en' ? 'N/A' : 'N/A')}</td>
         </tr>`;
       });
       htmlContent += `</tbody></table>`;
     } else {
-      htmlContent += `<p><strong>Pasos:</strong> No se analizaron pasos detallados o no se encontraron.</p>`;
+      htmlContent += `<p><strong>${language === 'en' ? 'Steps' : 'Pasos'}:</strong> ${language === 'en' ? 'No detailed steps were analyzed or found.' : 'No se analizaron pasos detallados o no se encontraron.'}</p>`;
     }
 
-    htmlContent += `<h2>Resultado Esperado General del Flujo:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</pre>`;
-    htmlContent += `<h2>Conclusión General del Flujo:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</pre>`;
+    htmlContent += `<h2>${language === 'en' ? 'Overall Expected Result of Flow' : 'Resultado Esperado General del Flujo'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</pre>`;
+    htmlContent += `<h2>${language === 'en' ? 'Overall Conclusion of Flow' : 'Conclusión General del Flujo'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</pre>`;
     htmlContent += `</body></html>`;
 
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
     const date = new Date().toISOString().split('T')[0];
-    saveAs(blob, `Informe_Flujo_${this.escapeFilename(hu.title)}_${date}.html`);
+    const langSuffix = language === 'en' ? 'ENG' : 'ESP';
+    saveAs(blob, `Informe_Flujo_${this.escapeFilename(hu.title)}_${langSuffix}_${date}.html`);
 }
 
-public exportBugComparisonReportToHtml(hu: HUData): void {
+public exportBugComparisonReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
     if (hu.originalInput.generationMode !== 'flowComparison' ||
         !hu.bugComparisonReport || hu.bugComparisonReport.length === 0 ||
         hu.bugComparisonReport.some(b => b.titulo_bug.startsWith("Error"))) {
-        alert('No hay un informe de comparación de bugs válido para exportar a HTML.');
+        alert(language === 'en' ? 'No valid bug comparison report to export to HTML.' : 'No hay un informe de comparación de bugs válido para exportar a HTML.');
         return;
     }
 
     const currentDateForExport = new Date().toISOString().split('T')[0];
+    const reportTitle = language === 'en' ? `Flow Comparison Report: ${this.escapeHtmlForExport(hu.title)}` : `Reporte de Comparación de Flujos: ${this.escapeHtmlForExport(hu.title)}`;
 
-    let htmlContent = `<html><head><title>Reporte de Comparación de Flujos: ${this.escapeHtmlForExport(hu.title)}</title>`;
+    let htmlContent = `<html><head><title>${reportTitle}</title>`;
     htmlContent += `<style>
         body { font-family: Segoe UI, Calibri, Arial, sans-serif; margin: 20px; line-height: 1.5; color: #333; }
         .report-container { max-width: 900px; margin: auto; }
         h1 { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
-        h2 { color: #4a6d7c; margin-top: 25px; border-bottom: 1px solid #e9ecef; padding-bottom: 5px; }
+        h2.main-title { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
+        h2.bug-title { font-size: 1.3em; color: #c0392b; margin-top: 0; margin-bottom: 10px; } /* Renamed for clarity */
         .bug-item { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 20px; background-color: #f9f9f9; }
-        .bug-title { font-size: 1.3em; color: #c0392b; margin-top: 0; margin-bottom: 10px; }
         .bug-meta, .bug-details p { margin-bottom: 8px; font-size: 0.95em; }
         .bug-meta strong, .bug-details strong { color: #555; }
         .bug-details pre { white-space: pre-wrap; word-wrap: break-word; background-color: #fff; border: 1px solid #eee; padding: 10px; border-radius: 4px; font-family: Consolas, monospace; margin-top: 3px; margin-bottom: 10px;}
@@ -1613,22 +1619,22 @@ public exportBugComparisonReportToHtml(hu: HUData): void {
         .bug-report-image { max-width: 300px; max-height: 250px; border: 1px solid #ccc; border-radius: 4px; display: block; margin: 10px 0; }
     </style></head><body><div class="report-container">`;
 
-    htmlContent += `<h1>Reporte de Comparación de Flujos: ${this.escapeHtmlForExport(hu.title)}</h1>`;
+    htmlContent += `<h1 class="main-title">${reportTitle}</h1>`;
 
     hu.bugComparisonReport.forEach((bug, index) => {
         htmlContent += `<div class="bug-item">`;
-        htmlContent += `<h2 class="bug-title">Bug #${index + 1}: ${this.escapeHtmlForExport(bug.titulo_bug)}</h2>`;
+        htmlContent += `<h2 class="bug-title">${language === 'en' ? 'Bug' : 'Bug'} #${index + 1}: ${this.escapeHtmlForExport(bug.titulo_bug)}</h2>`;
 
         htmlContent += `<div class="bug-meta">`;
-        htmlContent += `<p><strong>Prioridad:</strong> ${this.escapeHtmlForExport(bug.prioridad)} | <strong>Severidad:</strong> ${this.escapeHtmlForExport(bug.severidad)}</p>`;
-        htmlContent += `<p><strong>Fecha:</strong> ${currentDateForExport}</p>`;
+        htmlContent += `<p><strong>${language === 'en' ? 'Priority' : 'Prioridad'}:</strong> ${this.escapeHtmlForExport(bug.prioridad)} | <strong>${language === 'en' ? 'Severity' : 'Severidad'}:</strong> ${this.escapeHtmlForExport(bug.severidad)}</p>`;
+        htmlContent += `<p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${currentDateForExport}</p>`;
         htmlContent += `</div>`; // end bug-meta
 
         htmlContent += `<div class="bug-details">`;
         if (bug.descripcion_diferencia_general) {
-             htmlContent += `<p><strong>Descripción General de la Diferencia:</strong></p><pre>${this.escapeHtmlForExport(bug.descripcion_diferencia_general)}</pre>`;
+             htmlContent += `<p><strong>${language === 'en' ? 'General Difference Description' : 'Descripción General de la Diferencia'}:</strong></p><pre>${this.escapeHtmlForExport(bug.descripcion_diferencia_general)}</pre>`;
         }
-        htmlContent += `<p><strong>Pasos para Reproducir:</strong></p>`;
+        htmlContent += `<p><strong>${language === 'en' ? 'Steps to Reproduce' : 'Pasos para Reproducir'}:</strong></p>`;
         if (bug.pasos_para_reproducir && bug.pasos_para_reproducir.length > 0) {
             htmlContent += `<ol class="bug-steps">`;
             bug.pasos_para_reproducir.forEach(paso => {
@@ -1636,20 +1642,20 @@ public exportBugComparisonReportToHtml(hu: HUData): void {
             });
             htmlContent += `</ol>`;
         } else {
-            htmlContent += `<p>N/A</p>`;
+            htmlContent += `<p>${language === 'en' ? 'N/A' : 'N/A'}</p>`;
         }
 
-        htmlContent += `<p><strong>Resultado Esperado:</strong> <span class="image-ref">(Referencia Flujo A: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || 'N/A')})</span></p>`;
+        htmlContent += `<p><strong>${language === 'en' ? 'Expected Result' : 'Resultado Esperado'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow A' : 'Ref. Flujo A'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || 'N/A')})</span></p>`;
         const imgSrcA = this.getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A');
         if (imgSrcA) {
-            htmlContent += `<img src="${imgSrcA}" alt="Imagen Esperada ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || '')}" class="bug-report-image">`;
+            htmlContent += `<img src="${imgSrcA}" alt="${language === 'en' ? 'Expected Image' : 'Imagen Esperada'} ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || '')}" class="bug-report-image">`;
         }
         htmlContent += `<pre>${this.escapeHtmlForExport(bug.resultado_esperado)}</pre>`;
 
-        htmlContent += `<p><strong>Resultado Actual:</strong> <span class="image-ref">(Referencia Flujo B: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || 'N/A')})</span></p>`;
+        htmlContent += `<p><strong>${language === 'en' ? 'Actual Result' : 'Resultado Actual'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow B' : 'Ref. Flujo B'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || 'N/A')})</span></p>`;
         const imgSrcB = this.getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B');
         if (imgSrcB) {
-            htmlContent += `<img src="${imgSrcB}" alt="Imagen Actual ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || '')}" class="bug-report-image">`;
+            htmlContent += `<img src="${imgSrcB}" alt="${language === 'en' ? 'Actual Image' : 'Imagen Actual'} ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || '')}" class="bug-report-image">`;
         }
         htmlContent += `<pre>${this.escapeHtmlForExport(bug.resultado_actual)}</pre>`;
 
@@ -1660,7 +1666,8 @@ public exportBugComparisonReportToHtml(hu: HUData): void {
     htmlContent += `</div></body></html>`;
 
     const dateForFilename = new Date().toISOString().split('T')[0];
-    saveAs(new Blob([htmlContent], { type: 'text/html;charset=utf-8;' }), `Reporte_Comparacion_Bugs_${this.escapeFilename(hu.title)}_${dateForFilename}.html`);
+    const langSuffix = language === 'en' ? 'ENG' : 'ESP';
+    saveAs(new Blob([htmlContent], { type: 'text/html;charset=utf-8;' }), `Reporte_Comparacion_Bugs_${this.escapeFilename(hu.title)}_${langSuffix}_${dateForFilename}.html`);
 }
 
 

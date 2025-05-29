@@ -303,45 +303,65 @@ PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu sali
 `;
 
 // NEW: Prompt for refining flow analysis based on user edits
-private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
-Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de UI a partir de imágenes.
-Se te proporcionó una secuencia de imágenes y generaste un análisis inicial. El usuario ha revisado y editado algunas partes de ese análisis para proveer más contexto o corregir interpretaciones. El usuario también puede haber añadido nuevos pasos o eliminado pasos existentes.
+ private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
+Eres un Ingeniero de QA Analista de élite, altamente colaborativo, especializado en tomar la retroalimentación y el contexto detallado de un colega (el usuario) para refinar un análisis de flujo de UI. Tu tarea es producir un informe de análisis final que incorpore la sabiduría del usuario y tu propia pericia técnica, validado contra la evidencia visual.
 
-**IMÁGENES ORIGINALES DEL FLUJO DE EJECUCIÓN (PROPORCIONADAS EN LA SOLICITUD):**
-(Las imágenes se adjuntarán en la solicitud en el mismo orden cronológico estricto: la primera es "Imagen 1", la segunda "Imagen 2", ..., "Imagen N")
+**IMÁGENES DEL FLUJO DE EJECUCIÓN (PROPORCIONADAS EN ESTA SOLICITUD):**
+(Se adjuntan las imágenes originales: "Imagen 1", "Imagen 2", ..., "Imagen N". Si el usuario añadió imágenes a pasos específicos, estas se adjuntan después de las originales y se referencian en el JSON de contexto.)
 
-**CONTEXTO EDITADO/AMPLIADO POR EL USUARIO (BASADO EN TU ANÁLISIS ANTERIOR Y SUS MODIFICACIONES):**
+**CONTEXTO DETALLADO, MODIFICACIONES DEL USUARIO Y GUÍA ADICIONAL (GUÍA PRINCIPAL PARA TU ANÁLISIS):**
 \`\`\`json
 ${editedReportContextJSON}
 \`\`\`
-(El JSON anterior contiene el "Nombre_del_Escenario", los "Pasos_Analizados" editados/revisados/añadidos por el usuario, y el "Resultado_Esperado_General_Flujo" según el usuario. Los "Pasos_Analizados" pueden tener pasos eliminados, modificados o completamente nuevos. Presta especial atención a la descripción y la "imagen_referencia_entrada" de los nuevos pasos para entender cómo se relacionan con las imágenes originales.)
+(El JSON anterior contiene:
+  - "Nombre_del_Escenario": El nombre que el usuario desea para el escenario. Este debe ser el nombre que uses en tu informe final.
+  - "Pasos_Analizados": La secuencia de pasos tal como el usuario la ha editado (modificado, añadido, o eliminado pasos), incluyendo sus descripciones, datos, y **el "resultado_esperado_paso" para cada uno.** Esta es la secuencia de pasos que debes analizar.
+  - "Resultado_Esperado_General_Flujo": La **hipótesis o intención original** del usuario sobre lo que el flujo general debería demostrar o el objetivo que buscaba. Úsalo como una referencia de la perspectiva del usuario.
+  - "user_provided_additional_context": **(CRÍTICO - ALTA PRIORIDAD) Un texto libre proporcionado por el usuario con correcciones, aclaraciones, objetivos específicos no obvios, o contexto adicional general que aplica a todo el análisis. ESTE CAMPO ES TU GUÍA PRINCIPAL para entender las expectativas del usuario y refinar el análisis.**
+)
 
-**TU NUEVA TAREA:**
-1.  **RE-ANALIZA CUIDADOSAMENTE LAS IMÁGENES ORIGINALES** que se adjuntan en esta nueva solicitud.
-2.  **UTILIZA EL CONTEXTO PROPORCIONADO POR EL USUARIO (EL JSON ARRIBA) COMO GUÍA PRINCIPAL.** Tu objetivo es generar un nuevo informe de análisis que incorpore las correcciones, adiciones y el entendimiento del usuario, siempre que sea consistente con la evidencia visual de las imágenes originales.
-    *   **Nombre del Escenario:** Utiliza el "Nombre_del_Escenario" del JSON proporcionado por el usuario.
-    *   **Pasos Analizados:**
-        *   Toma los "Pasos_Analizados" del JSON proporcionado por el usuario como base. Estos pasos ya reflejan el orden, contenido y posibles eliminaciones/adiciones hechas por el usuario.
-        *   Para CADA paso en el JSON del usuario (existente modificado o nuevo):
-            *   Verifica y refina los campos "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", y "resultado_obtenido_paso_y_estado" para asegurar que sean precisos y estén completamente justificados por las IMÁGENES ORIGINALES y la lógica del flujo. Prioriza la intención del usuario, pero corrige si contradice claramente la evidencia visual o las buenas prácticas de QA.
-            *   Asegúrate de que el campo "imagen_referencia_entrada" sea preciso (ej: "Imagen X", "Imagen X a Imagen Y", o la descripción textual del usuario si es un nuevo paso conceptual) y se refiera a la(s) imagen(es) correcta(s) de la secuencia de entrada original, o que sea lógicamente consistente si es un nuevo paso.
-            *   Si el usuario añadió un nuevo paso, interprétalo en el contexto del flujo general y las imágenes. Su "imagen_referencia_entrada" podría ser "Imagen 3.5" conceptualmente, o "Nueva observación después de Imagen 2".
-        *   Re-numera secuencialmente el campo "numero_paso" para los pasos resultantes en tu nuevo análisis final, partiendo desde 1.
-    *   **Resultado Esperado General del Flujo:** Utiliza el "Resultado_Esperado_General_Flujo" del JSON proporcionado por el usuario.
-3.  **GENERA UNA NUEVA "Conclusion_General_Flujo"** que refleje el flujo re-analizado, los pasos refinados y el contexto proporcionado por el usuario.
-4.  **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
-    *   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto de escenario (este objeto representará el escenario refinado).
-    *   El objeto de escenario debe tener EXACTAMENTE las siguientes propiedades: "Nombre_del_Escenario", "Pasos_Analizados" (que es un array de objetos de paso), "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
-    *   Cada objeto de paso en "Pasos_Analizados" debe tener EXACTAMENTE: "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" (string, puede ser "N/A"), "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
-    *   NO incluyas absolutamente NINGÚN texto fuera del array JSON. La respuesta debe comenzar con '[' y terminar con ']'.
+**TU NUEVA Y CRUCIAL TAREA DE REFINAMIENTO Y GENERACIÓN:**
 
-**CASO DE IMÁGENES NO INTERPRETABLES / FLUJO INCOMPRENSIBLE (Incluso con contexto):**
-Si, a pesar del contexto del usuario, la secuencia de imágenes sigue siendo demasiado ambigua para un análisis razonable, responde con el JSON de error estándar para "Secuencia de imágenes no interpretable" como se definió en prompts anteriores.
+1.  **INTERPRETACIÓN GUIADA POR EL USUARIO:**
+    *   **Prioriza el "user_provided_additional_context":** Este texto es la clave para entender las correcciones o el enfoque deseado por el usuario. Úsalo para reinterpretar la secuencia de pasos, los resultados esperados de cada paso y el propósito general del flujo. Si este contexto contradice tu interpretación inicial de las imágenes o de los pasos editados por el usuario (sin contexto adicional), la guía del "user_provided_additional_context" debe prevalecer, siempre que sea lógicamente aplicable a las imágenes.
+    *   **Adopta el "Nombre_del_Escenario" proporcionado por el usuario.**
+
+2.  **RE-ANÁLISIS DE LOS "Pasos_Analizados" (SEGÚN EDICIÓN DEL USUARIO Y TU EXPERTICIA):**
+    *   Los "Pasos_Analizados" en el JSON del usuario son la secuencia definitiva que debes evaluar.
+    *   Para CADA paso de esta secuencia:
+        *   Valida la "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" y, muy importante, el "resultado_esperado_paso" (provisto por el usuario para ese paso) contra la(s) imagen(es) referenciada(s) Y el "user_provided_additional_context".
+        *   Si el "user_provided_additional_context" ofrece una nueva perspectiva sobre un paso, aplícala.
+        *   Basado en tu análisis de la imagen y el contexto del usuario, determina el "resultado_obtenido_paso_y_estado" más preciso para cada paso.
+        *   Interpreta correctamente las referencias en "imagen_referencia_entrada".
+    *   **Re-numera secuencialmente** el campo "numero_paso" en tu JSON de salida final (comenzando en 1) para reflejar el orden final de los pasos.
+
+3.  **GENERACIÓN DE UN NUEVO "Resultado_Esperado_General_Flujo" (BASADO EN TU ANÁLISIS REFINADO):**
+    *   Después de re-analizar los pasos bajo la guía del "user_provided_additional_context" y la edición de los pasos por el usuario:
+    *   **Sintetiza y redacta un NUEVO "Resultado_Esperado_General_Flujo"** para tu informe.
+    *   Este nuevo campo debe describir concisamente lo que el flujo (la secuencia de pasos analizada y validada con las imágenes y el contexto del usuario) está realmente diseñado para probar o lograr.
+    *   Debe ser una consecuencia lógica de los "Pasos_Analizados" finales y el "user_provided_additional_context". El "Resultado_Esperado_General_Flujo" original del usuario es una entrada para tu comprensión, pero tu salida para este campo debe ser tu conclusión experta post-análisis.
+
+4.  **GENERACIÓN DE UNA NUEVA "Conclusion_General_Flujo":**
+    *   Basándote en tu NUEVO "Resultado_Esperado_General_Flujo" y los "Pasos_Analizados" finales (con sus estados):
+    *   Evalúa si el flujo, tal como se ha re-analizado, es exitoso, fallido o tiene desviaciones, y explica brevemente por qué. Esta conclusión debe ser coherente con tu análisis completo.
+
+**FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
+*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto de escenario.
+*   El objeto de escenario debe tener EXACTAMENTE: "Nombre_del_Escenario", "Pasos_Analizados" (array de objetos de paso), "Resultado_Esperado_General_Flujo" (REGENERADO POR TI, BASADO EN TU ANÁLISIS REFINADO), "Conclusion_General_Flujo" (REGENERADA POR TI).
+*   Cada objeto de paso en "Pasos_Analizados" debe tener EXACTAMENTE: "numero_paso" (re-numerado secuencialmente), "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
+*   NO incluyas NINGÚN texto fuera del array JSON.
+
+**CASO DE CONTRADICCIÓN IRRECONCILIABLE O IMÁGENES NO INTERPRETABLES:**
+Si el "user_provided_additional_context" o los pasos editados por el usuario son imposibles de reconciliar con la evidencia visual clara, o las imágenes son inanalizables, responde con el JSON de error estándar para "Secuencia de imágenes no interpretable".
 
 ---
-PROCEDE A GENERAR EL INFORME JSON REFINADO BASADO EN LAS IMÁGENES ORIGINALES Y EL CONTEXTO EDITADO/AMPLIADO POR EL USUARIO.
+PROCEDE A GENERAR EL INFORME JSON REFINADO. TU OBJETIVO ES:
+1.  **CENTRARTE en el "user_provided_additional_context"** como la guía principal del usuario.
+2.  VALIDAR y REFINAR los "Pasos_Analizados" (editados por el usuario) contra las imágenes, aplicando intensamente el "user_provided_additional_context".
+3.  GENERAR un **NUEVO** "Resultado_Esperado_General_Flujo" que refleje tu análisis experto del flujo completo (pasos e imágenes) después de considerar toda la información y guía del usuario.
+4.  GENERAR una **NUEVA** "Conclusion_General_Flujo" coherente con lo anterior.
+5.  Asegurar que todo el informe JSON sea coherente y siga el formato estrictamente.
 `;
-
 
 // NEW: Prompt for comparing image flows
 private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = () => `
@@ -633,10 +653,11 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
   refineFlowAnalysisFromImagesAndContext(
     imagesBase64: string[],
     mimeTypes: string[],
-    editedReport: FlowAnalysisReportItem
+    editedReport: FlowAnalysisReportItem,
+    userReanalysisContext?: string // NUEVO PARÁMETRO
   ): Observable<FlowAnalysisReportItem[]> {
 
-    const reportContextForPrompt = {
+    const reportContextForPrompt: any = { // Cambiado a 'any' temporalmente para añadir el nuevo campo
         Nombre_del_Escenario: editedReport.Nombre_del_Escenario,
         Pasos_Analizados: editedReport.Pasos_Analizados.map((paso, index) => ({
             // numero_paso will be re-generated by AI based on final list, but we send current visual order.
@@ -651,6 +672,12 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
         })),
         Resultado_Esperado_General_Flujo: editedReport.Resultado_Esperado_General_Flujo
     };
+
+    // AÑADIR EL CONTEXTO ADICIONAL DEL USUARIO SI EXISTE
+    if (userReanalysisContext && userReanalysisContext.trim() !== '') {
+        reportContextForPrompt.user_provided_additional_context = userReanalysisContext.trim();
+    }
+
     const editedReportContextJSON = JSON.stringify(reportContextForPrompt, null, 2);
 
     const promptText = this.PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(editedReportContextJSON);
