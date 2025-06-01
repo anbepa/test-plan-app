@@ -7,7 +7,7 @@ import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap, switchMap } from 'rxjs/operators';
 import { Observable, of, Subscription, forkJoin, throwError } from 'rxjs';
 import { saveAs } from 'file-saver';
-import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
+import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component'; // Sigue siendo necesario para el selector
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -24,7 +24,7 @@ interface DraggableFlowImage {
   templateUrl: './test-plan-generator.component.html',
   styleUrls: ['./test-plan-generator.component.css'],
   standalone: true,
-  imports: [ FormsModule, CommonModule, TestCaseGeneratorComponent ]
+  imports: [ FormsModule, CommonModule, TestCaseGeneratorComponent ] // TestCaseGeneratorComponent se usa en el template
 })
 export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
@@ -60,7 +60,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   flowAnalysisErrorGlobal: string | null = null;
   loadingBugComparisonGlobal: boolean = false;
   bugComparisonErrorGlobal: string | null = null;
-
 
   testPlanTitle: string = '';
 
@@ -104,11 +103,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   draggedFlowStep: FlowAnalysisStep | null = null;
   dragOverFlowStepId: string | null = null; 
 
-  // Para drag-and-drop de Test Case Steps en TestPlanGenerator
-  draggedTestCaseStepForPlan: TestCaseStep | null = null;
-  dragOverTestCaseStepIdForPlan: string | null = null;
-
-
   @ViewChild('flowForm') flowFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
   @ViewChild('flowAnalysisImageInput') flowAnalysisImageInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -140,60 +134,31 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.currentGenerationMode = mode;
     this.isModeSelected = true;
     if (mode === 'text' || mode === 'image') {
-      this.showTestCaseGenerator = true;
+      this.showTestCaseGenerator = true; // El componente hijo se encarga de HUs de texto/imágenes
       this.showParentFormComponent = false;
     } else { 
       this.showTestCaseGenerator = false;
-      this.showParentFormComponent = true;
+      this.showParentFormComponent = true; // El padre maneja flujos
       this.onParentGenerationModeChange(); 
     }
-     console.log('selectInitialMode:', {
-        mode: this.currentGenerationMode,
-        isModeSelected: this.isModeSelected,
-        showChild: this.showTestCaseGenerator,
-        showParentForm: this.showParentFormComponent
-      });
-      this.cdr.detectChanges();
+    this.cdr.detectChanges();
   }
 
-  onHuGeneratedFromChild(huData: HUData) {
-    const huWithRegenFields: HUData = {
-        ...huData,
-        showRegenTechniquePicker: false,
-        regenSelectedTechnique: huData.originalInput.selectedTechnique, 
-        userTestCaseReanalysisContext: huData.userTestCaseReanalysisContext || '',
-        isEditingDetailedTestCases: false, // <--- NUEVO: Inicializar
-        userReanalysisContext: huData.userReanalysisContext || '' 
-    };
-    this.huList.push(huWithRegenFields);
+  onHuGeneratedFromChild(huData: HUData) { // Recibe HUData ya finalizada del hijo
+    this.huList.push(huData); // Simplemente añade a la lista
     this.updateTestPlanTitle();
     this.updatePreview();
     this.showTestCaseGenerator = false;
-    this.showParentFormComponent = false; 
     this.currentGenerationMode = null;
     this.isModeSelected = false;
-     console.log('onHuGeneratedFromChild:', {
-        mode: this.currentGenerationMode,
-        isModeSelected: this.isModeSelected,
-        showChild: this.showTestCaseGenerator,
-        showParentForm: this.showParentFormComponent,
-        addedHU: huWithRegenFields
-      });
-      this.cdr.detectChanges();
+    this.cdr.detectChanges();
   }
 
   onGenerationCancelledFromChild() {
     this.showTestCaseGenerator = false;
-    this.showParentFormComponent = false; 
     this.currentGenerationMode = null;
     this.isModeSelected = false;
-     console.log('onGenerationCancelledFromChild:', {
-        mode: this.currentGenerationMode,
-        isModeSelected: this.isModeSelected,
-        showChild: this.showTestCaseGenerator,
-        showParentForm: this.showParentFormComponent
-      });
-      this.cdr.detectChanges();
+    this.cdr.detectChanges();
   }
 
   resetToInitialSelection(): void { 
@@ -230,12 +195,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     } else {
         this.cdr.detectChanges();
     }
-     console.log('resetToInitialSelection (parent form cancel):', {
-        mode: this.currentGenerationMode,
-        isModeSelected: this.isModeSelected,
-        showChild: this.showTestCaseGenerator,
-        showParentForm: this.showParentFormComponent
-      });
   }
 
   onParentGenerationModeChange(): void { 
@@ -630,7 +589,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       userTestCaseReanalysisContext: '',
       isScopeDetailsOpen: false, 
       isScenariosDetailsOpen: false, 
-      isEditingDetailedTestCases: false, // <--- NUEVO: Inicializar
+      isEditingDetailedTestCases: false, // Para flujos, esto no aplica directamente.
       flowAnalysisReport: undefined,
       loadingFlowAnalysis: this.currentGenerationMode === 'flowAnalysis', errorFlowAnalysis: null,
       isFlowAnalysisDetailsOpen: this.currentGenerationMode === 'flowAnalysis', 
@@ -726,8 +685,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  // ----- MÉTODOS DE EDICIÓN/REGENERACIÓN PARA TEXTO/IMAGEN AHORA RESIDEN EN TestCaseGeneratorComponent -----
+  // ----- ESTOS MÉTODOS EN TestPlanGeneratorComponent SE SIMPLIFICAN O ELIMINAN SI CORRESPONDE -----
+
   public toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
-    if (section === 'scope') {
+    if (section === 'scope') { // La edición de alcance sigue aquí si es solo texto
       if (hu.originalInput.generationMode === 'text') {
         hu.editingScope = !hu.editingScope; 
         if (hu.editingScope) hu.isScopeDetailsOpen = true;
@@ -735,50 +697,19 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         alert("El alcance no es aplicable/editable para este modo.");
       }
     } else if (section === 'scenarios') {
-      if (hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image') {
-        // Modificado para llamar a la nueva lógica de edición/regeneración
-        this.toggleEditDetailedTestCases(hu);
-      } else {
-        alert("La edición/regeneración de casos no es aplicable para este modo.");
-      }
+      // Ya no se maneja aquí. El hijo (TestCaseGenerator) se encarga ANTES de emitir.
+      // Si se quisiera permitir "volver a abrir" una HU en el TestCaseGenerator para refinarla
+      // después de haberla añadido al plan, se necesitaría una lógica más compleja aquí
+      // para pasar los datos de vuelta al hijo y manejar su estado.
+      // Por ahora, se asume que TestCaseGenerator finaliza la HU antes de emitirla.
+       alert("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan.");
     }
-    // Ajustar la condición para la actualización de la vista previa
-    if (!hu.editingScope && !hu.isEditingDetailedTestCases) { 
+    if (!hu.editingScope) { 
         this.updatePreview();
     }
     this.cdr.detectChanges();
   }
 
-  public toggleEditDetailedTestCases(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
-      alert("La edición detallada de casos solo aplica a HUs generadas por texto o imagen.");
-      return;
-    }
-
-    hu.isEditingDetailedTestCases = !hu.isEditingDetailedTestCases;
-    if (hu.isEditingDetailedTestCases) {
-      hu.isScenariosDetailsOpen = true; 
-      hu.showRegenTechniquePicker = true; 
-      hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; 
-      hu.userTestCaseReanalysisContext = hu.userTestCaseReanalysisContext || ''; 
-    } else {
-      // Si se cancela la edición detallada (isEditingDetailedTestCases pasa a false)
-      hu.showRegenTechniquePicker = false; // Ocultar el picker
-      // Si se quiere revertir cambios no guardados, se necesitaría un snapshot.
-      // Por ahora, los cambios no confirmados se pierden o se mantienen si el modelo está bindeado.
-      this.updatePreview(); 
-    }
-    this.cdr.detectChanges();
-  }
-
-  public cancelDetailedTestCasesEditing(hu: HUData): void {
-    // Aquí se podría implementar la reversión a un snapshot si se almacenó.
-    hu.isEditingDetailedTestCases = false;
-    hu.showRegenTechniquePicker = false; // Asegurar que el picker también se oculte
-    hu.errorScenarios = null; 
-    this.cdr.detectChanges();
-    // No se actualiza la preview aquí porque los cambios editados no se confirmaron.
-  }
 
   public toggleStaticEdit(baseName: StaticSectionBaseName): void {
     let editingProp: keyof TestPlanGeneratorComponent, detailsOpenProp: keyof TestPlanGeneratorComponent;
@@ -802,112 +733,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  public startScenarioRegeneration(hu: HUData): void { //Esta función ahora es más para el picker inicial
-    if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
-      alert("Regeneración solo para HUs de texto/imágenes."); return;
-    }
-    hu.isEditingDetailedTestCases = false; // Asegurar que no esté en modo edición detallada
-    hu.showRegenTechniquePicker = true; 
-    hu.isScenariosDetailsOpen = true; 
-    hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; 
-    hu.userTestCaseReanalysisContext = hu.userTestCaseReanalysisContext || ''; 
-    hu.errorScenarios = null; 
-    this.cdr.detectChanges();
-  }
-
-  public cancelScenarioRegeneration(hu: HUData): void { // Para cancelar el picker sin edición detallada
-    hu.showRegenTechniquePicker = false; 
-    hu.isEditingDetailedTestCases = false; // Asegurar que también se apague
-    hu.errorScenarios = null;
-    this.cdr.detectChanges();
-  }
-
-  public confirmRegenerateScenarios(hu: HUData): void {
-    if (!hu.regenSelectedTechnique) { 
-        hu.errorScenarios = 'Debes seleccionar una técnica para regenerar.'; 
-        this.cdr.detectChanges(); 
-        return; 
-    }
-    if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
-        hu.errorScenarios = 'Regeneración/Refinamiento solo para HUs de texto o imágenes.';
-        this.cdr.detectChanges();
-        return;
-    }
-
-    hu.loadingScenarios = true; 
-    hu.errorScenarios = null;
-
-    // Asegurar que los pasos de los casos de prueba editados tengan contenido o un placeholder
-    if (hu.isEditingDetailedTestCases && hu.detailedTestCases) {
-        hu.detailedTestCases.forEach(tc => {
-            if (!tc.steps) tc.steps = [];
-            tc.steps.forEach(step => {
-                if (!step.accion || step.accion.trim() === '') {
-                    step.accion = "Acción no definida por el usuario."; // Placeholder
-                }
-            });
-        });
-    }
-    
-    let regenerationObs$: Observable<DetailedTestCase[]>;
-
-    if (hu.isEditingDetailedTestCases) { // Si se estaban editando los casos detallados
-        regenerationObs$ = this.geminiService.refineDetailedTestCases(
-            hu.originalInput,
-            hu.detailedTestCases, // Casos editados
-            hu.regenSelectedTechnique,
-            hu.userTestCaseReanalysisContext
-        );
-    } else { // Flujo de regeneración original (sin edición detallada activa, solo picker)
-        if (hu.originalInput.generationMode === 'image' && hu.originalInput.imagesBase64?.length) {
-            regenerationObs$ = this.geminiService.generateDetailedTestCasesImageBased(hu.originalInput.imagesBase64, hu.originalInput.imageMimeTypes!, hu.regenSelectedTechnique, hu.userTestCaseReanalysisContext);
-        } else if (hu.originalInput.generationMode === 'text' && hu.originalInput.description && hu.originalInput.acceptanceCriteria) {
-            regenerationObs$ = this.geminiService.generateDetailedTestCasesTextBased(hu.originalInput.description, hu.originalInput.acceptanceCriteria!, hu.regenSelectedTechnique, hu.userTestCaseReanalysisContext);
-        } else {
-            hu.errorScenarios = "Datos originales insuficientes para regenerar."; hu.loadingScenarios = false; this.cdr.detectChanges(); return;
-        }
-    }
-    
-    // Actualizar técnica seleccionada en originalInput para consistencia si se regenera/refina
-    hu.originalInput.selectedTechnique = hu.regenSelectedTechnique;
-
-    regenerationObs$.pipe(
-        tap(generatedOrRefinedTestCases => {
-            hu.detailedTestCases = generatedOrRefinedTestCases.map(tc => ({ 
-                ...tc,
-                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                    numero_paso: s.numero_paso || (i + 1),
-                    accion: s.accion || "Paso no descrito tras procesamiento"
-                })) : [{numero_paso: 1, accion: "Pasos no retornados en formato esperado."}] // Fallback
-            }));
-            hu.generatedTestCaseTitles = this.formatSimpleScenarioTitles(generatedOrRefinedTestCases.map(tc => tc.title));
-            
-            if (generatedOrRefinedTestCases?.length === 1 && (
-                generatedOrRefinedTestCases[0].title === "Información Insuficiente" || 
-                generatedOrRefinedTestCases[0].title === "Imágenes no interpretables o técnica no aplicable" || 
-                generatedOrRefinedTestCases[0].title === "Refinamiento no posible con el contexto actual" ||
-                generatedOrRefinedTestCases[0].title?.startsWith("Error")
-            )) {
-                hu.errorScenarios = `${generatedOrRefinedTestCases[0].title}: ${generatedOrRefinedTestCases[0].preconditions || (generatedOrRefinedTestCases[0].steps && generatedOrRefinedTestCases[0].steps[0] ? generatedOrRefinedTestCases[0].steps[0].accion : 'Detalles no disponibles.')}`;
-            }
-            hu.showRegenTechniquePicker = false; 
-            hu.isEditingDetailedTestCases = false; // Salir del modo de edición detallada
-        }),
-        catchError(error => {
-            hu.errorScenarios = (typeof error === 'string' ? error : error.message) || 'Error procesando casos de prueba.';
-            // No sobreescribir los detailedTestCases si ya hay edición del usuario, para no perderla.
-            // Si no había edición (regeneración simple), sí se podría poner un caso de error.
-            if (!hu.isEditingDetailedTestCases) { // Solo si no estaba editando, para no perder trabajo
-                 hu.detailedTestCases = [{ title: "Error Crítico", preconditions: hu.errorScenarios ?? "Error desconocido", steps: [{numero_paso: 1, accion: "Error."}], expectedResults: "N/A" }];
-                 hu.generatedTestCaseTitles = "Error al procesar.";
-            }
-            return of(hu.detailedTestCases); // Devolver los casos existentes para no perderlos
-        }),
-        finalize(() => { hu.loadingScenarios = false; this.updatePreview(); this.cdr.detectChanges(); })
-    ).subscribe();
-  }
-
-  public regenerateScope(hu: HUData): void {
+  public regenerateScope(hu: HUData): void { // Sigue siendo relevante para HUs de texto
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
       alert('Alcance solo se regenera para HUs con descripción/criterios.'); return;
     }
@@ -920,6 +746,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       ).subscribe();
   }
 
+  // --- Métodos de Regeneración para FlowAnalysis y BugComparison (permanecen aquí) ---
   public regenerateFlowAnalysis(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.originalInput.imagesBase64?.length || !hu.flowAnalysisReport?.length) {
         alert("Solo se puede re-analizar un flujo con imágenes y un informe previo."); return;
@@ -939,6 +766,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         catchError(error => {
             hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
+            // Mantener el reporte anterior si falla el refinamiento, o poner un error si no hay nada
             hu.flowAnalysisReport = hu.flowAnalysisReport || [{ Nombre_del_Escenario: "Error Crítico en Re-Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "Re-análisis fallido." }];
             return of(hu.flowAnalysisReport);
         }),
@@ -1251,7 +1079,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                  if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
                     fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Pasos:</strong></p>\n<ul style="margin-left:30px;">`;
                     report.Pasos_Analizados.forEach((paso) => {
-                        fullPlanHtmlContent += `<li>Paso ${paso.numero_paso}: ${escapeHtml(paso.descripcion_accion_observada)} (Ref. IA: ${escapeHtml(paso.imagen_referencia_entrada)}, Elemento IA: ${escapeHtml(paso.elemento_clave_y_ubicacion_aproximada)})<br>\n`;
+                        fullPlanHtmlContent += `<li>Paso ${paso.numero_paso}: ${escapeHtml(paso.descripcion_accion_observada)} (Ref. IA: ${escapeHtml(paso.imagen_referencia_entrada)}, Elem.IA: ${escapeHtml(paso.elemento_clave_y_ubicacion_aproximada)})<br>\n`;
                         fullPlanHtmlContent += `      <em>Dato de Entrada (Paso):</em> ${escapeHtml(paso.dato_de_entrada_paso || 'N/A')}<br>\n`;
                         fullPlanHtmlContent += `      <em>Resultado Esperado (Paso):</em> ${escapeHtml(paso.resultado_esperado_paso)}<br>\n`;
                         fullPlanHtmlContent += `      <em>Resultado Obtenido (Paso):</em> ${escapeHtml(paso.resultado_obtenido_paso_y_estado)}</li>\n`;
@@ -1352,7 +1180,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public exportExecutionMatrix(hu: HUData): void {
-    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases?.length || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || !tc.steps || tc.steps.length === 0)) {
+    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases?.length || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || tc.title === "Refinamiento no posible con el contexto actual" || !tc.steps || tc.steps.length === 0)) {
       alert('No hay casos de prueba válidos para exportar, el tipo de HU no genera matriz de ejecución, o los casos generados indican un error.'); return;
     }
     const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
@@ -1524,95 +1352,4 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         b.titulo_bug.startsWith("Error Crítico") ||
         b.titulo_bug.startsWith("Error en el Análisis de Imágenes") 
     );
-
-  // --- Funciones para drag-and-drop de Test Case Steps en TestPlanGenerator ---
-  public addTestCaseStepForPlan(testCase: DetailedTestCase, hu: HUData): void {
-    if (!testCase.steps) testCase.steps = [];
-    testCase.steps.push({ numero_paso: testCase.steps.length + 1, accion: '' });
-    this.cdr.detectChanges();
-    this.updatePreview(); 
-  }
-
-  public deleteTestCaseStepForPlan(testCase: DetailedTestCase, stepIndex: number, hu: HUData): void {
-    if (testCase.steps) {
-      testCase.steps.splice(stepIndex, 1);
-      testCase.steps.forEach((step: TestCaseStep, idx: number) => step.numero_paso = idx + 1);
-      this.cdr.detectChanges();
-      this.updatePreview();
-    }
-  }
-
-  public getTestCaseStepDragIdForPlan(huId: string, tcIndex: number, step: TestCaseStep, testCase: DetailedTestCase): string {
-    const stepIndex = testCase.steps.indexOf(step);
-    return `plan-${huId}-tc-${tcIndex}-step-${stepIndex}`;
-  }
-
-  public onTestCaseStepDragStartForPlan(event: DragEvent, step: TestCaseStep, testCase: DetailedTestCase): void {
-    this.draggedTestCaseStepForPlan = step;
-    if (event.dataTransfer) {
-      const stepIndex = testCase.steps.indexOf(step);
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', stepIndex.toString());
-      const targetEl = event.target as HTMLElement;
-      const rowEl = targetEl.closest('tr');
-      if(rowEl) rowEl.style.opacity = '0.4';
-    }
-  }
-
-  public onTestCaseStepDragOverForPlan(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase, huId: string, tcIndex: number): void {
-    event.preventDefault();
-    if(this.draggedTestCaseStepForPlan && event.dataTransfer && targetStep) {
-        event.dataTransfer.dropEffect = 'move';
-        this.dragOverTestCaseStepIdForPlan = this.getTestCaseStepDragIdForPlan(huId, tcIndex, targetStep, testCase);
-    } else if (!targetStep && event.dataTransfer) { // Permite dropear al final si no hay targetStep específico
-        event.dataTransfer.dropEffect = 'move';
-        this.dragOverTestCaseStepIdForPlan = `plan-${huId}-tc-${tcIndex}-dropzone-end`;
-    }
-  }
-  
-  public onTestCaseStepDragLeaveForPlan(event: DragEvent): void {
-    this.dragOverTestCaseStepIdForPlan = null;
-  }
-
-  public onTestCaseStepDropForPlan(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase, hu: HUData, tcIndex: number): void {
-    event.preventDefault();
-    this.dragOverTestCaseStepIdForPlan = null;
-    document.querySelectorAll('.test-case-steps-table-for-plan tbody tr[style*="opacity: 0.4"]')
-        .forEach(el => (el as HTMLElement).style.opacity = '1');
-
-    if (!this.draggedTestCaseStepForPlan || !testCase.steps) { // testCase.steps.length === 0 ya está cubierto
-        this.draggedTestCaseStepForPlan = null; return;
-    }
-    
-    const fromIndex = testCase.steps.indexOf(this.draggedTestCaseStepForPlan);
-    let toIndex = -1;
-
-    if (targetStep) { // Si se suelta sobre un paso existente
-        if (this.draggedTestCaseStepForPlan === targetStep) { this.draggedTestCaseStepForPlan = null; return; }
-        toIndex = testCase.steps.indexOf(targetStep);
-    } else { // Si se suelta en la zona de drop general (ej. al final de la tabla)
-        toIndex = testCase.steps.length; // Para añadir al final
-    }
-
-
-    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-        const itemToMove = testCase.steps.splice(fromIndex, 1)[0];
-        if (targetStep) {
-            testCase.steps.splice(toIndex, 0, itemToMove);
-        } else { // Añadir al final si no hay targetStep (toIndex es length)
-            testCase.steps.push(itemToMove);
-        }
-        testCase.steps.forEach((s: TestCaseStep, i: number) => s.numero_paso = i + 1);
-        this.cdr.detectChanges();
-        this.updatePreview();
-    }
-    this.draggedTestCaseStepForPlan = null;
-  }
-
-  public onTestCaseStepDragEndForPlan(event: DragEvent): void {
-     document.querySelectorAll('.test-case-steps-table-for-plan tbody tr[style*="opacity: 0.4"]')
-        .forEach(el => (el as HTMLElement).style.opacity = '1');
-    this.draggedTestCaseStepForPlan = null;
-    this.dragOverTestCaseStepIdForPlan = null;
-  }
 }

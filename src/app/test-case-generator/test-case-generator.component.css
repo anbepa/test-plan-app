@@ -74,11 +74,15 @@
     box-shadow: 0 0 0 0.2rem rgba(138, 155, 140, 0.25);
     outline: none;
 }
+.form-group input[readonly] {
+    background-color: #e9ecef;
+    color: #6c757d;
+}
 .form-group textarea,
 textarea.form-control {
     resize: vertical;
     min-height: 80px;
-    font-family: inherit; /* Asegurar herencia de fuente */
+    font-family: inherit; 
 }
 .form-group input[type="file"] {
     width: 100%;
@@ -180,6 +184,7 @@ textarea.form-control {
 
 .required-indicator { color: #dc3545; margin-left: 4px; font-weight: bold; }
 .validation-error { color: #dc3545; font-size: 0.85em; margin-top: 5px; }
+.validation-error.small-error-text { font-size: 0.8em; margin-top: 3px; }
 
 /* --- Botones (Generales para este componente) --- */
 .button-primary, .button-secondary, .button-cancel, .button-generate {
@@ -189,7 +194,7 @@ textarea.form-control {
     cursor: pointer;
     font-size: 0.95em; 
     font-weight: 600;
-    transition: background-color 0.2s ease, transform 0.1s ease;
+    transition: background-color 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -207,22 +212,40 @@ textarea.form-control {
     font-size: 1em;
 }
 .button-primary:hover { background-color: #3b5a6b; transform: translateY(-1px); }
-.button-primary:disabled { background-color: #adb5bd; cursor: not-allowed; transform: none; }
+.button-primary:disabled, .button-secondary:disabled, .button-cancel:disabled, .button-generate:disabled { 
+    background-color: #adb5bd; 
+    color: #6c757d;
+    cursor: not-allowed; 
+    transform: none; 
+    opacity: 0.7;
+}
+.button-secondary:disabled { background-color: #e9ecef; }
+
 
 .button-secondary { background-color: #e9ecef; color: #343a40; }
-.button-secondary:hover { background-color: #dee2e6; transform: translateY(-1px); }
+.button-secondary:hover:not(:disabled) { background-color: #dee2e6; transform: translateY(-1px); }
 
 .button-cancel { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
-.button-cancel:hover { background-color: #f1c0c5; }
+.button-cancel:hover:not(:disabled) { background-color: #f1c0c5; }
 
 .button-generate { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc;}
-.button-generate:hover { background-color: #b8dfc9; }
+.button-generate:hover:not(:disabled) { background-color: #b8dfc9; }
 
 
 /* --- Mensajes de Error y Spinner (Generales) --- */
 .error-message { background-color: #ffebe8; color: #dc3545; border: 1px solid #f0b4b4; padding: 12px; margin-top: 20px; border-radius: 5px; text-align: center; font-weight: 500; }
 .error-message p { margin: 0; }
 .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #4a6d7c; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; margin-right: 8px; vertical-align: text-bottom; }
+.spinner-inline {
+    border: 2px solid #e0e0e0; 
+    border-top: 2px solid #4a6d7c; 
+    border-radius: 50%; 
+    width: 14px; height: 14px; 
+    animation: spin 1s linear infinite; 
+    display: inline-block; 
+    margin-right: 6px; 
+    vertical-align: middle;
+}
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 /* --- Sección de Edición de Casos de Prueba Generados --- */
@@ -236,7 +259,7 @@ textarea.form-control {
 }
 .generated-test-cases-editor > h3 { 
     color: #3b5a6b; 
-    font-size: 1.6em; 
+    font-size: 1.4em; /* Ligeramente más pequeño para este contexto */
     margin-top: 0;
     margin-bottom: 20px;
     padding-bottom: 10px;
@@ -266,6 +289,35 @@ textarea.form-control {
     color: #343a40;
     margin-top: 0; 
 }
+.scope-display-section pre.loading-text {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.refinement-controls {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 25px;
+}
+.refinement-controls h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #4a6d7c;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+.refinement-controls .form-group {
+    margin-bottom: 15px;
+}
+.refinement-controls .actions.refinement-actions {
+    border-top: none;
+    padding-top: 5px;
+    margin-top: 0;
+    justify-content: flex-start;
+}
+
 
 .test-case-edit-card {
     background-color: #fdfdff; 
@@ -331,7 +383,7 @@ textarea.form-control {
     font-size: 0.95em;
     padding: 10px;
     background-color: #fff; 
-    font-family: inherit; /* Asegurar herencia de fuente */
+    font-family: inherit;
 }
 
 .test-case-edit-card h5 { 
@@ -340,14 +392,13 @@ textarea.form-control {
     margin-bottom: 10px;
     font-size: 1.05em;
     font-weight: 600;
-    /* No flex para que el botón de añadir esté debajo */
 }
 
 /* Tabla de Pasos del Caso de Prueba */
 .detailed-test-cases-table-container {
     width: 100%;
     overflow-x: auto;
-    margin-bottom: 10px; /* Reducir margen inferior para acercar botón Añadir Paso */
+    margin-bottom: 10px; 
     border: 1px solid #dee2e6; 
     border-radius: 5px;
     background-color: #fff; 
@@ -379,19 +430,19 @@ textarea.form-control {
     width: 100%;
     box-sizing: border-box;
     padding: 8px 10px; 
-    font-size: 0.95em; /* Mantener un buen tamaño de fuente */
+    font-size: 0.95em; 
     border-radius: 4px;
     border: 1px solid #ced4da;
     min-height: 40px; 
     line-height: 1.5;
-    resize: vertical; /* Permitir que crezca verticalmente */
-    overflow-y: hidden; /* Ocultar scrollbar vertical hasta que sea necesario */
-    font-family: inherit; /* Asegurar herencia de fuente */
+    resize: vertical; 
+    overflow-y: hidden; 
+    font-family: inherit; 
 }
 .test-case-steps-table textarea.table-input:focus {
     border-color: #8a9b8c;
     box-shadow: 0 0 0 0.15rem rgba(138, 155, 140, 0.2);
-    overflow-y: auto; /* Mostrar scroll si el contenido excede */
+    overflow-y: auto; 
 }
 .test-case-steps-table td.action-cell { 
     text-align: center;
@@ -426,25 +477,32 @@ textarea.form-control {
     height: 1.3em;
 }
 
-.add-step-action-container { /* Contenedor para el botón Añadir Paso */
-    margin-top: 10px; /* Espacio después de la tabla */
-    margin-bottom: 15px; /* Espacio antes del siguiente campo */
-    text-align: left; /* Alineación del botón */
+.add-step-action-container { 
+    margin-top: 10px; 
+    margin-bottom: 15px; 
+    text-align: left; 
 }
 .add-step-button { 
     background-color: #e0e7ff; 
     border: 1px solid #c7d2fe;
     color: #4338ca; 
-    padding: 7px 15px !important; /* Más padding horizontal */
+    padding: 7px 15px !important; 
     font-weight: 500;
 }
 .add-step-button svg {
     width: 1.2em;
     height: 1.2em;
-    margin-right: 6px; /* Espacio entre ícono y texto */
+    margin-right: 6px; 
 }
-.add-step-button:hover {
+.add-step-button:hover:not(:disabled) {
     background-color: #c7d2fe; 
+}
+
+.loading-message-full-editor {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    color: #5c6770;
 }
 
 
@@ -470,6 +528,10 @@ textarea.form-control {
     border-top: 1px solid #e9ecef;
     text-align: center; 
 }
+.form-actions.editor-form-actions.final-confirm-actions {
+    margin-top: 30px; /* Más espacio para el botón final */
+}
+
 .form-actions.editor-form-actions .button-primary {
     width: auto; 
     min-width: 220px; 
@@ -498,6 +560,10 @@ textarea.form-control {
     .generated-test-cases-editor > h3 { font-size: 1.3em; }
     .test-case-edit-card h4 { font-size: 1.1em; }
     .test-case-steps-table th, .test-case-steps-table td { padding: 8px; font-size: 0.85em; }
+    .refinement-controls .actions.refinement-actions button {
+        width: 100%;
+        margin-right: 0;
+    }
 }
 
 @media (max-width: 576px) {

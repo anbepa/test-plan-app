@@ -34,14 +34,16 @@
     </div>
   </section>
 
+  <!-- COMPONENTE HIJO PARA GENERACIÓN DE HU TEXTO/IMAGEN -->
   <app-test-case-generator *ngIf="showTestCaseGenerator"
-    [initialGenerationMode]="currentGenerationMode!"
-    [initialSprint]="currentFlowSprint || ''"
+    [initialGenerationMode]="currentGenerationMode!" 
+    [initialSprint]="currentFlowSprint || ''" 
     (huGenerated)="onHuGeneratedFromChild($event)"
     (generationCancelled)="onGenerationCancelledFromChild()">
   </app-test-case-generator>
 
 
+  <!-- FORMULARIO PADRE PARA GENERACIÓN DE FLUJOS -->
   <section class="form-section" aria-labelledby="flow-form-section-title"
            *ngIf="showParentFormComponent">
     <div class="form-header-actions">
@@ -157,7 +159,7 @@
     </div>
 
     <div class="hu-list-container" *ngIf="huList.length > 0">
-      <div *ngFor="let hu of huList; trackBy: trackHuById" class="hu-card">
+      <div *ngFor="let hu of huList; trackBy: trackHuById" class="hu-card" [id]="'hu-' + hu.id"> <!-- ID para selectores más específicos -->
         <div class="hu-header">
           <h3>
             <ng-container [ngSwitch]="hu.originalInput.generationMode">
@@ -185,175 +187,57 @@
           </div>
         </div>
 
+        <!-- Sección Alcance (Solo para HUs de Texto) -->
         <details class="plan-section-details" #scopeDetailsElement [open]="hu.isScopeDetailsOpen" (toggle)="!hu.editingScope && (hu.isScopeDetailsOpen = scopeDetailsElement.open)" *ngIf="hu.originalInput.generationMode === 'text'">
           <summary class="plan-section-summary"> Alcance <span class="summary-indicators"> <span *ngIf="hu.loadingScope" class="spinner-small"></span> <span *ngIf="hu.errorScope" class="error-status-icon" title="{{ hu.errorScope }}">⚠️</span> </span> </summary>
           <div class="plan-section-content"> <div *ngIf="!hu.editingScope; else editScopeBlock"> <pre class="generated-text">{{ hu.generatedScope || 'No se ha generado alcance.' }}</pre> </div> <ng-template #editScopeBlock> <textarea [(ngModel)]="hu.generatedScope" rows="10" class="scrollable-content"></textarea> </ng-template> <div class="actions"> <button (click)="toggleEdit(hu, 'scope')" class="button-edit"> {{ hu.editingScope ? 'Guardar Alcance' : 'Editar Alcance' }} </button> <button (click)="regenerateScope(hu)" class="button-generate" [disabled]="hu.loadingScope"> <span *ngIf="hu.loadingScope" class="spinner-inline"></span> Regenerar Alcance </button> </div> <div *ngIf="hu.errorScope && !hu.loadingScope" class="validation-error" role="alert">{{hu.errorScope}}</div> </div>
         </details>
 
+        <!-- Sección Casos de Prueba (Solo para HUs de Texto e Imágenes) -->
         <details class="plan-section-details" #scenariosDetailsElement 
                 [open]="hu.isScenariosDetailsOpen" 
-                (toggle)="!(hu.showRegenTechniquePicker || hu.isEditingDetailedTestCases) && (hu.isScenariosDetailsOpen = scenariosDetailsElement.open)"
+                (toggle)="hu.isScenariosDetailsOpen = scenariosDetailsElement.open"
                 *ngIf="hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image'">
-          <summary class="plan-section-summary"> Casos de Prueba <span class="summary-indicators"> <span *ngIf="hu.loadingScenarios && !(hu.showRegenTechniquePicker || hu.isEditingDetailedTestCases)" class="spinner-small"></span> <span *ngIf="hu.errorScenarios && !hu.loadingScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span> </span> </summary>
+          <summary class="plan-section-summary"> Casos de Prueba <span class="summary-indicators"> <span *ngIf="hu.loadingScenarios" class="spinner-small"></span> <span *ngIf="hu.errorScenarios && !hu.loadingScenarios" class="error-status-icon" title="{{ hu.errorScenarios }}">⚠️</span> </span> </summary>
           <div class="plan-section-content">
-            
-            <!-- MODO EDICIÓN DETALLADA DE CASOS DE PRUEBA -->
-            <div *ngIf="hu.isEditingDetailedTestCases">
-              <p style="font-style: italic; margin-bottom:15px;">Editando casos de prueba para <strong>{{ hu.title }}</strong>. Realiza los cambios necesarios en títulos, precondiciones, pasos y resultados esperados. Luego usa las opciones de re-análisis de abajo.</p>
-              
-              <div *ngFor="let tc of hu.detailedTestCases; let tcIndex = index" class="test-case-edit-card-in-plan">
-                <h4>
-                    <span>Caso de Prueba #{{ tcIndex + 1 }}:</span>
-                    <input type="text" class="form-control inline-edit" [(ngModel)]="tc.title" placeholder="Título del Caso de Prueba">
-                </h4>
-                <div class="form-group">
-                    <label for="plan-tcPreconditions-{{hu.id}}-{{tcIndex}}">Precondiciones:</label>
-                    <textarea id="plan-tcPreconditions-{{hu.id}}-{{tcIndex}}" class="form-control" [(ngModel)]="tc.preconditions" rows="2"></textarea>
-                </div>
-
-                <h5>Pasos del Caso de Prueba:
-                    <button type="button" (click)="addTestCaseStepForPlan(tc, hu)" class="button-secondary button-small-icon" title="Añadir Paso">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1.2em; height: 1.2em;"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
-                    </button>
-                </h5>
-                <div class="detailed-test-cases-table-container"
-                    (dragover)="onTestCaseStepDragOverForPlan($event, undefined, tc, hu.id, tcIndex)" 
-                    (dragleave)="onTestCaseStepDragLeaveForPlan($event)"
-                    (drop)="onTestCaseStepDropForPlan($event, undefined, tc, hu, tcIndex)">
-                    <table class="detailed-test-cases-table test-case-steps-table-for-plan">
-                    <thead>
-                        <tr>
-                        <th style="width: 10%;">Paso N°</th>
-                        <th style="width: 70%;">Acción</th>
-                        <th style="width: 20%;">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let step of tc.steps; let stepIndex = index"
-                            [attr.draggable]="true"
-                            (dragstart)="onTestCaseStepDragStartForPlan($event, step, tc)"
-                            (drop)="onTestCaseStepDropForPlan($event, step, tc, hu, tcIndex)"
-                            (dragend)="onTestCaseStepDragEndForPlan($event)"
-                            (dragover)="onTestCaseStepDragOverForPlan($event, step, tc, hu.id, tcIndex)"
-                            (dragleave)="onTestCaseStepDragLeaveForPlan($event)"
-                            [class.drag-over-element]="dragOverTestCaseStepIdForPlan === getTestCaseStepDragIdForPlan(hu.id, tcIndex, step, tc)">
-                        <td>{{ step.numero_paso }}</td>
-                        <td>
-                            <textarea class="form-control table-input" [(ngModel)]="step.accion" rows="1" placeholder="Descripción del paso"></textarea>
-                        </td>
-                        <td>
-                            <button (click)="deleteTestCaseStepForPlan(tc, stepIndex, hu)" class="button-cancel button-small-icon" title="Eliminar Paso">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:1.2em; height:1.2em;"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H14A2.75 2.75 0 0011.25 1H8.75zM10 4.75a.75.75 0 01.75.75V15.5a.75.75 0 01-1.5 0V5.5A.75.75 0 0110 4.75zM7.515 7.31l-.53 7.422a.75.75 0 101.49.107l.53-7.422a.75.75 0 00-1.49-.107zM12.485 7.31a.75.75 0 00-1.49.107l.53 7.422a.75.75 0 101.49-.107l-.53-7.422z" clip-rule="evenodd" /></svg>
-                            </button>
-                        </td>
-                        </tr>
-                        <tr *ngIf="!tc.steps || tc.steps.length === 0">
-                            <td colspan="3" style="text-align: center; font-style: italic;">No hay pasos definidos. Haz clic en el botón '+' para añadir uno.</td>
-                        </tr>
-                    </tbody>
-                    </table>
-                </div>
-
-                <div class="form-group">
-                    <label for="plan-tcExpectedResults-{{hu.id}}-{{tcIndex}}">Resultados Esperados:</label>
-                    <textarea id="plan-tcExpectedResults-{{hu.id}}-{{tcIndex}}" class="form-control" [(ngModel)]="tc.expectedResults" rows="3"></textarea>
-                </div>
+            <div *ngIf="hu.loadingScenarios" class="loading-message"> 
+                <span class="spinner-inline"></span> Cargando casos de prueba... 
+            </div> 
+            <div *ngIf="!hu.loadingScenarios && hu.errorScenarios" class="error-message" role="alert">
+                <p><strong>Error en Casos:</strong> {{ hu.errorScenarios }}</p>
+                 <span *ngIf="hu.detailedTestCases?.[0]?.steps?.[0]?.accion && typeof hu.detailedTestCases[0].steps[0].accion === 'string' &&
+                                     (hu.detailedTestCases[0].steps[0].accion.toLowerCase().includes('api') || hu.detailedTestCases[0].steps[0].accion.toLowerCase().includes('error'))">
+                            <br><small>Respuesta IA: {{ hu.detailedTestCases[0].steps[0]?.accion }}</small>
+                 </span>
+            </div>
+            <div *ngIf="!hu.loadingScenarios && !hu.errorScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0">
+              <div class="detailed-test-cases-table-container">
+                <table class="detailed-test-cases-table">
+                  <thead> <tr> <th>ID Caso</th> <th>Escenario de Prueba (Título)</th> <th>Precondiciones</th> <th>Paso a Paso</th> <th>Resultado Esperado</th> </tr> </thead>
+                  <tbody>
+                    <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
+                      <td>{{ hu.id }}_CP{{ i + 1 }}</td>
+                      <td>{{ tc.title }}</td>
+                      <td><pre class="table-pre">{{ tc.preconditions }}</pre></td>
+                      <td>
+                        <ul style="margin: 0; padding-left: 20px; list-style: decimal;" *ngIf="tc.steps && tc.steps.length > 0">
+                            <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                        </ul>
+                        <span *ngIf="!tc.steps || tc.steps.length === 0">No hay pasos.</span>
+                      </td>
+                      <td><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-
-
-            <!-- MODO VISTA (cuando no se está editando detalladamente Y no está el picker de regeneración simple) -->
-            <div *ngIf="!hu.isEditingDetailedTestCases && !hu.showRegenTechniquePicker">
-                <div *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0 && !hu.errorScenarios && 
-                            hu.detailedTestCases[0] && hu.detailedTestCases[0].steps && hu.detailedTestCases[0].steps.length > 0 &&
-                            hu.detailedTestCases[0]?.title !== 'Información Insuficiente' && 
-                            hu.detailedTestCases[0]?.title !== 'Imágenes no interpretables o técnica no aplicable' &&
-                            hu.detailedTestCases[0]?.title !== 'Refinamiento no posible con el contexto actual' &&
-                            !hu.detailedTestCases[0]?.title?.startsWith('Error')">
-                  <div class="detailed-test-cases-table-container">
-                    <table class="detailed-test-cases-table">
-                      <thead> <tr> <th>ID Caso</th> <th>Escenario de Prueba (Título)</th> <th>Precondiciones</th> <th>Paso a Paso</th> <th>Resultado Esperado</th> </tr> </thead>
-                      <tbody>
-                        <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
-                          <td>{{ hu.id }}_CP{{ i + 1 }}</td>
-                          <td>{{ tc.title }}</td>
-                          <td><pre class="table-pre">{{ tc.preconditions }}</pre></td>
-                          <td>
-                            <ul style="margin: 0; padding-left: 20px; list-style: decimal;" *ngIf="tc.steps && tc.steps.length > 0">
-                                <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
-                            </ul>
-                            <span *ngIf="!tc.steps || tc.steps.length === 0">No hay pasos.</span>
-                          </td>
-                          <td><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-            </div>
-            
-            <!-- Controles de Regeneración (Picker de Técnica y Contexto Adicional) -->
-            <div *ngIf="hu.showRegenTechniquePicker"> 
-                <div class="regen-picker-inline"> 
-                    <label for="regenTechnique-{{hu.id}}">Técnica ISTQB para {{ hu.isEditingDetailedTestCases ? 'Re-Análisis' : 'Regeneración' }}:<span class="required-indicator">*</span></label> 
-                    <select id="regenTechnique-{{hu.id}}" [(ngModel)]="hu.regenSelectedTechnique" name="regenTechnique-{{hu.id}}" class="regen-technique-select form-control" [disabled]="hu.loadingScenarios" required> 
-                        <option value="">Selecciona una técnica</option> 
-                        <option value="Equivalent Partitioning">Partición Equivalente</option> 
-                        <option value="Boundary Value Analysis">Análisis de Valor Límite</option> 
-                        <option value="Decision Table Testing">Tabla de Decisión</option> 
-                        <option value="State Transition Testing">Pruebas de Transición de Estados</option> 
-                    </select>
-                    <div *ngIf="!hu.regenSelectedTechnique && hu.showRegenTechniquePicker && !hu.loadingScenarios" class="validation-error" role="alert"> Debes seleccionar una técnica. </div>
-                    
-                    <label for="userTestCaseReanalysisContext-{{hu.id}}" style="margin-top: 10px;">Contexto adicional para {{ hu.isEditingDetailedTestCases ? 'Re-Análisis con Casos Editados' : 'Regeneración' }} (opcional):</label>
-                    <textarea id="userTestCaseReanalysisContext-{{hu.id}}" name="userTestCaseReanalysisContext-{{hu.id}}"
-                              class="form-control scrollable-content" rows="3"
-                              [(ngModel)]="hu.userTestCaseReanalysisContext"
-                              placeholder="Ej: Considerar flujos alternativos. Si editaste los casos arriba, este contexto ayudará a la IA a entender tus cambios."></textarea>
-
-                    <div class="regen-buttons-container"> 
-                        <button (click)="confirmRegenerateScenarios(hu)" class="button-generate" [disabled]="!hu.regenSelectedTechnique || hu.loadingScenarios"> 
-                            <span *ngIf="hu.loadingScenarios" class="spinner-inline"></span> 
-                            {{ hu.loadingScenarios ? 'Procesando...' : (hu.isEditingDetailedTestCases ? 'Confirmar Cambios y Re-Analizar' : 'Confirmar y Regenerar') }} 
-                        </button> 
-                        <button (click)="hu.isEditingDetailedTestCases ? cancelDetailedTestCasesEditing(hu) : cancelScenarioRegeneration(hu)" class="button-cancel" [disabled]="hu.loadingScenarios">Cancelar</button> 
-                    </div> 
-                    <div *ngIf="hu.errorScenarios && hu.showRegenTechniquePicker && !hu.loadingScenarios" class="validation-error" role="alert"> {{ hu.errorScenarios }} </div> 
-                </div> 
+            <div *ngIf="!hu.loadingScenarios && !hu.errorScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="no-content-message">
+                <p>No se generaron casos de prueba o la respuesta fue vacía.</p>
             </div>
 
-            <!-- Mensajes de error o no datos cuando no se está en modo de edición detallada ni en picker de regeneración -->
-             <div *ngIf="!hu.isEditingDetailedTestCases && !hu.showRegenTechniquePicker">
-                <div *ngIf="hu.loadingScenarios" class="loading-message"> 
-                    <span class="spinner-inline"></span> Cargando casos de prueba... 
-                </div> 
-                <div *ngIf="!hu.loadingScenarios"> 
-                    <pre class="generated-text" 
-                         *ngIf="hu.errorScenarios || 
-                                (!hu.detailedTestCases || hu.detailedTestCases.length === 0) || 
-                                (hu.detailedTestCases?.[0] && (!hu.detailedTestCases[0].steps || hu.detailedTestCases[0].steps.length === 0)) || 
-                                hu.detailedTestCases?.[0]?.title === 'Información Insuficiente' || 
-                                hu.detailedTestCases?.[0]?.title === 'Imágenes no interpretables o técnica no aplicable' || 
-                                hu.detailedTestCases?.[0]?.title === 'Refinamiento no posible con el contexto actual' ||
-                                hu.detailedTestCases?.[0]?.title?.startsWith('Error')">
-                        {{ hu.errorScenarios ? 'Error: ' + hu.errorScenarios : (hu.generatedTestCaseTitles || 'No se han generado escenarios o la HU está en proceso de carga/error.') }}
-                        <span *ngIf="hu.detailedTestCases?.[0]?.steps?.[0]?.accion && typeof hu.detailedTestCases[0].steps[0].accion === 'string' &&
-                                     (hu.detailedTestCases[0].steps[0].accion.toLowerCase().includes('api') || hu.detailedTestCases[0].steps[0].accion.toLowerCase().includes('error'))">
-                            <br>--- Respuesta Recibida (puede contener detalles del error) ---<br>
-                            {{ hu.detailedTestCases[0].steps[0]?.accion }}
-                        </span>
-                    </pre> 
-                </div> 
-            </div>
-
-            <!-- Botones de acción principales (Editar/Regenerar, Exportar) -->
-            <div class="actions" *ngIf="!hu.showRegenTechniquePicker"> 
-                <button (click)="toggleEdit(hu, 'scenarios')" class="button-edit" [disabled]="hu.loadingScenarios"> 
-                   {{ hu.isEditingDetailedTestCases ? 'Finalizar Edición Casos' : 'Editar/Regenerar Casos' }}
-                </button> 
+            <div class="actions"> 
                 <button (click)="exportExecutionMatrix(hu)" class="button-secondary" 
-                        [disabled]="hu.isEditingDetailedTestCases || !hu.detailedTestCases || hu.detailedTestCases.length === 0 || 
-                                    !hu.detailedTestCases[0]?.steps || hu.detailedTestCases[0].steps.length === 0 || 
+                        [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 || 
                                     hu.detailedTestCases[0].title?.startsWith('Error') || 
                                     hu.detailedTestCases[0].title === 'Información Insuficiente' || 
                                     hu.detailedTestCases[0].title === 'Refinamiento no posible con el contexto actual' ||
@@ -364,10 +248,12 @@
           </div>
         </details>
 
+        <!-- Sección Análisis de Flujo (Solo para modo 'flowAnalysis') -->
         <details class="plan-section-details" #flowAnalysisDetailsElement [open]="hu.isFlowAnalysisDetailsOpen" (toggle)="!hu.isEditingFlowReportDetails && (hu.isFlowAnalysisDetailsOpen = flowAnalysisDetailsElement.open)" *ngIf="hu.originalInput.generationMode === 'flowAnalysis'">
             <summary class="plan-section-summary"> Informe de Análisis de Flujo Inverso <span class="summary-indicators"> <span *ngIf="hu.loadingFlowAnalysis" class="spinner-small"></span> <span *ngIf="hu.errorFlowAnalysis && !hu.loadingFlowAnalysis" class="error-status-icon" title="{{ hu.errorFlowAnalysis }}">⚠️</span> </span> </summary>
             <div class="plan-section-content"> 
-                <div *ngIf="hu.loadingFlowAnalysis" class="loading-message"> <span class="spinner-inline"></span> Analizando flujo de imágenes... </div> 
+                <!-- ... (Contenido de visualización y edición de Análisis de Flujo como estaba antes) ... -->
+                 <div *ngIf="hu.loadingFlowAnalysis" class="loading-message"> <span class="spinner-inline"></span> Analizando flujo de imágenes... </div> 
                 <div *ngIf="hu.errorFlowAnalysis && !hu.loadingFlowAnalysis" class="error-message" role="alert"> 
                     <p><strong>Error en el Análisis:</strong> {{ hu.errorFlowAnalysis }}</p> 
                     <ng-container *ngIf="hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0]) && hu.flowAnalysisReport[0].Pasos_Analizados && hu.flowAnalysisReport[0].Pasos_Analizados.length > 0 && hu.flowAnalysisReport[0].Pasos_Analizados[0].elemento_clave_y_ubicacion_aproximada && hu.flowAnalysisReport[0].Pasos_Analizados[0].elemento_clave_y_ubicacion_aproximada?.includes('Respuesta')"> 
@@ -412,157 +298,160 @@
                         </div> 
                         <ng-template #noStepsAnalyzed> <p>No se pudieron analizar pasos detallados o no se encontraron.</p> </ng-template> 
                         <div *ngIf="hu.isEditingFlowReportDetails" class="actions" style="justify-content: flex-start; margin-top: 10px; border-top:none; padding-top: 5px;"> 
-                            <button (click)="addFlowAnalysisStep(hu, 0)" class="button-secondary button-small-icon" title="Añadir nuevo paso al final"> 
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 5px;"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg> Añadir Paso 
-                            </button> 
-                        </div> 
-                        
-                        <h4>Resultado Esperado General del Flujo:</h4> 
-                        <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editResEsperadoGeneral"> <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo }}</pre> </ng-container> 
-                        <ng-template #editResEsperadoGeneral> <textarea class="form-control full-width-input" [(ngModel)]="hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo" rows="3" placeholder="Resultado Esperado General del Flujo"></textarea> </ng-template> 
-                        
-                        <h4>Conclusión General del Flujo (Generada por IA):</h4> 
-                        <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Conclusion_General_Flujo }}</pre> 
+                          <button (click)="addFlowAnalysisStep(hu, 0)" class="button-secondary button-small-icon" title="Añadir nuevo paso al final"> 
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 5px;"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg> Añadir Paso 
+                        </button> 
                     </div> 
-                    <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0]) && hu.isEditingFlowReportDetails" class="form-group full-width" style="margin-top: 15px;"> 
-                        <label for="userReanalysisContext-{{hu.id}}">Contexto adicional para Re-Análisis (opcional):</label> 
-                        <textarea id="userReanalysisContext-{{hu.id}}" name="userReanalysisContext-{{hu.id}}" class="form-control" rows="3" [(ngModel)]="hu.userReanalysisContext" placeholder="Ej: El paso 3 debería mostrar un error específico..."></textarea> 
+                    
+                    <h4>Resultado Esperado General del Flujo:</h4> 
+                    <ng-container *ngIf="!hu.isEditingFlowReportDetails; else editResEsperadoGeneral"> <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo }}</pre> </ng-container> 
+                    <ng-template #editResEsperadoGeneral> <textarea class="form-control full-width-input" [(ngModel)]="hu.flowAnalysisReport[0].Resultado_Esperado_General_Flujo" rows="3" placeholder="Resultado Esperado General del Flujo"></textarea> </ng-template> 
+                    
+                    <h4>Conclusión General del Flujo (Generada por IA):</h4> 
+                    <pre class="generated-text report-field">{{ hu.flowAnalysisReport[0].Conclusion_General_Flujo }}</pre> 
+                </div> 
+                <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0]) && hu.isEditingFlowReportDetails" class="form-group full-width" style="margin-top: 15px;"> 
+                    <label for="userReanalysisContext-{{hu.id}}">Contexto adicional para Re-Análisis (opcional):</label> 
+                    <textarea id="userReanalysisContext-{{hu.id}}" name="userReanalysisContext-{{hu.id}}" class="form-control" rows="3" [(ngModel)]="hu.userReanalysisContext" placeholder="Ej: El paso 3 debería mostrar un error específico..."></textarea> 
+                </div> 
+                <div class="actions"> 
+                    <button (click)="toggleEditFlowReportDetails(hu)" class="button-edit" [disabled]="hu.loadingFlowAnalysis"> {{ hu.isEditingFlowReportDetails ? 'Finalizar Edición' : 'Editar Informe' }} </button> 
+                    <button (click)="regenerateFlowAnalysis(hu)" class="button-generate" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> <span *ngIf="hu.loadingFlowAnalysis" class="spinner-inline"></span> Re-Analizar Flujo </button> 
+                    <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'es')" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Informe ESP (.html) </button> 
+                    <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'en')" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Informe ENG (.html) </button> 
+                    <button (click)="exportFlowAnalysisReportToCsv(hu)" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Datos (.csv) </button> 
+                </div> 
+            </div> 
+            <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && (!hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport?.[0]))" class="no-content-message"> 
+                <p>No se generó el informe de análisis de flujo o la respuesta fue vacía/errónea.</p> 
+            </div> 
+        </div>
+    </details>
+
+    <!-- Sección Comparación de Flujos (Bugs) (Solo para modo 'flowComparison') -->
+    <details class="plan-section-details" #bugComparisonDetailsElement [open]="hu.isBugComparisonDetailsOpen" (toggle)="hu.isBugComparisonDetailsOpen = bugComparisonDetailsElement.open" *ngIf="hu.originalInput.generationMode === 'flowComparison'">
+        <summary class="plan-section-summary"> Reporte de Comparación de Flujos (Bugs) <span class="summary-indicators"> <span *ngIf="hu.loadingBugComparison" class="spinner-small"></span> <span *ngIf="hu.errorBugComparison && !hu.loadingBugComparison" class="error-status-icon" title="{{ hu.errorBugComparison }}">⚠️</span> </span> </summary>
+        <div class="plan-section-content"> 
+            <!-- ... (Contenido de visualización y edición de Comparación de Flujos como estaba antes) ... -->
+             <div *ngIf="hu.loadingBugComparison" class="loading-message"> <span class="spinner-inline"></span> Comparando flujos y generando reporte de bugs... </div> 
+            <div *ngIf="hu.errorBugComparison && !hu.loadingBugComparison" class="error-message" role="alert"> 
+                <p><strong>Error en la Comparación:</strong> {{ hu.errorBugComparison }}</p> 
+                <ng-container *ngIf="isBugReportInErrorState(hu.bugComparisonReport) && hu.bugComparisonReport && hu.bugComparisonReport.length > 0"> 
+                    <p><small>Título del primer error IA: {{ hu.bugComparisonReport[0]?.titulo_bug }}</small></p> 
+                    <p *ngIf="hu.bugComparisonReport[0]?.resultado_actual"><small>Detalle (Res. Actual): {{ hu.bugComparisonReport[0]?.resultado_actual }}</small></p> 
+                </ng-container> 
+            </div> 
+            <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && !isBugReportInErrorState(hu.bugComparisonReport)"> 
+                <div *ngIf="hu.bugComparisonReport.length === 0" class="no-content-message"> <p>No se encontraron diferencias significativas que ameriten un reporte de bug.</p> </div> 
+                <div *ngIf="hu.bugComparisonReport.length > 0"> 
+                    <div *ngFor="let bug of hu.bugComparisonReport; let i = index" class="bug-report-item-card"> 
+                        <h4>Bug #{{ i + 1 }}: {{ bug.titulo_bug }}</h4> 
+                        <div class="bug-report-grid"> 
+                            <div class="bug-report-field"><strong>Prioridad:</strong> {{ bug.prioridad }}</div> 
+                            <div class="bug-report-field"><strong>Severidad:</strong> {{ bug.severidad }}</div> 
+                            <div class="bug-report-field" *ngIf="bug.fecha_reporte"><strong>Fecha:</strong> {{ bug.fecha_reporte }}</div> 
+                            <div class="bug-report-field full-width" *ngIf="bug.descripcion_diferencia_general"> <strong>Descripción General Diferencia:</strong> <pre class="generated-text report-field">{{ bug.descripcion_diferencia_general }}</pre> </div> 
+                            <div class="bug-report-field full-width"> <strong>Pasos para Reproducir:</strong> 
+                                <ol *ngIf="bug.pasos_para_reproducir && bug.pasos_para_reproducir.length > 0"><li *ngFor="let paso of bug.pasos_para_reproducir">{{ paso.numero_paso }}. {{ paso.descripcion }}</li></ol> 
+                                <p *ngIf="!bug.pasos_para_reproducir || bug.pasos_para_reproducir.length === 0">N/A</p> 
+                            </div> 
+                            <div class="bug-report-field full-width"> <strong>Resultado Esperado:</strong> <small>(Ref. A: {{bug.imagen_referencia_flujo_a || 'N/A'}})</small> <pre class="generated-text report-field">{{ bug.resultado_esperado }}</pre> <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" [alt]="'Imagen Esperada ' + (bug.imagen_referencia_flujo_a || '')" class="flow-step-image"> </div> 
+                            <div class="bug-report-field full-width"> <strong>Resultado Actual:</strong> <small>(Ref. B: {{bug.imagen_referencia_flujo_b || 'N/A'}})</small> <pre class="generated-text report-field">{{ bug.resultado_actual }}</pre> <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" [alt]="'Imagen Actual ' + (bug.imagen_referencia_flujo_b || '')" class="flow-step-image"> </div> 
+                        </div> 
                     </div> 
                     <div class="actions"> 
-                        <button (click)="toggleEditFlowReportDetails(hu)" class="button-edit" [disabled]="hu.loadingFlowAnalysis"> {{ hu.isEditingFlowReportDetails ? 'Finalizar Edición' : 'Editar Informe' }} </button> 
-                        <button (click)="regenerateFlowAnalysis(hu)" class="button-generate" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> <span *ngIf="hu.loadingFlowAnalysis" class="spinner-inline"></span> Re-Analizar Flujo </button> 
-                        <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'es')" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Informe ESP (.html) </button> 
-                        <button (click)="exportFlowAnalysisReportToHtmlLocalized(hu, 'en')" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Informe ENG (.html) </button> 
-                        <button (click)="exportFlowAnalysisReportToCsv(hu)" class="button-secondary" [disabled]="hu.loadingFlowAnalysis || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport ? hu.flowAnalysisReport[0] : undefined)"> Exportar Datos (.csv) </button> 
+                        <button (click)="regenerateBugComparison(hu)" class="button-generate" [disabled]="hu.loadingBugComparison"> <span *ngIf="hu.loadingBugComparison" class="spinner-inline"></span> Re-Analizar Comparación </button> 
+                        <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'es')" class="button-secondary" [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0"> Exportar Reporte ESP (.html) </button> 
+                        <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'en')" class="button-secondary" [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0"> Exportar Reporte ENG (.html) </button> 
                     </div> 
                 </div> 
-                <div *ngIf="!hu.loadingFlowAnalysis && !hu.errorFlowAnalysis && (!hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 || isFlowAnalysisReportInErrorState(hu.flowAnalysisReport?.[0]))" class="no-content-message"> 
-                    <p>No se generó el informe de análisis de flujo o la respuesta fue vacía/errónea.</p> 
-                </div> 
-            </div>
-        </details>
-
-        <details class="plan-section-details" #bugComparisonDetailsElement [open]="hu.isBugComparisonDetailsOpen" (toggle)="hu.isBugComparisonDetailsOpen = bugComparisonDetailsElement.open" *ngIf="hu.originalInput.generationMode === 'flowComparison'">
-            <summary class="plan-section-summary"> Reporte de Comparación de Flujos (Bugs) <span class="summary-indicators"> <span *ngIf="hu.loadingBugComparison" class="spinner-small"></span> <span *ngIf="hu.errorBugComparison && !hu.loadingBugComparison" class="error-status-icon" title="{{ hu.errorBugComparison }}">⚠️</span> </span> </summary>
-            <div class="plan-section-content"> 
-                <div *ngIf="hu.loadingBugComparison" class="loading-message"> <span class="spinner-inline"></span> Comparando flujos y generando reporte de bugs... </div> 
-                <div *ngIf="hu.errorBugComparison && !hu.loadingBugComparison" class="error-message" role="alert"> 
-                    <p><strong>Error en la Comparación:</strong> {{ hu.errorBugComparison }}</p> 
-                    <ng-container *ngIf="isBugReportInErrorState(hu.bugComparisonReport) && hu.bugComparisonReport && hu.bugComparisonReport.length > 0"> 
-                        <p><small>Título del primer error IA: {{ hu.bugComparisonReport[0]?.titulo_bug }}</small></p> 
-                        <p *ngIf="hu.bugComparisonReport[0]?.resultado_actual"><small>Detalle (Res. Actual): {{ hu.bugComparisonReport[0]?.resultado_actual }}</small></p> 
-                    </ng-container> 
-                </div> 
-                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && !isBugReportInErrorState(hu.bugComparisonReport)"> 
-                    <div *ngIf="hu.bugComparisonReport.length === 0" class="no-content-message"> <p>No se encontraron diferencias significativas que ameriten un reporte de bug.</p> </div> 
-                    <div *ngIf="hu.bugComparisonReport.length > 0"> 
-                        <div *ngFor="let bug of hu.bugComparisonReport; let i = index" class="bug-report-item-card"> 
-                            <h4>Bug #{{ i + 1 }}: {{ bug.titulo_bug }}</h4> 
-                            <div class="bug-report-grid"> 
-                                <div class="bug-report-field"><strong>Prioridad:</strong> {{ bug.prioridad }}</div> 
-                                <div class="bug-report-field"><strong>Severidad:</strong> {{ bug.severidad }}</div> 
-                                <div class="bug-report-field" *ngIf="bug.fecha_reporte"><strong>Fecha:</strong> {{ bug.fecha_reporte }}</div> 
-                                <div class="bug-report-field full-width" *ngIf="bug.descripcion_diferencia_general"> <strong>Descripción General Diferencia:</strong> <pre class="generated-text report-field">{{ bug.descripcion_diferencia_general }}</pre> </div> 
-                                <div class="bug-report-field full-width"> <strong>Pasos para Reproducir:</strong> 
-                                    <ol *ngIf="bug.pasos_para_reproducir && bug.pasos_para_reproducir.length > 0"><li *ngFor="let paso of bug.pasos_para_reproducir">{{ paso.numero_paso }}. {{ paso.descripcion }}</li></ol> 
-                                    <p *ngIf="!bug.pasos_para_reproducir || bug.pasos_para_reproducir.length === 0">N/A</p> 
-                                </div> 
-                                <div class="bug-report-field full-width"> <strong>Resultado Esperado:</strong> <small>(Ref. A: {{bug.imagen_referencia_flujo_a || 'N/A'}})</small> <pre class="generated-text report-field">{{ bug.resultado_esperado }}</pre> <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A')" [alt]="'Imagen Esperada ' + (bug.imagen_referencia_flujo_a || '')" class="flow-step-image"> </div> 
-                                <div class="bug-report-field full-width"> <strong>Resultado Actual:</strong> <small>(Ref. B: {{bug.imagen_referencia_flujo_b || 'N/A'}})</small> <pre class="generated-text report-field">{{ bug.resultado_actual }}</pre> <img *ngIf="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" [src]="getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B')" [alt]="'Imagen Actual ' + (bug.imagen_referencia_flujo_b || '')" class="flow-step-image"> </div> 
-                            </div> 
-                        </div> 
-                        <div class="actions"> 
-                            <button (click)="regenerateBugComparison(hu)" class="button-generate" [disabled]="hu.loadingBugComparison"> <span *ngIf="hu.loadingBugComparison" class="spinner-inline"></span> Re-Analizar Comparación </button> 
-                            <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'es')" class="button-secondary" [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0"> Exportar Reporte ESP (.html) </button> 
-                            <button (click)="exportBugComparisonReportToHtmlLocalized(hu, 'en')" class="button-secondary" [disabled]="hu.loadingBugComparison || isBugReportInErrorState(hu.bugComparisonReport) || !hu.bugComparisonReport || hu.bugComparisonReport.length === 0"> Exportar Reporte ENG (.html) </button> 
-                        </div> 
-                    </div> 
-                </div> 
-                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && hu.bugComparisonReport.length === 0 && !isBugReportInErrorState(hu.bugComparisonReport)" class="no-content-message">
-                    <p>No se generó el reporte de comparación o no se encontraron diferencias.</p>
-                </div>
-                <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && isBugReportInErrorState(hu.bugComparisonReport)" class="no-content-message">
-                     <p>El reporte de comparación contiene errores o no se pudo generar correctamente.</p>
-                </div>
-            </div>
-        </details>
-
-      </div>
-    </div> 
-
-    <div class="static-plan-sections-container" *ngIf="huList.length > 0">
-        <div class="section-header"> <h2>Secciones Generales del Plan</h2> </div>
-        <details class="plan-section-details static-block" #repoDetailsElement [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen" (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)"> 
-            <summary class="plan-section-summary">Repositorio Pruebas VSTS</summary> 
-            <div class="plan-section-content"> 
-                <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock"> <pre class="static-text"> <a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a> </pre> </div> 
-                <ng-template #editRepositoryLinkBlock> <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea> </ng-template> 
-                <div class="actions"> <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary"> {{ editingRepositoryLink ? 'Guardar' : 'Editar' }} </button> </div> 
             </div> 
-        </details>
-        <details class="plan-section-details static-block" #outOfScopeDetailsElement [open]="editingOutOfScope || isOutOfScopeDetailsOpen || loadingOutOfScopeAI" (toggle)="!editingOutOfScope && !loadingOutOfScopeAI && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)"> 
-            <summary class="plan-section-summary"> Fuera del Alcance <span class="summary-indicators"> <span *ngIf="loadingOutOfScopeAI" class="spinner-small"></span> <span *ngIf="errorOutOfScopeAI" class="error-status-icon" title="{{ errorOutOfScopeAI }}">⚠️</span> </span> </summary> 
-            <div class="plan-section-content"> 
-                <div *ngIf="!editingOutOfScope; else editOutOfScopeBlock"> <pre class="static-text">{{ outOfScopeContent }}</pre> </div> 
-                <ng-template #editOutOfScopeBlock> <textarea [(ngModel)]="outOfScopeContent" rows="4" class="scrollable-content"></textarea> </ng-template> 
-                <div *ngIf="errorOutOfScopeAI && !loadingOutOfScopeAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorOutOfScopeAI}}</div> 
-                <div class="actions"> <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary" [disabled]="loadingOutOfScopeAI"> {{ editingOutOfScope ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate" [disabled]="loadingOutOfScopeAI || editingOutOfScope"> <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
-            </div> 
-        </details>
-        <details class="plan-section-details static-block" #strategyDetailsElement [open]="editingStrategy || isStrategyDetailsOpen || loadingStrategyAI" (toggle)="!editingStrategy && !loadingStrategyAI && (isStrategyDetailsOpen = strategyDetailsElement.open)"> 
-            <summary class="plan-section-summary"> Estrategia <span class="summary-indicators"> <span *ngIf="loadingStrategyAI" class="spinner-small"></span> <span *ngIf="errorStrategyAI" class="error-status-icon" title="{{ errorStrategyAI }}">⚠️</span> </span> </summary> 
-            <div class="plan-section-content"> 
-                <div *ngIf="!editingStrategy; else editStrategyBlock"> <pre class="static-text">{{ strategyContent }}</pre> </div> 
-                <ng-template #editStrategyBlock> <textarea [(ngModel)]="strategyContent" rows="8" class="scrollable-content"></textarea> </ng-template> 
-                <div *ngIf="errorStrategyAI && !loadingStrategyAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorStrategyAI}}</div> 
-                <div class="actions"> <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="loadingStrategyAI"> {{ editingStrategy ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate" [disabled]="loadingStrategyAI || editingStrategy"> <span *ngIf="loadingStrategyAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
-            </div> 
-        </details>
-        <details class="plan-section-details static-block" #limitationsDetailsElement [open]="editingLimitations || isLimitationsDetailsOpen || loadingLimitationsAI" (toggle)="!editingLimitations && !loadingLimitationsAI && (isLimitationsDetailsOpen = limitationsDetailsElement.open)"> 
-            <summary class="plan-section-summary"> Limitaciones <span class="summary-indicators"> <span *ngIf="loadingLimitationsAI" class="spinner-small"></span> <span *ngIf="errorLimitationsAI" class="error-status-icon" title="{{ errorLimitationsAI }}">⚠️</span> </span> </summary> 
-            <div class="plan-section-content"> 
-                <div *ngIf="!editingLimitations; else editLimitationsBlock"> <pre class="static-text">{{ limitationsContent }}</pre> </div> 
-                <ng-template #editLimitationsBlock> <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea> </ng-template> 
-                <div *ngIf="errorLimitationsAI && !loadingLimitationsAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorLimitationsAI}}</div> 
-                <div class="actions"> <button (click)="toggleStaticEdit('limitations')" class="button-secondary" [disabled]="loadingLimitationsAI"> {{ editingLimitations ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate" [disabled]="loadingLimitationsAI || editingLimitations"> <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
-            </div> 
-        </details>
-        <details class="plan-section-details static-block" #assumptionsDetailsElement
-                 [open]="editingAssumptions || isAssumptionsDetailsOpen || loadingAssumptionsAI"
-                 (toggle)="!editingAssumptions && !loadingAssumptionsAI && (isAssumptionsDetailsOpen = assumptionsDetailsElement.open)">
-            <summary class="plan-section-summary"> Supuestos <span class="summary-indicators"> <span *ngIf="loadingAssumptionsAI" class="spinner-small"></span> <span *ngIf="errorAssumptionsAI" class="error-status-icon" title="{{ errorAssumptionsAI }}">⚠️</span> </span> </summary>
-            <div class="plan-section-content">
-              <div *ngIf="!editingAssumptions; else editAssumptionsBlock"> <pre class="static-text">{{ assumptionsContent }}</pre> </div>
-              <ng-template #editAssumptionsBlock> <textarea [(ngModel)]="assumptionsContent" rows="8" class="scrollable-content"></textarea> </ng-template>
-              <div *ngIf="errorAssumptionsAI && !loadingAssumptionsAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorAssumptionsAI}}</div>
-              <div class="actions"> <button (click)="toggleStaticEdit('assumptions')" class="button-secondary" [disabled]="loadingAssumptionsAI"> {{ editingAssumptions ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate" [disabled]="loadingAssumptionsAI || editingAssumptions"> <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span> Mejorar con IA </button> </div>
+            <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && hu.bugComparisonReport && hu.bugComparisonReport.length === 0 && !isBugReportInErrorState(hu.bugComparisonReport)" class="no-content-message">
+                <p>No se generó el reporte de comparación o no se encontraron diferencias.</p>
             </div>
-        </details>
-        <details class="plan-section-details static-block" #teamDetailsElement [open]="editingTeam || isTeamDetailsOpen" (toggle)="!editingTeam && (isTeamDetailsOpen = teamDetailsElement.open)">
-            <summary class="plan-section-summary">Equipo de Trabajo</summary>
-            <div class="plan-section-content">
-              <div *ngIf="!editingTeam; else editTeamBlock"> <pre class="static-text">{{ teamContent }}</pre> </div>
-              <ng-template #editTeamBlock> <textarea [(ngModel)]="teamContent" rows="8" class="scrollable-content"></textarea> </ng-template>
-              <div class="actions"> <button (click)="toggleStaticEdit('team')" class="button-secondary"> {{ editingTeam ? 'Guardar' : 'Editar' }} </button> </div>
+            <div *ngIf="!hu.loadingBugComparison && !hu.errorBugComparison && isBugReportInErrorState(hu.bugComparisonReport)" class="no-content-message">
+                 <p>El reporte de comparación contiene errores o no se pudo generar correctamente.</p>
             </div>
-        </details>
-    </div> 
-
-    <div class="preview-download-section" *ngIf="huList.length > 0">
-        <div class="preview-section" *ngIf="downloadPreviewHtmlContent">
-          <h2>Previsualización del Plan Descargable (.doc)</h2>
-          <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre>
         </div>
-        <div class="download-actions-container">
-            <button (click)="copyPreviewToClipboard()" class="button-secondary" [disabled]="huList.length === 0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 8px;"><path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.121A1.5 1.5 0 0117 6.621V16.5A1.5 1.5 0 0115.5 18H8.5A1.5 1.5 0 017 16.5v-13z" /><path d="M5 6.5A1.5 1.5 0 016.5 5h3A1.5 1.5 0 0011 3.5V2A1.5 1.5 0 009.5 3.5v10A1.5 1.5 0 0011 15v1.5A1.5 1.5 0 019.5 15h-3A1.5 1.5 0 015 13.5v-7z" /></svg>
-              Copiar Texto del Plan
-            </button>
-            <button (click)="downloadWord()" class="button-primary button-download" [disabled]="huList.length === 0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 8px;"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z" clip-rule="evenodd" /></svg>
-              Descargar Plan Completo (.doc)
-            </button>
+    </details>
+  </div> <!-- Cierre de hu-card -->
+</div> <!-- Cierre de hu-list-container -->
+
+<!-- Secciones Estáticas del Plan -->
+<div class="static-plan-sections-container" *ngIf="huList.length > 0">
+    <div class="section-header"> <h2>Secciones Generales del Plan</h2> </div>
+    <details class="plan-section-details static-block" #repoDetailsElement [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen" (toggle)="!editingRepositoryLink && (isRepositoryLinkDetailsOpen = repoDetailsElement.open)"> 
+        <summary class="plan-section-summary">Repositorio Pruebas VSTS</summary> 
+        <div class="plan-section-content"> 
+            <div *ngIf="!editingRepositoryLink; else editRepositoryLinkBlock"> <pre class="static-text"> <a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a> </pre> </div> 
+            <ng-template #editRepositoryLinkBlock> <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea> </ng-template> 
+            <div class="actions"> <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary"> {{ editingRepositoryLink ? 'Guardar' : 'Editar' }} </button> </div> 
+        </div> 
+    </details>
+    <details class="plan-section-details static-block" #outOfScopeDetailsElement [open]="editingOutOfScope || isOutOfScopeDetailsOpen || loadingOutOfScopeAI" (toggle)="!editingOutOfScope && !loadingOutOfScopeAI && (isOutOfScopeDetailsOpen = outOfScopeDetailsElement.open)"> 
+        <summary class="plan-section-summary"> Fuera del Alcance <span class="summary-indicators"> <span *ngIf="loadingOutOfScopeAI" class="spinner-small"></span> <span *ngIf="errorOutOfScopeAI" class="error-status-icon" title="{{ errorOutOfScopeAI }}">⚠️</span> </span> </summary> 
+        <div class="plan-section-content"> 
+            <div *ngIf="!editingOutOfScope; else editOutOfScopeBlock"> <pre class="static-text">{{ outOfScopeContent }}</pre> </div> 
+            <ng-template #editOutOfScopeBlock> <textarea [(ngModel)]="outOfScopeContent" rows="4" class="scrollable-content"></textarea> </ng-template> 
+            <div *ngIf="errorOutOfScopeAI && !loadingOutOfScopeAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorOutOfScopeAI}}</div> 
+            <div class="actions"> <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary" [disabled]="loadingOutOfScopeAI"> {{ editingOutOfScope ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate" [disabled]="loadingOutOfScopeAI || editingOutOfScope"> <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
+        </div> 
+    </details>
+    <details class="plan-section-details static-block" #strategyDetailsElement [open]="editingStrategy || isStrategyDetailsOpen || loadingStrategyAI" (toggle)="!editingStrategy && !loadingStrategyAI && (isStrategyDetailsOpen = strategyDetailsElement.open)"> 
+        <summary class="plan-section-summary"> Estrategia <span class="summary-indicators"> <span *ngIf="loadingStrategyAI" class="spinner-small"></span> <span *ngIf="errorStrategyAI" class="error-status-icon" title="{{ errorStrategyAI }}">⚠️</span> </span> </summary> 
+        <div class="plan-section-content"> 
+            <div *ngIf="!editingStrategy; else editStrategyBlock"> <pre class="static-text">{{ strategyContent }}</pre> </div> 
+            <ng-template #editStrategyBlock> <textarea [(ngModel)]="strategyContent" rows="8" class="scrollable-content"></textarea> </ng-template> 
+            <div *ngIf="errorStrategyAI && !loadingStrategyAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorStrategyAI}}</div> 
+            <div class="actions"> <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="loadingStrategyAI"> {{ editingStrategy ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate" [disabled]="loadingStrategyAI || editingStrategy"> <span *ngIf="loadingStrategyAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
+        </div> 
+    </details>
+    <details class="plan-section-details static-block" #limitationsDetailsElement [open]="editingLimitations || isLimitationsDetailsOpen || loadingLimitationsAI" (toggle)="!editingLimitations && !loadingLimitationsAI && (isLimitationsDetailsOpen = limitationsDetailsElement.open)"> 
+        <summary class="plan-section-summary"> Limitaciones <span class="summary-indicators"> <span *ngIf="loadingLimitationsAI" class="spinner-small"></span> <span *ngIf="errorLimitationsAI" class="error-status-icon" title="{{ errorLimitationsAI }}">⚠️</span> </span> </summary> 
+        <div class="plan-section-content"> 
+            <div *ngIf="!editingLimitations; else editLimitationsBlock"> <pre class="static-text">{{ limitationsContent }}</pre> </div> 
+            <ng-template #editLimitationsBlock> <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea> </ng-template> 
+            <div *ngIf="errorLimitationsAI && !loadingLimitationsAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorLimitationsAI}}</div> 
+            <div class="actions"> <button (click)="toggleStaticEdit('limitations')" class="button-secondary" [disabled]="loadingLimitationsAI"> {{ editingLimitations ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate" [disabled]="loadingLimitationsAI || editingLimitations"> <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span> Mejorar con IA </button> </div> 
+        </div> 
+    </details>
+    <details class="plan-section-details static-block" #assumptionsDetailsElement
+             [open]="editingAssumptions || isAssumptionsDetailsOpen || loadingAssumptionsAI"
+             (toggle)="!editingAssumptions && !loadingAssumptionsAI && (isAssumptionsDetailsOpen = assumptionsDetailsElement.open)">
+        <summary class="plan-section-summary"> Supuestos <span class="summary-indicators"> <span *ngIf="loadingAssumptionsAI" class="spinner-small"></span> <span *ngIf="errorAssumptionsAI" class="error-status-icon" title="{{ errorAssumptionsAI }}">⚠️</span> </span> </summary>
+        <div class="plan-section-content">
+          <div *ngIf="!editingAssumptions; else editAssumptionsBlock"> <pre class="static-text">{{ assumptionsContent }}</pre> </div>
+          <ng-template #editAssumptionsBlock> <textarea [(ngModel)]="assumptionsContent" rows="8" class="scrollable-content"></textarea> </ng-template>
+          <div *ngIf="errorAssumptionsAI && !loadingAssumptionsAI" class="validation-error" role="alert" style="margin-top: 10px;">{{errorAssumptionsAI}}</div>
+          <div class="actions"> <button (click)="toggleStaticEdit('assumptions')" class="button-secondary" [disabled]="loadingAssumptionsAI"> {{ editingAssumptions ? 'Guardar' : 'Editar' }} </button> <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate" [disabled]="loadingAssumptionsAI || editingAssumptions"> <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span> Mejorar con IA </button> </div>
         </div>
+    </details>
+    <details class="plan-section-details static-block" #teamDetailsElement [open]="editingTeam || isTeamDetailsOpen" (toggle)="!editingTeam && (isTeamDetailsOpen = teamDetailsElement.open)">
+        <summary class="plan-section-summary">Equipo de Trabajo</summary>
+        <div class="plan-section-content">
+          <div *ngIf="!editingTeam; else editTeamBlock"> <pre class="static-text">{{ teamContent }}</pre> </div>
+          <ng-template #editTeamBlock> <textarea [(ngModel)]="teamContent" rows="8" class="scrollable-content"></textarea> </ng-template>
+          <div class="actions"> <button (click)="toggleStaticEdit('team')" class="button-secondary"> {{ editingTeam ? 'Guardar' : 'Editar' }} </button> </div>
+        </div>
+    </details>
+</div> 
+
+<!-- Previsualización y Descarga -->
+<div class="preview-download-section" *ngIf="huList.length > 0">
+    <div class="preview-section" *ngIf="downloadPreviewHtmlContent">
+      <h2>Previsualización del Plan Descargable (.doc)</h2>
+      <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre>
     </div>
-  </section> 
+    <div class="download-actions-container">
+        <button (click)="copyPreviewToClipboard()" class="button-secondary" [disabled]="huList.length === 0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 8px;"><path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.121A1.5 1.5 0 0117 6.621V16.5A1.5 1.5 0 0115.5 18H8.5A1.5 1.5 0 017 16.5v-13z" /><path d="M5 6.5A1.5 1.5 0 016.5 5h3A1.5 1.5 0 0011 3.5V2A1.5 1.5 0 009.5 3.5v10A1.5 1.5 0 0011 15v1.5A1.5 1.5 0 019.5 15h-3A1.5 1.5 0 015 13.5v-7z" /></svg>
+          Copiar Texto del Plan
+        </button>
+        <button (click)="downloadWord()" class="button-primary button-download" [disabled]="huList.length === 0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 8px;"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z" clip-rule="evenodd" /></svg>
+          Descargar Plan Completo (.doc)
+        </button>
+    </div>
+</div>
+</section> 
 </div>
