@@ -1,8 +1,19 @@
-import { DetailedTestCase } from '../services/gemini.service';
+// src/app/models/hu-data.model.ts
 
-// MODIFIED: Added 'flowComparison'
-export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
+// Definiciones para Casos de Prueba Detallados
+export interface TestCaseStep {
+  numero_paso: number;
+  accion: string;
+}
 
+export interface DetailedTestCase {
+  title: string;
+  preconditions: string;
+  steps: TestCaseStep[];
+  expectedResults: string;
+}
+
+// --- Interfaces para Análisis de Flujo ---
 export interface FlowAnalysisStep {
   numero_paso: number;
   descripcion_accion_observada: string;
@@ -20,13 +31,12 @@ export interface FlowAnalysisReportItem {
   Conclusion_General_Flujo: string;
 }
 
-// NEW: BugReportStep interface
+// --- Interfaces para Reporte de Bugs (Comparación de Flujos) ---
 export interface BugReportStep {
   numero_paso: number;
   descripcion: string;
 }
 
-// NEW: BugReportItem interface
 export interface BugReportItem {
   titulo_bug: string;
   id_bug: string;
@@ -43,14 +53,15 @@ export interface BugReportItem {
   pasos_para_reproducir: BugReportStep[];
   resultado_esperado: string;
   resultado_actual: string;
-  imagen_referencia_flujo_a?: string; // e.g., "Imagen A.1"
-  imagen_referencia_flujo_b?: string; // e.g., "Imagen B.1"
+  imagen_referencia_flujo_a?: string;
+  imagen_referencia_flujo_b?: string;
   descripcion_diferencia_general?: string;
 }
 
+// --- Tipo para el Modo de Generación ---
+export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
 
-// ... otras importaciones e interfaces ...
-
+// --- Interfaz Principal HUData ---
 export interface HUData {
   originalInput: {
     id: string;
@@ -58,14 +69,10 @@ export interface HUData {
     sprint: string;
     description?: string;
     acceptanceCriteria?: string;
-    selectedTechnique: string;
+    selectedTechnique: string; 
     generationMode: GenerationMode;
-
-    // For 'image' and 'flowAnalysis'
     imagesBase64?: string[];
     imageMimeTypes?: string[];
-
-    // NEW: For 'flowComparison'
     imagesBase64FlowA?: string[];
     imageMimeTypesFlowA?: string[];
     imagesBase64FlowB?: string[];
@@ -74,35 +81,31 @@ export interface HUData {
   id: string;
   title: string;
   sprint: string;
-
   generatedScope: string;
   detailedTestCases: DetailedTestCase[];
-  generatedTestCaseTitles: string;
-
+  generatedTestCaseTitles: string; 
+  
   editingScope: boolean;
-  editingScenarios: boolean;
-
   loadingScope: boolean;
   errorScope: string | null;
+  isScopeDetailsOpen: boolean;
+
+  editingScenarios: boolean; 
   loadingScenarios: boolean;
   errorScenarios: string | null;
-
-  showRegenTechniquePicker: boolean;
-  regenSelectedTechnique: string;
-
-  isScopeDetailsOpen: boolean;
+  showRegenTechniquePicker: boolean; 
+  regenSelectedTechnique: string; 
+  userTestCaseReanalysisContext: string; 
   isScenariosDetailsOpen: boolean;
+  isEditingDetailedTestCases?: boolean; // NUEVO: Para edición completa en TestPlanGenerator
 
   flowAnalysisReport?: FlowAnalysisReportItem[];
   loadingFlowAnalysis?: boolean;
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
-  isEditingFlowReportDetails?: boolean;
+  isEditingFlowReportDetails?: boolean; 
+  userReanalysisContext?: string;
 
-  // NEW: For user's additional context in flow re-analysis
-  userReanalysisContext?: string; // <<--- ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ PRESENTE Y SEA OPCIONAL
-
-  // NEW: For 'flowComparison' results
   bugComparisonReport?: BugReportItem[];
   loadingBugComparison?: boolean;
   errorBugComparison?: string | null;

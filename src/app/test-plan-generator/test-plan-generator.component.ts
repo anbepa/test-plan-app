@@ -2,15 +2,16 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy, ElementRef, Inject, PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { GeminiService, DetailedTestCase } from '../services/gemini.service';
+import { HUData, GenerationMode, FlowAnalysisReportItem, FlowAnalysisStep, BugReportItem, DetailedTestCase, TestCaseStep } from '../models/hu-data.model';
+import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap, switchMap } from 'rxjs/operators';
 import { Observable, of, Subscription, forkJoin, throwError } from 'rxjs';
 import { saveAs } from 'file-saver';
-import { HUData, GenerationMode, FlowAnalysisReportItem, FlowAnalysisStep, BugReportItem } from '../models/hu-data.model';
+import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
-interface DraggableImage {
+interface DraggableFlowImage {
   file: File;
   preview: string | ArrayBuffer;
   base64: string;
@@ -23,51 +24,40 @@ interface DraggableImage {
   templateUrl: './test-plan-generator.component.html',
   styleUrls: ['./test-plan-generator.component.css'],
   standalone: true,
-  imports: [ FormsModule, CommonModule ]
+  imports: [ FormsModule, CommonModule, TestCaseGeneratorComponent ]
 })
 export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   currentGenerationMode: GenerationMode | null = null;
+  showTestCaseGenerator: boolean = false;
+  showParentFormComponent: boolean = false;
+  isModeSelected: boolean = false;
 
-  // For 'image' and 'flowAnalysis' modes
-  selectedFiles: File[] = [];
-  currentImagePreviews: (string | ArrayBuffer)[] = [];
-  imagesBase64: string[] = [];
-  imageMimeTypes: string[] = [];
-  draggableImages: DraggableImage[] = []; // Used by 'image' and 'flowAnalysis'
+  draggableFlowImages: DraggableFlowImage[] = [];
+  flowImagesBase64: string[] = [];
+  flowImageMimeTypes: string[] = [];
+  flowImageUploadError: string | null = null;
 
-  // NEW: For 'flowComparison' mode - Flow A
-  draggableImagesFlowA: DraggableImage[] = [];
+  draggableImagesFlowA: DraggableFlowImage[] = [];
   imagesBase64FlowA: string[] = [];
   imageMimeTypesFlowA: string[] = [];
   imageUploadErrorFlowA: string | null = null;
 
-  // NEW: For 'flowComparison' mode - Flow B
-  draggableImagesFlowB: DraggableImage[] = [];
+  draggableImagesFlowB: DraggableFlowImage[] = [];
   imagesBase64FlowB: string[] = [];
   imageMimeTypesFlowB: string[] = [];
   imageUploadErrorFlowB: string | null = null;
 
-  imageUploadError: string | null = null; // General error for 'image' and 'flowAnalysis'
   formError: string | null = null;
 
-  currentHuId: string = '';
-  currentHuTitle: string = ''; // Used for all modes (HU title, Image Set title, Flow Analysis title, Comparison title)
-  currentSprint: string = '';
-  currentDescription: string = '';
-  currentAcceptanceCriteria: string = '';
-  currentSelectedTechnique: string = '';
+  currentFlowTitle: string = '';
+  currentFlowSprint: string = '';
 
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
 
-  loadingSections: boolean = false;
-  sectionsError: string | null = null;
-  loadingScenarios: boolean = false;
-  scenariosError: string | null = null;
   loadingFlowAnalysisGlobal: boolean = false;
   flowAnalysisErrorGlobal: string | null = null;
-  // NEW: Loading for bug comparison
   loadingBugComparisonGlobal: boolean = false;
   bugComparisonErrorGlobal: string | null = null;
 
@@ -104,24 +94,24 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
 
-  // For 'image' and 'flowAnalysis' drag/drop
-  draggedImage: DraggableImage | null = null;
-  dragOverImageId: string | null = null;
-  // NEW: For 'flowComparison' drag/drop
-  draggedImageFlowA: DraggableImage | null = null;
+  draggedFlowImage: DraggableFlowImage | null = null;
+  dragOverFlowImageId: string | null = null;
+  draggedImageFlowA: DraggableFlowImage | null = null;
   dragOverImageIdFlowA: string | null = null;
-  draggedImageFlowB: DraggableImage | null = null;
+  draggedImageFlowB: DraggableFlowImage | null = null;
   dragOverImageIdFlowB: string | null = null;
 
-
   draggedFlowStep: FlowAnalysisStep | null = null;
-  dragOverFlowStepId: string | null = null; // For styling drop target
+  dragOverFlowStepId: string | null = null; 
 
-  @ViewChild('huForm') huFormDirective!: NgForm;
+  // Para drag-and-drop de Test Case Steps en TestPlanGenerator
+  draggedTestCaseStepForPlan: TestCaseStep | null = null;
+  dragOverTestCaseStepIdForPlan: string | null = null;
+
+
+  @ViewChild('flowForm') flowFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
-  @ViewChild('scenariosTextarea') scenariosTextarea: ElementRef | undefined;
-  @ViewChild('imageFilesInput') imageFilesInputRef: ElementRef<HTMLInputElement> | undefined;
-  // NEW: Refs for flow comparison image inputs
+  @ViewChild('flowAnalysisImageInput') flowAnalysisImageInputRef: ElementRef<HTMLInputElement> | undefined;
   @ViewChild('imageFilesInputFlowA') imageFilesInputFlowARef: ElementRef<HTMLInputElement> | undefined;
   @ViewChild('imageFilesInputFlowB') imageFilesInputFlowBRef: ElementRef<HTMLInputElement> | undefined;
 
@@ -130,12 +120,12 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef
-  ) {
-  }
+  ) {}
 
   ngAfterViewInit(): void {
-    if (this.huFormDirective && this.huFormDirective.statusChanges) {
-      this.formStatusSubscription = this.huFormDirective.statusChanges.subscribe(() => {
+    if (this.flowFormDirective && this.flowFormDirective.statusChanges) {
+      this.formStatusSubscription = this.flowFormDirective.statusChanges.subscribe(() => {
+        this.cdr.detectChanges();
       });
     }
   }
@@ -148,184 +138,188 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   selectInitialMode(mode: GenerationMode): void {
     this.currentGenerationMode = mode;
-    this.onGenerationModeChange();
+    this.isModeSelected = true;
+    if (mode === 'text' || mode === 'image') {
+      this.showTestCaseGenerator = true;
+      this.showParentFormComponent = false;
+    } else { 
+      this.showTestCaseGenerator = false;
+      this.showParentFormComponent = true;
+      this.onParentGenerationModeChange(); 
+    }
+     console.log('selectInitialMode:', {
+        mode: this.currentGenerationMode,
+        isModeSelected: this.isModeSelected,
+        showChild: this.showTestCaseGenerator,
+        showParentForm: this.showParentFormComponent
+      });
+      this.cdr.detectChanges();
   }
 
-  resetToInitialSelection(): void {
-    const keptSprint = this.currentSprint;
-    const keptTechnique = (this.currentGenerationMode === 'text' || this.currentGenerationMode === 'image') ? this.currentSelectedTechnique : '';
+  onHuGeneratedFromChild(huData: HUData) {
+    const huWithRegenFields: HUData = {
+        ...huData,
+        showRegenTechniquePicker: false,
+        regenSelectedTechnique: huData.originalInput.selectedTechnique, 
+        userTestCaseReanalysisContext: huData.userTestCaseReanalysisContext || '',
+        isEditingDetailedTestCases: false, // <--- NUEVO: Inicializar
+        userReanalysisContext: huData.userReanalysisContext || '' 
+    };
+    this.huList.push(huWithRegenFields);
+    this.updateTestPlanTitle();
+    this.updatePreview();
+    this.showTestCaseGenerator = false;
+    this.showParentFormComponent = false; 
+    this.currentGenerationMode = null;
+    this.isModeSelected = false;
+     console.log('onHuGeneratedFromChild:', {
+        mode: this.currentGenerationMode,
+        isModeSelected: this.isModeSelected,
+        showChild: this.showTestCaseGenerator,
+        showParentForm: this.showParentFormComponent,
+        addedHU: huWithRegenFields
+      });
+      this.cdr.detectChanges();
+  }
+
+  onGenerationCancelledFromChild() {
+    this.showTestCaseGenerator = false;
+    this.showParentFormComponent = false; 
+    this.currentGenerationMode = null;
+    this.isModeSelected = false;
+     console.log('onGenerationCancelledFromChild:', {
+        mode: this.currentGenerationMode,
+        isModeSelected: this.isModeSelected,
+        showChild: this.showTestCaseGenerator,
+        showParentForm: this.showParentFormComponent
+      });
+      this.cdr.detectChanges();
+  }
+
+  resetToInitialSelection(): void { 
+    const keptSprint = this.currentFlowSprint; 
 
     this.currentGenerationMode = null;
+    this.showTestCaseGenerator = false;
+    this.showParentFormComponent = false;
+    this.isModeSelected = false;
     this.formError = null;
-    this.imageUploadError = null;
-    this.selectedFiles = [];
-    this.currentImagePreviews = [];
-    this.imagesBase64 = [];
-    this.imageMimeTypes = [];
-    this.draggableImages = [];
 
-    this.draggableImagesFlowA = [];
-    this.imagesBase64FlowA = [];
-    this.imageMimeTypesFlowA = [];
-    this.imageUploadErrorFlowA = null;
-    this.draggableImagesFlowB = [];
-    this.imagesBase64FlowB = [];
-    this.imageMimeTypesFlowB = [];
-    this.imageUploadErrorFlowB = null;
-
-    this.currentDescription = '';
-    this.currentAcceptanceCriteria = '';
-    this.currentHuId = '';
-    this.currentHuTitle = '';
-
+    this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
+    this.draggableImagesFlowA = []; this.imagesBase64FlowA = []; this.imageMimeTypesFlowA = []; this.imageUploadErrorFlowA = null;
+    this.draggableImagesFlowB = []; this.imagesBase64FlowB = []; this.imageMimeTypesFlowB = []; this.imageUploadErrorFlowB = null;
+    this.currentFlowTitle = '';
 
     if (isPlatformBrowser(this.platformId)) {
-      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
-        this.imageFilesInputRef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowARef && this.imageFilesInputFlowARef.nativeElement) {
-        this.imageFilesInputFlowARef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowBRef && this.imageFilesInputFlowBRef.nativeElement) {
-        this.imageFilesInputFlowBRef.nativeElement.value = '';
-      }
+      if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
+      if (this.imageFilesInputFlowARef?.nativeElement) this.imageFilesInputFlowARef.nativeElement.value = '';
+      if (this.imageFilesInputFlowBRef?.nativeElement) this.imageFilesInputFlowBRef.nativeElement.value = '';
     }
 
-    if (this.huFormDirective && this.huFormDirective.form) {
-        this.huFormDirective.resetForm({
-            currentSprint: keptSprint,
-            currentSelectedTechnique: keptTechnique
-        });
-        this.currentSprint = keptSprint;
-        this.currentSelectedTechnique = keptTechnique;
-
+    if (this.flowFormDirective && this.flowFormDirective.form) {
+        this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint }); 
+        this.currentFlowSprint = keptSprint; 
         setTimeout(() => {
-            if (this.huFormDirective && this.huFormDirective.form) {
-                this.huFormDirective.form.markAsPristine();
-                this.huFormDirective.form.markAsUntouched();
-                this.huFormDirective.form.updateValueAndValidity();
+            if (this.flowFormDirective?.form) {
+                this.flowFormDirective.form.markAsPristine();
+                this.flowFormDirective.form.markAsUntouched();
+                this.flowFormDirective.form.updateValueAndValidity();
             }
+            this.cdr.detectChanges();
         },0);
+    } else {
+        this.cdr.detectChanges();
     }
+     console.log('resetToInitialSelection (parent form cancel):', {
+        mode: this.currentGenerationMode,
+        isModeSelected: this.isModeSelected,
+        showChild: this.showTestCaseGenerator,
+        showParentForm: this.showParentFormComponent
+      });
   }
 
-
-  onGenerationModeChange(): void {
-    if (!this.currentGenerationMode) {
+  onParentGenerationModeChange(): void { 
+    if (!this.currentGenerationMode || this.currentGenerationMode === 'text' || this.currentGenerationMode === 'image') {
         return;
     }
     this.formError = null;
-    this.imageUploadError = null;
-    this.selectedFiles = [];
-    this.currentImagePreviews = [];
-    this.imagesBase64 = [];
-    this.imageMimeTypes = [];
-    this.draggableImages = [];
+    
+    this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
+    this.draggableImagesFlowA = []; this.imagesBase64FlowA = []; this.imageMimeTypesFlowA = []; this.imageUploadErrorFlowA = null;
+    this.draggableImagesFlowB = []; this.imagesBase64FlowB = []; this.imageMimeTypesFlowB = []; this.imageUploadErrorFlowB = null;
+    
+    const keptSprint = this.currentFlowSprint; 
 
-    this.draggableImagesFlowA = [];
-    this.imagesBase64FlowA = [];
-    this.imageMimeTypesFlowA = [];
-    this.imageUploadErrorFlowA = null;
-    this.draggableImagesFlowB = [];
-    this.imagesBase64FlowB = [];
-    this.imageMimeTypesFlowB = [];
-    this.imageUploadErrorFlowB = null;
-
-    this.currentHuId = '';
-    this.currentHuTitle = '';
-    this.currentDescription = '';
-    this.currentAcceptanceCriteria = '';
-
+    this.currentFlowTitle = ''; 
+    
     if (isPlatformBrowser(this.platformId)) {
-      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
-        this.imageFilesInputRef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowARef && this.imageFilesInputFlowARef.nativeElement) {
-        this.imageFilesInputFlowARef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowBRef && this.imageFilesInputFlowBRef.nativeElement) {
-        this.imageFilesInputFlowBRef.nativeElement.value = '';
-      }
+      if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
+      if (this.imageFilesInputFlowARef?.nativeElement) this.imageFilesInputFlowARef.nativeElement.value = '';
+      if (this.imageFilesInputFlowBRef?.nativeElement) this.imageFilesInputFlowBRef.nativeElement.value = '';
     }
 
-    if (this.currentGenerationMode === 'flowAnalysis' || this.currentGenerationMode === 'flowComparison') {
-      this.currentSelectedTechnique = '';
-    }
-
-    if (this.huFormDirective && this.huFormDirective.form) {
+    if (this.flowFormDirective && this.flowFormDirective.form) {
+        this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
+        this.currentFlowSprint = keptSprint;
         setTimeout(() => {
-            if (this.huFormDirective?.form) {
-              this.huFormDirective.form.markAsPristine();
-              this.huFormDirective.form.markAsUntouched();
-
-              if (this.currentGenerationMode === 'flowAnalysis' || this.currentGenerationMode === 'flowComparison') {
-                this.huFormDirective.form.controls['currentSelectedTechnique']?.setValue('', {emitEvent: false});
-                this.huFormDirective.form.controls['currentSelectedTechnique']?.disable({emitEvent: false});
-              } else {
-                this.huFormDirective.form.controls['currentSelectedTechnique']?.enable({emitEvent: false});
-              }
-              this.huFormDirective.form.updateValueAndValidity();
+            if (this.flowFormDirective?.form) {
+              this.flowFormDirective.form.markAsPristine();
+              this.flowFormDirective.form.markAsUntouched();
+              this.flowFormDirective.form.updateValueAndValidity();
             }
+            this.cdr.detectChanges();
         },0);
+    } else {
+        this.cdr.detectChanges();
     }
   }
 
-  isFormInvalidForCurrentMode(): boolean {
-    if (!this.huFormDirective || !this.huFormDirective.form || !this.currentGenerationMode) {
+  isParentFormInvalidForCurrentMode(): boolean {
+    if (!this.flowFormDirective || !this.flowFormDirective.form || !this.currentGenerationMode) {
       return true;
     }
-    const commonRequiredFields = !this.currentSprint || !this.currentHuTitle;
+    const commonRequiredFields = !this.currentFlowSprint || !this.currentFlowTitle;
 
     switch (this.currentGenerationMode) {
-      case 'text':
-        return !this.currentSprint || !this.currentHuId || !this.currentHuTitle || !this.currentDescription || !this.currentAcceptanceCriteria || !this.currentSelectedTechnique;
-      case 'image':
-        return commonRequiredFields || !this.currentSelectedTechnique || this.draggableImages.length === 0;
       case 'flowAnalysis':
-        return commonRequiredFields || this.draggableImages.length === 0;
+        return commonRequiredFields || this.draggableFlowImages.length === 0;
       case 'flowComparison':
         return commonRequiredFields || this.draggableImagesFlowA.length === 0 || this.draggableImagesFlowB.length === 0;
       default:
-        return true;
+        return true; 
     }
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
       const nameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
       const parts = nameWithoutExtension.split(/[^0-9]+/g).filter(Boolean).map(p => parseInt(p, 10));
-
       return {
           main: parts.length > 0 && !isNaN(parts[0]) ? parts[0] : Infinity,
           sub: parts.length > 1 && !isNaN(parts[1]) ? parts[1] : (parts.length > 0 && !isNaN(parts[0]) ? 0 : Infinity)
       };
   }
 
-  onFileSelected(event: Event, flowType?: 'A' | 'B'): void {
-    let currentDraggableImagesRef: DraggableImage[]; // This will be a reference
-    let currentUploadErrorProp: 'imageUploadErrorFlowA' | 'imageUploadErrorFlowB' | 'imageUploadError';
+  onFlowFileSelected(event: Event, flowType?: 'A' | 'B'): void {
+    let currentDraggableImagesRef!: DraggableFlowImage[]; 
+    let currentUploadErrorProp!: 'imageUploadErrorFlowA' | 'imageUploadErrorFlowB' | 'flowImageUploadError';
     let maxImages: number;
 
-    if (flowType === 'A') {
-        currentDraggableImagesRef = this.draggableImagesFlowA;
-        this.imageUploadErrorFlowA = null; // Reset specific error
-        currentUploadErrorProp = 'imageUploadErrorFlowA';
-        maxImages = 10;
-    } else if (flowType === 'B') {
-        currentDraggableImagesRef = this.draggableImagesFlowB;
-        this.imageUploadErrorFlowB = null; // Reset specific error
-        currentUploadErrorProp = 'imageUploadErrorFlowB';
-        maxImages = 10;
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') {
+            currentDraggableImagesRef = this.draggableImagesFlowA;
+            this.imageUploadErrorFlowA = null; currentUploadErrorProp = 'imageUploadErrorFlowA'; maxImages = 10;
+        } else if (flowType === 'B') {
+            currentDraggableImagesRef = this.draggableImagesFlowB;
+            this.imageUploadErrorFlowB = null; currentUploadErrorProp = 'imageUploadErrorFlowB'; maxImages = 10;
+        } else return; 
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        currentDraggableImagesRef = this.draggableFlowImages;
+        this.flowImageUploadError = null; currentUploadErrorProp = 'flowImageUploadError'; maxImages = 20;
     } else {
-        currentDraggableImagesRef = this.draggableImages;
-        this.imageUploadError = null; // Reset general error
-        currentUploadErrorProp = 'imageUploadError';
-        maxImages = this.currentGenerationMode === 'flowAnalysis' ? 20 : 5; // Max 20 for flow analysis
+        return; 
     }
-    this.formError = null;
-
-    // Clear the specific array being populated
-    currentDraggableImagesRef.length = 0;
-
+    this.formError = null; 
+    currentDraggableImagesRef.length = 0; 
 
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
@@ -335,123 +329,96 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
             this[currentUploadErrorProp] = `Puedes seleccionar un máximo de ${maxImages} imágenes para este flujo.`;
             element.value = ""; return;
         }
-
         let filesArray = Array.from(fileList);
-
         filesArray.sort((a, b) => {
             const parsedA = this.parseFileNameForSorting(a.name);
             const parsedB = this.parseFileNameForSorting(b.name);
-
-            if (parsedA.main !== parsedB.main) {
-                return parsedA.main - parsedB.main;
-            }
-            return parsedA.sub - parsedB.sub;
+            if (parsedA.main !== parsedB.main) return parsedA.main - parsedB.main;
+            return parsedB.sub - parsedB.sub;
         });
 
-        const fileProcessingObservables: Observable<DraggableImage>[] = [];
+        const fileProcessingObservables: Observable<DraggableFlowImage>[] = [];
         let validationErrorFound = false;
 
         for (const file of filesArray) {
             if (validationErrorFound) continue;
-
-            if (file.size > 4 * 1024 * 1024) {
-                this[currentUploadErrorProp] = `El archivo "${file.name}" es demasiado grande (Máx. 4MB). Se omitirán todos los archivos.`;
-                validationErrorFound = true;
-            }
-            if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) {
-                this[currentUploadErrorProp] = `Formato inválido para "${file.name}" (Solo JPG, PNG). Se omitirán todos los archivos.`;
-                validationErrorFound = true;
-            }
-
-            if (validationErrorFound) {
-                element.value = "";
-                currentDraggableImagesRef.length = 0; // Clear again on error
-                this.updateArraysFromDraggable(flowType);
-                return;
+            if (file.size > 4 * 1024 * 1024) { this[currentUploadErrorProp] = `"${file.name}" excede 4MB.`; validationErrorFound = true; }
+            if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) { this[currentUploadErrorProp] = `Formato inválido: "${file.name}". Solo JPG/PNG.`; validationErrorFound = true; }
+            
+            if (validationErrorFound) { 
+                element.value = ""; 
+                currentDraggableImagesRef.length = 0; 
+                this.updateParentArraysFromDraggable(flowType); 
+                this.cdr.detectChanges();
+                return; 
             }
 
-            const readerObservable = new Observable<DraggableImage>(observer => {
+            const readerObservable = new Observable<DraggableFlowImage>(observer => {
                 const reader = new FileReader();
-                reader.onload = e => {
-                    const preview = reader.result as string | ArrayBuffer;
-                    const base64 = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
-
-                    observer.next({
-                        file: file,
-                        preview: preview,
-                        base64: base64,
-                        mimeType: file.type,
-                        id: (flowType || 'G') + '_' + file.name + '_' + new Date().getTime() + Math.random()
-                    });
+                reader.onload = () => {
+                    observer.next({ file, preview: reader.result!, base64: (reader.result as string).split(',')[1], mimeType: file.type, id: (flowType || 'S') + '_' + file.name + '_' + Date.now() + Math.random().toString(16).slice(2) });
                     observer.complete();
                 };
-                reader.onerror = error => {
-                    this[currentUploadErrorProp] = `Error al leer el archivo "${file.name}".`;
-                    console.error(`FileReader error for ${file.name}: `, error);
-                    observer.error(error);
-                };
+                reader.onerror = error => { this[currentUploadErrorProp] = `Error al leer "${file.name}".`; observer.error(error); };
                 reader.readAsDataURL(file);
             });
             fileProcessingObservables.push(readerObservable);
         }
-
-        if (validationErrorFound) {
-             currentDraggableImagesRef.length = 0; // Clear again on error
-             this.updateArraysFromDraggable(flowType);
-             return;
+        
+        if (validationErrorFound) { 
+             currentDraggableImagesRef.length = 0; this.updateParentArraysFromDraggable(flowType); this.cdr.detectChanges(); return; 
         }
 
         if (fileProcessingObservables.length > 0) {
             forkJoin(fileProcessingObservables).subscribe({
-                next: (processedImages: DraggableImage[]) => {
-                    // Assign to the correct array by reference
-                    processedImages.forEach(img => currentDraggableImagesRef.push(img));
-                    this.updateArraysFromDraggable(flowType);
+                next: (processedImages) => { 
+                    processedImages.forEach(img => currentDraggableImagesRef.push(img)); 
+                    this.updateParentArraysFromDraggable(flowType); 
                 },
                 complete: () => {
-                    if (this.huFormDirective && this.huFormDirective.form) {
-                        this.huFormDirective.form.updateValueAndValidity();
-                    }
+                    this.flowFormDirective?.form.updateValueAndValidity();
+                    this.cdr.detectChanges();
                 },
-                error: (err) => {
-                    element.value = "";
-                    currentDraggableImagesRef.length = 0;
-                    this.updateArraysFromDraggable(flowType);
-                    if (this.huFormDirective && this.huFormDirective.form) {
-                        this.huFormDirective.form.updateValueAndValidity();
-                    }
-                     console.error("Error processing files with forkJoin:", err.message || err);
+                error: () => { 
+                    element.value = ""; 
+                    currentDraggableImagesRef.length = 0; 
+                    this.updateParentArraysFromDraggable(flowType); 
+                    this.flowFormDirective?.form.updateValueAndValidity();
+                    this.cdr.detectChanges();
                 }
             });
         }
-    } else {
-        currentDraggableImagesRef.length = 0;
-        this.updateArraysFromDraggable(flowType);
-        if (this.huFormDirective && this.huFormDirective.form) {
-            this.huFormDirective.form.updateValueAndValidity();
+    } else { 
+        currentDraggableImagesRef.length = 0; 
+        this.updateParentArraysFromDraggable(flowType);
+        this.flowFormDirective?.form.updateValueAndValidity();
+        this.cdr.detectChanges();
+    }
+  }
+
+  private updateParentArraysFromDraggable(flowType?: 'A' | 'B'): void {
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') {
+            this.imagesBase64FlowA = this.draggableImagesFlowA.map(di => di.base64);
+            this.imageMimeTypesFlowA = this.draggableImagesFlowA.map(di => di.mimeType);
+        } else if (flowType === 'B') {
+            this.imagesBase64FlowB = this.draggableImagesFlowB.map(di => di.base64);
+            this.imageMimeTypesFlowB = this.draggableImagesFlowB.map(di => di.mimeType);
         }
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        this.flowImagesBase64 = this.draggableFlowImages.map(di => di.base64);
+        this.flowImageMimeTypes = this.draggableFlowImages.map(di => di.mimeType);
     }
+    this.cdr.detectChanges();
   }
 
-  private updateArraysFromDraggable(flowType?: 'A' | 'B'): void {
-    if (flowType === 'A') {
-        this.imagesBase64FlowA = this.draggableImagesFlowA.map(di => di.base64);
-        this.imageMimeTypesFlowA = this.draggableImagesFlowA.map(di => di.mimeType);
-    } else if (flowType === 'B') {
-        this.imagesBase64FlowB = this.draggableImagesFlowB.map(di => di.base64);
-        this.imageMimeTypesFlowB = this.draggableImagesFlowB.map(di => di.mimeType);
-    } else {
-        this.selectedFiles = this.draggableImages.map(di => di.file);
-        this.currentImagePreviews = this.draggableImages.map(di => di.preview);
-        this.imagesBase64 = this.draggableImages.map(di => di.base64);
-        this.imageMimeTypes = this.draggableImages.map(di => di.mimeType);
-    }
-  }
-
-  public onImageDragStart(event: DragEvent, image: DraggableImage, flowType?: 'A' | 'B'): void {
-    if (flowType === 'A') this.draggedImageFlowA = image;
-    else if (flowType === 'B') this.draggedImageFlowB = image;
-    else this.draggedImage = image;
+  public onParentImageDragStart(event: DragEvent, image: DraggableFlowImage, flowType?: 'A' | 'B'): void {
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') this.draggedImageFlowA = image;
+        else if (flowType === 'B') this.draggedImageFlowB = image;
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        this.draggedFlowImage = image;
+    } else return;
 
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -460,102 +427,116 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  public onImageDragOver(event: DragEvent, targetImage?: DraggableImage, flowType?: 'A' | 'B'): void {
+  public onParentImageDragOver(event: DragEvent, targetImage?: DraggableFlowImage, flowType?: 'A' | 'B'): void {
     event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') this.dragOverImageIdFlowA = targetImage ? targetImage.id : null;
+        else if (flowType === 'B') this.dragOverImageIdFlowB = targetImage ? targetImage.id : null;
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        this.dragOverFlowImageId = targetImage ? targetImage.id : null;
     }
-    if (flowType === 'A') this.dragOverImageIdFlowA = targetImage ? targetImage.id : null;
-    else if (flowType === 'B') this.dragOverImageIdFlowB = targetImage ? targetImage.id : null;
-    else this.dragOverImageId = targetImage ? targetImage.id : null;
   }
 
-  public onImageDragLeave(event: DragEvent, flowType?: 'A' | 'B'): void {
-    if (flowType === 'A') this.dragOverImageIdFlowA = null;
-    else if (flowType === 'B') this.dragOverImageIdFlowB = null;
-    else this.dragOverImageId = null;
+  public onParentImageDragLeave(event: DragEvent, flowType?: 'A' | 'B'): void {
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') this.dragOverImageIdFlowA = null;
+        else if (flowType === 'B') this.dragOverImageIdFlowB = null;
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        this.dragOverFlowImageId = null;
+    }
   }
 
-  public onImageDrop(event: DragEvent, targetImage: DraggableImage, flowType?: 'A' | 'B'): void {
+  public onParentImageDrop(event: DragEvent, targetImage: DraggableFlowImage, flowType?: 'A' | 'B'): void {
     event.preventDefault();
-    if (flowType === 'A') this.dragOverImageIdFlowA = null;
-    else if (flowType === 'B') this.dragOverImageIdFlowB = null;
-    else this.dragOverImageId = null;
+    let currentDraggedImage: DraggableFlowImage | null = null;
+    let currentDraggableImages: DraggableFlowImage[] = [];
+
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') { currentDraggedImage = this.draggedImageFlowA; currentDraggableImages = this.draggableImagesFlowA; this.dragOverImageIdFlowA = null; }
+        else if (flowType === 'B') { currentDraggedImage = this.draggedImageFlowB; currentDraggableImages = this.draggableImagesFlowB; this.dragOverImageIdFlowB = null; }
+        else return; 
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        currentDraggedImage = this.draggedFlowImage; currentDraggableImages = this.draggableFlowImages; this.dragOverFlowImageId = null;
+    } else return;
 
     const draggedHtmlElement = document.querySelector('.image-preview-item[style*="opacity: 0.4"]');
-    if (draggedHtmlElement) {
-        (draggedHtmlElement as HTMLElement).style.opacity = '1';
-    }
-
-    let currentDraggedImage = flowType === 'A' ? this.draggedImageFlowA : (flowType === 'B' ? this.draggedImageFlowB : this.draggedImage);
-    let currentDraggableImages = flowType === 'A' ? this.draggableImagesFlowA : (flowType === 'B' ? this.draggableImagesFlowB : this.draggableImages);
+    if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
 
     if (!currentDraggedImage || currentDraggedImage.id === targetImage.id) {
-      if (flowType === 'A') this.draggedImageFlowA = null;
-      else if (flowType === 'B') this.draggedImageFlowB = null;
-      else this.draggedImage = null;
+      if (this.currentGenerationMode === 'flowComparison') {
+          if (flowType === 'A') this.draggedImageFlowA = null; else if (flowType === 'B') this.draggedImageFlowB = null;
+      } else if (this.currentGenerationMode === 'flowAnalysis') {
+          this.draggedFlowImage = null;
+      }
       return;
     }
 
     const fromIndex = currentDraggableImages.findIndex(img => img.id === currentDraggedImage!.id);
-    let toIndex = currentDraggableImages.findIndex(img => img.id === targetImage.id);
+    const toIndex = currentDraggableImages.findIndex(img => img.id === targetImage.id);
 
     if (fromIndex !== -1 && toIndex !== -1) {
       const itemToMove = currentDraggableImages.splice(fromIndex, 1)[0];
       currentDraggableImages.splice(toIndex, 0, itemToMove);
-
-      this.updateArraysFromDraggable(flowType);
+      this.updateParentArraysFromDraggable(flowType);
     }
-    if (flowType === 'A') this.draggedImageFlowA = null;
-    else if (flowType === 'B') this.draggedImageFlowB = null;
-    else this.draggedImage = null;
+
+    if (this.currentGenerationMode === 'flowComparison') {
+        if (flowType === 'A') this.draggedImageFlowA = null; else if (flowType === 'B') this.draggedImageFlowB = null;
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+        this.draggedFlowImage = null;
+    }
   }
 
-  public onImageDragEnd(event?: DragEvent, flowType?: 'A' | 'B'): void {
-     if (event && event.target instanceof HTMLElement) {
-        (event.target as HTMLElement).style.opacity = '1';
-    } else {
+  public onParentImageDragEnd(event?: DragEvent, flowType?: 'A' | 'B'): void {
+     if (event?.target instanceof HTMLElement) (event.target as HTMLElement).style.opacity = '1';
+     else {
         const draggedHtmlElement = document.querySelector('.image-preview-item[style*="opacity: 0.4"]');
-        if (draggedHtmlElement) {
-            (draggedHtmlElement as HTMLElement).style.opacity = '1';
+        if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
+    }
+    if (this.currentGenerationMode === 'flowComparison') {
+      if (flowType === 'A') { this.draggedImageFlowA = null; this.dragOverImageIdFlowA = null; }
+      else if (flowType === 'B') { this.draggedImageFlowB = null; this.dragOverImageIdFlowB = null; }
+    } else if (this.currentGenerationMode === 'flowAnalysis') {
+      this.draggedFlowImage = null; this.dragOverFlowImageId = null;
+    }
+  }
+
+
+  public getFlowStepDragId(paso: FlowAnalysisStep, hu: HUData): string {
+    const report = hu.flowAnalysisReport?.[0];
+    if (report && report.Pasos_Analizados) {
+        const stepIndex = report.Pasos_Analizados.indexOf(paso);
+        if (stepIndex !== -1) {
+            return `flow-${hu.id}-step-${stepIndex}`;
         }
     }
-    if (flowType === 'A') { this.draggedImageFlowA = null; this.dragOverImageIdFlowA = null; }
-    else if (flowType === 'B') { this.draggedImageFlowB = null; this.dragOverImageIdFlowB = null; }
-    else { this.draggedImage = null; this.dragOverImageId = null; }
-  }
-
-  public getFlowStepDragId(paso: FlowAnalysisStep): string {
-    // Ensure a unique ID even if steps are identical initially or become identical after edits
-    // This ID is primarily for dragover styling.
-    return `${paso.numero_paso}-${(paso.descripcion_accion_observada || '').substring(0, 10).replace(/\s/g, '_')}-${Math.random().toString(16).slice(2, 8)}`;
+    return `flow-step-${paso.numero_paso}-${Math.random().toString(16).slice(2,8)}`;
   }
 
 
   public onFlowStepDragStart(event: DragEvent, paso: FlowAnalysisStep, hu: HUData): void {
-    if (hu.isEditingFlowReportDetails) {
-      event.preventDefault(); // Prevent dragging when editing to avoid conflicts
-      return;
-    }
+    if (hu.isEditingFlowReportDetails) { event.preventDefault(); return; } 
     this.draggedFlowStep = paso;
-    if (event.dataTransfer) {
+    if (event.dataTransfer && hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
+      const stepIndex = hu.flowAnalysisReport[0].Pasos_Analizados.indexOf(paso);
       event.dataTransfer.effectAllowed = 'move';
-      // Use the current visual index (paso.numero_paso which is 1-based)
-      event.dataTransfer.setData('text/plain', (paso.numero_paso - 1).toString()); // Store 0-based index
+      event.dataTransfer.setData('text/plain', stepIndex.toString()); 
       const targetElement = event.target as HTMLElement;
       const rowElement = targetElement.closest('tr');
-      if (rowElement) {
-        rowElement.style.opacity = '0.4';
-      }
+      if (rowElement) rowElement.style.opacity = '0.4';
     }
   }
 
-  public onFlowStepDragOver(event: DragEvent, targetPaso?: FlowAnalysisStep): void {
+  public onFlowStepDragOver(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData): void { 
     event.preventDefault();
-     if (this.draggedFlowStep && event.dataTransfer) { // Check if a drag operation is in progress
-      event.dataTransfer.dropEffect = 'move';
-    }
-    this.dragOverFlowStepId = targetPaso ? this.getFlowStepDragId(targetPaso) : null;
+     if (this.draggedFlowStep && event.dataTransfer && targetPaso) { 
+        event.dataTransfer.dropEffect = 'move';
+        this.dragOverFlowStepId = this.getFlowStepDragId(targetPaso, hu); 
+     } else if (!targetPaso) {
+        this.dragOverFlowStepId = null;
+     }
   }
 
   public onFlowStepDragLeave(event: DragEvent): void {
@@ -563,330 +544,244 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep, hu: HUData): void {
-    event.preventDefault();
-    this.dragOverFlowStepId = null;
+    event.preventDefault(); this.dragOverFlowStepId = null;
+    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
 
-    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]')
-      .forEach(el => (el as HTMLElement).style.opacity = '1');
-
-    if (!this.draggedFlowStep || !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 || hu.flowAnalysisReport[0].Pasos_Analizados.length === 0) {
-      this.draggedFlowStep = null;
-      return;
+    if (!this.draggedFlowStep || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados || hu.flowAnalysisReport[0].Pasos_Analizados.length === 0) { 
+        this.draggedFlowStep = null; return; 
     }
-
-    // If dragged and target are the same, do nothing
-    if(this.draggedFlowStep === targetPaso) {
-        this.draggedFlowStep = null;
-        return;
-    }
+    if(this.draggedFlowStep === targetPaso) { this.draggedFlowStep = null; return; }
 
     const pasosAnalizados = hu.flowAnalysisReport[0].Pasos_Analizados;
     const fromIndex = pasosAnalizados.indexOf(this.draggedFlowStep);
-    let toIndex = pasosAnalizados.indexOf(targetPaso);
+    const toIndex = pasosAnalizados.indexOf(targetPaso);
 
     if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
       const itemToMove = pasosAnalizados.splice(fromIndex, 1)[0];
       pasosAnalizados.splice(toIndex, 0, itemToMove);
-
-      // Re-index numero_paso based on the new visual order
-      pasosAnalizados.forEach((paso, index) => {
-        paso.numero_paso = index + 1;
-      });
-
-      hu.flowAnalysisReport = [{ ...hu.flowAnalysisReport[0], Pasos_Analizados: [...pasosAnalizados] }];
-      this.cdr.detectChanges();
-      this.updatePreview();
+      pasosAnalizados.forEach((paso, index) => { paso.numero_paso = index + 1; });
+      this.cdr.detectChanges(); this.updatePreview();
     }
     this.draggedFlowStep = null;
   }
 
   public onFlowStepDragEnd(event: DragEvent): void {
-    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]')
-      .forEach(el => (el as HTMLElement).style.opacity = '1');
-    this.draggedFlowStep = null;
-    this.dragOverFlowStepId = null;
+    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
+    this.draggedFlowStep = null; this.dragOverFlowStepId = null;
   }
 
-  public generateIdFromTitle(title: string, mode: GenerationMode | null): string {
-    if (!title || !mode) {
-        return '';
-    }
-    let prefix = "HU_";
-    if (mode === 'image') prefix = "IMG_";
-    else if (mode === 'flowAnalysis') prefix = "FLOW_";
+  public generateIdFromFlowTitle(title: string, mode: GenerationMode | null): string {
+    if (!title || !mode) return '';
+    let prefix = "UNKNOWN_";
+    if (mode === 'flowAnalysis') prefix = "FLOW_";
     else if (mode === 'flowComparison') prefix = "COMP_";
-
-    const sanitizedTitle = title.trim().toLowerCase()
-                              .replace(/\s+/g, '_')
-                              .replace(/[^\w-]+/g, '');
-    return `${prefix}${sanitizedTitle.substring(0, 20)}_${new Date().getTime().toString().slice(-4)}`;
+    const sanitizedTitle = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
+    return `${prefix}${sanitizedTitle.substring(0, 20)}_${Date.now().toString().slice(-4)}`;
   }
 
-  addHuAndGenerateData(): void {
+  addAndGenerateFlowData(): void {
     this.formError = null;
-    this.sectionsError = null;
-    this.scenariosError = null;
     this.flowAnalysisErrorGlobal = null;
     this.bugComparisonErrorGlobal = null;
 
-    if (!this.currentGenerationMode) {
-        this.formError = "Por favor, selecciona un método de generación primero.";
+    if (!this.currentGenerationMode || (this.currentGenerationMode !== 'flowAnalysis' && this.currentGenerationMode !== 'flowComparison')) {
+        this.formError = "Modo de generación no válido para esta acción.";
         return;
     }
-    if (this.isFormInvalidForCurrentMode()) {
-      this.formError = "Por favor, completa todos los campos requeridos.";
-      if ((this.currentGenerationMode === 'image' || this.currentGenerationMode === 'flowAnalysis') && this.draggableImages.length === 0) {
-        this.formError = "Por favor, selecciona al menos una imagen.";
+    if (this.isParentFormInvalidForCurrentMode()) {
+      this.formError = "Por favor, completa todos los campos requeridos para el flujo.";
+      if (this.currentGenerationMode === 'flowAnalysis' && this.draggableFlowImages.length === 0) {
+        this.formError = "Por favor, selecciona al menos una imagen para el análisis de flujo.";
       }
       if (this.currentGenerationMode === 'flowComparison' && (this.draggableImagesFlowA.length === 0 || this.draggableImagesFlowB.length === 0 )) {
-        this.formError = "Por favor, selecciona imágenes para ambos flujos (A y B).";
+        this.formError = "Por favor, selecciona imágenes para ambos flujos (A y B) en la comparación.";
       }
-       if (this.huFormDirective && this.huFormDirective.form) {
-        Object.values(this.huFormDirective.form.controls).forEach(control => {
+       if (this.flowFormDirective?.form) {
+        Object.values(this.flowFormDirective.form.controls).forEach(control => {
           if (control.invalid && control.enabled) control.markAsTouched();
         });
       }
       return;
     }
 
-    let finalHuId = this.currentHuId;
-    if (this.currentGenerationMode === 'image' || this.currentGenerationMode === 'flowAnalysis' || this.currentGenerationMode === 'flowComparison') {
-        finalHuId = this.generateIdFromTitle(this.currentHuTitle, this.currentGenerationMode);
-        if (!finalHuId) {
-            this.formError = "El título es necesario para generar el ID.";
-            return;
-        }
-    }
+    const finalFlowId = this.generateIdFromFlowTitle(this.currentFlowTitle, this.currentGenerationMode);
+    if (!finalFlowId) { this.formError = "El título es necesario para generar el ID del flujo/comparación."; return; }
 
     const newHu: HUData = {
       originalInput: {
-        id: finalHuId,
-        title: this.currentHuTitle,
-        sprint: this.currentSprint,
-        description: this.currentGenerationMode === 'text' ? this.currentDescription : undefined,
-        acceptanceCriteria: this.currentGenerationMode === 'text' ? this.currentAcceptanceCriteria : undefined,
-        selectedTechnique: (this.currentGenerationMode === 'text' || this.currentGenerationMode === 'image') ? this.currentSelectedTechnique : '',
+        id: finalFlowId, title: this.currentFlowTitle, sprint: this.currentFlowSprint,
+        selectedTechnique: '', 
         generationMode: this.currentGenerationMode,
-        imagesBase64: (this.currentGenerationMode === 'image' || this.currentGenerationMode === 'flowAnalysis') ? [...this.imagesBase64] : undefined,
-        imageMimeTypes: (this.currentGenerationMode === 'image' || this.currentGenerationMode === 'flowAnalysis') ? [...this.imageMimeTypes] : undefined,
+        imagesBase64: this.currentGenerationMode === 'flowAnalysis' ? [...this.flowImagesBase64] : undefined,
+        imageMimeTypes: this.currentGenerationMode === 'flowAnalysis' ? [...this.flowImageMimeTypes] : undefined,
         imagesBase64FlowA: this.currentGenerationMode === 'flowComparison' ? [...this.imagesBase64FlowA] : undefined,
         imageMimeTypesFlowA: this.currentGenerationMode === 'flowComparison' ? [...this.imageMimeTypesFlowA] : undefined,
         imagesBase64FlowB: this.currentGenerationMode === 'flowComparison' ? [...this.imagesBase64FlowB] : undefined,
         imageMimeTypesFlowB: this.currentGenerationMode === 'flowComparison' ? [...this.imageMimeTypesFlowB] : undefined,
       },
-      id: finalHuId.trim(),
-      title: this.currentHuTitle.trim(),
-      sprint: this.currentSprint.trim(),
-      generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
-      editingScope: false, editingScenarios: false,
-      loadingScope: this.currentGenerationMode === 'text', errorScope: null,
-      loadingScenarios: (this.currentGenerationMode === 'text' || this.currentGenerationMode === 'image'), errorScenarios: null,
-      showRegenTechniquePicker: false, regenSelectedTechnique: '',
-      isScopeDetailsOpen: this.currentGenerationMode === 'text',
-      isScenariosDetailsOpen: (this.currentGenerationMode === 'text' || this.currentGenerationMode === 'image'),
+      id: finalFlowId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
+      generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '', 
+      editingScope: false, 
+      editingScenarios: false, 
+      loadingScope: false, errorScope: null,
+      loadingScenarios: false, errorScenarios: null,
+      showRegenTechniquePicker: false, 
+      regenSelectedTechnique: '',      
+      userTestCaseReanalysisContext: '',
+      isScopeDetailsOpen: false, 
+      isScenariosDetailsOpen: false, 
+      isEditingDetailedTestCases: false, // <--- NUEVO: Inicializar
       flowAnalysisReport: undefined,
-      loadingFlowAnalysis: this.currentGenerationMode === 'flowAnalysis',
-      errorFlowAnalysis: null,
-      isFlowAnalysisDetailsOpen: this.currentGenerationMode === 'flowAnalysis',
+      loadingFlowAnalysis: this.currentGenerationMode === 'flowAnalysis', errorFlowAnalysis: null,
+      isFlowAnalysisDetailsOpen: this.currentGenerationMode === 'flowAnalysis', 
       isEditingFlowReportDetails: false,
-      userReanalysisContext: '', // NEW: Initialize context field
+      userReanalysisContext: '', 
       bugComparisonReport: undefined,
-      loadingBugComparison: this.currentGenerationMode === 'flowComparison',
-      errorBugComparison: null,
+      loadingBugComparison: this.currentGenerationMode === 'flowComparison', errorBugComparison: null,
       isBugComparisonDetailsOpen: this.currentGenerationMode === 'flowComparison',
     };
     this.huList.push(newHu);
+    this.updateTestPlanTitle(); 
 
-    if (newHu.originalInput.generationMode === 'text') {
-      this.loadingSections = true;
-      let scopeGeneration$: Observable<string> = this.geminiService.generateTestPlanSections(
-          newHu.originalInput.description!, newHu.originalInput.acceptanceCriteria!
-        ).pipe(
-          tap(scopeText => { newHu.generatedScope = scopeText; }),
-          catchError(error => {
-            newHu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error al generar alcance.';
-            this.sectionsError = newHu.errorScope;
-            return of('');
-          }),
-          finalize(() => { newHu.loadingScope = false; this.checkOverallLoadingStatus(); })
-        );
-
-      scopeGeneration$.pipe(
-        switchMap(() => this._generateDetailedTestCasesForHu(newHu, newHu.originalInput.selectedTechnique, true)),
-        finalize(() => { this.updateTestPlanTitle(); this.updatePreview(); this.resetCurrentInputs(); })
-      ).subscribe({
-          error: (err) => {
-              console.error("Error en el flujo de generación (texto):", err);
-              this.scenariosError = "Error general en el proceso de generación de HU basada en texto.";
-              newHu.loadingScenarios = false; newHu.loadingScope = false; this.checkOverallLoadingStatus();
-          }
-      });
-
-    } else if (newHu.originalInput.generationMode === 'image') {
-        newHu.loadingScope = false;
-        this._generateDetailedTestCasesForHu(newHu, newHu.originalInput.selectedTechnique, true).pipe(
-            finalize(() => { this.updateTestPlanTitle(); this.updatePreview(); this.resetCurrentInputs(); })
-        ).subscribe({
-            error: (err) => {
-                console.error("Error en el flujo de generación (imagen):", err);
-                this.scenariosError = "Error general en el proceso de generación de HU basada en imagen.";
-                newHu.loadingScenarios = false; this.checkOverallLoadingStatus();
-            }
-        });
-    } else if (newHu.originalInput.generationMode === 'flowAnalysis') {
-        newHu.loadingScope = false; newHu.loadingScenarios = false;
+    if (newHu.originalInput.generationMode === 'flowAnalysis') {
         this.loadingFlowAnalysisGlobal = true; this.flowAnalysisErrorGlobal = null;
         this.geminiService.generateFlowAnalysisFromImages(newHu.originalInput.imagesBase64!, newHu.originalInput.imageMimeTypes!).pipe(
             tap(report => {
-                newHu.flowAnalysisReport = report;
-                newHu.errorFlowAnalysis = null;
+                newHu.flowAnalysisReport = report; newHu.errorFlowAnalysis = null;
                 if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
-                    newHu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
+                    newHu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles en el error.'}`;
                     this.flowAnalysisErrorGlobal = newHu.errorFlowAnalysis ?? null;
                 }
             }),
             catchError(error => {
                 newHu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al generar análisis de flujo.';
                 this.flowAnalysisErrorGlobal = newHu.errorFlowAnalysis ?? null;
-                newHu.flowAnalysisReport = [{
-                    Nombre_del_Escenario: "Error Crítico en Generación",
-                    Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: newHu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
-                    Resultado_Esperado_General_Flujo: "N/A",
-                    Conclusion_General_Flujo: "El análisis de flujo no pudo completarse."
-                }];
-                return of(newHu.flowAnalysisReport);
+                newHu.flowAnalysisReport = [{ Nombre_del_Escenario: "Error Crítico en Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: newHu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "El análisis de flujo no pudo completarse." }];
+                return of(newHu.flowAnalysisReport); 
             }),
             finalize(() => {
                 newHu.loadingFlowAnalysis = false;
                 this.checkOverallLoadingStatus();
-                this.updateTestPlanTitle();
                 this.updatePreview();
-                this.resetCurrentInputs();
+                this.resetParentCurrentInputs(); 
+                this.showParentFormComponent = false; 
+                this.currentGenerationMode = null; 
+                this.isModeSelected = false;
+                this.cdr.detectChanges();
             })
-        ).subscribe({
-            error: (err) => {
-                console.error("Error en el flujo de generación (análisis de flujo):", err);
-                this.flowAnalysisErrorGlobal = (this.flowAnalysisErrorGlobal || "Error general en el proceso de análisis de flujo.");
-                newHu.loadingFlowAnalysis = false; this.checkOverallLoadingStatus();
+        ).subscribe({ 
+            error: (err) => { 
+                console.error("Error en suscripción de generación (análisis de flujo):", err); 
+                this.flowAnalysisErrorGlobal = (this.flowAnalysisErrorGlobal || "Error general en análisis de flujo."); 
+                newHu.loadingFlowAnalysis = false; 
+                this.checkOverallLoadingStatus(); 
+                this.cdr.detectChanges();
             }
         });
     } else if (newHu.originalInput.generationMode === 'flowComparison') {
-        newHu.loadingScope = false; newHu.loadingScenarios = false; newHu.loadingFlowAnalysis = false;
         this.loadingBugComparisonGlobal = true; this.bugComparisonErrorGlobal = null;
-
         this.geminiService.compareImageFlows(
             newHu.originalInput.imagesBase64FlowA!, newHu.originalInput.imageMimeTypesFlowA!,
             newHu.originalInput.imagesBase64FlowB!, newHu.originalInput.imageMimeTypesFlowB!
         ).pipe(
             tap(report => {
-                newHu.bugComparisonReport = report;
-                newHu.errorBugComparison = null;
-                if (report && report.length > 0 && report.some(item => item.titulo_bug.startsWith("Error de API") || item.titulo_bug.startsWith("Error de Formato") || item.titulo_bug.startsWith("Error de Parsing JSON"))){
+                newHu.bugComparisonReport = report; newHu.errorBugComparison = null;
+                if (report?.some(item => item.titulo_bug.startsWith("Error"))) {
                     const firstError = report.find(item => item.titulo_bug.startsWith("Error"));
-                    newHu.errorBugComparison = `${firstError?.titulo_bug}: ${firstError?.resultado_actual || 'Detalles no disponibles.'}`;
+                    newHu.errorBugComparison = `${firstError?.titulo_bug}: ${firstError?.resultado_actual || 'Detalles no disponibles en el error.'}`;
                     this.bugComparisonErrorGlobal = newHu.errorBugComparison ?? null;
                 }
             }),
             catchError(error => {
-                newHu.errorBugComparison = (typeof error === 'string' ? error : error.message) || 'Error al generar comparación de flujos.';
+                newHu.errorBugComparison = (typeof error === 'string' ? error : error.message) || 'Error al generar comparación.';
                 this.bugComparisonErrorGlobal = newHu.errorBugComparison ?? null;
-                newHu.bugComparisonReport = [{
-                    titulo_bug: "Error Crítico en Comparación", id_bug:"ERR-CRIT", prioridad:"Alta", severidad:"Crítica",
-                    pasos_para_reproducir: [], resultado_actual: newHu.errorBugComparison ?? "Error desconocido", resultado_esperado: "Reporte de bugs."
-                } as BugReportItem];
-                return of(newHu.bugComparisonReport);
+                newHu.bugComparisonReport = [{ titulo_bug: "Error Crítico en Comparación", id_bug:"ERR-CRIT", prioridad:"Alta", severidad:"Crítica", pasos_para_reproducir: [], resultado_actual: newHu.errorBugComparison ?? "Error desconocido", resultado_esperado: "Reporte de bugs." } as BugReportItem];
+                return of(newHu.bugComparisonReport); 
             }),
             finalize(() => {
                 newHu.loadingBugComparison = false;
                 this.checkOverallLoadingStatus();
-                this.updateTestPlanTitle();
                 this.updatePreview();
-                this.resetCurrentInputs();
+                this.resetParentCurrentInputs();
+                this.showParentFormComponent = false;
+                this.currentGenerationMode = null;
+                this.isModeSelected = false;
+                this.cdr.detectChanges();
             })
         ).subscribe({
             error: (err) => {
-                console.error("Error en el flujo de generación (comparación de flujos):", err);
-                this.bugComparisonErrorGlobal = (this.bugComparisonErrorGlobal || "Error general en el proceso de comparación de flujos.");
-                newHu.loadingBugComparison = false; this.checkOverallLoadingStatus();
+                console.error("Error en suscripción de generación (comparación):", err);
+                this.bugComparisonErrorGlobal = (this.bugComparisonErrorGlobal || "Error general en comparación.");
+                newHu.loadingBugComparison = false;
+                this.checkOverallLoadingStatus();
+                this.cdr.detectChanges();
             }
         });
     }
   }
 
-  private _generateDetailedTestCasesForHu(hu: HUData, technique: string, isInitialGeneration: boolean = false): Observable<DetailedTestCase[]> {
-    hu.loadingScenarios = true; hu.errorScenarios = null;
-    if (isInitialGeneration || !this.huList.some(h => h.id !== hu.id && h.loadingScenarios)) {
-        this.loadingScenarios = true; this.scenariosError = null;
-    }
-    let generationObservable$: Observable<DetailedTestCase[]>;
-    if (hu.originalInput.generationMode === 'image' && hu.originalInput.imagesBase64 && hu.originalInput.imagesBase64.length > 0 && hu.originalInput.imageMimeTypes && hu.originalInput.imageMimeTypes.length > 0) {
-      generationObservable$ = this.geminiService.generateDetailedTestCasesImageBased(
-        hu.originalInput.imagesBase64, hu.originalInput.imageMimeTypes, technique
-      );
-    } else if (hu.originalInput.generationMode === 'text' && hu.originalInput.description && hu.originalInput.acceptanceCriteria) {
-      generationObservable$ = this.geminiService.generateDetailedTestCasesTextBased(
-        hu.originalInput.description, hu.originalInput.acceptanceCriteria, technique
-      );
-    } else {
-      hu.errorScenarios = "Datos de entrada insuficientes para generar casos.";
-      hu.detailedTestCases = [{ title: "Error Configuración", preconditions: hu.errorScenarios, steps: "Verifique datos.", expectedResults: "N/A" }];
-      hu.generatedTestCaseTitles = hu.errorScenarios;
-      this.scenariosError = hu.errorScenarios;
-      return of(hu.detailedTestCases).pipe(
-          finalize(() => { hu.loadingScenarios = false; this.checkOverallLoadingStatus(); })
-      );
-    }
-    return generationObservable$.pipe(
-      tap(detailedTestCases => {
-        hu.detailedTestCases = detailedTestCases;
-        hu.generatedTestCaseTitles = this.formatSimpleScenarioTitles(detailedTestCases.map(tc => tc.title));
-        hu.errorScenarios = null;
-        if (detailedTestCases && detailedTestCases.length > 0 && (detailedTestCases[0].title === "Error de API" || detailedTestCases[0].title === "Error de Formato" || detailedTestCases[0].title === "Error de Parsing JSON" || detailedTestCases[0].title === "Información Insuficiente" || detailedTestCases[0].title === "Imágenes no interpretables o técnica no aplicable")) {
-            hu.errorScenarios = `${detailedTestCases[0].title}: ${detailedTestCases[0].preconditions}`;
-            this.scenariosError = hu.errorScenarios;
-        }
-        if (hu.showRegenTechniquePicker) { hu.showRegenTechniquePicker = false; hu.regenSelectedTechnique = ''; }
-      }),
-      catchError(error => {
-        hu.errorScenarios = (typeof error === 'string' ? error : error.message) || 'Error al generar casos detallados.';
-        hu.detailedTestCases = [{ title: "Error Crítico", preconditions: hu.errorScenarios ?? "Error no especificado.", steps: "N/A", expectedResults: "N/A" }];
-        hu.generatedTestCaseTitles = "Error al generar casos de prueba.";
-        this.scenariosError = `Error al generar casos para HU ${hu.id}. ${hu.errorScenarios}`;
-        return of(hu.detailedTestCases);
-      }),
-      finalize(() => {
-        hu.loadingScenarios = false; this.checkOverallLoadingStatus();
-        this.updatePreview();
-      })
-    );
-  }
-
   public checkOverallLoadingStatus(): void {
-    this.loadingSections = this.huList.some(huItem => huItem.loadingScope);
-    this.loadingScenarios = this.huList.some(huItem => huItem.loadingScenarios);
     this.loadingFlowAnalysisGlobal = this.huList.some(huItem => huItem.loadingFlowAnalysis);
     this.loadingBugComparisonGlobal = this.huList.some(huItem => huItem.loadingBugComparison);
+    this.cdr.detectChanges();
   }
 
   public toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
-    if (section === 'scenarios' && hu.showRegenTechniquePicker) { this.cancelScenarioRegeneration(hu); }
     if (section === 'scope') {
       if (hu.originalInput.generationMode === 'text') {
-        hu.editingScope = !hu.editingScope; if (hu.editingScope) hu.isScopeDetailsOpen = true;
-      } else { alert("El alcance no es aplicable ni editable para este modo de generación."); }
+        hu.editingScope = !hu.editingScope; 
+        if (hu.editingScope) hu.isScopeDetailsOpen = true;
+      } else {
+        alert("El alcance no es aplicable/editable para este modo.");
+      }
     } else if (section === 'scenarios') {
       if (hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image') {
-        hu.editingScenarios = !hu.editingScenarios;
-        if (hu.editingScenarios) { hu.isScenariosDetailsOpen = true; setTimeout(() => this.scenariosTextarea?.nativeElement.focus(), 0); }
-      } else { alert("La edición de títulos de escenarios no es aplicable para este modo de generación.");}
+        // Modificado para llamar a la nueva lógica de edición/regeneración
+        this.toggleEditDetailedTestCases(hu);
+      } else {
+        alert("La edición/regeneración de casos no es aplicable para este modo.");
+      }
     }
-    if ((section === 'scope' && !hu.editingScope && hu.originalInput.generationMode === 'text') ||
-        (section === 'scenarios' && !hu.editingScenarios && (hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image'))
-    ) { this.updatePreview(); }
+    // Ajustar la condición para la actualización de la vista previa
+    if (!hu.editingScope && !hu.isEditingDetailedTestCases) { 
+        this.updatePreview();
+    }
+    this.cdr.detectChanges();
+  }
+
+  public toggleEditDetailedTestCases(hu: HUData): void {
+    if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
+      alert("La edición detallada de casos solo aplica a HUs generadas por texto o imagen.");
+      return;
+    }
+
+    hu.isEditingDetailedTestCases = !hu.isEditingDetailedTestCases;
+    if (hu.isEditingDetailedTestCases) {
+      hu.isScenariosDetailsOpen = true; 
+      hu.showRegenTechniquePicker = true; 
+      hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; 
+      hu.userTestCaseReanalysisContext = hu.userTestCaseReanalysisContext || ''; 
+    } else {
+      // Si se cancela la edición detallada (isEditingDetailedTestCases pasa a false)
+      hu.showRegenTechniquePicker = false; // Ocultar el picker
+      // Si se quiere revertir cambios no guardados, se necesitaría un snapshot.
+      // Por ahora, los cambios no confirmados se pierden o se mantienen si el modelo está bindeado.
+      this.updatePreview(); 
+    }
+    this.cdr.detectChanges();
+  }
+
+  public cancelDetailedTestCasesEditing(hu: HUData): void {
+    // Aquí se podría implementar la reversión a un snapshot si se almacenó.
+    hu.isEditingDetailedTestCases = false;
+    hu.showRegenTechniquePicker = false; // Asegurar que el picker también se oculte
+    hu.errorScenarios = null; 
+    this.cdr.detectChanges();
+    // No se actualiza la preview aquí porque los cambios editados no se confirmaron.
   }
 
   public toggleStaticEdit(baseName: StaticSectionBaseName): void {
-    let editingProp: keyof TestPlanGeneratorComponent; let detailsOpenProp: keyof TestPlanGeneratorComponent;
+    let editingProp: keyof TestPlanGeneratorComponent, detailsOpenProp: keyof TestPlanGeneratorComponent;
     switch (baseName) {
       case 'repositoryLink': editingProp = 'editingRepositoryLink'; detailsOpenProp = 'isRepositoryLinkDetailsOpen'; break;
       case 'outOfScope': editingProp = 'editingOutOfScope'; detailsOpenProp = 'isOutOfScopeDetailsOpen'; break;
@@ -894,856 +789,699 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       case 'limitations': editingProp = 'editingLimitations'; detailsOpenProp = 'isLimitationsDetailsOpen'; break;
       case 'assumptions': editingProp = 'editingAssumptions'; detailsOpenProp = 'isAssumptionsDetailsOpen'; break;
       case 'team': editingProp = 'editingTeam'; detailsOpenProp = 'isTeamDetailsOpen'; break;
-      default: const exhaustiveCheck: never = baseName; console.error('Invalid static name:', exhaustiveCheck); return;
+      default: return;
     }
-    const wasEditing = this[editingProp] as boolean; (this[editingProp] as any) = !wasEditing;
-    if (this[editingProp]) { (this[detailsOpenProp] as any) = true; }
-    if (wasEditing && !(this[editingProp] as boolean)) { this.updatePreview(); }
+    const wasEditing = this[editingProp] as boolean; 
+    (this[editingProp] as any) = !wasEditing;
+    if (this[editingProp]) {
+        (this[detailsOpenProp] as any) = true;
+    }
+    if (wasEditing && !(this[editingProp] as boolean)) {
+        this.updatePreview();
+    }
+    this.cdr.detectChanges();
   }
 
-  public startScenarioRegeneration(hu: HUData): void {
+  public startScenarioRegeneration(hu: HUData): void { //Esta función ahora es más para el picker inicial
     if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
-      alert("La regeneración de escenarios solo aplica para HUs basadas en texto o imágenes."); return;
+      alert("Regeneración solo para HUs de texto/imágenes."); return;
     }
-    hu.editingScenarios = false; hu.showRegenTechniquePicker = true; hu.isScenariosDetailsOpen = true;
-    hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; hu.errorScenarios = null; this.scenariosError = null;
+    hu.isEditingDetailedTestCases = false; // Asegurar que no esté en modo edición detallada
+    hu.showRegenTechniquePicker = true; 
+    hu.isScenariosDetailsOpen = true; 
+    hu.regenSelectedTechnique = hu.originalInput.selectedTechnique; 
+    hu.userTestCaseReanalysisContext = hu.userTestCaseReanalysisContext || ''; 
+    hu.errorScenarios = null; 
+    this.cdr.detectChanges();
   }
 
-  public cancelScenarioRegeneration(hu: HUData): void {
-    hu.showRegenTechniquePicker = false; hu.regenSelectedTechnique = ''; hu.errorScenarios = null;
+  public cancelScenarioRegeneration(hu: HUData): void { // Para cancelar el picker sin edición detallada
+    hu.showRegenTechniquePicker = false; 
+    hu.isEditingDetailedTestCases = false; // Asegurar que también se apague
+    hu.errorScenarios = null;
+    this.cdr.detectChanges();
   }
 
   public confirmRegenerateScenarios(hu: HUData): void {
-    if (!hu.regenSelectedTechnique) { hu.errorScenarios = 'Debes seleccionar una técnica.'; return; }
-    this._generateDetailedTestCasesForHu(hu, hu.regenSelectedTechnique, false).subscribe();
+    if (!hu.regenSelectedTechnique) { 
+        hu.errorScenarios = 'Debes seleccionar una técnica para regenerar.'; 
+        this.cdr.detectChanges(); 
+        return; 
+    }
+    if (hu.originalInput.generationMode !== 'text' && hu.originalInput.generationMode !== 'image') {
+        hu.errorScenarios = 'Regeneración/Refinamiento solo para HUs de texto o imágenes.';
+        this.cdr.detectChanges();
+        return;
+    }
+
+    hu.loadingScenarios = true; 
+    hu.errorScenarios = null;
+
+    // Asegurar que los pasos de los casos de prueba editados tengan contenido o un placeholder
+    if (hu.isEditingDetailedTestCases && hu.detailedTestCases) {
+        hu.detailedTestCases.forEach(tc => {
+            if (!tc.steps) tc.steps = [];
+            tc.steps.forEach(step => {
+                if (!step.accion || step.accion.trim() === '') {
+                    step.accion = "Acción no definida por el usuario."; // Placeholder
+                }
+            });
+        });
+    }
+    
+    let regenerationObs$: Observable<DetailedTestCase[]>;
+
+    if (hu.isEditingDetailedTestCases) { // Si se estaban editando los casos detallados
+        regenerationObs$ = this.geminiService.refineDetailedTestCases(
+            hu.originalInput,
+            hu.detailedTestCases, // Casos editados
+            hu.regenSelectedTechnique,
+            hu.userTestCaseReanalysisContext
+        );
+    } else { // Flujo de regeneración original (sin edición detallada activa, solo picker)
+        if (hu.originalInput.generationMode === 'image' && hu.originalInput.imagesBase64?.length) {
+            regenerationObs$ = this.geminiService.generateDetailedTestCasesImageBased(hu.originalInput.imagesBase64, hu.originalInput.imageMimeTypes!, hu.regenSelectedTechnique, hu.userTestCaseReanalysisContext);
+        } else if (hu.originalInput.generationMode === 'text' && hu.originalInput.description && hu.originalInput.acceptanceCriteria) {
+            regenerationObs$ = this.geminiService.generateDetailedTestCasesTextBased(hu.originalInput.description, hu.originalInput.acceptanceCriteria!, hu.regenSelectedTechnique, hu.userTestCaseReanalysisContext);
+        } else {
+            hu.errorScenarios = "Datos originales insuficientes para regenerar."; hu.loadingScenarios = false; this.cdr.detectChanges(); return;
+        }
+    }
+    
+    // Actualizar técnica seleccionada en originalInput para consistencia si se regenera/refina
+    hu.originalInput.selectedTechnique = hu.regenSelectedTechnique;
+
+    regenerationObs$.pipe(
+        tap(generatedOrRefinedTestCases => {
+            hu.detailedTestCases = generatedOrRefinedTestCases.map(tc => ({ 
+                ...tc,
+                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
+                    numero_paso: s.numero_paso || (i + 1),
+                    accion: s.accion || "Paso no descrito tras procesamiento"
+                })) : [{numero_paso: 1, accion: "Pasos no retornados en formato esperado."}] // Fallback
+            }));
+            hu.generatedTestCaseTitles = this.formatSimpleScenarioTitles(generatedOrRefinedTestCases.map(tc => tc.title));
+            
+            if (generatedOrRefinedTestCases?.length === 1 && (
+                generatedOrRefinedTestCases[0].title === "Información Insuficiente" || 
+                generatedOrRefinedTestCases[0].title === "Imágenes no interpretables o técnica no aplicable" || 
+                generatedOrRefinedTestCases[0].title === "Refinamiento no posible con el contexto actual" ||
+                generatedOrRefinedTestCases[0].title?.startsWith("Error")
+            )) {
+                hu.errorScenarios = `${generatedOrRefinedTestCases[0].title}: ${generatedOrRefinedTestCases[0].preconditions || (generatedOrRefinedTestCases[0].steps && generatedOrRefinedTestCases[0].steps[0] ? generatedOrRefinedTestCases[0].steps[0].accion : 'Detalles no disponibles.')}`;
+            }
+            hu.showRegenTechniquePicker = false; 
+            hu.isEditingDetailedTestCases = false; // Salir del modo de edición detallada
+        }),
+        catchError(error => {
+            hu.errorScenarios = (typeof error === 'string' ? error : error.message) || 'Error procesando casos de prueba.';
+            // No sobreescribir los detailedTestCases si ya hay edición del usuario, para no perderla.
+            // Si no había edición (regeneración simple), sí se podría poner un caso de error.
+            if (!hu.isEditingDetailedTestCases) { // Solo si no estaba editando, para no perder trabajo
+                 hu.detailedTestCases = [{ title: "Error Crítico", preconditions: hu.errorScenarios ?? "Error desconocido", steps: [{numero_paso: 1, accion: "Error."}], expectedResults: "N/A" }];
+                 hu.generatedTestCaseTitles = "Error al procesar.";
+            }
+            return of(hu.detailedTestCases); // Devolver los casos existentes para no perderlos
+        }),
+        finalize(() => { hu.loadingScenarios = false; this.updatePreview(); this.cdr.detectChanges(); })
+    ).subscribe();
   }
 
   public regenerateScope(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
-      hu.errorScope = 'El alcance solo se regenera para HUs con descripción/criterios.'; alert(hu.errorScope); return;
+      alert('Alcance solo se regenera para HUs con descripción/criterios.'); return;
     }
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
-    this.loadingSections = this.huList.some(h => h.loadingScope || h.id === hu.id); this.sectionsError = null;
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
         tap(scopeText => { hu.generatedScope = scopeText; hu.errorScope = null; }),
-        catchError(error => {
-          hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.';
-          this.sectionsError = `Error alcance HU ${hu.id}.`; return of('');
-        }),
-        finalize(() => { hu.loadingScope = false; this.checkOverallLoadingStatus(); this.updatePreview(); })
+        catchError(error => { hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.'; return of(''); }),
+        finalize(() => { hu.loadingScope = false; this.updatePreview(); this.cdr.detectChanges(); })
       ).subscribe();
   }
 
-public regenerateFlowAnalysis(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'flowAnalysis' ||
-        !hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0 ||
-        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0) {
-        alert("Solo se puede re-analizar un flujo si es de tipo 'Análisis de Flujo', tiene imágenes y un informe previo para contextualizar.");
-        return;
+  public regenerateFlowAnalysis(hu: HUData): void {
+    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.originalInput.imagesBase64?.length || !hu.flowAnalysisReport?.length) {
+        alert("Solo se puede re-analizar un flujo con imágenes y un informe previo."); return;
     }
-    hu.loadingFlowAnalysis = true;
-    hu.errorFlowAnalysis = null;
-    this.loadingFlowAnalysisGlobal = true;
-    this.flowAnalysisErrorGlobal = null;
-
+    hu.loadingFlowAnalysis = true; hu.errorFlowAnalysis = null; this.loadingFlowAnalysisGlobal = true; this.flowAnalysisErrorGlobal = null;
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
-        hu.originalInput.imagesBase64!,
-        hu.originalInput.imageMimeTypes!,
-        hu.flowAnalysisReport[0],
-        hu.userReanalysisContext // NUEVO: Pasar el contexto del usuario
+        hu.originalInput.imagesBase64!, hu.originalInput.imageMimeTypes!, hu.flowAnalysisReport[0], hu.userReanalysisContext 
     ).pipe(
         tap(report => {
-            hu.flowAnalysisReport = report;
-            hu.errorFlowAnalysis = null;
+            hu.flowAnalysisReport = report; hu.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
-                hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
+                hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles en el error.'}`;
                 this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
             }
-            hu.isEditingFlowReportDetails = false; // Terminar edición después de re-análisis
+            hu.isEditingFlowReportDetails = false; 
         }),
         catchError(error => {
-            hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis de flujo con contexto.';
+            hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
-            // Conservar el reporte anterior o una indicación del error en el reporte
-            hu.flowAnalysisReport = hu.flowAnalysisReport || [{
-                Nombre_del_Escenario: "Error Crítico en Re-Generación (Contextualizada)",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "El re-análisis de flujo no pudo completarse."
-            }];
-            return of(hu.flowAnalysisReport); // Devuelve el reporte (posiblemente con error) para no romper el flujo
+            hu.flowAnalysisReport = hu.flowAnalysisReport || [{ Nombre_del_Escenario: "Error Crítico en Re-Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "Re-análisis fallido." }];
+            return of(hu.flowAnalysisReport);
         }),
-        finalize(() => {
-            hu.loadingFlowAnalysis = false;
-            this.checkOverallLoadingStatus();
-            this.updatePreview();
-        })
+        finalize(() => { hu.loadingFlowAnalysis = false; this.checkOverallLoadingStatus(); this.updatePreview(); this.cdr.detectChanges(); })
     ).subscribe();
-}
+  }
 
-public toggleEditFlowReportDetails(hu: HUData): void {
+  public toggleEditFlowReportDetails(hu: HUData): void {
     hu.isEditingFlowReportDetails = !hu.isEditingFlowReportDetails;
-    if (!hu.isEditingFlowReportDetails) { // When finishing edit
-        if (hu.flowAnalysisReport && hu.flowAnalysisReport[0] && hu.flowAnalysisReport[0].Pasos_Analizados) {
-            // Ensure steps are re-numbered for visual consistency
-            hu.flowAnalysisReport[0].Pasos_Analizados.forEach((paso, index) => {
-                paso.numero_paso = index + 1;
-            });
-        }
+    if (!hu.isEditingFlowReportDetails && hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
+        hu.flowAnalysisReport[0].Pasos_Analizados.forEach((paso, index) => { paso.numero_paso = index + 1; });
         this.updatePreview();
     }
-}
+    this.cdr.detectChanges();
+  }
 
-public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number): void {
-    if (hu.flowAnalysisReport && hu.flowAnalysisReport[reportIndex] && hu.flowAnalysisReport[reportIndex].Pasos_Analizados) {
+  public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number): void {
+    if (hu.flowAnalysisReport?.[reportIndex]?.Pasos_Analizados) {
         hu.flowAnalysisReport[reportIndex].Pasos_Analizados.splice(stepIndex, 1);
-        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.forEach((paso, idx) => {
-            paso.numero_paso = idx + 1; // Re-number after deletion
-        });
-        this.updatePreview();
-        this.cdr.detectChanges();
+        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.forEach((paso, idx) => { paso.numero_paso = idx + 1; });
+        this.updatePreview(); this.cdr.detectChanges();
     }
-}
+  }
 
-public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
-    if (hu.flowAnalysisReport && hu.flowAnalysisReport[reportIndex]) {
-        const newStep: FlowAnalysisStep = {
-            numero_paso: hu.flowAnalysisReport[reportIndex].Pasos_Analizados.length + 1,
-            descripcion_accion_observada: '',
-            imagen_referencia_entrada: 'Nueva (describir o sin imagen)', // User should edit this
-            elemento_clave_y_ubicacion_aproximada: '',
-            dato_de_entrada_paso: '',
-            resultado_esperado_paso: '',
-            resultado_obtenido_paso_y_estado: ''
+  public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
+    if (hu.flowAnalysisReport?.[reportIndex] && hu.flowAnalysisReport[reportIndex].Pasos_Analizados) {
+        const newStep: FlowAnalysisStep = { 
+            numero_paso: hu.flowAnalysisReport[reportIndex].Pasos_Analizados.length + 1, 
+            descripcion_accion_observada: '', 
+            imagen_referencia_entrada: 'Nueva', 
+            elemento_clave_y_ubicacion_aproximada: '', 
+            dato_de_entrada_paso: '', 
+            resultado_esperado_paso: '', 
+            resultado_obtenido_paso_y_estado: '' 
         };
         hu.flowAnalysisReport[reportIndex].Pasos_Analizados.push(newStep);
-        this.updatePreview();
-        this.cdr.detectChanges();
+        this.updatePreview(); this.cdr.detectChanges();
     }
-}
-
+  }
 
   public regenerateBugComparison(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'flowComparison' ||
-        !hu.originalInput.imagesBase64FlowA || hu.originalInput.imagesBase64FlowA.length === 0 ||
-        !hu.originalInput.imagesBase64FlowB || hu.originalInput.imagesBase64FlowB.length === 0) {
-        alert("Solo se puede re-analizar una comparación si es de tipo 'Comparación de Flujos' y tiene imágenes cargadas para ambos flujos.");
-        return;
+    if (hu.originalInput.generationMode !== 'flowComparison' || !hu.originalInput.imagesBase64FlowA?.length || !hu.originalInput.imagesBase64FlowB?.length) {
+        alert("Solo se re-analiza una comparación con imágenes en ambos flujos."); return;
     }
-    hu.loadingBugComparison = true;
-    hu.errorBugComparison = null;
-    this.loadingBugComparisonGlobal = true;
-    this.bugComparisonErrorGlobal = null;
-
+    hu.loadingBugComparison = true; hu.errorBugComparison = null; this.loadingBugComparisonGlobal = true; this.bugComparisonErrorGlobal = null;
     this.geminiService.compareImageFlows(
         hu.originalInput.imagesBase64FlowA!, hu.originalInput.imageMimeTypesFlowA!,
         hu.originalInput.imagesBase64FlowB!, hu.originalInput.imageMimeTypesFlowB!
     ).pipe(
         tap(report => {
-            hu.bugComparisonReport = report;
-            hu.errorBugComparison = null;
-             if (report && report.length > 0 && report.some(item => item.titulo_bug.startsWith("Error de API") || item.titulo_bug.startsWith("Error de Formato") || item.titulo_bug.startsWith("Error de Parsing JSON"))){
+            hu.bugComparisonReport = report; hu.errorBugComparison = null;
+             if (report?.some(item => item.titulo_bug.startsWith("Error"))) {
                 const firstError = report.find(item => item.titulo_bug.startsWith("Error"));
-                hu.errorBugComparison = `${firstError?.titulo_bug}: ${firstError?.resultado_actual || 'Detalles no disponibles.'}`;
+                hu.errorBugComparison = `${firstError?.titulo_bug}: ${firstError?.resultado_actual || 'Detalles no disponibles en el error.'}`;
                 this.bugComparisonErrorGlobal = hu.errorBugComparison ?? null;
             }
         }),
         catchError(error => {
-            hu.errorBugComparison = (typeof error === 'string' ? error : error.message) || 'Error al re-generar comparación de flujos.';
+            hu.errorBugComparison = (typeof error === 'string' ? error : error.message) || 'Error al re-generar comparación.';
             this.bugComparisonErrorGlobal = hu.errorBugComparison ?? null;
-            hu.bugComparisonReport = [{
-                titulo_bug: "Error Crítico en Re-Comparación", id_bug:"ERR-CRIT-RE", prioridad:"Alta", severidad:"Crítica",
-                pasos_para_reproducir: [], resultado_actual: hu.errorBugComparison ?? "Error desconocido", resultado_esperado: "Reporte de bugs."
-            } as BugReportItem];
+            hu.bugComparisonReport = [{ titulo_bug: "Error Crítico en Re-Comparación", id_bug:"ERR-CRIT-RE", prioridad:"Alta", severidad:"Crítica", pasos_para_reproducir: [], resultado_actual: hu.errorBugComparison ?? "Error desconocido", resultado_esperado: "Reporte." } as BugReportItem];
             return of(hu.bugComparisonReport);
         }),
-        finalize(() => {
-            hu.loadingBugComparison = false;
-            this.checkOverallLoadingStatus();
-            this.updatePreview();
-        })
+        finalize(() => { hu.loadingBugComparison = false; this.checkOverallLoadingStatus(); this.updatePreview(); this.cdr.detectChanges(); })
     ).subscribe();
   }
 
-
   public getHuSummaryForStaticAI(): string {
-    if (this.huList.length === 0) {
-      return "No hay Historias de Usuario definidas aún.";
-    }
+    if (this.huList.length === 0) return "No hay Historias de Usuario, Análisis de Flujo ni Comparaciones definidas aún.";
     let summary = this.huList.map(hu => {
-      let huDesc = `ID ${hu.id} (${hu.title}): Modo ${hu.originalInput.generationMode}.`;
-      if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
-        huDesc += ` Descripción (inicio): ${hu.originalInput.description.substring(0, 70)}...`;
-      } else if (hu.originalInput.generationMode === 'image' || hu.originalInput.generationMode === 'flowAnalysis') {
-        huDesc += ` (Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es), título: ${hu.title})`;
-      } else if (hu.originalInput.generationMode === 'flowComparison') {
-        huDesc += ` (Comparación desde ${hu.originalInput.imagesBase64FlowA?.length || 0} imgs Flujo A vs ${hu.originalInput.imagesBase64FlowB?.length || 0} imgs Flujo B, título: ${hu.title})`;
-      }
+      let huDesc = `ID ${hu.id} (${hu.title}): Modo "${hu.originalInput.generationMode}".`;
+      if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) huDesc += ` Descripción: ${hu.originalInput.description.substring(0, 70)}...`;
+      else if (hu.originalInput.generationMode === 'image') huDesc += ` (Desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es), título: ${hu.title}, técnica: ${hu.originalInput.selectedTechnique})`;
+      else if (hu.originalInput.generationMode === 'flowAnalysis') huDesc += ` (Análisis desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es), título: ${hu.title})`;
+      else if (hu.originalInput.generationMode === 'flowComparison') huDesc += ` (Comparación Flujo A:${hu.originalInput.imagesBase64FlowA?.length || 0} vs Flujo B:${hu.originalInput.imagesBase64FlowB?.length || 0} imagen(es), título: ${hu.title})`;
       return `- ${huDesc}`;
     }).join('\n');
-
-    if (summary.length > 1500) {
-        summary = summary.substring(0, 1500) + "\n... (resumen truncado por longitud)";
-    }
-    return summary;
+    return summary.length > 1500 ? summary.substring(0, 1500) + "\n... (resumen truncado para no exceder límites de prompt)" : summary;
   }
 
   public regenerateStaticSectionWithAI(section: 'outOfScope' | 'strategy' | 'limitations' | 'assumptions'): void {
-    let sectionNameDisplay: string = '';
-    let currentContent: string = '';
-    let loadingFlag: keyof TestPlanGeneratorComponent | null = null;
-    let errorFlag: keyof TestPlanGeneratorComponent | null = null;
-    let detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
-
-
+    let sectionNameDisplay = '', currentContent = '', loadingFlag: keyof TestPlanGeneratorComponent | null = null, errorFlag: keyof TestPlanGeneratorComponent | null = null, detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
     switch (section) {
-      case 'outOfScope':
-        sectionNameDisplay = 'Fuera del Alcance'; currentContent = this.outOfScopeContent;
-        loadingFlag = 'loadingOutOfScopeAI'; errorFlag = 'errorOutOfScopeAI'; detailsOpenFlag = 'isOutOfScopeDetailsOpen';
-        break;
-      case 'strategy':
-        sectionNameDisplay = 'Estrategia'; currentContent = this.strategyContent;
-        loadingFlag = 'loadingStrategyAI'; errorFlag = 'errorStrategyAI'; detailsOpenFlag = 'isStrategyDetailsOpen';
-        break;
-      case 'limitations':
-        sectionNameDisplay = 'Limitaciones'; currentContent = this.limitationsContent;
-        loadingFlag = 'loadingLimitationsAI'; errorFlag = 'errorLimitationsAI'; detailsOpenFlag = 'isLimitationsDetailsOpen';
-        break;
-      case 'assumptions':
-        sectionNameDisplay = 'Supuestos'; currentContent = this.assumptionsContent;
-        loadingFlag = 'loadingAssumptionsAI'; errorFlag = 'errorAssumptionsAI'; detailsOpenFlag = 'isAssumptionsDetailsOpen';
-        break;
+      case 'outOfScope': sectionNameDisplay = 'Fuera del Alcance'; currentContent = this.outOfScopeContent; loadingFlag = 'loadingOutOfScopeAI'; errorFlag = 'errorOutOfScopeAI'; detailsOpenFlag = 'isOutOfScopeDetailsOpen'; break;
+      case 'strategy': sectionNameDisplay = 'Estrategia'; currentContent = this.strategyContent; loadingFlag = 'loadingStrategyAI'; errorFlag = 'errorStrategyAI'; detailsOpenFlag = 'isStrategyDetailsOpen'; break;
+      case 'limitations': sectionNameDisplay = 'Limitaciones'; currentContent = this.limitationsContent; loadingFlag = 'loadingLimitationsAI'; errorFlag = 'errorLimitationsAI'; detailsOpenFlag = 'isLimitationsDetailsOpen'; break;
+      case 'assumptions': sectionNameDisplay = 'Supuestos'; currentContent = this.assumptionsContent; loadingFlag = 'loadingAssumptionsAI'; errorFlag = 'errorAssumptionsAI'; detailsOpenFlag = 'isAssumptionsDetailsOpen'; break;
     }
-
-    if (loadingFlag) (this[loadingFlag] as any) = true;
-    if (errorFlag) (this[errorFlag] as any) = null;
-    if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
-
-    const huSummary = this.getHuSummaryForStaticAI();
-
-    this.geminiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, huSummary)
+    if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
+    
+    this.geminiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI())
       .pipe(
-        finalize(() => {
-          if (loadingFlag) (this[loadingFlag] as any) = false;
-          this.updatePreview();
-        })
+          finalize(() => { 
+              if (loadingFlag) (this[loadingFlag] as any) = false; 
+              this.updatePreview(); 
+              this.cdr.detectChanges();
+            })
       )
       .subscribe({
-        next: (aiResponse: string) => {
-          if (aiResponse && aiResponse.trim() !== '') {
-            const newContent = (currentContent.trim() === '' || currentContent.trim().toLowerCase().startsWith('no se probarán') && section === 'outOfScope' || currentContent.trim().toLowerCase().startsWith('no tener los permisos') && section === 'limitations'
-                ? aiResponse.trim()
-                : currentContent + '\n\n' + aiResponse.trim());
+        next: (aiResponse) => {
+          if (aiResponse?.trim()) {
+            const isPlaceholder = 
+                (section === 'outOfScope' && currentContent.trim().toLowerCase().startsWith('no se probarán')) ||
+                (section === 'limitations' && currentContent.trim().toLowerCase().startsWith('no tener los permisos')) ||
+                currentContent.trim() === '';
+
+            const newContent = isPlaceholder ? aiResponse.trim() : currentContent + '\n\n' + aiResponse.trim();
+            
             switch (section) {
-              case 'outOfScope': this.outOfScopeContent = newContent; break;
+              case 'outOfScope': this.outOfScopeContent = newContent; break; 
               case 'strategy': this.strategyContent = newContent; break;
-              case 'limitations': this.limitationsContent = newContent; break;
+              case 'limitations': this.limitationsContent = newContent; break; 
               case 'assumptions': this.assumptionsContent = newContent; break;
             }
-          } else {
-            if (errorFlag) (this[errorFlag] as any) = 'La IA no generó contenido adicional.';
+          } else if (errorFlag) {
+              (this[errorFlag] as any) = 'La IA no generó contenido adicional o la respuesta fue vacía.';
           }
         },
-        error: (err: Error) => {
-          if (errorFlag) (this[errorFlag] as any) = err.message || `Error al regenerar "${sectionNameDisplay}" con IA.`;
+        error: (err) => { 
+            if (errorFlag) (this[errorFlag] as any) = err.message || `Error regenerando sección "${sectionNameDisplay}".`; 
         }
       });
   }
 
   public formatSimpleScenarioTitles(titles: string[]): string {
-    if (!titles || titles.length === 0) { return 'No se generaron escenarios.'; }
+    if (!titles || titles.length === 0) return 'No se generaron escenarios.';
     return titles.map((title, index) => `${index + 1}. ${title}`).join('\n');
   }
 
-  public resetCurrentInputs(): void {
-    const keptMode = this.currentGenerationMode;
-    const keptSprint = this.currentSprint;
-    const keptTechnique = (keptMode === 'text' || keptMode === 'image') ? this.currentSelectedTechnique : '';
+  public resetParentCurrentInputs(): void { 
+    const keptSprint = this.currentFlowSprint; 
 
-    if (this.huFormDirective) {
-        this.huFormDirective.resetForm({
-            currentSelectedTechnique: keptTechnique,
-            currentSprint: keptSprint,
-            currentHuTitle: ''
-        });
+    if (this.flowFormDirective) {
+        this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
     }
-
-    this.currentGenerationMode = keptMode;
-    this.currentSelectedTechnique = keptTechnique;
-    this.currentSprint = keptSprint;
-
-    this.currentHuId = '';
-    this.currentHuTitle = '';
-
-    this.currentDescription = '';
-    this.currentAcceptanceCriteria = '';
-
-    this.selectedFiles = [];
-    this.currentImagePreviews = [];
-    this.imagesBase64 = [];
-    this.imageMimeTypes = [];
-    this.draggableImages = [];
-    this.imageUploadError = null;
-
-    this.draggableImagesFlowA = [];
-    this.imagesBase64FlowA = [];
-    this.imageMimeTypesFlowA = [];
-    this.imageUploadErrorFlowA = null;
-    this.draggableImagesFlowB = [];
-    this.imagesBase64FlowB = [];
-    this.imageMimeTypesFlowB = [];
-    this.imageUploadErrorFlowB = null;
-
+    this.currentFlowSprint = keptSprint; 
+    this.currentFlowTitle = '';
+    
+    this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
+    this.draggableImagesFlowA = []; this.imagesBase64FlowA = []; this.imageMimeTypesFlowA = []; this.imageUploadErrorFlowA = null;
+    this.draggableImagesFlowB = []; this.imagesBase64FlowB = []; this.imageMimeTypesFlowB = []; this.imageUploadErrorFlowB = null;
     this.formError = null;
+    this.flowAnalysisErrorGlobal = null;
+    this.bugComparisonErrorGlobal = null;
 
 
     if (isPlatformBrowser(this.platformId)) {
-      if (this.imageFilesInputRef && this.imageFilesInputRef.nativeElement) {
-        this.imageFilesInputRef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowARef && this.imageFilesInputFlowARef.nativeElement) {
-        this.imageFilesInputFlowARef.nativeElement.value = '';
-      }
-      if (this.imageFilesInputFlowBRef && this.imageFilesInputFlowBRef.nativeElement) {
-        this.imageFilesInputFlowBRef.nativeElement.value = '';
-      }
+      if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
+      if (this.imageFilesInputFlowARef?.nativeElement) this.imageFilesInputFlowARef.nativeElement.value = '';
+      if (this.imageFilesInputFlowBRef?.nativeElement) this.imageFilesInputFlowBRef.nativeElement.value = '';
     }
-     setTimeout(() => {
-        if (this.huFormDirective && this.huFormDirective.form) {
-            if(this.currentGenerationMode === 'flowAnalysis' || this.currentGenerationMode === 'flowComparison'){
-                this.huFormDirective.form.controls['currentSelectedTechnique']?.disable({emitEvent: false});
-            } else {
-                this.huFormDirective.form.controls['currentSelectedTechnique']?.enable({emitEvent: false});
-            }
-            this.huFormDirective.form.updateValueAndValidity();
+    setTimeout(() => {
+        if(this.flowFormDirective?.form) {
+            this.flowFormDirective.form.patchValue({
+                currentFlowSprint: this.currentFlowSprint,
+                currentFlowTitle: this.currentFlowTitle
+            });
+            this.flowFormDirective.form.updateValueAndValidity();
         }
+        this.cdr.detectChanges();
     }, 0);
   }
 
   public updateTestPlanTitle(): void {
     if (this.huList.length > 0) {
-      const relevantHuForTitle = [...this.huList].reverse().find(hu => hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image' || hu.originalInput.generationMode === 'flowComparison' || hu.originalInput.generationMode === 'flowAnalysis') || this.huList[this.huList.length - 1];
+      const relevantHuForTitle = [...this.huList].reverse().find(hu => hu.originalInput.generationMode !== undefined) || this.huList[this.huList.length - 1];
       this.testPlanTitle = `TEST PLAN EVC00057_ ${relevantHuForTitle.id} SPRINT ${relevantHuForTitle.sprint}`;
-    } else { this.testPlanTitle = ''; }
+    } else this.testPlanTitle = 'Plan de Pruebas (Aún sin entradas)';
+    this.cdr.detectChanges();
   }
 
   public updatePreview(): void {
     this.downloadPreviewHtmlContent = this.generatePlanContentHtmlString();
+    this.cdr.detectChanges();
   }
 
-  public generatePlanContentString(): string {
-    if (this.huList.length === 0) { return ''; }
+  public generatePlanContentString(): string { 
+    if (this.huList.length === 0 && !this.testPlanTitle) return 'Plan de pruebas aún no generado. Añade entradas.';
+    
     let fullPlanContent = '';
-    if (this.testPlanTitle) { fullPlanContent += `Título del Plan de Pruebas: ${this.testPlanTitle}\n\n`; }
+    if (this.testPlanTitle) fullPlanContent += `Título del Plan de Pruebas: ${this.testPlanTitle}\n\n`;
+    
     fullPlanContent += `Repositorio pruebas VSTS: ${this.repositoryLink}\n\n`;
+    
     if (this.isAnyHuTextBased()) {
         fullPlanContent += `ALCANCE:\n\n`;
-        this.huList.forEach((hu) => {
-          if (hu.originalInput.generationMode === 'text') {
-            fullPlanContent += `HU ${hu.id}: ${hu.title}\n`;
-            fullPlanContent += `${hu.generatedScope || 'Alcance no generado.'}\n\n`;
-          }
+        this.huList.forEach(hu => { 
+            if (hu.originalInput.generationMode === 'text') {
+                fullPlanContent += `HU ${hu.id}: ${hu.title}\n${hu.generatedScope || 'Alcance no generado o no aplica.'}\n\n`; 
+            }
         });
     }
-    fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\n`;
-    fullPlanContent += `ESTRATEGIA:\n\n${this.strategyContent}\n\n`;
-
+    
+    fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\nESTRATEGIA:\n\n${this.strategyContent}\n\n`;
+    
     const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image');
     if(scenarioHUs.length > 0){
         fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
-        scenarioHUs.forEach((hu) => {
-          fullPlanContent += `HU ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es) - Técnica: ${hu.originalInput.selectedTechnique})` : `(Técnica: ${hu.originalInput.selectedTechnique})`}\n`;
-          fullPlanContent += `${hu.generatedTestCaseTitles}\n\n`;
+        scenarioHUs.forEach(hu => { 
+            fullPlanContent += `ID ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? `(Desde ${hu.originalInput.imagesBase64?.length || 0} imgs - Técnica: ${hu.originalInput.selectedTechnique})` : `(Técnica: ${hu.originalInput.selectedTechnique})`}\n${hu.generatedTestCaseTitles || 'Casos no generados o error.'}\n\n`; 
         });
     }
-
+    
     const flowAnalysisHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'flowAnalysis');
     if(flowAnalysisHUs.length > 0){
         fullPlanContent += `ANÁLISIS DE FLUJO INVERSO (Desde Imágenes):\n\n`;
         flowAnalysisHUs.forEach(hu => {
-            fullPlanContent += `Análisis ID ${hu.id}: ${hu.title} (Generado desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es))\n`;
-            if(hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])){
+            fullPlanContent += `Análisis ID ${hu.id}: ${hu.title} (Desde ${hu.originalInput.imagesBase64?.length || 0} imgs)\n`;
+            if(hu.flowAnalysisReport?.[0] && !this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])){
                 const report = hu.flowAnalysisReport[0];
-                fullPlanContent += `  Nombre del Escenario Inferido: ${report.Nombre_del_Escenario}\n`;
-                if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
-                    fullPlanContent += `  Pasos Analizados:\n`;
-                    report.Pasos_Analizados.forEach((paso, index) => {
-                        // Use index + 1 for visual numbering as paso.numero_paso might be AI's original or re-ordered.
-                        fullPlanContent += `    Paso ${index + 1}: ${paso.descripcion_accion_observada} (Ref IA: ${paso.imagen_referencia_entrada})\n`;
-                        fullPlanContent += `      Elemento Clave: ${paso.elemento_clave_y_ubicacion_aproximada}\n`;
-                        fullPlanContent += `      Dato de Entrada (Paso): ${paso.dato_de_entrada_paso || 'N/A'}\n`;
-                        fullPlanContent += `      Resultado Esperado (Paso): ${paso.resultado_esperado_paso}\n`;
-                        fullPlanContent += `      Resultado Obtenido (Paso): ${paso.resultado_obtenido_paso_y_estado}\n`;
+                fullPlanContent += `  Nombre Escenario: ${report.Nombre_del_Escenario}\n`;
+                if (report.Pasos_Analizados?.length) {
+                    report.Pasos_Analizados.forEach((paso) => { 
+                        fullPlanContent += `    Paso ${paso.numero_paso}: ${paso.descripcion_accion_observada} (Ref IA: ${paso.imagen_referencia_entrada})\n      Elemento: ${paso.elemento_clave_y_ubicacion_aproximada}\n      Dato Entrada: ${paso.dato_de_entrada_paso || 'N/A'}\n      Res.Esp: ${paso.resultado_esperado_paso}\n      Res.Obt: ${paso.resultado_obtenido_paso_y_estado}\n`; 
                     });
                 } else {
-                     fullPlanContent += `  Pasos Analizados: No se pudieron determinar pasos detallados.\n`;
+                     fullPlanContent += `  Pasos: No detallados o no generados.\n`;
                 }
-                fullPlanContent += `  Resultado Esperado General del Flujo: ${report.Resultado_Esperado_General_Flujo}\n`;
-                fullPlanContent += `  Conclusión General del Flujo: ${report.Conclusion_General_Flujo}\n\n`;
+                fullPlanContent += `  Res.Esp.General: ${report.Resultado_Esperado_General_Flujo}\n  Conclusión: ${report.Conclusion_General_Flujo}\n\n`;
+            } else if (hu.errorFlowAnalysis) {
+                fullPlanContent += `  Error en análisis: ${hu.errorFlowAnalysis}\n\n`;
             } else {
-                fullPlanContent += `  Informe de análisis de flujo no disponible o con errores.\n\n`;
+                 fullPlanContent += `  Informe no disponible o con errores.\n\n`;
             }
         });
     }
+    
     const bugComparisonHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'flowComparison');
     if (bugComparisonHUs.length > 0) {
         fullPlanContent += `REPORTE DE COMPARACIÓN DE FLUJOS (BUGS):\n\n`;
         const currentDate = new Date().toISOString().split('T')[0];
         bugComparisonHUs.forEach(hu => {
             fullPlanContent += `Comparación ID ${hu.id}: ${hu.title}\n`;
-            if (hu.bugComparisonReport && hu.bugComparisonReport.length > 0 && !hu.bugComparisonReport.some(b => b.titulo_bug.startsWith("Error"))) {
+            if (hu.bugComparisonReport?.length && !this.isBugReportInErrorState(hu.bugComparisonReport)) {
                 hu.bugComparisonReport.forEach(bug => {
-                    fullPlanContent += `  Bug: ${bug.titulo_bug}\n`; // ID del Bug omitido
-                    fullPlanContent += `    Prioridad: ${bug.prioridad}, Severidad: ${bug.severidad}\n`;
-                    fullPlanContent += `    Fecha: ${currentDate}\n`; // Usar fecha actual
-                    // Reportado por y Version/Entorno omitidos
-                    if (bug.descripcion_diferencia_general) fullPlanContent += `    Descripción General: ${bug.descripcion_diferencia_general}\n`;
-                    fullPlanContent += `    Pasos para Reproducir:\n`;
-                    bug.pasos_para_reproducir.forEach(paso => {
-                        fullPlanContent += `      ${paso.numero_paso}. ${paso.descripcion}\n`;
-                    });
-                    fullPlanContent += `    Resultado Esperado (Ref. Flujo A: ${bug.imagen_referencia_flujo_a || 'N/A'}): ${bug.resultado_esperado}\n`;
-                    fullPlanContent += `    Resultado Actual (Ref. Flujo B: ${bug.imagen_referencia_flujo_b || 'N/A'}): ${bug.resultado_actual}\n\n`;
+                    fullPlanContent += `  Bug: ${bug.titulo_bug}\n    Prioridad: ${bug.prioridad}, Severidad: ${bug.severidad}\n    Fecha: ${bug.fecha_reporte || currentDate}\n`;
+                    if (bug.descripcion_diferencia_general) fullPlanContent += `    Desc. General: ${bug.descripcion_diferencia_general}\n`;
+                    fullPlanContent += `    Pasos Repr.:\n`; 
+                    if (bug.pasos_para_reproducir?.length) {
+                        bug.pasos_para_reproducir.forEach(p => { fullPlanContent += `      ${p.numero_paso}. ${p.descripcion}\n`; });
+                    } else {
+                        fullPlanContent += `      Pasos no detallados.\n`;
+                    }
+                    fullPlanContent += `    Res.Esp. (Ref A: ${bug.imagen_referencia_flujo_a || 'N/A'}): ${bug.resultado_esperado}\n    Res.Act. (Ref B: ${bug.imagen_referencia_flujo_b || 'N/A'}): ${bug.resultado_actual}\n\n`;
                 });
-            } else if (hu.errorBugComparison) {
-                fullPlanContent += `  Error en la comparación: ${hu.errorBugComparison}\n\n`;
+            } else if (hu.errorBugComparison) { 
+                fullPlanContent += `  Error en comparación: ${hu.errorBugComparison}\n\n`;
             } else {
-                fullPlanContent += `  No se reportaron diferencias significativas o hubo un error.\n\n`;
+                fullPlanContent += `  No se reportaron diferencias o hubo un error en la generación.\n\n`;
             }
         });
     }
-
-
-    fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\n`;
-    fullPlanContent += `SUPUESTOS:\n\n${this.assumptionsContent}\n\n`;
-    fullPlanContent += `Equipo de Trabajo:\n\n${this.teamContent}\n\n`;
+    
+    fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\nSUPUESTOS:\n\n${this.assumptionsContent}\n\nEquipo de Trabajo:\n\n${this.teamContent}\n\n`;
     return fullPlanContent;
   }
 
-  public generatePlanContentHtmlString(): string {
-    if (this.huList.length === 0) { return ''; }
+  public generatePlanContentHtmlString(): string { 
+    if (this.huList.length === 0 && !this.testPlanTitle) { return '<p style="text-align:center; color:#6c757d;">Plan de pruebas aún no generado. Añade entradas.</p>'; }
+    
     let fullPlanHtmlContent = '';
-    const escapeHtml = (unsafe: string): string => {
-        if (typeof unsafe !== 'string') {
+    const escapeHtml = (unsafe: string | undefined | null): string => {
+        if (unsafe === null || unsafe === undefined) {
             return '';
         }
-        let safe = unsafe;
-        safe = safe.replace(/&/g, `&`);
-        safe = safe.replace(/</g, `<`);
-        safe = safe.replace(/>/g, `>`);
-        safe = safe.replace(/"/g, `"`);
-        safe = safe.replace(/'/g, `'`);
-        return safe.replace(/\n/g, '<br>');
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;")
+             .replace(/\n/g, '<br>'); 
     };
     const currentDateForHtml = new Date().toISOString().split('T')[0];
 
-    if (this.testPlanTitle) { fullPlanHtmlContent += `<span class="preview-section-title">Título del Plan de Pruebas:</span> ${escapeHtml(this.testPlanTitle)}\n\n`; }
+    if (this.testPlanTitle) { fullPlanHtmlContent += `<p><span class="preview-section-title">Título del Plan de Pruebas:</span> ${escapeHtml(this.testPlanTitle)}</p>\n\n`; }
 
-    const repoLinkUrl = this.repositoryLink.split(' ')[0];
-    fullPlanHtmlContent += `<span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${escapeHtml(repoLinkUrl)}" target="_blank">${escapeHtml(this.repositoryLink)}</a>\n\n`;
+    const repoLinkUrl = this.repositoryLink.split(' ')[0]; 
+    fullPlanHtmlContent += `<p><span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${escapeHtml(repoLinkUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(this.repositoryLink)}</a></p>\n\n`;
 
     if (this.isAnyHuTextBased()) {
-        fullPlanHtmlContent += `<span class="preview-section-title">ALCANCE:</span>\n\n`;
+        fullPlanHtmlContent += `<p><span class="preview-section-title">ALCANCE:</span></p>\n`;
         this.huList.forEach((hu) => {
           if (hu.originalInput.generationMode === 'text') {
-            fullPlanHtmlContent += `<span class="preview-hu-title">HU ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)}</span>\n`;
-            fullPlanHtmlContent += `${escapeHtml(hu.generatedScope) || 'Alcance no generado.'}\n\n`;
+            fullPlanHtmlContent += `<p><span class="preview-hu-title">HU ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)}</span><br>\n`;
+            fullPlanHtmlContent += `${escapeHtml(hu.generatedScope) || '<em>Alcance no generado o no aplica.</em>'}</p>\n\n`;
           }
         });
     }
-    fullPlanHtmlContent += `<span class="preview-section-title">FUERA DEL ALCANCE:</span>\n\n${escapeHtml(this.outOfScopeContent)}\n\n`;
-    fullPlanHtmlContent += `<span class="preview-section-title">ESTRATEGIA:</span>\n\n${escapeHtml(this.strategyContent)}\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">FUERA DEL ALCANCE:</span><br>\n${escapeHtml(this.outOfScopeContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">ESTRATEGIA:</span><br>\n${escapeHtml(this.strategyContent)}</p>\n\n`;
 
     const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image');
     if(scenarioHUs.length > 0){
-        fullPlanHtmlContent += `<span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span>\n\n`;
+        fullPlanHtmlContent += `<p><span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span></p>\n`;
         scenarioHUs.forEach((hu) => {
-          fullPlanHtmlContent += `<span class="preview-hu-title">HU ${escapeHtml(hu.id)} ${escapeHtml(hu.title)} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es) - Técnica: ${escapeHtml(hu.originalInput.selectedTechnique)})` : `(Técnica: ${escapeHtml(hu.originalInput.selectedTechnique)})`}</span>\n`;
-          fullPlanHtmlContent += `${escapeHtml(hu.generatedTestCaseTitles)}\n\n`;
+          fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es) - Técnica: ${escapeHtml(hu.originalInput.selectedTechnique)})` : `(Técnica: ${escapeHtml(hu.originalInput.selectedTechnique)})`}</span><br>\n`;
+          fullPlanHtmlContent += `${escapeHtml(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
         });
     }
 
     const flowAnalysisHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'flowAnalysis');
     if(flowAnalysisHUs.length > 0){
-        fullPlanHtmlContent += `<span class="preview-section-title">ANÁLISIS DE FLUJO INVERSO (Desde Imágenes):</span>\n\n`;
+        fullPlanHtmlContent += `<p><span class="preview-section-title">ANÁLISIS DE FLUJO INVERSO (Desde Imágenes):</span></p>\n`;
         flowAnalysisHUs.forEach(hu => {
-            fullPlanHtmlContent += `<span class="preview-hu-title">Análisis ID ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)} (Generado desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es))</span>\n`;
+            fullPlanHtmlContent += `<p><span class="preview-hu-title">Análisis ID ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)} (Generado desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es))</span></p>\n`;
             if(hu.flowAnalysisReport && hu.flowAnalysisReport.length > 0 && !this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])){
                 const report = hu.flowAnalysisReport[0];
-                fullPlanHtmlContent += `  <strong>Nombre del Escenario:</strong> ${escapeHtml(report.Nombre_del_Escenario)}\n`;
+                fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Nombre del Escenario:</strong> ${escapeHtml(report.Nombre_del_Escenario)}</p>\n`;
                  if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
-                    fullPlanHtmlContent += `  <strong>Pasos:</strong>\n`;
-                    report.Pasos_Analizados.forEach((paso, index) => {
-                        fullPlanHtmlContent += `    Paso ${index + 1}: ${escapeHtml(paso.descripcion_accion_observada)} (Ref. IA: ${escapeHtml(paso.imagen_referencia_entrada)}, Elemento IA: ${escapeHtml(paso.elemento_clave_y_ubicacion_aproximada)})\n`;
-                        fullPlanHtmlContent += `      <em>Dato de Entrada (Paso):</em> ${escapeHtml(paso.dato_de_entrada_paso || 'N/A')}\n`;
-                        fullPlanHtmlContent += `      <em>Resultado Esperado (Paso):</em> ${escapeHtml(paso.resultado_esperado_paso)}\n`;
-                        fullPlanHtmlContent += `      <em>Resultado Obtenido (Paso):</em> ${escapeHtml(paso.resultado_obtenido_paso_y_estado)}\n`;
+                    fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Pasos:</strong></p>\n<ul style="margin-left:30px;">`;
+                    report.Pasos_Analizados.forEach((paso) => {
+                        fullPlanHtmlContent += `<li>Paso ${paso.numero_paso}: ${escapeHtml(paso.descripcion_accion_observada)} (Ref. IA: ${escapeHtml(paso.imagen_referencia_entrada)}, Elemento IA: ${escapeHtml(paso.elemento_clave_y_ubicacion_aproximada)})<br>\n`;
+                        fullPlanHtmlContent += `      <em>Dato de Entrada (Paso):</em> ${escapeHtml(paso.dato_de_entrada_paso || 'N/A')}<br>\n`;
+                        fullPlanHtmlContent += `      <em>Resultado Esperado (Paso):</em> ${escapeHtml(paso.resultado_esperado_paso)}<br>\n`;
+                        fullPlanHtmlContent += `      <em>Resultado Obtenido (Paso):</em> ${escapeHtml(paso.resultado_obtenido_paso_y_estado)}</li>\n`;
                     });
+                    fullPlanHtmlContent += `</ul>\n`;
                 } else {
-                    fullPlanHtmlContent += `  <strong>Pasos:</strong> No se pudieron determinar pasos detallados.\n`;
+                    fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Pasos:</strong> <em>No se pudieron determinar pasos detallados o no se encontraron.</em></p>\n`;
                 }
-                fullPlanHtmlContent += `  <strong>Resultado Esperado General del Flujo:</strong> ${escapeHtml(report.Resultado_Esperado_General_Flujo)}\n`;
-                fullPlanHtmlContent += `  <strong>Conclusión General del Flujo:</strong> ${escapeHtml(report.Conclusion_General_Flujo)}\n\n`;
+                fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Resultado Esperado General del Flujo:</strong> ${escapeHtml(report.Resultado_Esperado_General_Flujo)}</p>\n`;
+                fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Conclusión General del Flujo:</strong> ${escapeHtml(report.Conclusion_General_Flujo)}</p>\n\n`;
+            } else if (hu.errorFlowAnalysis) {
+                fullPlanHtmlContent += `  <p style="margin-left:15px; color:red;"><em>Error en análisis: ${escapeHtml(hu.errorFlowAnalysis)}</em></p>\n\n`;
             } else {
-                fullPlanHtmlContent += `  Informe de análisis de flujo no disponible o con errores.\n\n`;
+                fullPlanHtmlContent += `  <p style="margin-left:15px;"><em>Informe de análisis de flujo no disponible o con errores.</em></p>\n\n`;
             }
         });
     }
 
     const bugComparisonHUs_html = this.huList.filter(hu => hu.originalInput.generationMode === 'flowComparison');
     if (bugComparisonHUs_html.length > 0) {
-        fullPlanHtmlContent += `<span class="preview-section-title">REPORTE DE COMPARACIÓN DE FLUJOS (BUGS):</span>\n\n`;
+        fullPlanHtmlContent += `<p><span class="preview-section-title">REPORTE DE COMPARACIÓN DE FLUJOS (BUGS):</span></p>\n`;
         bugComparisonHUs_html.forEach(hu => {
-            fullPlanHtmlContent += `<span class="preview-hu-title">Comparación ID ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)}</span>\n`;
-            if (hu.bugComparisonReport && hu.bugComparisonReport.length > 0 && !hu.bugComparisonReport.some(b => b.titulo_bug.startsWith("Error"))) {
+            fullPlanHtmlContent += `<p><span class="preview-hu-title">Comparación ID ${escapeHtml(hu.id)}: ${escapeHtml(hu.title)}</span></p>\n`;
+            if (hu.bugComparisonReport && hu.bugComparisonReport.length > 0 && !this.isBugReportInErrorState(hu.bugComparisonReport)) {
                 hu.bugComparisonReport.forEach(bug => {
-                    fullPlanHtmlContent += `  <strong>Bug: ${escapeHtml(bug.titulo_bug)}</strong>\n`; // ID Bug omitido
-                    fullPlanHtmlContent += `    Prioridad: ${escapeHtml(bug.prioridad)}, Severidad: ${escapeHtml(bug.severidad)}\n`;
-                    fullPlanHtmlContent += `    Fecha: ${currentDateForHtml}\n`; // Usar fecha actual
-                    // Reportado por y Version/Entorno omitidos
-                    if (bug.descripcion_diferencia_general) fullPlanHtmlContent += `    Descripción General: ${escapeHtml(bug.descripcion_diferencia_general)}\n`;
-                    fullPlanHtmlContent += `    Pasos para Reproducir:\n`;
-                    bug.pasos_para_reproducir.forEach(paso => {
-                        fullPlanHtmlContent += `      ${paso.numero_paso}. ${escapeHtml(paso.descripcion)}\n`;
-                    });
-                    fullPlanHtmlContent += `    Resultado Esperado (Ref. A: ${escapeHtml(bug.imagen_referencia_flujo_a || 'N/A')}): ${escapeHtml(bug.resultado_esperado)}\n`;
-                    // No se incluyen imágenes en esta previsualización de texto plano
-                    fullPlanHtmlContent += `    Resultado Actual (Ref. B: ${escapeHtml(bug.imagen_referencia_flujo_b || 'N/A')}): ${escapeHtml(bug.resultado_actual)}\n\n`;
+                    fullPlanHtmlContent += `  <div style="margin-left:15px; border-left: 2px solid #c0392b; padding-left:10px; margin-bottom:10px;"><strong>Bug: ${escapeHtml(bug.titulo_bug)}</strong><br>\n`;
+                    fullPlanHtmlContent += `    Prioridad: ${escapeHtml(bug.prioridad)}, Severidad: ${escapeHtml(bug.severidad)}<br>\n`;
+                    fullPlanHtmlContent += `    Fecha: ${escapeHtml(bug.fecha_reporte || currentDateForHtml)}<br>\n`;
+                    if (bug.descripcion_diferencia_general) fullPlanHtmlContent += `    Descripción General: ${escapeHtml(bug.descripcion_diferencia_general)}<br>\n`;
+                    fullPlanHtmlContent += `    Pasos para Reproducir:<br>\n`;
+                    if (bug.pasos_para_reproducir && bug.pasos_para_reproducir.length > 0) {
+                        fullPlanHtmlContent += `<ol style="margin-left:20px;">`;
+                        bug.pasos_para_reproducir.forEach(paso => {
+                            fullPlanHtmlContent += `<li>${escapeHtml(paso.descripcion)}</li>\n`;
+                        });
+                        fullPlanHtmlContent += `</ol>\n`;
+                    } else {
+                         fullPlanHtmlContent += `    <em>Pasos no detallados.</em><br>\n`;
+                    }
+                    fullPlanHtmlContent += `    Resultado Esperado (Ref. A: ${escapeHtml(bug.imagen_referencia_flujo_a || 'N/A')}): ${escapeHtml(bug.resultado_esperado)}<br>\n`;
+                    fullPlanHtmlContent += `    Resultado Actual (Ref. B: ${escapeHtml(bug.imagen_referencia_flujo_b || 'N/A')}): ${escapeHtml(bug.resultado_actual)}</div>\n\n`;
                 });
             } else if (hu.errorBugComparison) {
-                 fullPlanHtmlContent += `  <em>Error en la comparación: ${escapeHtml(hu.errorBugComparison)}</em>\n\n`;
+                 fullPlanHtmlContent += `  <p style="margin-left:15px; color:red;"><em>Error en la comparación: ${escapeHtml(hu.errorBugComparison)}</em></p>\n\n`;
             } else {
-                fullPlanHtmlContent += `  <em>No se reportaron diferencias significativas o hubo un error en la generación del reporte.</em>\n\n`;
+                fullPlanHtmlContent += `  <p style="margin-left:15px;"><em>No se reportaron diferencias significativas o hubo un error en la generación del reporte.</em></p>\n\n`;
             }
         });
     }
 
 
-    fullPlanHtmlContent += `<span class="preview-section-title">LIMITACIONES:</span>\n\n${escapeHtml(this.limitationsContent)}\n\n`;
-    fullPlanHtmlContent += `<span class="preview-section-title">SUPUESTOS:</span>\n\n${escapeHtml(this.assumptionsContent)}\n\n`;
-    fullPlanHtmlContent += `<span class="preview-section-title">Equipo de Trabajo:</span>\n\n${escapeHtml(this.teamContent)}\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">LIMITACIONES:</span><br>\n${escapeHtml(this.limitationsContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">SUPUESTOS:</span><br>\n${escapeHtml(this.assumptionsContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span><br>\n${escapeHtml(this.teamContent)}</p>\n\n`;
     return fullPlanHtmlContent;
   }
 
   public copyPreviewToClipboard(): void {
     const plainTextContent = this.generatePlanContentString();
-    if (!plainTextContent) {
-      alert('No hay contenido para copiar.');
-      return;
+    if (!plainTextContent || plainTextContent.trim() === 'Plan de pruebas aún no generado. Añade entradas.') { 
+        alert('No hay contenido para copiar.'); return; 
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(plainTextContent)
-        .then(() => {
-          alert('¡Plan de pruebas copiado al portapapeles!');
-        })
-        .catch(err => {
-          console.error('Error al copiar al portapapeles: ', err);
-          alert('Error al copiar. Puede que necesites hacerlo manualmente.');
-        });
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(plainTextContent)
+            .then(() => alert('¡Plan copiado al portapapeles!'))
+            .catch(err => {
+                console.error('Error al copiar al portapapeles:', err);
+                alert('Error al copiar. Intenta manualmente o revisa los permisos del navegador.');
+            });
     } else {
-      alert('La copia al portapapeles no es compatible o no está permitida en este navegador/contexto. Intenta copiar manualmente desde la previsualización.');
+        try {
+            const textArea = document.createElement("textarea");
+            textArea.value = plainTextContent;
+            textArea.style.position = "fixed"; 
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert('¡Plan copiado al portapapeles! (método alternativo)');
+        } catch (e) {
+            console.error('Error al copiar (método alternativo):', e);
+            alert('Copia no compatible con este navegador. Intenta manualmente.');
+        }
     }
   }
 
   public downloadWord(): void {
     const plainTextContent = this.generatePlanContentString();
-    if (!plainTextContent) { console.warn('No hay contenido para descargar.'); return; }
-    const blob = new Blob([plainTextContent], { type: 'text/plain;charset=utf-8' });
-    const date = new Date().toISOString().split('T')[0];
-    saveAs(blob, `PlanDePruebas_Completo_${date}.doc`);
+    if (!plainTextContent || plainTextContent.trim() === 'Plan de pruebas aún no generado. Añade entradas.') { 
+        console.warn('No hay contenido para descargar.'); 
+        alert('No hay contenido para descargar.');
+        return; 
+    }
+    const filename = `PlanDePruebas_${(this.testPlanTitle.replace(/[^a-z0-9_.-]/gi, '_') || 'General')}_${new Date().toISOString().split('T')[0]}.doc`;
+    saveAs(new Blob([plainTextContent], { type: 'text/plain;charset=utf-8' }), filename);
   }
 
   public exportExecutionMatrix(hu: HUData): void {
-    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable")) {
-      alert('No hay casos de prueba válidos para exportar para esta HU o el tipo de HU no genera matriz de ejecución.'); return;
+    if (hu.originalInput.generationMode === 'flowAnalysis' || hu.originalInput.generationMode === 'flowComparison' || !hu.detailedTestCases?.length || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || !tc.steps || tc.steps.length === 0)) {
+      alert('No hay casos de prueba válidos para exportar, el tipo de HU no genera matriz de ejecución, o los casos generados indican un error.'); return;
     }
-    const csvHeader = ["Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
-    const csvRows = hu.detailedTestCases.map(tc => ([
-      `${this.escapeCsvField(tc.title)}`,
-      `${this.escapeCsvField(tc.preconditions)}`,
-      `${this.escapeCsvField(tc.steps)}`,
-      `${this.escapeCsvField(tc.expectedResults)}`
-    ]));
-    const csvContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const date = new Date().toISOString().split('T')[0];
-    saveAs(blob, `MatrizEjecucion_${hu.id}_${date}.csv`);
+    const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
+    const csvRows = hu.detailedTestCases.map((tc, index) => {
+      const stepsString = Array.isArray(tc.steps) ? tc.steps.map(step => `${step.numero_paso}. ${step.accion}`).join('\n') : 'Pasos no disponibles.';
+      return [
+        `${this.escapeCsvField(hu.id + '_CP' + (index + 1))}`,
+        `${this.escapeCsvField(tc.title)}`,
+        `${this.escapeCsvField(tc.preconditions)}`,
+        `${this.escapeCsvField(stepsString)}`,
+        `${this.escapeCsvField(tc.expectedResults)}`
+      ];
+    });
+    const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
+    saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${hu.id}_${new Date().toISOString().split('T')[0]}.csv`); 
   }
 
   public exportFlowAnalysisReportToCsv(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'flowAnalysis' ||
-        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 ||
-        this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
-      alert('No hay un informe de análisis de flujo válido para exportar a CSV.');
-      return;
+    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0] || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+      alert('No hay informe de análisis de flujo válido para exportar a CSV.'); return;
     }
-
     const report = hu.flowAnalysisReport[0];
-    const csvHeader = [
-      "ID Análisis", "Título Análisis", "Sprint", "Nombre Escenario Inferido",
-      "Paso N° (Orden Visual)", "Descripción Acción/Observación", "Imagen(es) Referencia (IA)", "Elemento Clave y Ubicación", "Dato de Entrada (Paso)",
-      "Resultado Esperado (Paso)", "Resultado Obtenido y Estado (Paso)",
-      "Resultado Esperado General Flujo", "Conclusión General Flujo"
-    ];
+    const csvHeader = ["ID Análisis", "Título", "Sprint", "Nombre Escenario", "Paso N°", "Descripción Acción/Observación", "Imagen Referencia (IA)", "Elemento Clave y Ubicación", "Dato de Entrada (Paso)", "Resultado Esperado (Paso)", "Resultado Obtenido y Estado (Paso)", "Resultado Esperado General (Flujo)", "Conclusión General (Flujo)"];
     const csvRows: string[][] = [];
-
-    if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
-        report.Pasos_Analizados.forEach((paso, index) => {
+    if (report.Pasos_Analizados?.length) {
+        report.Pasos_Analizados.forEach((paso) => { 
             csvRows.push([
-                this.escapeCsvField(hu.id),
-                this.escapeCsvField(hu.title),
-                this.escapeCsvField(hu.sprint),
-                this.escapeCsvField(report.Nombre_del_Escenario),
-                this.escapeCsvField(index + 1), // Use visual order
-                this.escapeCsvField(paso.descripcion_accion_observada),
-                this.escapeCsvField(paso.imagen_referencia_entrada),
-                this.escapeCsvField(paso.elemento_clave_y_ubicacion_aproximada),
-                this.escapeCsvField(paso.dato_de_entrada_paso || 'N/A'),
-                this.escapeCsvField(paso.resultado_esperado_paso),
-                this.escapeCsvField(paso.resultado_obtenido_paso_y_estado),
-                this.escapeCsvField(report.Resultado_Esperado_General_Flujo),
+                this.escapeCsvField(hu.id), 
+                this.escapeCsvField(hu.title), 
+                this.escapeCsvField(hu.sprint), 
+                this.escapeCsvField(report.Nombre_del_Escenario), 
+                this.escapeCsvField(paso.numero_paso), 
+                this.escapeCsvField(paso.descripcion_accion_observada), 
+                this.escapeCsvField(paso.imagen_referencia_entrada), 
+                this.escapeCsvField(paso.elemento_clave_y_ubicacion_aproximada), 
+                this.escapeCsvField(paso.dato_de_entrada_paso || 'N/A'), 
+                this.escapeCsvField(paso.resultado_esperado_paso), 
+                this.escapeCsvField(paso.resultado_obtenido_paso_y_estado), 
+                this.escapeCsvField(report.Resultado_Esperado_General_Flujo), 
                 this.escapeCsvField(report.Conclusion_General_Flujo)
-            ]);
+            ]); 
         });
     } else {
-        csvRows.push([
-            this.escapeCsvField(hu.id),
-            this.escapeCsvField(hu.title),
-            this.escapeCsvField(hu.sprint),
-            this.escapeCsvField(report.Nombre_del_Escenario),
-            "N/A", "No se analizaron pasos.", "N/A", "N/A", "N/A", "N/A", "N/A",
-            this.escapeCsvField(report.Resultado_Esperado_General_Flujo),
-            this.escapeCsvField(report.Conclusion_General_Flujo)
-        ]);
+        csvRows.push([this.escapeCsvField(hu.id), this.escapeCsvField(hu.title), this.escapeCsvField(hu.sprint), this.escapeCsvField(report.Nombre_del_Escenario), "N/A", "No se analizaron pasos detallados.", "N/A", "N/A", "N/A", "N/A", "N/A", this.escapeCsvField(report.Resultado_Esperado_General_Flujo), this.escapeCsvField(report.Conclusion_General_Flujo)]);
     }
-
-    const csvContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const date = new Date().toISOString().split('T')[0];
-    saveAs(blob, `InformeAnalisisFlujo_CSV_${hu.id}_${date}.csv`);
+    const csvFullContentFlow = [csvHeader.join(','), ...csvRows.map(r => r.join(','))].join('\r\n');
+    saveAs(new Blob(["\uFEFF" + csvFullContentFlow], { type: 'text/csv;charset=utf-8;' }), `InformeAnalisisFlujo_CSV_${hu.id}_${new Date().toISOString().split('T')[0]}.csv`);
   }
 
   public exportFlowAnalysisReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
-    if (hu.originalInput.generationMode !== 'flowAnalysis' ||
-        !hu.flowAnalysisReport || hu.flowAnalysisReport.length === 0 ||
-        this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])
-      ) {
-      alert(language === 'en' ? 'No valid flow analysis report to export to HTML.' : 'No hay un informe de análisis de flujo válido para exportar a HTML.');
-      return;
+    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0] || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+      alert(language === 'en' ? 'No valid flow analysis report available for export.' : 'No hay informe de análisis de flujo válido para exportar.'); return;
     }
     const report = hu.flowAnalysisReport[0];
-    const title = language === 'en' ? `Flow Report: ${this.escapeHtmlForExport(hu.title)}` : `Informe de Flujo: ${this.escapeHtmlForExport(hu.title)}`;
-    let htmlContent = `<html><head><title>${title}</title>`;
-    htmlContent += `<style>
-      body { font-family: Segoe UI, Calibri, Arial, sans-serif; margin: 20px; line-height: 1.6; color: #343a40; }
-      h1 { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
-      h2 { color: #4a6d7c; margin-top: 30px; border-bottom: 1px solid #e9ecef; padding-bottom: 5px;}
-      p, pre.report-text { margin-bottom: 10px; }
-      pre.report-text { white-space: pre-wrap; word-wrap: break-word; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 10px; border-radius: 4px; font-family: Consolas, monospace; }
-      table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 0.9em; }
-      th, td { border: 1px solid #dee2e6; padding: 8px 10px; text-align: left; vertical-align: top; }
-      th { background-color: #f1f5f9; font-weight: 600; color: #4a6d7c; }
-      td pre { white-space: pre-wrap; word-wrap: break-word; margin:0; font-family: Consolas, monospace; background: transparent; border: none; padding: 0;}
-      img.flow-step-image { max-width: 250px; max-height: 200px; border: 1px solid #ced4da; border-radius: 4px; display: block; margin-top:5px; }
-      .status-success td:first-child { border-left: 4px solid #28a745; }
-      .status-failure td:first-child { border-left: 4px solid #dc3545; }
-      .status-deviation td:first-child { border-left: 4px solid #ffc107; }
-    </style></head><body>`;
-
-    htmlContent += `<h1>${title}</h1>`;
-    htmlContent += `<p><strong>${language === 'en' ? 'Sprint' : 'Sprint'}:</strong> ${this.escapeHtmlForExport(hu.sprint)}</p>`;
-    htmlContent += `<h2>${language === 'en' ? 'Scenario Name' : 'Nombre del Escenario'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Nombre_del_Escenario)}</pre>`;
-
-    if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
-      htmlContent += `<h2>${language === 'en' ? 'Steps' : 'Pasos'}</h2><table><thead><tr>
-        <th>${language === 'en' ? 'Step #' : 'Paso N°'} (Ordered)</th>
-        <th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th>
-        <th>${language === 'en' ? 'Input Data (Step)' : 'Dato de Entrada (Paso)'}</th>
-        <th>${language === 'en' ? 'Expected Result (Step)' : 'Resultado Esperado (Paso)'}</th>
-        <th>${language === 'en' ? 'Actual Result & Status (Step)' : 'Resultado Obtenido y Estado (Paso)'}</th>
-        <th>${language === 'en' ? 'Step Image' : 'Imagen del Paso'}</th>
-      </tr></thead><tbody>`;
-
-      report.Pasos_Analizados.forEach((paso, index) => {
+    const title = language === 'en' ? `Flow Analysis Report: ${this.escapeHtmlForExport(hu.title)} (ID: ${this.escapeHtmlForExport(hu.id)})` : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(hu.title)} (ID: ${this.escapeHtmlForExport(hu.id)})`;
+    let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#343a40}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2{color:#4a6d7c;margin-top:30px;border-bottom:1px solid #e9ecef;padding-bottom:5px}pre.report-text{white-space:pre-wrap;word-wrap:break-word;background:#f8f9fa;border:1px solid #e9ecef;padding:10px;border-radius:4px;font-family:Consolas,monospace,sans-serif}table{border-collapse:collapse;width:100%;margin-bottom:20px;font-size:.9em}th,td{border:1px solid #dee2e6;padding:8px 10px;text-align:left;vertical-align:top}th{background:#f1f5f9;font-weight:600;color:#4a6d7c}td pre{white-space:pre-wrap;word-wrap:break-word;margin:0;font-family:Consolas,monospace,sans-serif;background:transparent;border:none;padding:0}img.flow-step-image{max-width:250px;max-height:200px;border:1px solid #ced4da;border-radius:4px;display:block;margin-top:5px;background-color:#fff;}.status-success td:first-child{border-left:5px solid #28a745 !important;}.status-failure td:first-child{border-left:5px solid #dc3545 !important;}.status-deviation td:first-child{border-left:5px solid #ffc107 !important;}</style></head><body><h1>${title}</h1>`;
+    html += `<p><strong>${language === 'en' ? 'Sprint' : 'Sprint'}:</strong> ${this.escapeHtmlForExport(hu.sprint)}</p><h2>${language === 'en' ? 'Scenario Name' : 'Nombre del Escenario'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Nombre_del_Escenario)}</pre>`;
+    if (report.Pasos_Analizados?.length) {
+      html += `<h2>${language === 'en' ? 'Analyzed Steps' : 'Pasos Analizados'}</h2><table><thead><tr><th>${language === 'en' ? 'Step #' : 'Paso N°'}</th><th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th><th>${language === 'en' ? 'Input Data (Step)' : 'Dato Entrada (Paso)'}</th><th>${language === 'en' ? 'Expected Result (Step)' : 'Resultado Esperado (Paso)'}</th><th>${language === 'en' ? 'Actual Result & Status (Step)' : 'Resultado Actual y Estado (Paso)'}</th><th>${language === 'en' ? 'Image (Step)' : 'Imagen (Paso)'}</th></tr></thead><tbody>`;
+      report.Pasos_Analizados.forEach((paso) => {
         const imgSrc = this.getFlowStepImage(hu, paso);
-        const statusClass = this.getFlowStepStatusClass(paso);
-        htmlContent += `<tr class="${statusClass}">
-          <td>${index + 1}</td>
-          <td><pre>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</pre></td>
-          <td><pre>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || (language === 'en' ? 'N/A' : 'N/A'))}</pre></td>
-          <td><pre>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</pre></td>
-          <td><pre>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</pre></td>
-          <td>${imgSrc ? `<img src="${imgSrc}" alt="${language === 'en' ? 'Image for original step' : 'Imagen para paso original'} ${paso.numero_paso}" class="flow-step-image">` : (language === 'en' ? 'N/A' : 'N/A')}</td>
-        </tr>`;
+        html += `<tr class="${this.getFlowStepStatusClass(paso)}"><td>${paso.numero_paso}</td><td><pre>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}<br><small style="color:#555;">(Ref.IA: ${this.escapeHtmlForExport(paso.imagen_referencia_entrada)}, Elem.IA: ${this.escapeHtmlForExport(paso.elemento_clave_y_ubicacion_aproximada)})</small></pre></td><td><pre>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || (language === 'en' ? 'N/A' : 'N/A'))}</pre></td><td><pre>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</pre></td><td><pre>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</pre></td><td>${imgSrc ? `<img src="${imgSrc}" alt="Imagen para paso ${paso.numero_paso}" class="flow-step-image">` : (language === 'en' ? 'N/A' : 'N/A')}</td></tr>`;
       });
-      htmlContent += `</tbody></table>`;
-    } else {
-      htmlContent += `<p><strong>${language === 'en' ? 'Steps' : 'Pasos'}:</strong> ${language === 'en' ? 'No detailed steps were analyzed or found.' : 'No se analizaron pasos detallados o no se encontraron.'}</p>`;
+      html += `</tbody></table>`;
+    } else html += `<p><strong>${language === 'en' ? 'Steps' : 'Pasos'}:</strong> ${language === 'en' ? 'No detailed steps were analyzed or found.' : 'No se analizaron pasos detallados o no se encontraron.'}</p>`;
+    html += `<h2>${language === 'en' ? 'Overall Expected Result (Flow)' : 'Resultado Esperado General (Flujo)'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</pre><h2>${language === 'en' ? 'Overall Conclusion (Flow)' : 'Conclusión General (Flujo)'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</pre></body></html>`;
+    saveAs(new Blob([html], { type: 'text/html;charset=utf-8;' }), `Informe_Analisis_Flujo_${this.escapeFilename(hu.title)}_${language === 'en' ? 'ENG' : 'ESP'}_${new Date().toISOString().split('T')[0]}.html`);
+  }
+
+  public exportBugComparisonReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
+    if (hu.originalInput.generationMode !== 'flowComparison' || !hu.bugComparisonReport?.length || this.isBugReportInErrorState(hu.bugComparisonReport)) {
+        alert(language === 'en' ? 'No valid bug comparison report available for export.' : 'No hay reporte de comparación de bugs válido para exportar.'); return;
     }
-
-    htmlContent += `<h2>${language === 'en' ? 'Overall Expected Result of Flow' : 'Resultado Esperado General del Flujo'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</pre>`;
-    htmlContent += `<h2>${language === 'en' ? 'Overall Conclusion of Flow' : 'Conclusión General del Flujo'}:</h2><pre class="report-text">${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</pre>`;
-    htmlContent += `</body></html>`;
-
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
     const date = new Date().toISOString().split('T')[0];
-    const langSuffix = language === 'en' ? 'ENG' : 'ESP';
-    saveAs(blob, `Informe_Flujo_${this.escapeFilename(hu.title)}_${langSuffix}_${date}.html`);
-}
-
-public exportBugComparisonReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
-    if (hu.originalInput.generationMode !== 'flowComparison' ||
-        !hu.bugComparisonReport || hu.bugComparisonReport.length === 0 ||
-        hu.bugComparisonReport.some(b => b.titulo_bug.startsWith("Error"))) {
-        alert(language === 'en' ? 'No valid bug comparison report to export to HTML.' : 'No hay un informe de comparación de bugs válido para exportar a HTML.');
-        return;
-    }
-
-    const currentDateForExport = new Date().toISOString().split('T')[0];
-    const reportTitle = language === 'en' ? `Flow Comparison Report: ${this.escapeHtmlForExport(hu.title)}` : `Reporte de Comparación de Flujos: ${this.escapeHtmlForExport(hu.title)}`;
-
-    let htmlContent = `<html><head><title>${reportTitle}</title>`;
-    htmlContent += `<style>
-        body { font-family: Segoe UI, Calibri, Arial, sans-serif; margin: 20px; line-height: 1.5; color: #333; }
-        .report-container { max-width: 900px; margin: auto; }
-        h1 { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
-        h2.main-title { color: #3b5a6b; border-bottom: 2px solid #e9ecef; padding-bottom: 10px; }
-        h2.bug-title { font-size: 1.3em; color: #c0392b; margin-top: 0; margin-bottom: 10px; } /* Renamed for clarity */
-        .bug-item { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 20px; background-color: #f9f9f9; }
-        .bug-meta, .bug-details p { margin-bottom: 8px; font-size: 0.95em; }
-        .bug-meta strong, .bug-details strong { color: #555; }
-        .bug-details pre { white-space: pre-wrap; word-wrap: break-word; background-color: #fff; border: 1px solid #eee; padding: 10px; border-radius: 4px; font-family: Consolas, monospace; margin-top: 3px; margin-bottom: 10px;}
-        .bug-steps { margin-left: 20px; list-style-type: decimal; }
-        .image-ref { font-style: italic; color: #777; font-size: 0.9em; }
-        .bug-report-image { max-width: 300px; max-height: 250px; border: 1px solid #ccc; border-radius: 4px; display: block; margin: 10px 0; }
-    </style></head><body><div class="report-container">`;
-
-    htmlContent += `<h1 class="main-title">${reportTitle}</h1>`;
-
-    hu.bugComparisonReport.forEach((bug, index) => {
-        htmlContent += `<div class="bug-item">`;
-        htmlContent += `<h2 class="bug-title">${language === 'en' ? 'Bug' : 'Bug'} #${index + 1}: ${this.escapeHtmlForExport(bug.titulo_bug)}</h2>`;
-
-        htmlContent += `<div class="bug-meta">`;
-        htmlContent += `<p><strong>${language === 'en' ? 'Priority' : 'Prioridad'}:</strong> ${this.escapeHtmlForExport(bug.prioridad)} | <strong>${language === 'en' ? 'Severity' : 'Severidad'}:</strong> ${this.escapeHtmlForExport(bug.severidad)}</p>`;
-        htmlContent += `<p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${currentDateForExport}</p>`;
-        htmlContent += `</div>`; // end bug-meta
-
-        htmlContent += `<div class="bug-details">`;
-        if (bug.descripcion_diferencia_general) {
-             htmlContent += `<p><strong>${language === 'en' ? 'General Difference Description' : 'Descripción General de la Diferencia'}:</strong></p><pre>${this.escapeHtmlForExport(bug.descripcion_diferencia_general)}</pre>`;
-        }
-        htmlContent += `<p><strong>${language === 'en' ? 'Steps to Reproduce' : 'Pasos para Reproducir'}:</strong></p>`;
-        if (bug.pasos_para_reproducir && bug.pasos_para_reproducir.length > 0) {
-            htmlContent += `<ol class="bug-steps">`;
-            bug.pasos_para_reproducir.forEach(paso => {
-                htmlContent += `<li>${this.escapeHtmlForExport(paso.descripcion)}</li>`;
-            });
-            htmlContent += `</ol>`;
-        } else {
-            htmlContent += `<p>${language === 'en' ? 'N/A' : 'N/A'}</p>`;
-        }
-
-        htmlContent += `<p><strong>${language === 'en' ? 'Expected Result' : 'Resultado Esperado'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow A' : 'Ref. Flujo A'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || 'N/A')})</span></p>`;
-        const imgSrcA = this.getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A');
-        if (imgSrcA) {
-            htmlContent += `<img src="${imgSrcA}" alt="${language === 'en' ? 'Expected Image' : 'Imagen Esperada'} ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || '')}" class="bug-report-image">`;
-        }
-        htmlContent += `<pre>${this.escapeHtmlForExport(bug.resultado_esperado)}</pre>`;
-
-        htmlContent += `<p><strong>${language === 'en' ? 'Actual Result' : 'Resultado Actual'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow B' : 'Ref. Flujo B'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || 'N/A')})</span></p>`;
-        const imgSrcB = this.getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B');
-        if (imgSrcB) {
-            htmlContent += `<img src="${imgSrcB}" alt="${language === 'en' ? 'Actual Image' : 'Imagen Actual'} ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || '')}" class="bug-report-image">`;
-        }
-        htmlContent += `<pre>${this.escapeHtmlForExport(bug.resultado_actual)}</pre>`;
-
-        htmlContent += `</div>`; // end bug-details
-        htmlContent += `</div>`; // end bug-item
+    const title = language === 'en' ? `Bug Comparison Report: ${this.escapeHtmlForExport(hu.title)} (ID: ${this.escapeHtmlForExport(hu.id)})` : `Reporte de Comparación de Bugs: ${this.escapeHtmlForExport(hu.title)} (ID: ${this.escapeHtmlForExport(hu.id)})`;
+    let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.5;color:#333}.report-container{max-width:900px;margin:auto}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2.bug-title{font-size:1.3em;color:#c0392b;margin-top:25px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0;}.bug-item{border:1px solid #ddd;border-radius:5px;padding:15px;margin-bottom:20px;background:#f9f9f9;box-shadow:0 2px 4px rgba(0,0,0,0.05);}.bug-meta p,.bug-details p{margin-bottom:8px;font-size:.95em}.bug-meta strong,.bug-details strong{color:#555;font-weight:600;}.bug-details pre{white-space:pre-wrap;word-wrap:break-word;background:#fff;border:1px solid #eee;padding:10px;border-radius:4px;font-family:Consolas,monospace,sans-serif;margin:3px 0 10px;font-size:0.9em;}.bug-steps{margin-left:20px;list-style-type:decimal;padding-left:15px;}.bug-steps li{margin-bottom:4px;}.image-ref{font-style:italic;color:#777;font-size:.9em}.bug-report-image{max-width:100%;height:auto;max-height:250px;border:1px solid #ccc;border-radius:4px;display:block;margin:10px 0;background-color:#fff;object-fit:contain;}</style></head><body><div class="report-container"><h1>${title}</h1>`;
+    hu.bugComparisonReport.forEach((bug, i) => {
+        html += `<div class="bug-item"><h2 class="bug-title">${language === 'en' ? 'Bug' : 'Bug'} #${i + 1}: ${this.escapeHtmlForExport(bug.titulo_bug)} (ID: ${this.escapeHtmlForExport(bug.id_bug)})</h2><div class="bug-meta"><p><strong>${language === 'en' ? 'Priority' : 'Prioridad'}:</strong> ${this.escapeHtmlForExport(bug.prioridad)} | <strong>${language === 'en' ? 'Severity' : 'Severidad'}:</strong> ${this.escapeHtmlForExport(bug.severidad)}</p><p><strong>${language === 'en' ? 'Report Date' : 'Fecha de Reporte'}:</strong> ${this.escapeHtmlForExport(bug.fecha_reporte || date)}</p></div><div class="bug-details">`;
+        if (bug.descripcion_diferencia_general) html += `<p><strong>${language === 'en' ? 'General Description of Difference' : 'Descripción General de la Diferencia'}:</strong></p><pre>${this.escapeHtmlForExport(bug.descripcion_diferencia_general)}</pre>`;
+        html += `<p><strong>${language === 'en' ? 'Steps to Reproduce' : 'Pasos para Reproducir'}:</strong></p>`;
+        if (bug.pasos_para_reproducir?.length) { html += `<ol class="bug-steps">${bug.pasos_para_reproducir.map(p => `<li>${this.escapeHtmlForExport(p.descripcion)}</li>`).join('')}</ol>`; } else html += `<p><em>${language === 'en' ? 'Steps not detailed.' : 'Pasos no detallados.'}</em></p>`;
+        const imgSrcA = this.getBugReportImage(hu, bug.imagen_referencia_flujo_a, 'A'), imgSrcB = this.getBugReportImage(hu, bug.imagen_referencia_flujo_b, 'B');
+        html += `<p><strong>${language === 'en' ? 'Expected Result' : 'Resultado Esperado'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow A' : 'Ref. Flujo A'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_a || 'N/A')})</span></p>${imgSrcA ? `<img src="${imgSrcA}" alt="Imagen Flujo A para bug ${bug.id_bug}" class="bug-report-image">` : ''}<pre>${this.escapeHtmlForExport(bug.resultado_esperado)}</pre>`;
+        html += `<p><strong>${language === 'en' ? 'Actual Result' : 'Resultado Actual'}:</strong> <span class="image-ref">(${language === 'en' ? 'Ref. Flow B' : 'Ref. Flujo B'}: ${this.escapeHtmlForExport(bug.imagen_referencia_flujo_b || 'N/A')})</span></p>${imgSrcB ? `<img src="${imgSrcB}" alt="Imagen Flujo B para bug ${bug.id_bug}" class="bug-report-image">` : ''}<pre>${this.escapeHtmlForExport(bug.resultado_actual)}</pre></div></div>`;
     });
-
-    htmlContent += `</div></body></html>`;
-
-    const dateForFilename = new Date().toISOString().split('T')[0];
-    const langSuffix = language === 'en' ? 'ENG' : 'ESP';
-    saveAs(new Blob([htmlContent], { type: 'text/html;charset=utf-8;' }), `Reporte_Comparacion_Bugs_${this.escapeFilename(hu.title)}_${langSuffix}_${dateForFilename}.html`);
-}
-
-
-private escapeFilename(filename: string): string {
-  return filename.replace(/[^a-z0-9_.-]/gi, '_').substring(0, 50);
-}
-
-    public isFlowAnalysisReportInErrorState(reportItem?: FlowAnalysisReportItem): boolean {
-        if (!reportItem) return true; // Treat no report as an error state for display logic
-        const errorScenarioNames = [
-            "Error de API",
-            "Error de Formato de Respuesta",
-            "Error de Formato (No JSON Array)",
-            "Error de Formato (No Array)",
-            "Error de Formato (Faltan Campos)",
-            "Error de Parsing JSON",
-            "Secuencia de imágenes no interpretable",
-            "Error Crítico en Generación",
-            "Error Crítico en Re-Generación",
-            "Error Crítico en Re-Generación (Contextualizada)",
-            "Respuesta Vacía de IA"
-        ];
-        return errorScenarioNames.includes(reportItem.Nombre_del_Escenario);
-    }
-
-  private escapeCsvField(field: string | number): string {
-    if (field === null || field === undefined) { return ''; }
-    let result = field.toString();
-    result = result.replace(/"/g, '""');
-    if (result.includes(',')) {
-        result = `"${result}"`;
-    }
-    return result;
+    html += `</div></body></html>`;
+    saveAs(new Blob([html], { type: 'text/html;charset=utf-8;' }), `Reporte_Comparacion_Bugs_${this.escapeFilename(hu.title)}_${language === 'en' ? 'ENG' : 'ESP'}_${date}.html`);
   }
 
-    private escapeHtmlForExport(unsafe: string): string {
-        if (typeof unsafe !== 'string') {
-            return '';
-        }
-        return unsafe
-             .replace(/&/g, `&`)
-             .replace(/</g, `<`)
-             .replace(/>/g, `>`)
-             .replace(/"/g, `"`)
-             .replace(/'/g, `'`);
-    }
+  private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
+  
+  public isFlowAnalysisReportInErrorState = (r?: FlowAnalysisReportItem): boolean => 
+    !r || 
+    ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(r.Nombre_del_Escenario);
+  
+  private escapeCsvField = (f: string | number | undefined | null): string => {
+      if (f === null || f === undefined) return '';
+      const stringValue = String(f);
+      if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('\r')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+  };
 
-
-  public isAnyHuTextBased(): boolean {
-    return this.huList.some(hu => hu.originalInput.generationMode === 'text');
-  }
-
-  public trackHuById(index: number, hu: HUData): string {
-    return hu.id;
-  }
+  private escapeHtmlForExport = (u: string | undefined | null): string =>
+    u ? u.replace(/&/g, "&amp;")
+           .replace(/</g, "&lt;")
+           .replace(/>/g, "&gt;")
+           .replace(/"/g, "&quot;")
+           .replace(/'/g, "&#039;")
+      : '';
+  public isAnyHuTextBased = (): boolean => this.huList.some(hu => hu.originalInput.generationMode === 'text');
+  public trackHuById = (i: number, hu: HUData): string => hu.id;
 
   public getFlowStepImage(hu: HUData, paso: FlowAnalysisStep): string | null {
-    if (!hu.originalInput.imagesBase64 || hu.originalInput.imagesBase64.length === 0 || !hu.originalInput.imageMimeTypes) {
-      return null;
-    }
-    // The paso.imagen_referencia_entrada can be "Imagen X" or "Imagen X a Imagen Y"
-    // For simplicity, we'll try to show the first image mentioned if it's a range.
+    if (!hu.originalInput.imagesBase64?.length || !hu.originalInput.imageMimeTypes) return null;
     const match = paso.imagen_referencia_entrada.match(/Imagen (\d+)/i);
-    if (match && match[1]) {
-      const imageIndex = parseInt(match[1], 10) - 1; // Input images are 1-indexed in prompt.
+    if (match?.[1]) {
+      const imageIndex = parseInt(match[1], 10) - 1; 
       if (imageIndex >= 0 && imageIndex < hu.originalInput.imagesBase64.length) {
-        const mimeType = hu.originalInput.imageMimeTypes[imageIndex];
-        const base64Data = hu.originalInput.imagesBase64[imageIndex];
-        return `data:${mimeType};base64,${base64Data}`;
+        return `data:${hu.originalInput.imageMimeTypes[imageIndex]};base64,${hu.originalInput.imagesBase64[imageIndex]}`;
       }
     }
     return null;
   }
-  public getBugReportImage(hu: HUData, imageRefString?: string, flowType?: 'A' | 'B'): string | null {
-    if (!imageRefString) return null;
 
+  public getBugReportImage(hu: HUData, imageNameRef?: string, flowType?: 'A' | 'B'): string | null {
+    if (!imageNameRef) return null;
+    
     let imagesArray: string[] | undefined;
     let mimeTypesArray: string[] | undefined;
 
@@ -1753,49 +1491,128 @@ private escapeFilename(filename: string): string {
     } else if (flowType === 'B') {
         imagesArray = hu.originalInput.imagesBase64FlowB;
         mimeTypesArray = hu.originalInput.imageMimeTypesFlowB;
-    } else {
-        // This case might not be used if flowType A/B is always specified for bug reports.
+    } else { 
         imagesArray = hu.originalInput.imagesBase64;
         mimeTypesArray = hu.originalInput.imageMimeTypes;
     }
 
-    if (!imagesArray || imagesArray.length === 0 || !mimeTypesArray) {
-        return null;
-    }
+    if (!imagesArray?.length || !mimeTypesArray?.length) return null;
 
-    // Match "Imagen A.1", "Imagen B.1", or "Imagen 1"
-    const match = imageRefString.match(/Imagen (?:[AB]\.)?(\d+)/i);
-    if (match && match[1]) {
-        const imageIndex = parseInt(match[1], 10) - 1; // Input images are 1-indexed in prompt.
-        if (imageIndex >= 0 && imageIndex < imagesArray.length) {
-            const mimeType = mimeTypesArray[imageIndex];
-            const base64Data = imagesArray[imageIndex];
-            return `data:${mimeType};base64,${base64Data}`;
-        }
+    const match = imageNameRef.match(/Imagen (?:[AB]\.)?(\d+)/i);
+    if (match?.[1]) {
+      const imageIndex = parseInt(match[1], 10) - 1; 
+      if (imageIndex >= 0 && imageIndex < imagesArray.length) {
+        return `data:${mimeTypesArray[imageIndex]};base64,${imagesArray[imageIndex]}`;
+      }
     }
     return null;
   }
 
-
   public getFlowStepStatusClass(paso: FlowAnalysisStep): string {
-    const statusText = (paso.resultado_obtenido_paso_y_estado || '').toLowerCase();
-    if (statusText.includes('exitosa con desviaciones')) {
-        return 'status-deviation';
-    } else if (statusText.includes('exitosa')) {
-        return 'status-success';
-    } else if (statusText.includes('fallido') || statusText.includes('fallida')) {
-        return 'status-failure';
-    }
-    return '';
+    const status = (paso.resultado_obtenido_paso_y_estado || '').toLowerCase();
+    if (status.includes('exitosa con desviaciones') || status.includes('parcialmente exitosa')) return 'status-deviation';
+    if (status.includes('exitosa')) return 'status-success';
+    if (status.includes('fallido') || status.includes('fallida') || status.includes('error')) return 'status-failure';
+    return ''; 
   }
 
-  public isBugReportInErrorState(bugReport?: BugReportItem[]): boolean {
-    if (!bugReport || bugReport.length === 0) return false; // No report is not an error in itself for this check
-    return bugReport.some(bug =>
-        bug.titulo_bug.startsWith("Error de API") ||
-        bug.titulo_bug.startsWith("Error de Formato") ||
-        bug.titulo_bug.startsWith("Error de Parsing JSON") ||
-        bug.titulo_bug.startsWith("Error Crítico")
+  public isBugReportInErrorState = (r?: BugReportItem[]): boolean => 
+    !r || r.length === 0 ? false : r.some(b => 
+        b.titulo_bug.startsWith("Error de API") || 
+        b.titulo_bug.startsWith("Error de Formato") || 
+        b.titulo_bug.startsWith("Error de Parsing JSON") || 
+        b.titulo_bug.startsWith("Error Crítico") ||
+        b.titulo_bug.startsWith("Error en el Análisis de Imágenes") 
     );
+
+  // --- Funciones para drag-and-drop de Test Case Steps en TestPlanGenerator ---
+  public addTestCaseStepForPlan(testCase: DetailedTestCase, hu: HUData): void {
+    if (!testCase.steps) testCase.steps = [];
+    testCase.steps.push({ numero_paso: testCase.steps.length + 1, accion: '' });
+    this.cdr.detectChanges();
+    this.updatePreview(); 
+  }
+
+  public deleteTestCaseStepForPlan(testCase: DetailedTestCase, stepIndex: number, hu: HUData): void {
+    if (testCase.steps) {
+      testCase.steps.splice(stepIndex, 1);
+      testCase.steps.forEach((step: TestCaseStep, idx: number) => step.numero_paso = idx + 1);
+      this.cdr.detectChanges();
+      this.updatePreview();
+    }
+  }
+
+  public getTestCaseStepDragIdForPlan(huId: string, tcIndex: number, step: TestCaseStep, testCase: DetailedTestCase): string {
+    const stepIndex = testCase.steps.indexOf(step);
+    return `plan-${huId}-tc-${tcIndex}-step-${stepIndex}`;
+  }
+
+  public onTestCaseStepDragStartForPlan(event: DragEvent, step: TestCaseStep, testCase: DetailedTestCase): void {
+    this.draggedTestCaseStepForPlan = step;
+    if (event.dataTransfer) {
+      const stepIndex = testCase.steps.indexOf(step);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', stepIndex.toString());
+      const targetEl = event.target as HTMLElement;
+      const rowEl = targetEl.closest('tr');
+      if(rowEl) rowEl.style.opacity = '0.4';
+    }
+  }
+
+  public onTestCaseStepDragOverForPlan(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase, huId: string, tcIndex: number): void {
+    event.preventDefault();
+    if(this.draggedTestCaseStepForPlan && event.dataTransfer && targetStep) {
+        event.dataTransfer.dropEffect = 'move';
+        this.dragOverTestCaseStepIdForPlan = this.getTestCaseStepDragIdForPlan(huId, tcIndex, targetStep, testCase);
+    } else if (!targetStep && event.dataTransfer) { // Permite dropear al final si no hay targetStep específico
+        event.dataTransfer.dropEffect = 'move';
+        this.dragOverTestCaseStepIdForPlan = `plan-${huId}-tc-${tcIndex}-dropzone-end`;
+    }
+  }
+  
+  public onTestCaseStepDragLeaveForPlan(event: DragEvent): void {
+    this.dragOverTestCaseStepIdForPlan = null;
+  }
+
+  public onTestCaseStepDropForPlan(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase, hu: HUData, tcIndex: number): void {
+    event.preventDefault();
+    this.dragOverTestCaseStepIdForPlan = null;
+    document.querySelectorAll('.test-case-steps-table-for-plan tbody tr[style*="opacity: 0.4"]')
+        .forEach(el => (el as HTMLElement).style.opacity = '1');
+
+    if (!this.draggedTestCaseStepForPlan || !testCase.steps) { // testCase.steps.length === 0 ya está cubierto
+        this.draggedTestCaseStepForPlan = null; return;
+    }
+    
+    const fromIndex = testCase.steps.indexOf(this.draggedTestCaseStepForPlan);
+    let toIndex = -1;
+
+    if (targetStep) { // Si se suelta sobre un paso existente
+        if (this.draggedTestCaseStepForPlan === targetStep) { this.draggedTestCaseStepForPlan = null; return; }
+        toIndex = testCase.steps.indexOf(targetStep);
+    } else { // Si se suelta en la zona de drop general (ej. al final de la tabla)
+        toIndex = testCase.steps.length; // Para añadir al final
+    }
+
+
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+        const itemToMove = testCase.steps.splice(fromIndex, 1)[0];
+        if (targetStep) {
+            testCase.steps.splice(toIndex, 0, itemToMove);
+        } else { // Añadir al final si no hay targetStep (toIndex es length)
+            testCase.steps.push(itemToMove);
+        }
+        testCase.steps.forEach((s: TestCaseStep, i: number) => s.numero_paso = i + 1);
+        this.cdr.detectChanges();
+        this.updatePreview();
+    }
+    this.draggedTestCaseStepForPlan = null;
+  }
+
+  public onTestCaseStepDragEndForPlan(event: DragEvent): void {
+     document.querySelectorAll('.test-case-steps-table-for-plan tbody tr[style*="opacity: 0.4"]')
+        .forEach(el => (el as HTMLElement).style.opacity = '1');
+    this.draggedTestCaseStepForPlan = null;
+    this.dragOverTestCaseStepIdForPlan = null;
   }
 }

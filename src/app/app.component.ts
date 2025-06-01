@@ -7,7 +7,7 @@ import { TestPlanGeneratorComponent } from './test-plan-generator/test-plan-gene
   standalone: true,
   imports: [
     CommonModule,
-    TestPlanGeneratorComponent // Importa tu componente generador
+    TestPlanGeneratorComponent // Importa tu componente generador principal
   ],
   template: `
     <app-test-plan-generator></app-test-plan-generator>

@@ -1,0 +1,515 @@
+/* src/app/test-case-generator/test-case-generator.component.css */
+
+/* --- Formulario de Entrada --- */
+.form-section {
+    background-color: #fcfcfc;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+}
+
+.form-header-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.form-header-actions h2 {
+    margin-bottom: 0;
+    border-bottom: none;
+    font-size: 1.6em;
+    color: #4a6d7c;
+    font-weight: 600;
+}
+.button-small {
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+@media (min-width: 768px) {
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .form-group.full-width {
+        grid-column: span 2;
+    }
+}
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #343a40;
+}
+
+.form-group input[type="text"],
+.form-group textarea,
+.form-group select,
+.form-control { 
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    font-size: 1em;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit; 
+}
+.form-group input[type="text"]:focus,
+.form-group textarea:focus,
+.form-group select:not([disabled]):focus,
+.form-control:focus {
+    border-color: #8a9b8c;
+    box-shadow: 0 0 0 0.2rem rgba(138, 155, 140, 0.25);
+    outline: none;
+}
+.form-group textarea,
+textarea.form-control {
+    resize: vertical;
+    min-height: 80px;
+    font-family: inherit; /* Asegurar herencia de fuente */
+}
+.form-group input[type="file"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    display: block;
+    background-color: #fff;
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1.4;
+}
+.form-group input[type="file"]::file-selector-button {
+    margin-right: 12px;
+    padding: 8px 15px;
+    border: none;
+    background-color: #e9ecef;
+    color: #343a40;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-weight: 500;
+}
+.form-group input[type="file"]::file-selector-button:hover {
+    background-color: #dee2e6;
+}
+
+.image-preview-container {
+    margin-top: 15px;
+    border: 1px dashed #ced4da;
+    padding: 15px;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+    overflow: hidden; 
+}
+.image-preview-container p {
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #343a40;
+    text-align: left; 
+}
+.image-preview-container.multiple-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: flex-start; 
+}
+.image-preview-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+    width: calc(20% - 12px); 
+    min-width: 120px; 
+    box-sizing: border-box;
+    position: relative;
+    cursor: grab;
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, opacity 0.2s ease-out;
+}
+.image-preview-item.drag-over-element {
+    border: 2px dashed #007bff;
+    background-color: #e6f2ff;
+}
+.image-order-badge {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    background-color: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 0.7em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    z-index: 1;
+}
+.image-preview-item .image-preview {
+    width: 100%; 
+    height: 100px; 
+    object-fit: contain; 
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-bottom: 6px;
+    background-color: #fff; 
+}
+.image-preview-item .image-filename {
+    font-size: 0.75em;
+    color: #444;
+    text-align: center;
+    word-break: break-all;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+}
+
+.required-indicator { color: #dc3545; margin-left: 4px; font-weight: bold; }
+.validation-error { color: #dc3545; font-size: 0.85em; margin-top: 5px; }
+
+/* --- Botones (Generales para este componente) --- */
+.button-primary, .button-secondary, .button-cancel, .button-generate {
+    padding: 10px 18px; 
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.95em; 
+    font-weight: 600;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px; 
+    margin-bottom: 8px;
+}
+.button-primary:last-child, .button-secondary:last-child, .button-cancel:last-child, .button-generate:last-child { margin-right: 0; }
+
+.button-primary { background-color: #4a6d7c; color: #fff; }
+.button-primary.full-width-action { 
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px 20px;
+    font-size: 1em;
+}
+.button-primary:hover { background-color: #3b5a6b; transform: translateY(-1px); }
+.button-primary:disabled { background-color: #adb5bd; cursor: not-allowed; transform: none; }
+
+.button-secondary { background-color: #e9ecef; color: #343a40; }
+.button-secondary:hover { background-color: #dee2e6; transform: translateY(-1px); }
+
+.button-cancel { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;}
+.button-cancel:hover { background-color: #f1c0c5; }
+
+.button-generate { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc;}
+.button-generate:hover { background-color: #b8dfc9; }
+
+
+/* --- Mensajes de Error y Spinner (Generales) --- */
+.error-message { background-color: #ffebe8; color: #dc3545; border: 1px solid #f0b4b4; padding: 12px; margin-top: 20px; border-radius: 5px; text-align: center; font-weight: 500; }
+.error-message p { margin: 0; }
+.spinner { border: 3px solid #f3f3f3; border-top: 3px solid #4a6d7c; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; margin-right: 8px; vertical-align: text-bottom; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* --- Sección de Edición de Casos de Prueba Generados --- */
+.generated-test-cases-editor {
+    margin-top: 25px;
+    padding: 20px;
+    background-color: #ffffff; 
+    border: 1px solid #dee2e6; 
+    border-radius: 8px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.07); 
+}
+.generated-test-cases-editor > h3 { 
+    color: #3b5a6b; 
+    font-size: 1.6em; 
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+    font-weight: 600;
+}
+.scope-display-section { 
+    margin-bottom: 25px;
+}
+.scope-display-section strong { 
+    font-weight: 600;
+    color: #4a6d7c; 
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}
+.scope-display-section pre { 
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    padding: 12px 15px;
+    border-radius: 5px;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif; 
+    font-size: 0.95em;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #343a40;
+    margin-top: 0; 
+}
+
+.test-case-edit-card {
+    background-color: #fdfdff; 
+    border: 1px solid #e0e7ff; 
+    border-radius: 6px;
+    padding: 15px 20px;
+    margin-bottom: 25px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.test-case-edit-card h4 { 
+    color: #435a66; 
+    margin-top: 0;
+    margin-bottom: 18px; 
+    font-size: 1.15em; 
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    flex-wrap: wrap; 
+}
+.test-case-edit-card h4 > span:first-child { 
+    margin-right: 10px;
+    white-space: nowrap; 
+    line-height: 1.4; 
+}
+.form-control.inline-edit { 
+    flex-grow: 1;
+    padding: 8px 12px; 
+    font-size: 0.95em; 
+    font-weight: normal; 
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    line-height: 1.4; 
+    min-width: 200px; 
+}
+
+@media (max-width: 600px) { 
+    .test-case-edit-card h4 {
+        align-items: flex-start; 
+        flex-direction: column; 
+    }
+    .test-case-edit-card h4 > span:first-child {
+        margin-right: 0;
+        margin-bottom: 8px; 
+    }
+    .form-control.inline-edit {
+        width: 100%; 
+        margin-left: 0;
+    }
+}
+
+.test-case-edit-card .form-group {
+    margin-bottom: 18px; 
+}
+.test-case-edit-card .form-group label {
+    font-weight: 600;
+    color: #5c6770; 
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+.test-case-edit-card .form-group textarea.form-control { 
+    min-height: 70px; 
+    font-size: 0.95em;
+    padding: 10px;
+    background-color: #fff; 
+    font-family: inherit; /* Asegurar herencia de fuente */
+}
+
+.test-case-edit-card h5 { 
+    color: #435a66;
+    margin-top: 20px; 
+    margin-bottom: 10px;
+    font-size: 1.05em;
+    font-weight: 600;
+    /* No flex para que el botón de añadir esté debajo */
+}
+
+/* Tabla de Pasos del Caso de Prueba */
+.detailed-test-cases-table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 10px; /* Reducir margen inferior para acercar botón Añadir Paso */
+    border: 1px solid #dee2e6; 
+    border-radius: 5px;
+    background-color: #fff; 
+}
+.test-case-steps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+.test-case-steps-table th,
+.test-case-steps-table td {
+    border: 1px solid #e9ecef; 
+    padding: 10px 12px; 
+    text-align: left;
+    vertical-align: top; 
+}
+.test-case-steps-table th {
+    background-color: #f8f9fa; 
+    font-weight: 600;
+    color: #495057;
+}
+.test-case-steps-table tbody tr[draggable="true"]:hover { cursor: grab; background-color: #f7faff; } 
+.test-case-steps-table tr.drag-over-element td {
+    border-top: 2px dashed #0d6efd;
+    border-bottom: 2px dashed #0d6efd;
+    background-color: #eef6ff; 
+}
+.test-case-steps-table textarea.table-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px; 
+    font-size: 0.95em; /* Mantener un buen tamaño de fuente */
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    min-height: 40px; 
+    line-height: 1.5;
+    resize: vertical; /* Permitir que crezca verticalmente */
+    overflow-y: hidden; /* Ocultar scrollbar vertical hasta que sea necesario */
+    font-family: inherit; /* Asegurar herencia de fuente */
+}
+.test-case-steps-table textarea.table-input:focus {
+    border-color: #8a9b8c;
+    box-shadow: 0 0 0 0.15rem rgba(138, 155, 140, 0.2);
+    overflow-y: auto; /* Mostrar scroll si el contenido excede */
+}
+.test-case-steps-table td.action-cell { 
+    text-align: center;
+    vertical-align: middle; 
+}
+
+.button-small-icon {
+    padding: 5px 7px !important;
+    font-size: 0.9em !important;
+    line-height: 1 !important;
+    margin: 0 !important; 
+    min-width: auto;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.button-small-icon svg { width: 1em; height: 1em; }
+
+.delete-step-button { 
+    padding: 8px 10px !important; 
+    font-size: 0.9em !important; 
+    line-height: 1;
+    min-width: auto;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.delete-step-button svg {
+    width: 1.3em; 
+    height: 1.3em;
+}
+
+.add-step-action-container { /* Contenedor para el botón Añadir Paso */
+    margin-top: 10px; /* Espacio después de la tabla */
+    margin-bottom: 15px; /* Espacio antes del siguiente campo */
+    text-align: left; /* Alineación del botón */
+}
+.add-step-button { 
+    background-color: #e0e7ff; 
+    border: 1px solid #c7d2fe;
+    color: #4338ca; 
+    padding: 7px 15px !important; /* Más padding horizontal */
+    font-weight: 500;
+}
+.add-step-button svg {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 6px; /* Espacio entre ícono y texto */
+}
+.add-step-button:hover {
+    background-color: #c7d2fe; 
+}
+
+
+/* --- Contenedor de Acciones del Formulario Principal --- */
+.form-actions.main-form-actions {
+    text-align: center; 
+    margin-top: 15px; 
+    padding-top: 0; 
+    border-top: none; 
+}
+.form-actions.main-form-actions .button-primary.full-width-action {
+    width: auto; 
+    max-width: 350px; 
+    margin-left: auto;
+    margin-right: auto;
+    display: block; 
+}
+
+/* --- Contenedor de Acciones del Editor (Confirmar y Añadir al Plan) --- */
+.form-actions.editor-form-actions {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+    text-align: center; 
+}
+.form-actions.editor-form-actions .button-primary {
+    width: auto; 
+    min-width: 220px; 
+    padding: 12px 30px; 
+    font-size: 1em;
+    margin-top: 0;
+}
+
+/* --- Mensajes de error específicos --- */
+.error-message.generated-data-error { 
+    margin-top: 10px;
+    margin-bottom: 15px; 
+}
+.error-message.initial-form-error { 
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+
+/* Responsive para TestCaseGenerator */
+@media (max-width: 768px) {
+    .form-header-actions { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .form-header-actions h2 { font-size: 1.4em; }
+    .image-preview-item { width: calc(33.333% - 10px); } 
+    .image-preview-item .image-preview { height: 80px; }
+    .generated-test-cases-editor > h3 { font-size: 1.3em; }
+    .test-case-edit-card h4 { font-size: 1.1em; }
+    .test-case-steps-table th, .test-case-steps-table td { padding: 8px; font-size: 0.85em; }
+}
+
+@media (max-width: 576px) {
+    .form-header-actions h2 { font-size: 1.2em; }
+    .form-section, .generated-test-cases-editor, .test-case-edit-card { padding: 15px; }
+    .image-preview-item { width: calc(50% - 8px); } 
+    .image-preview-item .image-preview { height: 100px; }
+    .test-case-steps-table th, .test-case-steps-table td { padding: 6px 8px; font-size: 0.8em; }
+    .form-actions.editor-form-actions, .form-actions.main-form-actions { text-align: center; }
+    .form-actions.editor-form-actions .button-primary,
+    .form-actions.main-form-actions .button-primary.full-width-action { 
+      width: 100%; 
+      max-width: 300px; 
+    }
+}

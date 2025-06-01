@@ -4,12 +4,20 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
-// MODIFIED: Added BugReportItem
-import { FlowAnalysisReportItem, BugReportItem, FlowAnalysisStep } from '../models/hu-data.model';
+// IMPORTAR DESDE EL ARCHIVO DE MODELOS
+import {
+  FlowAnalysisReportItem,
+  BugReportItem,
+  FlowAnalysisStep,
+  DetailedTestCase,
+  TestCaseStep,
+  HUData // Asegúrate que HUData está importado si usas originalInput
+} from '../models/hu-data.model';
 
 interface GeminiTextPart { text: string; }
 interface GeminiInlineDataPart { inlineData: { mimeType: string; data: string; }; }
-interface GeminiContent { parts: (GeminiTextPart | GeminiInlineDataPart)[]; }
+type GeminiPart = GeminiTextPart | GeminiInlineDataPart; 
+interface GeminiContent { parts: GeminiPart[]; } 
 interface GeminiGenerationConfig {
   temperature?: number;
   topK?: number;
@@ -21,9 +29,8 @@ interface GeminiSafetySetting {
   category: string;
   threshold: string;
 }
-// MODIFIED: Added 'compareImageFlows', 'refineFlowAnalysis'
 interface ProxyRequestBody {
-  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis';
+  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis' | 'refineDetailedTestCases'; // Acción nueva
   payload: any;
 }
 interface GeminiCandidate {
@@ -55,14 +62,6 @@ interface GeminiErrorResponse {
   error?: GeminiError;
 }
 
-export interface DetailedTestCase {
-  title: string;
-  preconditions: string;
-  steps: string;
-  expectedResults: string;
-}
-
-
 @Injectable({
   providedIn: 'root'
 })
@@ -70,7 +69,7 @@ export class GeminiService {
 
   private proxyApiUrl = environment.geminiApiUrl;
 
-  private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string) => `
+  private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string): string => `
 Eres un analista de QA experimentado.
 Genera la sección de ALCANCE para un plan de pruebas.
 Basándote EXCLUSIVAMENTE en la siguiente Historia de Usuario y Criterios de Aceptación, redacta UN PÁRRAFO CONCISO (máximo 4 líneas) que defina CLARAMENTE el alcance de las pruebas.
@@ -85,356 +84,332 @@ Criterios de Aceptación:
 ${acceptanceCriteria}
 `;
 
-  private readonly PROMPT_SCENARIOS_DETAILED_TEXT_BASED = (description: string, acceptanceCriteria: string, technique: string) => `
+  private readonly PROMPT_SCENARIOS_DETAILED_TEXT_BASED = (description: string, acceptanceCriteria: string, technique: string, additionalContext?: string): string => `
 Eres un Ingeniero de QA experto en el diseño de pruebas de caja negra.
 Tu tarea es generar casos de prueba detallados, claros, concisos y accionables.
 **ENTRADA PROPORCIONADA:**
 1.  **Historia de Usuario (HU):** ${description}
 2.  **Criterios de Aceptación (CA):** ${acceptanceCriteria}
 3.  **Técnica de Diseño de Pruebas de Caja Negra a Aplicar:** "${technique}"
+${additionalContext ? `4.  **Contexto Adicional del Usuario:** ${additionalContext}` : ''}
 
 **INSTRUCCIONES FUNDAMENTALES PARA EL DISEÑO DE CASOS DE PRUEBA DETALLADOS:**
-1.  **COMPRENSIÓN PROFUNDA:** Analiza minuciosamente la HU y CADA UNO de los CA. Los casos de prueba deben cubrir los aspectos funcionales descritos.
-2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":**
-    *   Basa tu razonamiento y la generación de casos de prueba DIRECTAMENTE en los principios de la técnica "${technique}".
-    *   Los casos de prueba DEBEN ser una consecuencia lógica de aplicar "${technique}" a la HU y CA. NO inventes funcionalidad.
-3.  **DERIVACIÓN DIRECTA:** CADA caso de prueba generado debe poder rastrearse y justificarse EXCLUSIVAMENTE a partir de la HU, los CA y la aplicación de la técnica "${technique}".
-4.  **CONCISIÓN Y ACCIÓN:** (Title, Preconditions, Steps, ExpectedResults deben ser claros y accionables).
-5.  **COBERTURA ADECUADA:** Genera un conjunto de casos de prueba que cubran razonablemente los CA a través de la lente de la técnica "${technique}".
-6.  **CASO DE NO APLICABILIDAD / INFORMACIÓN INSUFICIENTE:** Si no puedes generar casos válidos, responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
+1.  **COMPRENSIÓN PROFUNDA:** Analiza minuciosamente la HU, CADA UNO de los CA ${additionalContext ? 'y el CONTEXTO ADICIONAL' : ''}.
+2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":** Basa tu razonamiento DIRECTAMENTE en los principios de "${technique}". Los casos DEBEN ser una consecuencia lógica de aplicar "${technique}" a la HU, CA ${additionalContext ? 'y el CONTEXTO ADICIONAL' : ''}. NO inventes funcionalidad.
+3.  **DERIVACIÓN DIRECTA:** CADA caso de prueba generado debe poder rastrearse y justificarse EXCLUSIVAMENTE a partir de la HU, los CA, la aplicación de "${technique}" ${additionalContext ? 'y el CONTEXTO ADICIONAL' : ''}.
+4.  **FORMATO DE PASOS ESTRUCTURADO:** La propiedad "steps" DEBE ser un array de objetos JSON. Cada objeto de paso debe tener las propiedades "numero_paso" (integer, secuencial iniciando en 1) y "accion" (string, descripción clara y concisa del paso).
+5.  **CONCISIÓN Y ACCIÓN:** "title", "preconditions", y "expectedResults" deben ser claros y accionables. El "title" debe comenzar con un verbo.
+6.  **COBERTURA ADECUADA:** Genera un conjunto de casos que cubran razonablemente los CA a través de "${technique}" ${additionalContext ? 'y considerando el CONTEXTO ADICIONAL' : ''}.
+7.  **CASO DE NO APLICABILIDAD / INFORMACIÓN INSUFICIENTE:** Si no puedes generar casos válidos, responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
     \`\`\`json
-    [{"title": "Información Insuficiente", "preconditions": "N/A", "steps": "No se pudieron generar casos detallados basados en la información proporcionada y la técnica solicitada.", "expectedResults": "N/A"}]
+    [{"title": "Información Insuficiente", "preconditions": "N/A", "steps": [{"numero_paso": 1, "accion": "No se pudieron generar casos detallados basados en la información proporcionada, la técnica solicitada ${additionalContext ? 'y el contexto adicional' : ''}."}], "expectedResults": "N/A"}]
     \`\`\`
 
 **FORMATO DE SALIDA ESTRICTO JSON (SIN EXCEPCIONES):**
 *   La respuesta DEBE ser un array JSON válido. Tu respuesta debe comenzar con '[' y terminar con ']'.
-*   Cada elemento del array debe ser un objeto JSON representando un caso de prueba con las siguientes propiedades EXACTAS: "title", "preconditions", "steps", "expectedResults".
-*   Ejemplo de un elemento: { "title": "Verificar inicio de sesión exitoso", "preconditions": "Usuario registrado existe y tiene credenciales válidas.", "steps": "1. Navegar a la página de login.\\n2. Ingresar usuario.\\n3. Ingresar contraseña.\\n4. Hacer clic en 'Ingresar'.", "expectedResults": "El usuario es redirigido al dashboard." }
-*   Los valores de "preconditions", "steps", y "expectedResults" pueden ser strings con múltiples líneas separadas por '\\n'.
+*   Cada elemento del array debe ser un objeto JSON representando un caso de prueba con las siguientes propiedades EXACTAS: "title" (string), "preconditions" (string), "steps" (ARRAY DE OBJETOS JSON), "expectedResults" (string).
+*   Cada objeto dentro del array "steps" debe tener las propiedades EXACTAS: "numero_paso" (integer) y "accion" (string).
+*   Ejemplo de un elemento del array principal (caso de prueba):
+    \`\`\`json
+    {
+      "title": "Verificar inicio de sesión exitoso con credenciales válidas",
+      "preconditions": "Usuario registrado existe y tiene credenciales válidas. El sistema está accesible.",
+      "steps": [
+        {"numero_paso": 1, "accion": "Navegar a la página de inicio de sesión."},
+        {"numero_paso": 2, "accion": "Ingresar el nombre de usuario válido en el campo 'Usuario'."},
+        {"numero_paso": 3, "accion": "Ingresar la contraseña válida en el campo 'Contraseña'."},
+        {"numero_paso": 4, "accion": "Hacer clic en el botón 'Ingresar'."}
+      ],
+      "expectedResults": "El usuario es redirigido al dashboard principal y se muestra un mensaje de bienvenida."
+    }
+    \`\`\`
 *   El valor de "title" DEBE COMENZAR con un verbo en infinitivo o imperativo.
+*   Los valores de "preconditions" y "expectedResults" pueden ser strings con múltiples líneas separadas por '\\n'. La "accion" dentro de "steps" debe ser un string conciso para un solo paso.
 *   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON. No incluyas explicaciones, introducciones, saludos, despedidas, ni ningún texto conversacional. Tu ÚNICA respuesta debe ser el array JSON.
 ---
-PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LA HU, LOS CA Y LA TÉCNICA "${technique}":
+PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LA HU, LOS CA, LA TÉCNICA "${technique}" ${additionalContext ? 'Y EL CONTEXTO ADICIONAL' : ''}:
 `;
 
-private readonly PROMPT_SCENARIOS_DETAILED_IMAGE_BASED = (technique: string) => `
+  private readonly PROMPT_SCENARIOS_DETAILED_IMAGE_BASED = (technique: string, additionalContext?: string): string => `
 Eres un Ingeniero de QA experto en diseño de pruebas de caja negra y en la interpretación de interfaces de usuario a partir de imágenes.
-Tu tarea es analizar LAS IMÁGENES proporcionadas, que representan un flujo de interfaz de usuario, y generar casos de prueba detallados, claros, concisos y accionables basados en la técnica de prueba especificada.
+Tu tarea es analizar LAS IMÁGENES proporcionadas, que representan un flujo de interfaz de usuario, y generar casos de prueba detallados, claros, concisos y accionables basados en la técnica de prueba especificada ${additionalContext ? 'y el CONTEXTO ADICIONAL proporcionado' : ''}.
 Las imágenes se proporcionan en el orden en que deben ser consideradas para el flujo.
 
 **ENTRADA PROPORCIONADA:**
 1.  **Imágenes del Flujo de Interfaz de Usuario:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto. La primera imagen es "Imagen 1", la segunda "Imagen 2", y así sucesivamente).
 2.  **Técnica de Diseño de Pruebas de Caja Negra a Aplicar:** "${technique}"
+${additionalContext ? `3.  **Contexto Adicional del Usuario:** ${additionalContext}` : ''}
 
 **INSTRUCCIONES FUNDAMENTALES PARA EL DISEÑO DE CASOS DE PRUEBA:**
 1.  **INTERPRETACIÓN VISUAL DETALLADA Y SECUENCIAL:**
-    * Analiza LAS IMÁGENES minuciosamente EN EL ORDEN EXACTO en que se proporcionan. La "Imagen 1" es el inicio del flujo, la "Imagen 2" es el siguiente estado, etc.
-    * Identifica elementos (botones, campos, etc.), el flujo de navegación general que representan en conjunto, acciones y resultados visuales.
-    * Infiere criterios de aceptación o reglas de negocio a partir de la secuencia de imágenes si aplica.
+    * Analiza LAS IMÁGENES minuciosamente EN EL ORDEN EXACTO en que se proporcionan.
+    * Identifica elementos (botones, campos, etc.), el flujo de navegación, acciones y resultados visuales.
     * Considera el texto en CADA imagen como crucial.
-2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":**
-    * Basa la generación de casos en tu interpretación de las imágenes y los principios de "${technique}".
-    * Aplica la técnica a elementos y flujos visuales (Partición Equivalencia, Valores Límite, etc.) considerando el conjunto de imágenes en su orden.
-    * Los casos DEBEN ser consecuencia lógica de aplicar "${technique}" a la funcionalidad inferida del conjunto de imágenes. NO inventes funcionalidad no soportada por las imágenes.
-3.  **DERIVACIÓN DIRECTA DE LAS IMÁGENES:** CADA caso debe justificarse por el contenido de las imágenes y la aplicación de "${technique}".
-4.  **CONCISIÓN Y ACCIÓN (ENFOCADO EN LAS IMÁGENES):**
-    * **Title:** Breve, descriptivo, reflejando el objetivo del caso a través del flujo de imágenes.
-    * **Preconditions:** Estado ANTES de pasos, inferido del conjunto de imágenes o la imagen inicial del flujo.
-    * **Steps:** Acciones CLARAS sobre elementos VISIBLES en las imágenes. Sé específico y referencia las imágenes EXCLUSIVAMENTE por su orden secuencial en la entrada (ej. "En Imagen 1...", "Después de la acción en Imagen 2, se observa en Imagen 3...").
-    * **ExpectedResults:** Resultado observable DESPUÉS de pasos, posiblemente en la última imagen del flujo o como un estado final esperado.
-5.  **COBERTURA ADECUADA:** Cubre funcionalidad principal e interacciones clave inferidas del conjunto de imágenes, a través de "${technique}". Prioriza escenarios que demuestren la correcta transición y funcionalidad a lo largo del flujo visual.
+2.  **APLICACIÓN ESTRICTA DE LA TÉCNICA "${technique}":** Basa la generación de casos en tu interpretación de las imágenes, los principios de "${technique}" ${additionalContext ? 'y el CONTEXTO ADICIONAL' : ''}. Aplica la técnica a elementos y flujos visuales. Los casos DEBEN ser consecuencia lógica de aplicar "${technique}" a la funcionalidad inferida. NO inventes funcionalidad no soportada por las imágenes.
+3.  **DERIVACIÓN DIRECTA DE LAS IMÁGENES:** CADA caso debe justificarse por el contenido de las imágenes, la aplicación de "${technique}" ${additionalContext ? 'y el CONTEXTO ADICIONAL' : ''}.
+4.  **FORMATO DE PASOS ESTRUCTURADO:** La propiedad "steps" DEBE ser un array de objetos JSON. Cada objeto de paso debe tener "numero_paso" (integer, secuencial iniciando en 1) y "accion" (string). La "accion" debe ser específica y referenciar las imágenes por su orden secuencial (ej. "En Imagen 1, hacer clic en...", "Después de la acción en Imagen 2, se observa en Imagen 3...").
+5.  **CONCISIÓN Y ACCIÓN (ENFOCADO EN LAS IMÁGENES):**
+    * **Title:** Breve, descriptivo, reflejando el objetivo del caso. Debe comenzar con un verbo.
+    * **Preconditions:** Estado ANTES de los pasos, inferido del conjunto de imágenes o la imagen inicial.
+    * **ExpectedResults:** Resultado observable DESPUÉS de los pasos, posiblemente en la última imagen del flujo.
 6.  **CASO DE IMÁGENES NO CLARAS / NO APLICABILIDAD:** Si no puedes generar casos válidos, responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
     \`\`\`json
-    [{"title": "Imágenes no interpretables o técnica no aplicable", "preconditions": "N/A", "steps": "No se pudieron generar casos detallados a partir del conjunto de imágenes proporcionadas y la técnica solicitada.", "expectedResults": "N/A"}]
+    [{"title": "Imágenes no interpretables o técnica no aplicable", "preconditions": "N/A", "steps": [{"numero_paso": 1, "accion": "No se pudieron generar casos detallados a partir del conjunto de imágenes, la técnica solicitada ${additionalContext ? 'y el contexto adicional' : ''}."}], "expectedResults": "N/A"}]
     \`\`\`
 
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
 * La respuesta DEBE ser un array JSON válido. Tu respuesta debe comenzar con '[' y terminar con ']'.
-* Cada elemento: objeto JSON con propiedades EXACTAS: **"title"**, **"preconditions"**, **"steps"**, **"expectedResults"**.
-* Ejemplo de un elemento: {"title": "Verificar navegación a través de múltiples pantallas...", "preconditions": "Usuario en la pantalla inicial del flujo (Imagen 1)...", "steps": "1. Observar Imagen 1 y hacer X.\\n2. Observar Imagen 2 y hacer Y.", "expectedResults": "Sistema navega correctamente a través del flujo y muestra Z."}
-* Valores pueden ser strings multilínea (separados por '\\n'). "title" DEBE comenzar con verbo.
+* Cada elemento: objeto JSON con propiedades EXACTAS: "title" (string), "preconditions" (string), "steps" (ARRAY DE OBJETOS JSON), "expectedResults" (string).
+* Cada objeto dentro del array "steps" debe tener: "numero_paso" (integer) y "accion" (string).
+* Ejemplo de un elemento del array principal:
+    \`\`\`json
+    {
+      "title": "Verificar navegación a pantalla de confirmación tras completar formulario",
+      "preconditions": "Usuario en la pantalla inicial del flujo (Imagen 1) con el formulario visible.",
+      "steps": [
+        {"numero_paso": 1, "accion": "En Imagen 1, ingresar 'dato de prueba' en el campo 'Nombre'."},
+        {"numero_paso": 2, "accion": "En Imagen 1, hacer clic en el botón 'Siguiente'."},
+        {"numero_paso": 3, "accion": "Observar Imagen 2. Verificar que se muestra el texto 'Confirmación'."}
+      ],
+      "expectedResults": "El sistema navega correctamente a la pantalla de confirmación (visible en Imagen 2) después de enviar el formulario."
+    }
+    \`\`\`
+* El valor de "title" DEBE comenzar con un verbo.
+* Los valores "preconditions" y "expectedResults" pueden ser strings multilínea (separados por '\\n' si es necesario, pero es mejor si la IA los genera directamente con saltos de línea). La "accion" dentro de "steps" debe ser un string conciso para un solo paso.
 * **ABSOLUTAMENTE PROHIBIDO TEXTO FUERA del array JSON.** No incluyas explicaciones, introducciones, saludos, despedidas, ni ningún texto conversacional. Tu ÚNICA respuesta debe ser el array JSON.
 ---
-PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LAS IMÁGENES Y LA TÉCNICA "${technique}":
+PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LAS IMÁGENES, LA TÉCNICA "${technique}" ${additionalContext ? 'Y EL CONTEXTO ADICIONAL' : ''}:
 `;
 
-private readonly PROMPT_STATIC_SECTION_ENHANCEMENT = (sectionName: string, existingContent: string, huSummary: string) => `
-Eres un analista de QA experimentado. Revisa la sección "${sectionName}" actual de un plan de pruebas y el resumen de las Historias de Usuario (HUs) involucradas.
-Tu tarea es generar texto ADICIONAL, CONCISO y relevante para ENRIQUECER la sección "${sectionName}".
-NO repitas la información ya existente en la sección actual.
-La respuesta debe ser ÚNICAMENTE el texto adicional sugerido, listo para ser añadido. Evita introducciones como "Aquí tienes algunas sugerencias:" o similares. Solo el texto a añadir.
-
-Sección Actual de "${sectionName}":
-${existingContent}
-
-Resumen de Historias de Usuario (HUs) Involucradas:
-${huSummary}
-
----
-Texto ADICIONAL sugerido para la sección "${sectionName}" (debe ser UN ÚNICO PÁRRAFO CONCISO, MÁXIMO 4 LÍNEAS, sin enumeraciones, viñetas, encabezados ni saludos. Solo el texto a añadir.):`;
-
-private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = () => `
-Eres un Ingeniero de QA Analista experto en la interpretación de ejecuciones de pruebas de software y en el análisis forense de interfaces de usuario a partir de secuencias de imágenes.
-Tu tarea es analizar la SECUENCIA DE IMÁGENES adjunta, que representa la ejecución de un flujo de interfaz de usuario. Debes generar un informe detallado de dicha ejecución, identificando **uno o más escenarios posibles** que la secuencia podría representar, incluyendo flujos exitosos y flujos con errores o desviaciones.
+  private readonly PROMPT_REFINE_DETAILED_TEST_CASES = (
+    originalInputType: 'text' | 'image',
+    originalDescription: string | undefined, 
+    originalAcceptanceCriteria: string | undefined, 
+    currentTestCasesJSON: string, 
+    newTechnique: string,
+    additionalUserContext: string
+  ): string => `
+Eres un Ingeniero de QA experto en el diseño y REFINAMIENTO de pruebas de caja negra.
+Tu tarea es revisar y refinar un conjunto de casos de prueba existentes, basándote en la información original de la HU (o imágenes), una nueva técnica de diseño de pruebas (o la misma para refinar), y contexto adicional proporcionado por el usuario.
 
 **ENTRADA PROPORCIONADA:**
-1.  **Imágenes del Flujo de Ejecución (Screenshots):** Una secuencia de imágenes en base64. Estas imágenes están en el ORDEN CRONOLÓGICO ESTRICTO de la ejecución. Considera la primera imagen en la secuencia que recibes como "Imagen 1", la segunda como "Imagen 2", y así sucesivamente hasta la "Imagen N".
+1.  **Tipo de Entrada Original:** "${originalInputType}"
+${originalInputType === 'text' ? `2.  **Descripción Original de la HU:** ${originalDescription}\n3.  **Criterios de Aceptación Originales:** ${originalAcceptanceCriteria}` : `2.  **Imágenes Originales del Flujo de UI:** (Provistas en la solicitud. Refiérelas como "Imagen Original 1", "Imagen Original 2", etc. si es necesario para justificar cambios.)`}
+4.  **Casos de Prueba Actuales (Editados por el Usuario - JSON):**
+    \`\`\`json
+    ${currentTestCasesJSON}
+    \`\`\`
+5.  **Técnica de Diseño de Pruebas a Aplicar/Considerar para el Refinamiento:** "${newTechnique}"
+6.  **Contexto Adicional del Usuario para el Re-Análisis:** ${additionalUserContext || "Ninguno."}
 
-**INSTRUCCIONES FUNDAMENTALES PARA EL ANÁLISIS Y REFERENCIACIÓN:**
+**INSTRUCCIONES PARA EL REFINAMIENTO Y REGENERACIÓN:**
+1.  **PRIORIZA LOS CASOS ACTUALES:** Los "Casos de Prueba Actuales" (JSON del punto 4) son la base principal. Tu objetivo es mejorarlos, corregirlos o complementarlos. NO los descartes a menos que sean fundamentalmente erróneos respecto a la entrada original (punto 2 o 3) y la nueva técnica/contexto (puntos 5 y 6).
+2.  **APLICA LA TÉCNICA "${newTechnique}":**
+    *   Verifica si los "Casos de Prueba Actuales" aplican correctamente la técnica "${newTechnique}" a la ${originalInputType === 'text' ? 'descripción/CAs originales' : 'funcionalidad inferida de las imágenes originales'}.
+    *   Si no, ajústalos. Si faltan casos clave según esta técnica (considerando el contexto adicional), añádelos.
+3.  **UTILIZA EL CONTEXTO ADICIONAL:** El "Contexto Adicional del Usuario" (punto 6) es crucial. Debe guiar tus modificaciones y adiciones a los "Casos de Prueba Actuales".
+4.  **COHERENCIA Y TRAZABILIDAD:** Asegúrate de que todos los casos refinados sigan siendo trazables a la ${originalInputType === 'text' ? 'HU/CAs originales' : 'funcionalidad de las imágenes originales'}, la técnica "${newTechnique}", y el contexto adicional.
+5.  **FORMATO DE SALIDA:** Sigue EXACTAMENTE el mismo formato JSON que los "Casos de Prueba Actuales": un array de objetos, donde cada objeto tiene "title" (string), "preconditions" (string), "steps" (array de objetos con "numero_paso" (integer) y "accion" (string)), y "expectedResults" (string).
+6.  **DETALLES DE LOS PASOS ("steps"):** Los pasos deben ser claros y accionables. Si es tipo 'image', las acciones deben referenciar las "Imágenes Originales" si es pertinente (ej: "En Imagen Original 1..."). "numero_paso" debe ser secuencial iniciando en 1 para cada caso.
+7.  **CONCISIÓN:** Mantén los títulos, precondiciones y resultados esperados concisos y relevantes. Los títulos deben comenzar con un verbo.
+8.  **CASO DE ERROR / NO REFINAMIENTO POSIBLE:** Si, a pesar de toda la información, no puedes generar un conjunto de casos refinados válidos (ej. el contexto es contradictorio o la información es fundamentalmente insuficiente incluso con los casos actuales), responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
+    \`\`\`json
+    [{"title": "Refinamiento no posible con el contexto actual", "preconditions": "N/A", "steps": [{"numero_paso": 1, "accion": "No se pudieron refinar/regenerar los casos de prueba basándose en la información y el contexto proporcionados."}], "expectedResults": "N/A"}]
+    \`\`\`
 
-1.  **ANÁLISIS SECUENCIAL ESTRICTO:**
-    *   Analiza CADA IMAGEN y la SECUENCIA COMPLETA minuciosamente, SIGUIENDO ESTRICTAMENTE el orden numérico en que se te proporcionan (Imagen 1, luego Imagen 2, ..., hasta Imagen N). Tu análisis de un paso DEBE basarse en la imagen o imágenes que corresponden a ese punto en la secuencia.
-    *   Identifica elementos de la UI, su estado, datos visibles y cambios entre imágenes CONSECUTIVAS.
+**FORMATO DE SALIDA ESTRICTO JSON (SIN EXCEPCIONES):**
+*   La respuesta DEBE ser un array JSON válido, comenzando con '[' y terminando con ']'.
+*   Sigue la estructura detallada en el punto 5.
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
+---
+PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS Y REFINADOS:
+`;
 
-2.  **DEDUCCIÓN DE POSIBLES ESCENARIOS EJECUTADOS (Nombre del Escenario):**
-    *   Basándote en el flujo COMPLETO (analizado en orden), infiere el propósito general de **cada posible escenario**.
-    *   Debes ser capaz de identificar y reportar **múltiples escenarios** si la secuencia de imágenes lo permite. Por ejemplo, un escenario podría ser el flujo "ideal" o "positivo", mientras que otro podría ser un "flujo con error" o un "camino alternativo no exitoso" que también sea consistente con las imágenes.
-    *   Cada escenario identificado debe ser un objeto JSON completo dentro del array de salida.
 
-3.  **EXTRACCIÓN DEL PASO A PASO DETALLADO (Pasos Analizados) PARA CADA ESCENARIO:**
-    *   Para cada escenario deducido, describe cronológicamente las acciones y observaciones que lo constituyen.
-    *   Para cada paso identificado dentro de un escenario:
-        *   **REFERENCIA DE IMAGEN OBLIGATORIA Y PRECISA:** En el campo "imagen_referencia_entrada" del JSON, DEBES indicar la imagen (o rango de imágenes consecutivas) de la secuencia de entrada que es MÁS RELEVANTE para este paso. Usa el formato "Imagen X" (ej: "Imagen 1", "Imagen 3") o "Imagen X a Imagen Y" (ej: "Imagen 2 a Imagen 3") donde X e Y son los números de las imágenes según su orden de entrada.
-        *   **NO INFIERAS UN ORDEN DIFERENTE AL DE ENTRADA PARA LAS REFERENCIAS.** Si el paso 1 del flujo ocurre en la primera imagen de entrada, la referencia debe ser "Imagen 1". Si el paso 2 ocurre en la segunda imagen de entrada, la referencia debe ser "Imagen 2".
-        *   Describe la acción/estado.
-        *   Identifica el elemento clave y su ubicación DENTRO de la imagen referenciada (ej: "botón 'Login' en Imagen 1").
-        *   **DATO DE ENTRADA (Si aplica):** Si el paso implica la entrada de datos por parte del usuario (ej: escribir en un campo de texto, seleccionar una opción), describe el dato que se infiere fue ingresado. Si no hay entrada de datos directa por el usuario en este paso (ej: solo observación o clic en botón sin datos), indica "N/A".
+  private readonly PROMPT_STATIC_SECTION_ENHANCEMENT = (sectionName: string, existingContent: string, huSummary: string): string => `
+Eres un asistente de QA experto. Tu tarea es MEJORAR y EXPANDIR una sección específica de un plan de pruebas.
+**Sección a Mejorar:** "${sectionName}"
+**Contenido Existente (si lo hay, podría estar vacío o ser un placeholder):**
+${existingContent}
+**Resumen de Historias de Usuario/Flujos en el Plan (para contexto):**
+${huSummary}
 
-4.  **INFERENCIA DEL RESULTADO ESPERADO (PARA CADA PASO Y ESCENARIO).**
-5.  **DETERMINACIÓN DEL RESULTADO OBTENIDO (PARA CADA PASO Y ESCENARIO) (Concluyendo 'Exitosa', 'Fallida (describir fallo)', o 'Exitosa con desviaciones').**
+**INSTRUCCIONES:**
+1.  **ANALIZA EL CONTEXTO:** Considera el resumen de HUs/Flujos para que tu contribución sea relevante.
+2.  **MEJORA Y EXPANDE:** Si el contenido existente es un placeholder (ej: "No se probarán...", "No tener los permisos...") o está vacío, genera contenido nuevo y relevante para la sección "${sectionName}" basado en el contexto general. Si ya hay contenido, añade 2-3 puntos o ideas adicionales que lo complementen, sin repetir lo existente.
+3.  **FORMATO:** Responde ÚNICAMENTE con el texto adicional o mejorado para la sección. No uses encabezados, títulos de sección, ni introducciones/despedidas. Si añades múltiples puntos, usa saltos de línea entre ellos.
+4.  **CONCISIÓN Y RELEVANCIA:** Sé conciso y asegúrate de que tus adiciones sean relevantes para un plan de pruebas y la sección "${sectionName}".
+5.  **NO REPITAS:** Si el contenido existente ya es bueno y completo para el contexto, y no puedes añadir nada valioso, responde con una cadena vacía.
 
-6.  **CASO DE IMÁGENES NO INTERPRETABLES / FLUJO INCOMPRENSIBLE:** Si la secuencia de imágenes es demasiado ambigua o no permite una deducción razonable de NINGÚN escenario completo, responde EXACTAMENTE y ÚNICAMENTE con el siguiente JSON (un array conteniendo un único objeto de escenario no interpretable):
+**EJEMPLO DE RESPUESTA (si se añaden dos puntos a "Limitaciones"):**
+Se cuenta con un ambiente de pruebas con datos limitados.
+La funcionalidad X depende de un sistema externo no disponible para pruebas exhaustivas.
+
+PROCEDE A GENERAR TU RESPUESTA PARA LA SECCIÓN "${sectionName}":
+`;
+
+  private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (): string => `
+Eres un Ingeniero de QA experto en análisis forense de flujos de interfaz de usuario a partir de imágenes y en la documentación de pruebas.
+Tu tarea es analizar una secuencia de imágenes que representan un flujo de usuario YA EJECUTADO, y generar un informe detallado en formato JSON. Este informe debe documentar las acciones observadas, los datos de entrada (si son visibles o inferibles), los elementos clave, y los resultados esperados y obtenidos para cada paso, culminando en una conclusión general.
+Las imágenes se proporcionan en el orden en que ocurrieron los pasos del flujo.
+
+**ENTRADA PROPORCIONADA:**
+*   **Imágenes del Flujo Ejecutado:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto. La primera imagen es "Imagen 1", la segunda "Imagen 2", etc.).
+
+**INSTRUCCIONES DETALLADAS PARA EL ANÁLISIS Y GENERACIÓN DEL INFORME:**
+1.  **SECUENCIA DE IMÁGENES:** Analiza las imágenes EN EL ORDEN ESTRICTO proporcionado. Cada imagen (o un conjunto pequeño de imágenes consecutivas) representa un paso o el resultado de un paso.
+2.  **IDENTIFICACIÓN DE PASOS Y ACCIONES:**
+    *   Para cada paso, describe la "descripcion_accion_observada": ¿Qué acción parece haber realizado el usuario o qué cambio de estado importante ocurrió para llegar a la imagen actual desde la anterior?
+    *   Indica la "imagen_referencia_entrada": ¿Cuál es la imagen principal que muestra el estado ANTES o DURANTE la acción de este paso? (Ej: "Imagen 1", "Imagen 3").
+    *   Identifica el "elemento_clave_y_ubicacion_aproximada": ¿Cuál fue el elemento principal de la UI con el que se interactuó (botón, campo, enlace) y su ubicación aproximada en esa imagen? (Ej: "Botón 'Siguiente' en la parte inferior", "Campo 'Email' en el centro").
+    *   Si es visible o claramente inferible, indica el "dato_de_entrada_paso" (Ej: "usuario@ejemplo.com", "Contraseña123", "Opción 'Sí' seleccionada"). Si no hay dato de entrada explícito para la acción (ej. solo clic en un enlace), usa "N/A".
+    *   Define el "resultado_esperado_paso": ¿Qué se esperaba que sucediera INMEDIATAMENTE después de esta acción específica?
+    *   Describe el "resultado_obtenido_paso_y_estado": ¿Qué se observa en la imagen(es) SIGUIENTE(s) como resultado de la acción? Indica si el paso fue "Exitosa", "Fallido", o "Exitosa con desviaciones". (Ej: "Se navega a Imagen 2, mostrando formulario de dirección. Estado: Exitosa").
+3.  **CONCLUSIONES GENERALES DEL FLUJO:**
+    *   "Nombre_del_Escenario": Un título descriptivo para el flujo completo analizado. (Ej: "Proceso de Registro de Nuevo Usuario", "Validación de Carrito de Compras").
+    *   "Resultado_Esperado_General_Flujo": ¿Cuál era el objetivo o resultado final esperado para TODO el flujo?
+    *   "Conclusion_General_Flujo": Basado en todos los pasos, ¿el flujo completo fue exitoso, fallido, o exitoso con observaciones? Proporciona una breve justificación.
+4.  **NÚMERO DE PASO:** Asegúrate que "numero_paso" sea un entero secuencial comenzando en 1 para cada paso analizado.
+
+**CASO DE IMÁGENES NO INTERPRETABLES / ERROR INTERNO:**
+Si las imágenes no forman una secuencia lógica, son incomprensibles, o no puedes generar un informe válido, responde **EXACTAMENTE y ÚNICAMENTE** con el siguiente array JSON:
+\`\`\`json
+[
+  {
+    "Nombre_del_Escenario": "Secuencia de imágenes no interpretable",
+    "Pasos_Analizados": [
+      {
+        "numero_paso": 1,
+        "descripcion_accion_observada": "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis.",
+        "imagen_referencia_entrada": "N/A",
+        "elemento_clave_y_ubicacion_aproximada": "N/A",
+        "dato_de_entrada_paso": "N/A",
+        "resultado_esperado_paso": "N/A",
+        "resultado_obtenido_paso_y_estado": "Análisis no concluyente."
+      }
+    ],
+    "Resultado_Esperado_General_Flujo": "N/A",
+    "Conclusion_General_Flujo": "El análisis de flujo no pudo completarse debido a la calidad o secuencia de las imágenes."
+  }
+]
+\`\`\`
+
+**FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
+*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto. Tu respuesta debe comenzar con '[{' y terminar con '}]'.
+*   El objeto principal debe tener las propiedades EXACTAS: "Nombre_del_Escenario" (string), "Pasos_Analizados" (ARRAY de objetos JSON), "Resultado_Esperado_General_Flujo" (string), "Conclusion_General_Flujo" (string).
+*   Cada objeto dentro del array "Pasos_Analizados" debe tener las propiedades EXACTAS: "numero_paso" (integer), "descripcion_accion_observada" (string), "imagen_referencia_entrada" (string), "elemento_clave_y_ubicacion_aproximada" (string), "dato_de_entrada_paso" (string, opcional, default "N/A"), "resultado_esperado_paso" (string), "resultado_obtenido_paso_y_estado" (string).
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON. No incluyas explicaciones, introducciones, saludos, despedidas, ni ningún texto conversacional. Tu ÚNICA respuesta debe ser el array JSON.
+---
+PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO BASADO EN LAS IMÁGENES PROPORCIONADAS:
+`;
+
+  private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string): string => `
+Eres un Ingeniero de QA experto en análisis forense de flujos de UI y refinamiento de documentación de pruebas.
+Tu tarea es REFINAR un informe de análisis de flujo existente, basándote en las imágenes originales y en un contexto editado del informe (que podría incluir correcciones o comentarios del usuario).
+**ENTRADA PROPORCIONADA:**
+1.  **Imágenes Originales del Flujo Ejecutado:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto).
+2.  **Contexto del Informe Editado (JSON):** Un objeto JSON que representa el informe tal como fue editado o anotado por el usuario. Este JSON incluye "Nombre_del_Escenario", "Pasos_Analizados" (con las descripciones, elementos, datos de entrada y resultados esperados *editados*), "Resultado_Esperado_General_Flujo", y opcionalmente "user_provided_additional_context" con comentarios generales del usuario. El JSON es:
+    \`\`\`json
+    ${editedReportContextJSON}
+    \`\`\`
+
+**INSTRUCCIONES DETALLADAS PARA EL REFINAMIENTO:**
+1.  **RE-ANALIZA LAS IMÁGENES CON EL NUEVO CONTEXTO:** Vuelve a examinar las imágenes originales, pero esta vez, considera las ediciones y el contexto adicional proporcionado en el JSON como la "verdad" o la intención a verificar.
+2.  **ENFOQUE EN "resultado_obtenido_paso_y_estado":** Para cada paso en "Pasos_Analizados" del JSON de contexto:
+    *   Toma la "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" y "resultado_esperado_paso" del JSON de contexto como correctos.
+    *   Tu principal tarea es generar un NUEVO "resultado_obtenido_paso_y_estado" que refleje si, dadas esas acciones/entradas/elementos y expectativas del contexto, lo que se ve en las imágenes siguientes coincide. Actualiza el estado a "Exitosa", "Fallido", o "Exitosa con desviaciones" según corresponda.
+3.  **ACTUALIZA LA CONCLUSIÓN GENERAL:** Basado en los "resultado_obtenido_paso_y_estado" refinados, genera una nueva "Conclusion_General_Flujo". El "Nombre_del_Escenario" y "Resultado_Esperado_General_Flujo" del JSON de contexto deben mantenerse.
+4.  **MANTÉN LA ESTRUCTURA Y ORDEN:** El número de pasos y su orden deben coincidir con los de "Pasos_Analizados" en el JSON de contexto. Simplemente estás refinando los resultados obtenidos y la conclusión general.
+
+**CASO DE ERROR EN REFINAMIENTO:**
+Si, a pesar del contexto, las imágenes siguen sin permitir un refinamiento claro o hay una contradicción fundamental, produce un informe con un error específico en la "Conclusion_General_Flujo" y en el "resultado_obtenido_paso_y_estado" del primer paso problemático. Usa el "Nombre_del_Escenario" del contexto.
+Ejemplo de estructura de error:
+\`\`\`json
+[
+  {
+    "Nombre_del_Escenario": "Error Crítico en Re-Generación (Contextualizada)", 
+    "Pasos_Analizados": [
+      {
+        "numero_paso": 1, 
+        "descripcion_accion_observada": "Descripción del contexto",
+        "imagen_referencia_entrada": "Ref del contexto",
+        "elemento_clave_y_ubicacion_aproximada": "Elemento del contexto",
+        "dato_de_entrada_paso": "Dato del contexto",
+        "resultado_esperado_paso": "Esperado del contexto",
+        "resultado_obtenido_paso_y_estado": "No se pudo refinar el resultado obtenido debido a [razón específica o contradicción con las imágenes]."
+      }
+    ],
+    "Resultado_Esperado_General_Flujo": "Esperado general del contexto",
+    "Conclusion_General_Flujo": "El refinamiento del flujo no pudo completarse debido a [razón general]."
+  }
+]
+\`\`\`
+
+**FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
+*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto, con la misma estructura que el prompt \`PROMPT_FLOW_ANALYSIS_FROM_IMAGES\`.
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
+---
+PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO REFINADO:
+`;
+
+  private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = (): string => `
+Eres un Analista de QA meticuloso y experto en la detección de bugs visuales y funcionales mediante la comparación de flujos de interfaz de usuario.
+Tu tarea es comparar dos secuencias de imágenes: "Flujo A" (generalmente el esperado o versión anterior) y "Flujo B" (generalmente el actual o nueva versión). Debes identificar diferencias significativas y reportarlas como bugs en un formato JSON estructurado.
+
+**ENTRADA PROPORCIONADA:**
+*   **Imágenes del Flujo A:** (Adjuntas en la solicitud, ordenadas secuencialmente. Ej: "Imagen A.1", "Imagen A.2", etc.)
+*   **Imágenes del Flujo B:** (Adjuntas en la solicitud, ordenadas secuencialmente. Ej: "Imagen B.1", "Imagen B.2", etc.)
+
+**INSTRUCCIONES DETALLADAS PARA LA COMPARACIÓN Y REPORTE DE BUGS:**
+1.  **ANÁLISIS COMPARATIVO SECUENCIAL:** Compara las imágenes de Flujo A con las de Flujo B paso a paso, asumiendo que representan flujos equivalentes. Busca discrepancias en:
+    *   **Elementos de UI:** Faltantes, adicionales, mal ubicados, con estilo incorrecto (colores, fuentes, tamaños).
+    *   **Textos:** Errores ortográficos, mensajes incorrectos, etiquetas faltantes o diferentes.
+    *   **Funcionalidad Implícita:** Si una acción en Flujo A (ej. clic en botón) lleva a un resultado X (visible en Imagen A.2), y la misma acción (inferida) en Flujo B lleva a un resultado Y diferente (visible en Imagen B.2).
+    *   **Flujo de Navegación:** Diferencias en el orden de las pantallas o pasos inesperados.
+2.  **REPORTE DE BUGS SIGNIFICATIVOS:** Solo reporta diferencias que constituyan un bug funcional o visual relevante. No reportes cambios menores de píxeles si la funcionalidad y comprensión no se ven afectadas.
+3.  **ESTRUCTURA DEL BUG:** Para CADA bug identificado, crea un objeto JSON con los siguientes campos:
+    *   \`titulo_bug\` (string): Título conciso y descriptivo del bug. Ej: "Botón 'Guardar' inactivo en pantalla de perfil (Flujo B)".
+    *   \`id_bug\` (string): Un ID único generado por ti para el bug. Ej: "BUG-COMP-001".
+    *   \`prioridad\` (string): Estima la prioridad ('Baja', 'Media', 'Alta', 'Crítica').
+    *   \`severidad\` (string): Estima la severidad ('Menor', 'Moderada', 'Mayor', 'Crítica').
+    *   \`descripcion_diferencia_general\` (string, opcional): Una descripción general de la diferencia observada si aplica a múltiples pasos o es un concepto general.
+    *   \`pasos_para_reproducir\` (array de objetos): Cada objeto con \`numero_paso\` (integer) y \`descripcion\` (string). Describe los pasos para llegar al bug, referenciando las imágenes. Ej: \`{"numero_paso": 1, "descripcion": "Comparar Imagen A.3 con Imagen B.3."}\`.
+    *   \`resultado_esperado\` (string): Lo que se ve en Flujo A (o lo que se esperaba). Referencia la imagen de Flujo A. Ej: "En Imagen A.3, el título es 'Bienvenido Usuario'."
+    *   \`resultado_actual\` (string): Lo que se ve en Flujo B (lo incorrecto). Referencia la imagen de Flujo B. Ej: "En Imagen B.3, el título es 'Bienbenido Usario' (error ortográfico)."
+    *   \`imagen_referencia_flujo_a\` (string, opcional): Nombre de la imagen clave de Flujo A para este bug. Ej: "Imagen A.3".
+    *   \`imagen_referencia_flujo_b\` (string, opcional): Nombre de la imagen clave de Flujo B para este bug. Ej: "Imagen B.3".
+4.  **NOMENCLATURA DE IMÁGENES:** En tus descripciones y referencias, usa "Imagen A.X" y "Imagen B.X" donde X es el número de la imagen en su respectiva secuencia.
+
+**CASO DE NO DIFERENCIAS / IMÁGENES NO CLARAS / ERROR INTERNO:**
+*   Si **no hay bugs significativos** o los flujos son idénticos, responde **EXACTAMENTE y ÚNICAMENTE** con un array JSON vacío: \`[]\`.
+*   Si las imágenes no son claras, no permiten una comparación efectiva, o hay un error interno, responde **EXACTAMENTE y ÚNICAMENTE** con el siguiente array JSON (puedes adaptar el mensaje de error si es específico):
     \`\`\`json
     [
       {
-        "Nombre_del_Escenario": "Secuencia de imágenes no interpretable",
-        "Pasos_Analizados": [
-          {
-            "numero_paso": 1,
-            "descripcion_accion_observada": "Las imágenes proporcionadas no permiten una deducción clara de los pasos ejecutados para ningún escenario.",
-            "imagen_referencia_entrada": "N/A",
-            "elemento_clave_y_ubicacion_aproximada": "N/A",
-            "dato_de_entrada_paso": "N/A",
-            "resultado_esperado_paso": "N/A",
-            "resultado_obtenido_paso_y_estado": "Análisis no concluyente."
-          }
+        "titulo_bug": "Error en el Análisis de Imágenes para Comparación",
+        "id_bug":"IMG-COMP-ERR-01",
+        "prioridad": "Media",
+        "severidad": "Menor",
+        "pasos_para_reproducir": [
+          {"numero_paso":1, "descripcion": "Las imágenes proporcionadas (Flujo A y/o Flujo B) no fueron suficientemente claras, no corresponden a flujos equivalentes, o no permitieron una comparación efectiva."}
         ],
-        "Resultado_Esperado_General_Flujo": "N/A debido a la falta de interpretabilidad.",
-        "Conclusion_General_Flujo": "Análisis no concluyente debido a la calidad o ambigüedad de las imágenes."
+        "resultado_esperado": "N/A",
+        "resultado_actual": "N/A"
       }
     ]
     \`\`\`
 
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
-*   La respuesta DEBE ser un array JSON válido. Tu respuesta debe comenzar con '[' y terminar con ']'.
-*   **Cada elemento del array raíz será un objeto JSON que representa un escenario deducido.**
-*   Cada objeto de escenario debe tener las siguientes propiedades: "Nombre_del_Escenario", "Pasos_Analizados" (que es un array de objetos de paso), "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
-*   Cada objeto en "Pasos_Analizados" debe tener: "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada" (CRÍTICO: "Imagen X" o "Imagen X a Imagen Y" según orden de entrada), "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" (string, puede ser "N/A"), "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
-*   **ABSOLUTAMENTE PROHIBIDO TEXTO FUERA del array JSON.** No incluyas explicaciones, introducciones, saludos, despedidas, ni ningún texto conversacional. Tu ÚNICA respuesta debe ser el array JSON.
-
-**Ejemplo de estructura de salida si se deducen DOS escenarios:**
-\`\`\`json
-[
-  {
-    "Nombre_del_Escenario": "Ejemplo: Flujo de Login Exitoso",
-    "Pasos_Analizados": [
-      {
-        "numero_paso": 1,
-        "descripcion_accion_observada": "Se visualiza la pantalla de login.",
-        "imagen_referencia_entrada": "Imagen 1",
-        "elemento_clave_y_ubicacion_aproximada": "Formulario de login completo en Imagen 1",
-        "dato_de_entrada_paso": "N/A",
-        "resultado_esperado_paso": "Visualizar campos de usuario y contraseña.",
-        "resultado_obtenido_paso_y_estado": "Exitosa"
-      },
-      {
-        "numero_paso": 2,
-        "descripcion_accion_observada": "Se ingresa el nombre de usuario 'testuser'.",
-        "imagen_referencia_entrada": "Imagen 2",
-        "elemento_clave_y_ubicacion_aproximada": "Campo 'username' en Imagen 2",
-        "dato_de_entrada_paso": "testuser",
-        "resultado_esperado_paso": "El campo 'username' debe contener 'testuser'.",
-        "resultado_obtenido_paso_y_estado": "Exitosa"
-      }
-      // ... más pasos para este escenario
-    ],
-    "Resultado_Esperado_General_Flujo": "El usuario debe poder iniciar sesión exitosamente.",
-    "Conclusion_General_Flujo": "Exitosa"
-  },
-  {
-    "Nombre_del_Escenario": "Ejemplo: Flujo de Login Fallido por Contraseña Incorrecta",
-    "Pasos_Analizados": [
-      {
-        "numero_paso": 1,
-        "descripcion_accion_observada": "Se visualiza la pantalla de login.",
-        "imagen_referencia_entrada": "Imagen 1",
-        "elemento_clave_y_ubicacion_aproximada": "Formulario de login completo en Imagen 1",
-        "dato_de_entrada_paso": "N/A",
-        "resultado_esperado_paso": "Visualizar campos de usuario y contraseña.",
-        "resultado_obtenido_paso_y_estado": "Exitosa"
-      },
-      {
-        "numero_paso": 2,
-        "descripcion_accion_observada": "Se ingresa el nombre de usuario 'testuser'.",
-        "imagen_referencia_entrada": "Imagen 2",
-        "elemento_clave_y_ubicacion_aproximada": "Campo 'username' en Imagen 2",
-        "dato_de_entrada_paso": "testuser",
-        "resultado_esperado_paso": "El campo 'username' debe contener 'testuser'.",
-        "resultado_obtenido_paso_y_estado": "Exitosa"
-      },
-      {
-        "numero_paso": 3,
-        "descripcion_accion_observada": "Se ingresa una contraseña y se presiona 'Login', pero aparece un mensaje de error 'Contraseña incorrecta'.",
-        "imagen_referencia_entrada": "Imagen 4 a Imagen 5",
-        "elemento_clave_y_ubicacion_aproximada": "Mensaje de error 'Contraseña incorrecta' en Imagen 5",
-        "dato_de_entrada_paso": "password_incorrecta (inferido)",
-        "resultado_esperado_paso": "El sistema debe mostrar un mensaje de error indicando contraseña incorrecta.",
-        "resultado_obtenido_paso_y_estado": "Exitosa (el error esperado se manifestó)"
-      }
-      // ... más pasos para este escenario de error
-    ],
-    "Resultado_Esperado_General_Flujo": "El sistema debe impedir el inicio de sesión y mostrar un error.",
-    "Conclusion_General_Flujo": "Fallida (según el intento de login, pero el manejo del error fue correcto)"
-  }
-]
-\`\`\`
+*   La respuesta DEBE ser un array JSON válido. Cada elemento del array es un objeto de bug como se describió arriba.
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
 ---
-PROCEDE A GENERAR EL INFORME JSON. Recuerda, la referencia "Imagen X" en tu salida JSON debe corresponder estrictamente a la X-ésima imagen en la secuencia de entrada que has recibido. Incluye el campo "dato_de_entrada_paso" en cada paso de cada escenario. Si solo un escenario es claramente deducible, el array de salida contendrá un único objeto de escenario.
-`;
-
-// NEW: Prompt for refining flow analysis based on user edits
- private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
-Eres un Ingeniero de QA Analista de élite, altamente colaborativo, especializado en tomar la retroalimentación y el contexto detallado de un colega (el usuario) para refinar un análisis de flujo de UI. Tu tarea es producir un informe de análisis final que incorpore la sabiduría del usuario y tu propia pericia técnica, validado contra la evidencia visual.
-
-**IMÁGENES DEL FLUJO DE EJECUCIÓN (PROPORCIONADAS EN ESTA SOLICITUD):**
-(Se adjuntan las imágenes originales: "Imagen 1", "Imagen 2", ..., "Imagen N". Si el usuario añadió imágenes a pasos específicos, estas se adjuntan después de las originales y se referencian en el JSON de contexto.)
-
-**CONTEXTO DETALLADO, MODIFICACIONES DEL USUARIO Y GUÍA ADICIONAL (GUÍA PRINCIPAL PARA TU ANÁLISIS):**
-\`\`\`json
-${editedReportContextJSON}
-\`\`\`
-(El JSON anterior contiene:
-  - "Nombre_del_Escenario": El nombre que el usuario desea para el escenario. Este debe ser el nombre que uses en tu informe final.
-  - "Pasos_Analizados": La secuencia de pasos tal como el usuario la ha editado (modificado, añadido, o eliminado pasos), incluyendo sus descripciones, datos, y **el "resultado_esperado_paso" para cada uno.** Esta es la secuencia de pasos que debes analizar.
-  - "Resultado_Esperado_General_Flujo": La **hipótesis o intención original** del usuario sobre lo que el flujo general debería demostrar o el objetivo que buscaba. Úsalo como una referencia de la perspectiva del usuario.
-  - "user_provided_additional_context": **(CRÍTICO - ALTA PRIORIDAD) Un texto libre proporcionado por el usuario con correcciones, aclaraciones, objetivos específicos no obvios, o contexto adicional general que aplica a todo el análisis. ESTE CAMPO ES TU GUÍA PRINCIPAL para entender las expectativas del usuario y refinar el análisis.**
-)
-
-**TU NUEVA Y CRUCIAL TAREA DE REFINAMIENTO Y GENERACIÓN:**
-
-1.  **INTERPRETACIÓN GUIADA POR EL USUARIO:**
-    *   **Prioriza el "user_provided_additional_context":** Este texto es la clave para entender las correcciones o el enfoque deseado por el usuario. Úsalo para reinterpretar la secuencia de pasos, los resultados esperados de cada paso y el propósito general del flujo. Si este contexto contradice tu interpretación inicial de las imágenes o de los pasos editados por el usuario (sin contexto adicional), la guía del "user_provided_additional_context" debe prevalecer, siempre que sea lógicamente aplicable a las imágenes.
-    *   **Adopta el "Nombre_del_Escenario" proporcionado por el usuario.**
-
-2.  **RE-ANÁLISIS DE LOS "Pasos_Analizados" (SEGÚN EDICIÓN DEL USUARIO Y TU EXPERTICIA):**
-    *   Los "Pasos_Analizados" en el JSON del usuario son la secuencia definitiva que debes evaluar.
-    *   Para CADA paso de esta secuencia:
-        *   Valida la "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" y, muy importante, el "resultado_esperado_paso" (provisto por el usuario para ese paso) contra la(s) imagen(es) referenciada(s) Y el "user_provided_additional_context".
-        *   Si el "user_provided_additional_context" ofrece una nueva perspectiva sobre un paso, aplícala.
-        *   Basado en tu análisis de la imagen y el contexto del usuario, determina el "resultado_obtenido_paso_y_estado" más preciso para cada paso.
-        *   Interpreta correctamente las referencias en "imagen_referencia_entrada".
-    *   **Re-numera secuencialmente** el campo "numero_paso" en tu JSON de salida final (comenzando en 1) para reflejar el orden final de los pasos.
-
-3.  **GENERACIÓN DE UN NUEVO "Resultado_Esperado_General_Flujo" (BASADO EN TU ANÁLISIS REFINADO):**
-    *   Después de re-analizar los pasos bajo la guía del "user_provided_additional_context" y la edición de los pasos por el usuario:
-    *   **Sintetiza y redacta un NUEVO "Resultado_Esperado_General_Flujo"** para tu informe.
-    *   Este nuevo campo debe describir concisamente lo que el flujo (la secuencia de pasos analizada y validada con las imágenes y el contexto del usuario) está realmente diseñado para probar o lograr.
-    *   Debe ser una consecuencia lógica de los "Pasos_Analizados" finales y el "user_provided_additional_context". El "Resultado_Esperado_General_Flujo" original del usuario es una entrada para tu comprensión, pero tu salida para este campo debe ser tu conclusión experta post-análisis.
-
-4.  **GENERACIÓN DE UNA NUEVA "Conclusion_General_Flujo":**
-    *   Basándote en tu NUEVO "Resultado_Esperado_General_Flujo" y los "Pasos_Analizados" finales (con sus estados):
-    *   Evalúa si el flujo, tal como se ha re-analizado, es exitoso, fallido o tiene desviaciones, y explica brevemente por qué. Esta conclusión debe ser coherente con tu análisis completo.
-
-**FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
-*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto de escenario.
-*   El objeto de escenario debe tener EXACTAMENTE: "Nombre_del_Escenario", "Pasos_Analizados" (array de objetos de paso), "Resultado_Esperado_General_Flujo" (REGENERADO POR TI, BASADO EN TU ANÁLISIS REFINADO), "Conclusion_General_Flujo" (REGENERADA POR TI).
-*   Cada objeto de paso en "Pasos_Analizados" debe tener EXACTAMENTE: "numero_paso" (re-numerado secuencialmente), "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
-*   NO incluyas NINGÚN texto fuera del array JSON.
-
-**CASO DE CONTRADICCIÓN IRRECONCILIABLE O IMÁGENES NO INTERPRETABLES:**
-Si el "user_provided_additional_context" o los pasos editados por el usuario son imposibles de reconciliar con la evidencia visual clara, o las imágenes son inanalizables, responde con el JSON de error estándar para "Secuencia de imágenes no interpretable".
-
----
-PROCEDE A GENERAR EL INFORME JSON REFINADO. TU OBJETIVO ES:
-1.  **CENTRARTE en el "user_provided_additional_context"** como la guía principal del usuario.
-2.  VALIDAR y REFINAR los "Pasos_Analizados" (editados por el usuario) contra las imágenes, aplicando intensamente el "user_provided_additional_context".
-3.  GENERAR un **NUEVO** "Resultado_Esperado_General_Flujo" que refleje tu análisis experto del flujo completo (pasos e imágenes) después de considerar toda la información y guía del usuario.
-4.  GENERAR una **NUEVA** "Conclusion_General_Flujo" coherente con lo anterior.
-5.  Asegurar que todo el informe JSON sea coherente y siga el formato estrictamente.
-`;
-
-// NEW: Prompt for comparing image flows
-private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = () => `
-Eres un Ingeniero de QA experto en la detección de diferencias visuales y funcionales entre dos flujos de interfaz de usuario representados por secuencias de imágenes.
-Se te proporcionarán dos conjuntos de imágenes: "Imágenes Flujo A" (representa el diseño esperado o la versión de referencia) y "Imágenes Flujo B" (representa la implementación actual o la versión a comparar). Ambas secuencias de imágenes están ordenadas cronológicamente por el usuario antes de ser enviadas.
-
-**ENTRADA PROPORCIONADA:**
-1.  **Imágenes del Flujo A:** (Se adjuntarán primero, N imágenes. La primera es "Imagen A.1", la segunda "Imagen A.2", etc.)
-2.  **Imágenes del Flujo B:** (Se adjuntarán después de las de Flujo A, M imágenes. La primera es "Imagen B.1", la segunda "Imagen B.2", etc.)
-
-**TU TAREA:**
-Compara el Flujo A con el Flujo B, imagen por imagen o paso a paso según corresponda, asumiendo que el usuario ha intentado alinear los flujos para que "Imagen A.X" se corresponda conceptualmente con "Imagen B.X" en la medida de lo posible.
-Identifica cualquier diferencia visual significativa (colores, fuentes, alineación, elementos faltantes/adicionales, texto incorrecto) o inferencias de diferencias funcionales.
-Para CADA diferencia significativa que constituya un posible bug o desviación, genera un objeto JSON con el formato especificado abajo. Si no encuentras diferencias significativas, devuelve un array JSON vacío: [].
-Intenta rellenar los campos opcionales como 'reportado_por', 'fecha_reporte', 'version_entorno' con valores genéricos si no son inferibles. Por ejemplo, 'reportado_por': 'Sistema de Análisis IA', 'fecha_reporte': 'Fecha Actual (AAAA-MM-DD)'.
-
-**FORMATO DE SALIDA ESTRICTO (ARRAY DE REPORTES DE BUG EN JSON):**
-Tu ÚNICA salida debe ser un array JSON. Cada elemento del array debe ser un objeto con las siguientes propiedades EXACTAS:
-{
-  "titulo_bug": "string",
-  "id_bug": "string", /* Ej: FEAT-UI-001 */
-  "prioridad": "string", /* Valores: 'Baja', 'Media', 'Alta', 'Crítica' */
-  "severidad": "string", /* Valores: 'Menor', 'Moderada', 'Mayor', 'Crítica' */
-  "reportado_por": "string", /* Opcional, si no inferible, usar 'Sistema IA' */
-  "fecha_reporte": "string", /* Opcional, formato AAAA-MM-DD */
-  "version_entorno": { /* Opcional */
-    "aplicacion": "string", /* Ej: E-commerce v1.0 */
-    "sistema_operativo": "string", /* Ej: N/A (visual) */
-    "navegador": "string", /* Ej: N/A (visual) */
-    "ambiente": "string" /* Ej: Comparación Visual */
-  },
-  "pasos_para_reproducir": [ /* Array de objetos */
-    { "numero_paso": "integer", "descripcion": "string" }
-  ],
-  "resultado_esperado": "string", /* Descripción basada en Flujo A */
-  "resultado_actual": "string", /* Descripción basada en Flujo B */
-  "imagen_referencia_flujo_a": "string", /* Ej: "Imagen A.1", "Imagen A.2". SIEMPRE referenciar la imagen de Flujo A. */
-  "imagen_referencia_flujo_b": "string", /* Ej: "Imagen B.1", "Imagen B.2". SIEMPRE referenciar la imagen de Flujo B. */
-  "descripcion_diferencia_general": "string" /* Descripción concisa de la diferencia principal. */
-}
-**ABSOLUTAMENTE NINGÚN TEXTO FUERA del array JSON.** Comienza con '[' y termina con ']'. Si no hay bugs, devuelve [].
-
-EJEMPLO DE UN REPORTE DE BUG (si se encuentra uno):
-[
-  {
-    "titulo_bug": "El color del botón principal es incorrecto en la pantalla de inicio",
-    "id_bug": "HOME-BTN-CLR-01",
-    "prioridad": "Media",
-    "severidad": "Menor",
-    "reportado_por": "Sistema IA",
-    "fecha_reporte": "2024-05-26",
-    "version_entorno": {
-        "aplicacion": "WebApp v1.2",
-        "ambiente": "Comparación Visual"
-    },
-    "descripcion_diferencia_general": "El botón 'Comenzar' en la pantalla de inicio (Flujo B) es de color azul, pero en el diseño (Flujo A) se esperaba que fuera verde.",
-    "pasos_para_reproducir": [
-      { "numero_paso": 1, "descripcion": "Observar la pantalla de inicio correspondiente a Imagen A.1 (referencia) y Imagen B.1 (actual)." }
-    ],
-    "resultado_esperado": "El botón 'Comenzar' debe ser de color verde (#34A853) como se muestra en la Imagen A.1.",
-    "resultado_actual": "El botón 'Comenzar' es de color azul (#4285F4) como se observa en la Imagen B.1.",
-    "imagen_referencia_flujo_a": "Imagen A.1",
-    "imagen_referencia_flujo_b": "Imagen B.1"
-  }
-]
----
-PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
+PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
 `;
 
 
   constructor(private http: HttpClient) { }
 
-  private getTextFromParts(parts: (GeminiTextPart | GeminiInlineDataPart)[] | undefined): string {
+  private getTextFromParts(parts: GeminiPart[] | undefined): string { 
     if (parts && parts.length > 0) {
       const firstPart = parts[0];
       if (firstPart && 'text' in firstPart) {
@@ -444,7 +419,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     return '';
   }
 
-  generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
+  public generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
     const promptText = this.PROMPT_SCOPE(description, acceptanceCriteria);
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
@@ -457,24 +432,24 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     );
   }
 
-  generateDetailedTestCasesTextBased(description: string, acceptanceCriteria: string, technique: string): Observable<DetailedTestCase[]> {
-    const promptText = this.PROMPT_SCENARIOS_DETAILED_TEXT_BASED(description, acceptanceCriteria, technique);
+  public generateDetailedTestCasesTextBased(description: string, acceptanceCriteria: string, technique: string, additionalContext?: string): Observable<DetailedTestCase[]> {
+    const promptText = this.PROMPT_SCENARIOS_DETAILED_TEXT_BASED(description, acceptanceCriteria, technique, additionalContext);
     const geminiPayload = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.2 }
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.2 } 
     };
     const requestToProxy: ProxyRequestBody = { action: 'generateTextCases', payload: geminiPayload };
     return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
-  generateDetailedTestCasesImageBased(imagesBase64: string[], mimeTypes: string[], technique: string): Observable<DetailedTestCase[]> {
-    const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique);
+  public generateDetailedTestCasesImageBased(imagesBase64: string[], mimeTypes: string[], technique: string, additionalContext?: string): Observable<DetailedTestCase[]> {
+    const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique, additionalContext);
     const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
       inlineData: { mimeType: mimeTypes[index], data: base64 }
     }));
     const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }, ...imageParts] }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.2, topP: 0.95, topK: 40 },
+      contents: [{ parts: ([{ text: promptText }] as GeminiPart[]).concat(imageParts) }], 
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 }, 
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -486,13 +461,54 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
+  public refineDetailedTestCases(
+    originalHuInput: HUData['originalInput'],
+    editedTestCases: DetailedTestCase[],
+    newTechnique: string,
+    userReanalysisContext: string
+  ): Observable<DetailedTestCase[]> {
+    const currentTestCasesJSON = JSON.stringify(editedTestCases, null, 2);
+    const promptText = this.PROMPT_REFINE_DETAILED_TEST_CASES(
+        originalHuInput.generationMode as 'text' | 'image',
+        originalHuInput.description,
+        originalHuInput.acceptanceCriteria,
+        currentTestCasesJSON,
+        newTechnique,
+        userReanalysisContext
+    );
+
+    const parts: GeminiPart[] = [{ text: promptText }];
+    if (originalHuInput.generationMode === 'image' && originalHuInput.imagesBase64 && originalHuInput.imageMimeTypes) {
+        const imageParts: GeminiInlineDataPart[] = originalHuInput.imagesBase64.map((base64, index) => ({
+            inlineData: { mimeType: originalHuInput.imageMimeTypes![index], data: base64 }
+        }));
+        parts.push(...imageParts);
+    }
+
+    const geminiPayload = {
+        contents: [{ parts: parts }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 }, 
+        safetySettings: [
+             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+        ]
+    };
+    
+    const requestToProxy: ProxyRequestBody = { action: 'refineDetailedTestCases', payload: geminiPayload };
+    return this.sendGenerationRequestThroughProxy(requestToProxy); 
+  }
+
+
   private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
     return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
       map(response => {
         const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
+        console.log(`[GeminiService] Raw response for ${requestToProxy.action}:`, rawText);
         if (!rawText) {
           console.warn(`[GeminiService] API (via proxy) para ${requestToProxy.action} no retornó contenido.`);
-          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API (via proxy).", steps: `Acción: ${requestToProxy.action}`, expectedResults: "N/A" }];
+          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API.", steps: [{numero_paso: 1, accion: "Respuesta vacía de la API."}], expectedResults: "N/A" }];
         }
 
         let jsonText = rawText;
@@ -502,32 +518,74 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
 
         if (!jsonText.startsWith("[")) {
             console.warn(`[GeminiService] Respuesta no JSON (o no array) de ${requestToProxy.action}: `, rawText);
-            return [{ title: "Error de Formato (No JSON Array)", preconditions: "La respuesta de la API (via proxy) no fue un array JSON válido.", steps: rawText.substring(0,500), expectedResults: "N/A" }];
+            return [{ title: "Error de Formato (No JSON Array)", preconditions: "Respuesta no fue array JSON.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
         }
 
         try {
-          const testCases: DetailedTestCase[] = JSON.parse(jsonText);
-          if (!Array.isArray(testCases)) {
+          let parsedResponse: any[] = JSON.parse(jsonText);
+          if (!Array.isArray(parsedResponse)) {
             console.warn(`[GeminiService] Respuesta JSON para ${requestToProxy.action} no es un array después de parsear.`, rawText);
-             return [{ title: "Error de Formato (No Array)", preconditions: "La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado.", steps: rawText.substring(0,500), expectedResults: "N/A" }];
+             return [{ title: "Error de Formato (No Array)", preconditions: "Respuesta JSON no tuvo formato array.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
           }
-          if (testCases.length === 0) {
-             console.info(`[GeminiService] Respuesta JSON para ${requestToProxy.action} es un array vacío (puede ser normal).`, rawText);
-             return [];
-          }
-          if (testCases.length === 1 && (testCases[0].title === "Información Insuficiente" || testCases[0].title === "Imágenes no interpretables o técnica no aplicable")) {
-              return testCases;
+          if (parsedResponse.length === 0) {
+             console.info(`[GeminiService] Respuesta JSON para ${requestToProxy.action} es un array vacío.`, rawText);
+             // Si la IA devuelve un array vacío, podría ser intencional (ej: no hay casos válidos), o un error.
+             // Devolveremos el array vacío para que la lógica de negocio decida cómo manejarlo.
+             return []; 
           }
 
-          return testCases.map(tc => ({
-            title: tc.title || "Título no proporcionado",
-            preconditions: tc.preconditions || "N/A",
-            steps: tc.steps || "Pasos no proporcionados",
-            expectedResults: tc.expectedResults || "Resultados no proporcionados"
-          }));
-        } catch (e) {
-          console.error(`[GeminiService] Error parseando JSON para ${requestToProxy.action}:`, e, "\nRespuesta Cruda:", rawText);
-          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar la respuesta JSON de la API (via proxy).", steps: rawText.substring(0,500), expectedResults: "Verificar consola." }];
+          if (parsedResponse.length === 1 && (
+                parsedResponse[0].title === "Información Insuficiente" || 
+                parsedResponse[0].title === "Imágenes no interpretables o técnica no aplicable" ||
+                parsedResponse[0].title === "Refinamiento no posible con el contexto actual" // Error del nuevo prompt
+              )) {
+              if (!Array.isArray(parsedResponse[0].steps) || parsedResponse[0].steps.length === 0) {
+                 parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps || (parsedResponse[0].preconditions || "Detalle no disponible en los pasos.")}];
+              } else if (typeof parsedResponse[0].steps[0] === 'string') { 
+                parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps[0]}];
+              } else if (typeof parsedResponse[0].steps[0] === 'object' && !parsedResponse[0].steps[0].hasOwnProperty('accion')) {
+                // Si es un objeto pero no tiene 'accion', convertirlo a string para no romper la UI.
+                parsedResponse[0].steps = [{numero_paso: 1, accion: JSON.stringify(parsedResponse[0].steps[0])}];
+              }
+              return [{
+                title: parsedResponse[0].title,
+                preconditions: parsedResponse[0].preconditions || "N/A",
+                steps: parsedResponse[0].steps,
+                expectedResults: parsedResponse[0].expectedResults || "N/A"
+              }] as DetailedTestCase[];
+          }
+
+          return parsedResponse.map((tc: any, tcIndex: number) => {
+            let formattedSteps: TestCaseStep[];
+            if (Array.isArray(tc.steps)) {
+                formattedSteps = tc.steps.map((step: any, index: number) => ({
+                    numero_paso: Number.isInteger(step.numero_paso) ? step.numero_paso : (index + 1),
+                    accion: typeof step.accion === 'string' ? step.accion.trim() : "Paso no descrito"
+                }));
+            } else if (typeof tc.steps === 'string') { 
+                console.warn(`[GeminiService] La IA devolvió 'steps' como string para '${tc.title}'. Se intentará parsear.`);
+                formattedSteps = tc.steps.split('\n').map((line: string, index: number) => ({
+                    numero_paso: index + 1,
+                    accion: line.replace(/^\d+\.\s*/, '').trim() // Intenta limpiar numeración si la IA la añade incorrectamente
+                })).filter((step: TestCaseStep) => step.accion.length > 0); // Filtrar pasos vacíos
+            } else {
+                console.warn(`[GeminiService] 'steps' en formato inesperado para '${tc.title}'.`, tc.steps);
+                formattedSteps = [{ numero_paso: 1, accion: "Pasos no proporcionados o en formato incorrecto." }];
+            }
+            if (formattedSteps.length === 0) { // Si después de parsear o filtrar no quedan pasos
+                formattedSteps.push({ numero_paso: 1, accion: "No se pudieron determinar los pasos." });
+            }
+
+            return {
+              title: tc.title || `Caso de Prueba Sin Título ${tcIndex + 1}`,
+              preconditions: tc.preconditions || "N/A",
+              steps: formattedSteps,
+              expectedResults: tc.expectedResults || "Resultados no proporcionados"
+            };
+          }) as DetailedTestCase[];
+        } catch (e: any) {
+          console.error(`[GeminiService] Error parseando JSON para ${requestToProxy.action}:`, e.message, "\nRespuesta Cruda:", rawText);
+          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar respuesta JSON.", steps: [{numero_paso:1, accion: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}`}], expectedResults: "Verificar consola." }];
         }
       }),
       catchError(this.handleError)
@@ -535,6 +593,7 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
   }
 
   private parseFlowAnalysisResponse(rawText: string, action: string): FlowAnalysisReportItem[] {
+    console.log(`[GeminiService] Raw response for ${action}:`, rawText);
     if (!rawText) {
       console.warn(`[GeminiService] API (via proxy) para ${action} no retornó contenido.`);
       return [{
@@ -554,24 +613,24 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
         console.warn(`[GeminiService] Respuesta no JSON (o no array) de ${action}: `, rawText);
         return [{
             Nombre_del_Escenario: "Error de Formato (No JSON Array)",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta de la API (via proxy) no fue un array JSON válido para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta de la API (via proxy) no fue un array JSON válido para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
             Resultado_Esperado_General_Flujo: "N/A",
             Conclusion_General_Flujo: "Error de formato en la API."
         }] as FlowAnalysisReportItem[];
     }
 
     try {
-      const flowAnalysisReport: FlowAnalysisReportItem[] = JSON.parse(jsonText);
-      if (!Array.isArray(flowAnalysisReport)) {
+      const flowAnalysisReportArray: any[] = JSON.parse(jsonText);
+      if (!Array.isArray(flowAnalysisReportArray)) {
          console.warn(`[GeminiService] Respuesta JSON para ${action} no es un array después de parsear.`, rawText);
          return [{
             Nombre_del_Escenario: "Error de Formato (No Array)",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
             Resultado_Esperado_General_Flujo: "N/A",
             Conclusion_General_Flujo: "Error de formato en la API."
         }] as FlowAnalysisReportItem[];
       }
-       if (flowAnalysisReport.length === 0) { // Should ideally return one item as per prompt.
+       if (flowAnalysisReportArray.length === 0) {
            console.info(`[GeminiService] Respuesta JSON para ${action} es un array vacío.`, rawText);
             return [{
                 Nombre_del_Escenario: "Respuesta Vacía de IA",
@@ -580,42 +639,44 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
                 Conclusion_General_Flujo: "La IA no generó contenido."
             }];
        }
-       if (flowAnalysisReport[0].Nombre_del_Escenario === "Secuencia de imágenes no interpretable") {
-           return flowAnalysisReport;
+
+       const flowAnalysisReportItem = flowAnalysisReportArray[0] as FlowAnalysisReportItem;
+
+       if (flowAnalysisReportItem.Nombre_del_Escenario === "Secuencia de imágenes no interpretable" ||
+           flowAnalysisReportItem.Nombre_del_Escenario === "Error Crítico en Re-Generación (Contextualizada)") { // Manejar error de refinamiento
+           if (!Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || flowAnalysisReportItem.Pasos_Analizados.length === 0) {
+               flowAnalysisReportItem.Pasos_Analizados = [{ numero_paso: 1, descripcion_accion_observada: "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}];
+           }
+           return [flowAnalysisReportItem];
        }
-       // Basic validation for the first item if not an error object
-       if (!flowAnalysisReport[0].Nombre_del_Escenario || !Array.isArray(flowAnalysisReport[0].Pasos_Analizados)) {
-            console.warn(`[GeminiService] Respuesta JSON para ${action} malformado.`, rawText);
+
+       if (!flowAnalysisReportItem.Nombre_del_Escenario || !Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || !flowAnalysisReportItem.Resultado_Esperado_General_Flujo || !flowAnalysisReportItem.Conclusion_General_Flujo) {
+            console.warn(`[GeminiService] Respuesta JSON para ${action} malformado (faltan campos clave).`, rawText);
              return [{
                 Nombre_del_Escenario: "Error de Formato (Faltan Campos)",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) está malformada para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0, 200), dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) está malformada para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0, 200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
                 Resultado_Esperado_General_Flujo: "N/A",
                 Conclusion_General_Flujo: "Error de formato en la respuesta de la API."
             }] as FlowAnalysisReportItem[];
        }
 
-      // Ensure 'dato_de_entrada_paso' is present and other step fields
-      flowAnalysisReport.forEach(reportItem => {
-        if (Array.isArray(reportItem.Pasos_Analizados)) {
-            reportItem.Pasos_Analizados = reportItem.Pasos_Analizados.map((paso, index) => ({
-              numero_paso: paso.numero_paso || (index + 1), // Ensure numero_paso if missing
-              descripcion_accion_observada: paso.descripcion_accion_observada || "Descripción no proporcionada",
-              imagen_referencia_entrada: paso.imagen_referencia_entrada || "N/A",
-              elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada || "N/A",
-              dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A",
-              resultado_esperado_paso: paso.resultado_esperado_paso || "N/A",
-              resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado || "Estado no determinado"
-            }));
-        } else {
-            reportItem.Pasos_Analizados = [];
-        }
-      });
-      return flowAnalysisReport;
-    } catch (e) {
-      console.error(`[GeminiService] Error parseando JSON para ${action}:`, e, "\nRespuesta Cruda:", rawText);
+      flowAnalysisReportItem.Pasos_Analizados = flowAnalysisReportItem.Pasos_Analizados.map((paso: any, index: number) => ({
+        numero_paso: paso.numero_paso || (index + 1),
+        descripcion_accion_observada: paso.descripcion_accion_observada || "Descripción no proporcionada",
+        imagen_referencia_entrada: paso.imagen_referencia_entrada || "N/A",
+        elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada || "N/A",
+        dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A",
+        resultado_esperado_paso: paso.resultado_esperado_paso || "N/A",
+        resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado || "Estado no determinado"
+      }));
+      
+      return [flowAnalysisReportItem];
+
+    } catch (e: any) {
+      console.error(`[GeminiService] Error parseando JSON para ${action}:`, e.message, "\nRespuesta Cruda:", rawText);
       return [{
         Nombre_del_Escenario: "Error de Parsing JSON",
-        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `No se pudo interpretar la respuesta JSON de la API (via proxy) para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: rawText.substring(0,500) , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `No se pudo interpretar la respuesta JSON de la API (via proxy) para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}` , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}],
         Resultado_Esperado_General_Flujo: "N/A",
         Conclusion_General_Flujo: "Error al procesar la respuesta de la API."
       }] as FlowAnalysisReportItem[];
@@ -623,14 +684,14 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
   }
 
 
-  generateFlowAnalysisFromImages(imagesBase64: string[], mimeTypes: string[]): Observable<FlowAnalysisReportItem[]> {
+  public generateFlowAnalysisFromImages(imagesBase64: string[], mimeTypes: string[]): Observable<FlowAnalysisReportItem[]> {
     const promptText = this.PROMPT_FLOW_ANALYSIS_FROM_IMAGES();
     const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
       inlineData: { mimeType: mimeTypes[index], data: base64 }
     }));
     const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }, ...imageParts ]}],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.1, topP: 0.95, topK: 40 },
+      contents: [{ parts: ([{ text: promptText }] as GeminiPart[]).concat(imageParts) }],
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.1, topP: 0.95, topK: 40 }, 
       safetySettings: [
         { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
         { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
@@ -649,180 +710,152 @@ PROCEDE A COMPARAR LOS FLUJOS Y GENERAR EL ARRAY JSON DE REPORTES DE BUGS:
     );
   }
 
-  // NEW: Method to refine flow analysis based on user edits
-  refineFlowAnalysisFromImagesAndContext(
+  public refineFlowAnalysisFromImagesAndContext(
     imagesBase64: string[],
     mimeTypes: string[],
     editedReport: FlowAnalysisReportItem,
-    userReanalysisContext?: string // NUEVO PARÁMETRO
+    userReanalysisContext?: string
   ): Observable<FlowAnalysisReportItem[]> {
-
-    const reportContextForPrompt: any = { // Cambiado a 'any' temporalmente para añadir el nuevo campo
+    const reportContextForPrompt: any = {
         Nombre_del_Escenario: editedReport.Nombre_del_Escenario,
-        Pasos_Analizados: editedReport.Pasos_Analizados.map((paso, index) => ({
-            // numero_paso will be re-generated by AI based on final list, but we send current visual order.
-            // The prompt asks AI to re-number based on the final list it generates.
-            numero_paso: index + 1, // Current visual order
+        Pasos_Analizados: editedReport.Pasos_Analizados.map((paso: FlowAnalysisStep, index: number) => ({
+            numero_paso: paso.numero_paso || index + 1, 
             descripcion_accion_observada: paso.descripcion_accion_observada,
             imagen_referencia_entrada: paso.imagen_referencia_entrada,
             elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada,
             dato_de_entrada_paso: paso.dato_de_entrada_paso,
             resultado_esperado_paso: paso.resultado_esperado_paso,
-            resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado
+            // NO SE ENVÍA resultado_obtenido_paso_y_estado AL REFINAMIENTO, ya que eso es lo que la IA debe generar.
         })),
         Resultado_Esperado_General_Flujo: editedReport.Resultado_Esperado_General_Flujo
     };
-
-    // AÑADIR EL CONTEXTO ADICIONAL DEL USUARIO SI EXISTE
-    if (userReanalysisContext && userReanalysisContext.trim() !== '') {
+    if (userReanalysisContext?.trim()) {
         reportContextForPrompt.user_provided_additional_context = userReanalysisContext.trim();
     }
-
     const editedReportContextJSON = JSON.stringify(reportContextForPrompt, null, 2);
-
     const promptText = this.PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(editedReportContextJSON);
-    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
-      inlineData: { mimeType: mimeTypes[index], data: base64 }
-    }));
-
+    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({ inlineData: { mimeType: mimeTypes[index], data: base64 } }));
     const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }, ...imageParts ]}],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-      ]
+      contents: [{ parts: ([{ text: promptText }] as GeminiPart[]).concat(imageParts) }],
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.2, topP: 0.95, topK: 40 }, 
+      safetySettings: [ { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" } ]
     };
     const requestToProxy: ProxyRequestBody = { action: 'refineFlowAnalysis', payload: geminiPayload };
-
     return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
-      map(response => this.parseFlowAnalysisResponse(
-        this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '',
-        'refineFlowAnalysis'
-      )),
+      map(response => this.parseFlowAnalysisResponse( this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '', 'refineFlowAnalysis' )),
       catchError(this.handleError)
     );
   }
 
-
-  // NEW: Method to compare image flows and report bugs
   public compareImageFlows(
     flowAImagesBase64: string[], flowAMimeTypes: string[],
     flowBImagesBase64: string[], flowBMimeTypes: string[]
   ): Observable<BugReportItem[]> {
       const promptText = this.PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS();
-
-      const flowAParts: GeminiInlineDataPart[] = flowAImagesBase64.map((base64, index) => ({
-          inlineData: { mimeType: flowAMimeTypes[index], data: base64 }
-      }));
-      const flowBParts: GeminiInlineDataPart[] = flowBImagesBase64.map((base64, index) => ({
-          inlineData: { mimeType: flowBMimeTypes[index], data: base64 }
-      }));
-
+      const flowAParts: GeminiInlineDataPart[] = flowAImagesBase64.map((data, i) => ({ inlineData: { mimeType: flowAMimeTypes[i], data }}));
+      const flowBParts: GeminiInlineDataPart[] = flowBImagesBase64.map((data, i) => ({ inlineData: { mimeType: flowBMimeTypes[i], data }}));
       const geminiPayload = {
-          contents: [
-              {
-                  parts: [
-                      { text: promptText },
-                      { text: "\n--- IMÁGENES FLUJO A ---" },
-                      ...flowAParts,
-                      { text: "\n--- IMÁGENES FLUJO B ---" },
-                      ...flowBParts
-                  ]
-              }
-          ],
+          contents: [ { parts: ([{ text: promptText }, { text: "\n--- IMÁGENES FLUJO A ---" }] as GeminiPart[]).concat(flowAParts, [{ text: "\n--- IMÁGENES FLUJO B ---" }] as GeminiPart[], flowBParts) } ],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
-          safetySettings: [
-              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-          ]
+          safetySettings: [ { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" } ]
       };
-
-      const requestToProxy: ProxyRequestBody = {
-          action: 'compareImageFlows',
-          payload: geminiPayload
-      };
-
+      const requestToProxy: ProxyRequestBody = { action: 'compareImageFlows', payload: geminiPayload };
+      
       return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
           map(response => {
               const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
-              if (!rawText) {
-                  console.warn("[GeminiService] API para compareImageFlows no retornó contenido.");
-                  return [{titulo_bug: "Error de API (Respuesta Vacía)", id_bug:"ERR-API-EMPTY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: "La API no devolvió contenido.", resultado_esperado:"Un reporte de bugs en JSON."} as BugReportItem];
+              console.log(`[GeminiService] Raw response for compareImageFlows:`, rawText);
+              if (!rawText) { 
+                  console.warn("[GeminiService] API para compareImageFlows no retornó contenido."); 
+                  return [{titulo_bug: "Error de API (Respuesta Vacía)", id_bug:"ERR-API-EMPTY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: "API no devolvió contenido.", resultado_esperado:"Reporte JSON."} as BugReportItem]; 
               }
-
-              let jsonText = rawText;
-              if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-              if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
-              jsonText = jsonText.trim();
-
-              if (!jsonText.startsWith("[")) {
-                 console.warn(`[GeminiService] Respuesta no JSON array de compareImageFlows: `, rawText);
-                 return [{titulo_bug: "Error de Formato (No JSON Array)", id_bug:"ERR-FORMAT-IA", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
+              let jsonText = rawText; 
+              if (jsonText.startsWith("```json")){jsonText=jsonText.substring(7);} 
+              if(jsonText.endsWith("```")){jsonText=jsonText.substring(0,jsonText.length-3);} 
+              jsonText=jsonText.trim();
+              
+              if (!jsonText.startsWith("[")) { 
+                  console.warn(`[GeminiService] Respuesta no JSON array de compareImageFlows: `, rawText); 
+                  const errorTitle = rawText.length < 100 ? rawText : rawText.substring(0, 100) + "...";
+                  return [{titulo_bug: `Error de Formato (Respuesta IA: ${errorTitle})`, id_bug:"ERR-FORMAT-IA-TEXT", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: `Respuesta completa: ${rawText.substring(0,200)}`, resultado_esperado:"Array JSON."} as BugReportItem];
               }
-
-              try {
-                  const bugReports: BugReportItem[] = JSON.parse(jsonText);
-                  if (!Array.isArray(bugReports)) {
-                       console.warn("[GeminiService] Respuesta JSON para compareImageFlows no es un array.", rawText);
-                       return [{titulo_bug: "Error de Formato (No Array)", id_bug:"ERR-FORMAT-NOARRAY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
+              try { 
+                  const bugReports: any[] = JSON.parse(jsonText); 
+                  if (!Array.isArray(bugReports)) { 
+                      console.warn("[GeminiService] Respuesta JSON para compareImageFlows no es array.", rawText); 
+                      return [{titulo_bug: "Error de Formato (No Array)", id_bug:"ERR-FORMAT-NOARRAY", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: `Respuesta cruda: ${rawText.substring(0,100)}`, resultado_esperado:"Array JSON."} as BugReportItem]; 
+                  } 
+                  if (bugReports.length === 0) {
+                      console.info("[GeminiService] No se reportaron bugs en la comparación (array vacío).");
+                      return []; 
                   }
-                  return bugReports.map(bug => ({
-                    ...bug,
-                    pasos_para_reproducir: Array.isArray(bug.pasos_para_reproducir) ? bug.pasos_para_reproducir : []
-                  }));
-              } catch (e) {
-                  console.error("[GeminiService] Error parseando JSON para compareImageFlows:", e, "\nRespuesta Cruda:", rawText);
-                  return [{titulo_bug: "Error de Parsing JSON", id_bug:"ERR-PARSE", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: rawText.substring(0,100), resultado_esperado:"Un array JSON de reportes de bug."} as BugReportItem];
+                  return bugReports.map(bug => ({ 
+                      ...bug, 
+                      titulo_bug: bug.titulo_bug || "Bug sin título",
+                      id_bug: bug.id_bug || `BUG-COMP-${Date.now()}`,
+                      prioridad: bug.prioridad || "Media",
+                      severidad: bug.severidad || "Moderada",
+                      pasos_para_reproducir: Array.isArray(bug.pasos_para_reproducir) ? bug.pasos_para_reproducir.map((p:any, i:number) => ({numero_paso: p.numero_paso || i+1, descripcion: p.descripcion || "Paso no descrito"})) : [{numero_paso:1, descripcion: "Pasos no detallados"}],
+                      resultado_esperado: bug.resultado_esperado || "N/A",
+                      resultado_actual: bug.resultado_actual || "N/A"
+                  })) as BugReportItem[];
+              } catch (e: any) { 
+                  console.error("[GeminiService] Error parseando JSON para compareImageFlows:", e.message, "\nRespuesta Cruda:", rawText); 
+                  return [{titulo_bug: "Error de Parsing JSON", id_bug:"ERR-PARSE", prioridad: "Alta", severidad: "Mayor", pasos_para_reproducir: [], resultado_actual: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,100)}`, resultado_esperado:"Array JSON."} as BugReportItem]; 
               }
           }),
           catchError(this.handleError)
       );
   }
 
-
-  generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
-    const promptText = this.PROMPT_STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
-    const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 300, temperature: 0.5 }
-    };
+  public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
+    const promptText: string = this.PROMPT_STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
+    const geminiPayload: any = { contents: [{ parts: [{ text: promptText }] }], generationConfig: { maxOutputTokens: 500, temperature: 0.5 } };
     const requestToProxy: ProxyRequestBody = { action: 'enhanceStaticSection', payload: geminiPayload };
-    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
-      map(response => this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim()),
-      catchError(this.handleError)
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe( 
+        map(response => this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim()), 
+        catchError(this.handleError) 
     );
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage = 'Ocurrió un error desconocido en la comunicación con el API (via proxy).';
     console.error('Error de API (via proxy) capturado:', error);
-    if (error.error instanceof ErrorEvent) {
-      errorMessage = `Error del cliente o de red: ${error.error.message}`;
-    } else if (error.error && error.error.error && typeof error.error.error === 'string') {
-        errorMessage = `Error del proxy (${error.status}): ${error.error.error}`;
-        if (error.error.details) {
-            errorMessage += ` Detalles: ${error.error.details}`;
+
+    if (error.error instanceof ErrorEvent) { 
+        errorMessage = `Error del cliente o de red: ${error.error.message}`; 
+    } else if (error.error?.error && typeof error.error.error === 'string') { 
+        errorMessage = `Error del proxy (${error.status}): ${error.error.error}`; 
+        if (error.error.details) errorMessage += ` Detalles: ${error.error.details}`; 
+    } else if (error.error && typeof error.error === 'string' && (error.error.includes('{') || error.error.includes('error'))) {
+        try {
+            const errorObj = JSON.parse(error.error); 
+            const geminiApiError = errorObj as GeminiErrorResponse;
+             if (geminiApiError?.error?.message) {
+                errorMessage = `Error de API (via proxy) (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
+                if (geminiApiError.error.details?.length) {
+                    errorMessage += ` Detalles: ${geminiApiError.error.details.map(d => d.reason || JSON.stringify(d)).join(', ')}`;
+                }
+            } else { 
+                 errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText} - Respuesta: ${JSON.stringify(errorObj).substring(0,200)}`;
+            }
+        } catch (e) { 
+             errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText} - Respuesta: ${error.error.substring(0,200)}`;
         }
     } else if (error.error && typeof error.error === 'string') {
         errorMessage = `Error del proxy (${error.status}): ${error.error}`;
-    }
-    else {
-      const geminiApiError = error.error as GeminiErrorResponse;
-      if (geminiApiError?.error?.message) {
-        errorMessage = `Error de API (via proxy) (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
-        if (geminiApiError.error.details?.length) {
-          errorMessage += ` Detalles: ${geminiApiError.error.details.map(d => d.reason || JSON.stringify(d)).join(', ')}`;
+    } else { 
+        const geminiApiError = error.error as GeminiErrorResponse; 
+        if (geminiApiError?.error?.message) {
+            errorMessage = `Error de API (via proxy) (${error.status} - ${geminiApiError.error.status || 'N/A'}): ${geminiApiError.error.message}`;
+            if (geminiApiError.error.details?.length) {
+                errorMessage += ` Detalles: ${geminiApiError.error.details.map(d => d.reason || JSON.stringify(d)).join(', ')}`;
+            }
+        } else if (typeof error.message === 'string') {
+             errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.message}`;
+        } else {
+            errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText}. La respuesta del servidor no pudo ser interpretada.`;
         }
-      } else if (typeof error.error === 'string' && error.error.length > 0 && error.error.length < 500) {
-        errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText} - Respuesta: ${error.error}`;
-      } else {
-        errorMessage = `Error HTTP (via proxy) (${error.status}): ${error.statusText}.`;
-      }
     }
     return throwError(() => new Error(errorMessage));
   }
