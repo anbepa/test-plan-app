@@ -11,7 +11,7 @@ import {
   FlowAnalysisStep,
   DetailedTestCase,
   TestCaseStep,
-  HUData // Asegúrate que HUData está importado si usas originalInput
+  HUData 
 } from '../models/hu-data.model';
 
 interface GeminiTextPart { text: string; }
@@ -30,7 +30,7 @@ interface GeminiSafetySetting {
   threshold: string;
 }
 interface ProxyRequestBody {
-  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis' | 'refineDetailedTestCases'; // Acción nueva
+  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis' | 'refineDetailedTestCases'; 
   payload: any;
 }
 interface GeminiCandidate {
@@ -69,6 +69,7 @@ export class GeminiService {
 
   private proxyApiUrl = environment.geminiApiUrl;
 
+  // ... (otros prompts sin cambios) ...
   private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string): string => `
 Eres un analista de QA experimentado.
 Genera la sección de ALCANCE para un plan de pruebas.
@@ -388,46 +389,63 @@ PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO/SECUENCIA REFI
 `;
 
 
-  private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = (): string => `
-Eres un Analista de QA meticuloso y experto en la detección de bugs visuales y funcionales mediante la comparación de flujos de interfaz de usuario.
+private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = (userContext?: string): string => `
+Eres un Analista de QA extremadamente meticuloso y experto en la detección de bugs visuales y funcionales mediante la comparación de flujos de interfaz de usuario.
 Tu tarea es comparar dos secuencias de imágenes: "Flujo A" (generalmente el esperado o versión anterior) y "Flujo B" (generalmente el actual o nueva versión). Debes identificar diferencias significativas y reportarlas como bugs en un formato JSON estructurado.
+
+${userContext ? `
+**DIRECTRIZ FUNDAMENTAL E INELUDIBLE: El siguiente CONTEXTO ADICIONAL DEL USUARIO tiene MÁXIMA PRIORIDAD y DEBE guiar CADA ASPECTO de tu análisis. TU INTERPRETACIÓN Y REPORTE DEBEN OBEDECER ESTRICTAMENTE ESTE CONTEXTO POR ENCIMA DE CUALQUIER OTRA CONSIDERACIÓN O INTERPRETACIÓN GENERAL.**
+` : ''}
 
 **ENTRADA PROPORCIONADA:**
 *   **Imágenes del Flujo A:** (Adjuntas en la solicitud, ordenadas secuencialmente. Ej: "Imagen A.1", "Imagen A.2", etc.)
 *   **Imágenes del Flujo B:** (Adjuntas en la solicitud, ordenadas secuencialmente. Ej: "Imagen B.1", "Imagen B.2", etc.)
+${userContext ? `*   **CONTEXTO ADICIONAL DEL USUARIO PARA ESTA COMPARACIÓN (MÁXIMA PRIORIDAD E INELUDIBLE):**
+    "${userContext}"
+    **Instrucción CLAVE Y OBLIGATORIA:** Este contexto es tu guía principal y mandato absoluto. DEBES USARLO para determinar la relevancia de cualquier diferencia. Si el contexto especifica "enfocarse en X", "ignorar diferencias cosméticas en Y a menos que afecten Z", o "el Flujo B debe mostrar AHORA el resultado Z", TUS HALLAZGOS Y EL REPORTE DE BUGS DEBEN REFLEJAR ESTRICTAMENTE ESTAS DIRECTRICES. Tu juicio sobre qué es un bug DEBE ESTAR ABSOLUTAMENTE SUBORDINADO a este contexto. Si hay una aparente contradicción entre tu interpretación general de las imágenes y el contexto del usuario, EL CONTEXTO DEL USUARIO SIEMPRE PREVALECE.
+` : ''}
 
-**INSTRUCCIONES DETALLADAS PARA LA COMPARACIÓN Y REPORTE DE BUGS:**
-1.  **ANÁLISIS COMPARATIVO SECUENCIAL:** Compara las imágenes de Flujo A con las de Flujo B paso a paso, asumiendo que representan flujos equivalentes. Busca discrepancias en:
-    *   **Elementos de UI:** Faltantes, adicionales, mal ubicados, con estilo incorrecto (colores, fuentes, tamaños).
-    *   **Textos:** Errores ortográficos, mensajes incorrectos, etiquetas faltantes o diferentes.
-    *   **Funcionalidad Implícita:** Si una acción en Flujo A (ej. clic en botón) lleva a un resultado X (visible en Imagen A.2), y la misma acción (inferida) en Flujo B lleva a un resultado Y diferente (visible en Imagen B.2).
-    *   **Flujo de Navegación:** Diferencias en el orden de las pantallas o pasos inesperados.
-2.  **REPORTE DE BUGS SIGNIFICATIVOS:** Solo reporta diferencias que constituyan un bug funcional o visual relevante. No reportes cambios menores de píxeles si la funcionalidad y comprensión no se ven afectadas.
-3.  **ESTRUCTURA DEL BUG:** Para CADA bug identificado, crea un objeto JSON con los siguientes campos:
-    *   \`titulo_bug\` (string): Título conciso y descriptivo del bug. Ej: "Botón 'Guardar' inactivo en pantalla de perfil (Flujo B)".
+**INSTRUCCIONES DETALLADAS PARA LA COMPARACIÓN Y REPORTE DE BUGS (SIEMPRE PRIORIZANDO EL CONTEXTO DEL USUARIO SI FUE PROVISTO):**
+1.  **ANÁLISIS COMPARATIVO SECUENCIAL (FILTRADO POR EL CONTEXTO DEL USUARIO):**
+    *   Compara las imágenes de Flujo A con las de Flujo B paso a paso.
+    *   ${userContext ? '**Tu análisis DEBE ESTAR fuertemente influenciado, dirigido y filtrado por el CONTEXTO ADICIONAL DEL USUARIO.** Evalúa TODAS las discrepancias a través del lente de este contexto OBLIGATORIAMENTE. No reportes nada que el contexto indique que es esperado o irrelevante.' : 'Asume flujos equivalentes y busca discrepancias generales.'}
+    *   Busca discrepancias en:
+        *   **Elementos de UI:** Faltantes, adicionales, mal ubicados, con estilo incorrecto (colores, fuentes, tamaños).
+        *   **Textos:** Errores ortográficos, mensajes incorrectos, etiquetas faltantes o diferentes.
+        *   **Funcionalidad Implícita:** Si una acción en Flujo A (ej. clic en botón) lleva a un resultado X (visible en Imagen A.2), y la misma acción (inferida) en Flujo B lleva a un resultado Y diferente (visible en Imagen B.2).
+        *   **Flujo de Navegación:** Diferencias en el orden de las pantallas o pasos inesperados.
+
+2.  **REPORTE DE BUGS SIGNIFICATIVOS (SEGÚN LO DEFINIDO ESTRICTAMENTE POR EL CONTEXTO DEL USUARIO):**
+    *   Solo reporta diferencias que constituyan un bug funcional o visual relevante **DE ACUERDO CON LAS DIRECTRICES IMPLÍCITAS O EXPLÍCITAS DEL CONTEXTO DEL USUARIO.**
+    *   ${userContext ? 'Si el contexto del usuario indica que ciertas diferencias son esperadas, son parte de un nuevo diseño, o deben ignorarse (ej. "ignorar cambios de color si no afectan la legibilidad", "el nuevo diseño en Flujo B es intencional y correcto para el elemento X", "no considerar diferencias en la fecha del sistema"), **ENTONCES NO LAS REPORTES COMO BUGS, incluso si parecen desviaciones obvias sin ese contexto.** Tu reporte debe ser fiel al entendimiento que el usuario te ha proporcionado.' : 'No reportes cambios menores de píxeles si la funcionalidad y comprensión no se ven afectadas.'}
+    *   Si el contexto del usuario resalta áreas específicas de preocupación o tipos de defectos a buscar, enfoca tu búsqueda de bugs en esas áreas con diligencia.
+
+3.  **ESTRUCTURA DEL BUG:** Para CADA bug identificado (que sea relevante según el contexto), crea un objeto JSON con los siguientes campos:
+    *   \`titulo_bug\` (string): Título conciso y descriptivo del bug. Ej: "Botón 'Guardar' inactivo en pantalla de perfil (Flujo B), contrario a lo especificado en el contexto."
     *   \`id_bug\` (string): Un ID único generado por ti para el bug. Ej: "BUG-COMP-001".
-    *   \`prioridad\` (string): Estima la prioridad ('Baja', 'Media', 'Alta', 'Crítica').
-    *   \`severidad\` (string): Estima la severidad ('Menor', 'Moderada', 'Mayor', 'Crítica').
-    *   \`descripcion_diferencia_general\` (string, opcional): Una descripción general de la diferencia observada si aplica a múltiples pasos o es un concepto general.
-    *   \`pasos_para_reproducir\` (array de objetos): Cada objeto con \`numero_paso\` (integer) y \`descripcion\` (string). Describe los pasos para llegar al bug, referenciando las imágenes. Ej: \`{"numero_paso": 1, "descripcion": "Comparar Imagen A.3 con Imagen B.3."}\`.
-    *   \`resultado_esperado\` (string): Lo que se ve en Flujo A (o lo que se esperaba). Referencia la imagen de Flujo A. Ej: "En Imagen A.3, el título es 'Bienvenido Usuario'."
-    *   \`resultado_actual\` (string): Lo que se ve en Flujo B (lo incorrecto). Referencia la imagen de Flujo B. Ej: "En Imagen B.3, el título es 'Bienbenido Usario' (error ortográfico)."
+    *   \`prioridad\` (string): Estima la prioridad ('Baja', 'Media', 'Alta', 'Crítica'), reflejando el impacto según la perspectiva y directrices del contexto del usuario.
+    *   \`severidad\` (string): Estima la severidad ('Menor', 'Moderada', 'Mayor', 'Crítica'), reflejando el impacto según la perspectiva y directrices del contexto del usuario.
+    *   \`descripcion_diferencia_general\` (string, opcional): Una descripción general de la diferencia observada, especialmente si el contexto la hace más o menos relevante.
+    *   \`pasos_para_reproducir\` (array de objetos): Cada objeto con \`numero_paso\` (integer) y \`descripcion\` (string). Describe los pasos para llegar al bug, referenciando las imágenes. Ej: \`{"numero_paso": 1, "descripcion": "Comparar Imagen A.3 con Imagen B.3, observando el elemento X según el contexto."}\`.
+    *   \`resultado_esperado\` (string): Lo que se ve en Flujo A (o lo que se esperaba según el contexto si este lo modifica). Referencia la imagen de Flujo A. Ej: "En Imagen A.3, el título es 'Bienvenido Usuario', tal como se espera."
+    *   \`resultado_actual\` (string): Lo que se ve en Flujo B (lo incorrecto según el contexto). Referencia la imagen de Flujo B. Ej: "En Imagen B.3, el título es 'Bienbenido Usario' (error ortográfico), lo cual es incorrecto."
     *   \`imagen_referencia_flujo_a\` (string, opcional): Nombre de la imagen clave de Flujo A para este bug. Ej: "Imagen A.3".
     *   \`imagen_referencia_flujo_b\` (string, opcional): Nombre de la imagen clave de Flujo B para este bug. Ej: "Imagen B.3".
+
 4.  **NOMENCLATURA DE IMÁGENES:** En tus descripciones y referencias, usa "Imagen A.X" y "Imagen B.X" donde X es el número de la imagen en su respectiva secuencia.
 
-**CASO DE NO DIFERENCIAS / IMÁGENES NO CLARAS / ERROR INTERNO:**
-*   Si **no hay bugs significativos** o los flujos son idénticos, responde **EXACTAMENTE y ÚNICAMENTE** con un array JSON vacío: \`[]\`.
-*   Si las imágenes no son claras, no permiten una comparación efectiva, o hay un error interno, responde **EXACTAMENTE y ÚNICAMENTE** con el siguiente array JSON (puedes adaptar el mensaje de error si es específico):
+**CASO DE NO DIFERENCIAS (Según Contexto) / IMÁGENES NO CLARAS / ERROR INTERNO:**
+*   Si, después de aplicar ESTRICTAMENTE el filtro del contexto del usuario, **no hay bugs significativos** o los flujos son idénticos (según los criterios de relevancia definidos por el contexto), responde **EXACTAMENTE y ÚNICAMENTE** con un array JSON vacío: \`[]\`.
+*   Si las imágenes no son claras, no permiten una comparación efectiva incluso con el contexto, o hay un error interno que impide seguir las directrices del contexto, responde **EXACTAMENTE y ÚNICAMENTE** con el siguiente array JSON (puedes adaptar el mensaje de error si es específico):
     \`\`\`json
     [
       {
-        "titulo_bug": "Error en el Análisis de Imágenes para Comparación",
-        "id_bug":"IMG-COMP-ERR-01",
+        "titulo_bug": "Error en el Análisis de Imágenes para Comparación (Contexto no aplicable o imágenes insuficientes)",
+        "id_bug":"IMG-COMP-ERR-CTX-01",
         "prioridad": "Media",
         "severidad": "Menor",
         "pasos_para_reproducir": [
-          {"numero_paso":1, "descripcion": "Las imágenes proporcionadas (Flujo A y/o Flujo B) no fueron suficientemente claras, no corresponden a flujos equivalentes, o no permitieron una comparación efectiva."}
+          {"numero_paso":1, "descripcion": "Las imágenes proporcionadas (Flujo A y/o Flujo B) no fueron suficientemente claras, no corresponden a flujos equivalentes, o no permitieron una comparación efectiva ${userContext ? 'incluso aplicando el CONTEXTO DEL USUARIO. Es posible que el contexto necesite mayor detalle, las imágenes sean inadecuadas para la tarea solicitada conforme al contexto provisto, o exista una contradicción fundamental.' : '.'}"}
         ],
         "resultado_esperado": "N/A",
         "resultado_actual": "N/A"
@@ -437,10 +455,12 @@ Tu tarea es comparar dos secuencias de imágenes: "Flujo A" (generalmente el esp
 
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
 *   La respuesta DEBE ser un array JSON válido. Cada elemento del array es un objeto de bug como se describió arriba.
-*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON (explicaciones, notas, saludos, etc.). Tu única salida debe ser el array JSON puro.
 ---
-PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
+PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO, DANDO MÁXIMA Y ABSOLUTA PRIORIDAD A LAS INDICACIONES DEL CONTEXTO DEL USUARIO SI FUE PROPORCIONADO, Y USÁNDOLO COMO FILTRO PRINCIPAL E INDISCUTIBLE PARA DETERMINAR LA RELEVANCIA DE LAS DIFERENCIAS Y EL REPORTE DE BUGS:
 `;
+
+
 
 
   constructor(private http: HttpClient) { }
@@ -565,22 +585,19 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
           }
           if (parsedResponse.length === 0) {
              console.info(`[GeminiService] Respuesta JSON para ${requestToProxy.action} es un array vacío.`, rawText);
-             // Si la IA devuelve un array vacío, podría ser intencional (ej: no hay casos válidos), o un error.
-             // Devolveremos el array vacío para que la lógica de negocio decida cómo manejarlo.
              return []; 
           }
 
           if (parsedResponse.length === 1 && (
                 parsedResponse[0].title === "Información Insuficiente" || 
                 parsedResponse[0].title === "Imágenes no interpretables o técnica no aplicable" ||
-                parsedResponse[0].title === "Refinamiento no posible con el contexto actual" // Error del nuevo prompt
+                parsedResponse[0].title === "Refinamiento no posible con el contexto actual" 
               )) {
               if (!Array.isArray(parsedResponse[0].steps) || parsedResponse[0].steps.length === 0) {
                  parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps || (parsedResponse[0].preconditions || "Detalle no disponible en los pasos.")}];
               } else if (typeof parsedResponse[0].steps[0] === 'string') { 
                 parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps[0]}];
               } else if (typeof parsedResponse[0].steps[0] === 'object' && !parsedResponse[0].steps[0].hasOwnProperty('accion')) {
-                // Si es un objeto pero no tiene 'accion', convertirlo a string para no romper la UI.
                 parsedResponse[0].steps = [{numero_paso: 1, accion: JSON.stringify(parsedResponse[0].steps[0])}];
               }
               return [{
@@ -602,13 +619,13 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
                 console.warn(`[GeminiService] La IA devolvió 'steps' como string para '${tc.title}'. Se intentará parsear.`);
                 formattedSteps = tc.steps.split('\n').map((line: string, index: number) => ({
                     numero_paso: index + 1,
-                    accion: line.replace(/^\d+\.\s*/, '').trim() // Intenta limpiar numeración si la IA la añade incorrectamente
-                })).filter((step: TestCaseStep) => step.accion.length > 0); // Filtrar pasos vacíos
+                    accion: line.replace(/^\d+\.\s*/, '').trim() 
+                })).filter((step: TestCaseStep) => step.accion.length > 0); 
             } else {
                 console.warn(`[GeminiService] 'steps' en formato inesperado para '${tc.title}'.`, tc.steps);
                 formattedSteps = [{ numero_paso: 1, accion: "Pasos no proporcionados o en formato incorrecto." }];
             }
-            if (formattedSteps.length === 0) { // Si después de parsear o filtrar no quedan pasos
+            if (formattedSteps.length === 0) { 
                 formattedSteps.push({ numero_paso: 1, accion: "No se pudieron determinar los pasos." });
             }
 
@@ -679,7 +696,7 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
        const flowAnalysisReportItem = flowAnalysisReportArray[0] as FlowAnalysisReportItem;
 
        if (flowAnalysisReportItem.Nombre_del_Escenario === "Secuencia de imágenes no interpretable" ||
-           flowAnalysisReportItem.Nombre_del_Escenario === "Error Crítico en Re-Generación (Contextualizada)") { // Manejar error de refinamiento
+           flowAnalysisReportItem.Nombre_del_Escenario === "Error Crítico en Re-Generación (Contextualizada)") { 
            if (!Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || flowAnalysisReportItem.Pasos_Analizados.length === 0) {
                flowAnalysisReportItem.Pasos_Analizados = [{ numero_paso: 1, descripcion_accion_observada: "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente."}];
            }
@@ -761,7 +778,6 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
             elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada,
             dato_de_entrada_paso: paso.dato_de_entrada_paso,
             resultado_esperado_paso: paso.resultado_esperado_paso,
-            // NO SE ENVÍA resultado_obtenido_paso_y_estado AL REFINAMIENTO, ya que eso es lo que la IA debe generar.
         })),
         Resultado_Esperado_General_Flujo: editedReport.Resultado_Esperado_General_Flujo
     };
@@ -785,13 +801,21 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
 
   public compareImageFlows(
     flowAImagesBase64: string[], flowAMimeTypes: string[],
-    flowBImagesBase64: string[], flowBMimeTypes: string[]
+    flowBImagesBase64: string[], flowBMimeTypes: string[],
+    userContext?: string // NUEVO PARÁMETRO
   ): Observable<BugReportItem[]> {
-      const promptText = this.PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS();
+      const promptText = this.PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS(userContext); // PASAR userContext
       const flowAParts: GeminiInlineDataPart[] = flowAImagesBase64.map((data, i) => ({ inlineData: { mimeType: flowAMimeTypes[i], data }}));
       const flowBParts: GeminiInlineDataPart[] = flowBImagesBase64.map((data, i) => ({ inlineData: { mimeType: flowBMimeTypes[i], data }}));
+      
+      const contentParts: GeminiPart[] = [{ text: promptText }];
+      contentParts.push({ text: "\n--- IMÁGENES FLUJO A ---" });
+      contentParts.push(...flowAParts);
+      contentParts.push({ text: "\n--- IMÁGENES FLUJO B ---" });
+      contentParts.push(...flowBParts);
+      
       const geminiPayload = {
-          contents: [ { parts: ([{ text: promptText }, { text: "\n--- IMÁGENES FLUJO A ---" }] as GeminiPart[]).concat(flowAParts, [{ text: "\n--- IMÁGENES FLUJO B ---" }] as GeminiPart[], flowBParts) } ],
+          contents: [ { parts: contentParts } ],
           generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
           safetySettings: [ { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }, { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" } ]
       };
@@ -825,6 +849,11 @@ PROCEDE A GENERAR EL ARRAY JSON DEL REPORTE DE BUGS COMPARATIVO:
                       console.info("[GeminiService] No se reportaron bugs en la comparación (array vacío).");
                       return []; 
                   }
+                  // Manejar el caso de error específico del prompt de comparación
+                  if (bugReports.length === 1 && bugReports[0].titulo_bug === "Error en el Análisis de Imágenes para Comparación") {
+                    return bugReports as BugReportItem[];
+                  }
+
                   return bugReports.map(bug => ({ 
                       ...bug, 
                       titulo_bug: bug.titulo_bug || "Bug sin título",

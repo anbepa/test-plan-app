@@ -97,7 +97,7 @@ export interface HUData {
   regenSelectedTechnique: string; 
   userTestCaseReanalysisContext: string; 
   isScenariosDetailsOpen: boolean;
-  isEditingDetailedTestCases?: boolean; // NUEVO: Para edición completa en TestPlanGenerator
+  isEditingDetailedTestCases?: boolean; 
 
   flowAnalysisReport?: FlowAnalysisReportItem[];
   loadingFlowAnalysis?: boolean;
@@ -110,4 +110,5 @@ export interface HUData {
   loadingBugComparison?: boolean;
   errorBugComparison?: string | null;
   isBugComparisonDetailsOpen?: boolean;
+  userBugComparisonReanalysisContext?: string; // NUEVA PROPIEDAD
 }
