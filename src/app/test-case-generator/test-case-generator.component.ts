@@ -2,7 +2,7 @@
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { DetailedTestCase, TestCaseStep, HUData, GenerationMode } from '../models/hu-data.model';
+import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model'; // Renamed imports
 import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap, switchMap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
@@ -14,6 +14,16 @@ interface DraggableImage {
   base64: string;
   mimeType: string;
   id: string;
+}
+
+// UI-specific interface extending the original model
+interface UIDetailedTestCase extends OriginalDetailedTestCase {
+  isExpanded?: boolean;
+}
+
+// UI-specific HUData interface
+interface UIHUData extends OriginalHUData {
+  detailedTestCases: UIDetailedTestCase[];
 }
 
 type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinement' | 'submitting';
@@ -28,7 +38,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 export class TestCaseGeneratorComponent implements OnInit {
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
-  @Output() huGenerated = new EventEmitter<HUData>();
+  @Output() huGenerated = new EventEmitter<OriginalHUData>(); // Emits the original HUData type
   @Output() generationCancelled = new EventEmitter<void>();
 
   componentState: ComponentState = 'initialForm';
@@ -49,7 +59,7 @@ export class TestCaseGeneratorComponent implements OnInit {
   refinementTechnique: string = ''; 
   userRefinementContext: string = '';
 
-  generatedHUData: HUData | null = null; 
+  generatedHUData: UIHUData | null = null; // Use the UI-specific HUData type
 
   formError: string | null = null;
   loadingScope: boolean = false;
@@ -69,7 +79,8 @@ export class TestCaseGeneratorComponent implements OnInit {
   constructor(
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private elRef: ElementRef 
   ) {}
 
   ngOnInit(): void {
@@ -97,10 +108,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     
     this.generatedHUData = null;
     this.userRefinementContext = '';
-    // No resetear currentSelectedTechnique aquí si se quiere mantener entre generaciones del mismo tipo
-    // this.currentSelectedTechnique = ''; 
     this.refinementTechnique = '';
-
 
     this.loadingScope = false;
     this.loadingScenarios = false;
@@ -114,7 +122,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.huFormDirective?.resetForm();
     this.currentGenerationMode = keptMode;
     this.currentSprint = keptSprint;
-    this.currentSelectedTechnique = keptTechnique; // Restaurar después del reset
+    this.currentSelectedTechnique = keptTechnique; 
     
      setTimeout(() => {
         if (this.huFormDirective?.form) {
@@ -135,9 +143,30 @@ export class TestCaseGeneratorComponent implements OnInit {
   public autoGrowTextarea(element: any): void {
     if (element && element instanceof HTMLTextAreaElement) {
       element.style.height = 'auto';
-      // eslint-disable-next-line no-self-assign
-      element.scrollTop = element.scrollTop;
+      element.scrollTop = element.scrollTop; 
       element.style.height = (element.scrollHeight) + 'px';
+    }
+  }
+
+  private autoGrowTextareasInCardByIndex(tcIndex: number): void {
+    if (!this.generatedHUData || !this.generatedHUData.detailedTestCases || 
+        !this.generatedHUData.detailedTestCases[tcIndex] || 
+        !this.generatedHUData.detailedTestCases[tcIndex].isExpanded) {
+      return;
+    }
+  
+    const cardId = `test-case-card-${this.generatedHUData.id || 'temp'}-${tcIndex}`;
+    const cardElement = this.elRef.nativeElement.querySelector(`#${cardId}`);
+  
+    if (cardElement) {
+      const textareas = cardElement.querySelectorAll(
+        '.form-group textarea.form-control, .test-case-steps-table textarea.table-input'
+      );
+      textareas.forEach((ta: HTMLTextAreaElement) => {
+        if (ta.offsetParent !== null) { 
+          this.autoGrowTextarea(ta);
+        }
+      });
     }
   }
 
@@ -254,7 +283,26 @@ export class TestCaseGeneratorComponent implements OnInit {
   public onImageDrop(event: DragEvent, targetImage: DraggableImage): void { event.preventDefault(); this.dragOverImageId = null; const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; if (!this.draggedImage || this.draggedImage.id === targetImage.id) { this.draggedImage = null; return; } const fromI = this.draggableImages.findIndex(i => i.id === this.draggedImage!.id), toI = this.draggableImages.findIndex(i => i.id === targetImage.id); if (fromI!==-1 && toI!==-1) { const item = this.draggableImages.splice(fromI,1)[0]; this.draggableImages.splice(toI,0,item); this.updateArraysFromDraggable(); } this.draggedImage = null; }
   public onImageDragEnd(event?: DragEvent): void { if (event?.target instanceof HTMLElement) (event.target as HTMLElement).style.opacity = '1'; else { const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; } this.draggedImage = null; this.dragOverImageId = null; }
 
-  generateIdFromTitle(title: string, mode: GenerationMode): string { if (!title || !mode) return ''; let p = mode === 'text' ? "HU_" : "IMG_"; const sT = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, ''); return `${p}${sT.substring(0,20)}_${Date.now().toString().slice(-4)}`; }
+  generateIdFromTitle(title: string, mode: GenerationMode): string {
+    if (!title || !mode) return '';
+
+    if (mode === 'text') {
+      const prefix = "HU_";
+      const sanitizedTitle = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
+      return `${prefix}${sanitizedTitle.substring(0, 20)}_${Date.now().toString().slice(-4)}`;
+    } else if (mode === 'image') {
+      const sanitizedTitle = title.trim().replace(/\s+/g, '').replace(/[^\wÀ-ÿ]+/g, ''); 
+      if (sanitizedTitle.length < 2) {
+
+        return `#_XX_${Date.now().toString().slice(-4)}`; 
+      }
+      const prefixLetters = sanitizedTitle.substring(0, 2).toUpperCase();
+
+      return `#_${prefixLetters}_${Date.now().toString().slice(-4)}`;
+    }
+    return ''; 
+  }
+
 
   generateInitialHuAndCases(): void {
     this.formError = null; this.errorScope = null; this.errorScenarios = null;
@@ -269,7 +317,8 @@ export class TestCaseGeneratorComponent implements OnInit {
         if(!finalId){this.formError="El título es necesario para generar el ID.";return;}
     }
 
-    const huData: HUData = {
+    // Use UIHUData for the object creation
+    const huData: UIHUData = {
       originalInput: { 
         id: finalId, title: this.currentHuTitle, sprint: this.currentSprint, 
         description: this.currentGenerationMode === 'text' ? this.currentDescription : undefined, 
@@ -280,9 +329,15 @@ export class TestCaseGeneratorComponent implements OnInit {
         imageMimeTypes: this.currentGenerationMode === 'image' ? [...this.imageMimeTypes] : undefined, 
       },
       id: finalId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
-      generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
-      editingScope: false, editingScenarios: false, loadingScope: false, errorScope: null,
-      loadingScenarios: false, errorScenarios: null, showRegenTechniquePicker: false, 
+      generatedScope: '', 
+      detailedTestCases: [], // Initialized as UIDetailedTestCase[]
+      generatedTestCaseTitles: '',
+      // Ensure all properties from OriginalHUData are covered here or by UIHUData extending it
+      editingScope: false, 
+      editingScenarios: false, 
+      loadingScope: false, errorScope: null,
+      loadingScenarios: false, errorScenarios: null, 
+      showRegenTechniquePicker: false, 
       regenSelectedTechnique: this.currentSelectedTechnique, 
       userTestCaseReanalysisContext: '', 
       isScopeDetailsOpen: this.currentGenerationMode === 'text', 
@@ -339,23 +394,29 @@ export class TestCaseGeneratorComponent implements OnInit {
   }
   
   private _generateOrRefineDetailedTestCases$(
-    huData: HUData, 
+    huData: UIHUData, // Parameter is UIHUData
     technique: string, 
     userContext?: string,
     mode: 'initial' | 'refinement' = 'initial' 
-  ): Observable<DetailedTestCase[]> {
+  ): Observable<UIDetailedTestCase[]> { // Returns Observable of UIDetailedTestCase[]
     if (!this.generatedHUData) return of([]); 
     
     this.loadingScenarios = true;
     this.errorScenarios = null;
     if (this.generatedHUData) this.generatedHUData.errorScenarios = null;
 
-    let genObs$: Observable<DetailedTestCase[]>;
+    let genObs$: Observable<OriginalDetailedTestCase[]>; // Service returns OriginalDetailedTestCase[]
 
     if (mode === 'refinement') {
+      // Map UIDetailedTestCase[] to OriginalDetailedTestCase[] before sending to service if needed
+      const originalTestCasesForRefinement = huData.detailedTestCases.map(uiTc => {
+          const { isExpanded, ...originalTc } = uiTc;
+          return originalTc as OriginalDetailedTestCase;
+      });
+
       genObs$ = this.geminiService.refineDetailedTestCases(
         huData.originalInput, 
-        huData.detailedTestCases, 
+        originalTestCasesForRefinement, 
         technique, 
         userContext || '' 
       );
@@ -375,15 +436,27 @@ export class TestCaseGeneratorComponent implements OnInit {
     }
 
     return genObs$.pipe(
-      tap(tcs => {
+      tap((tcs: OriginalDetailedTestCase[]) => { 
         if (this.generatedHUData) {
-          this.generatedHUData.detailedTestCases = tcs.map(tc => ({
-            ...tc,
-            steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({ 
-              numero_paso: s.numero_paso || (i + 1),
-              accion: s.accion || "Paso no descrito"
-            })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto"}]
-          }));
+          const existingExpansionStates = new Map<string, boolean>();
+          if (mode === 'refinement') {
+            this.generatedHUData.detailedTestCases.forEach(existingTc => {
+              existingExpansionStates.set(existingTc.title, existingTc.isExpanded || false);
+            });
+          }
+
+          this.generatedHUData.detailedTestCases = tcs.map((tc, index) => {
+            const detailedTc: UIDetailedTestCase = {
+              ...tc,
+              steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({ 
+                numero_paso: s.numero_paso || (i + 1),
+                accion: s.accion || "Paso no descrito"
+              })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto"}],
+              isExpanded: mode === 'refinement' ? (existingExpansionStates.get(tc.title) || false) : (index === 0)
+            };
+            return detailedTc;
+          });
+
           this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(tcs.map(tc => tc.title));
           
           if (tcs?.length === 1 && (
@@ -402,7 +475,15 @@ export class TestCaseGeneratorComponent implements OnInit {
         if (this.generatedHUData) {
             this.generatedHUData.errorScenarios = errorMsg;
             if (mode === 'initial' || !this.generatedHUData.detailedTestCases?.length) {
-                this.generatedHUData.detailedTestCases = [{ title: `Error Crítico en ${mode === 'initial' ? 'Generación' : 'Refinamiento'}`, preconditions: errorMsg, steps: [], expectedResults: "N/A" }];
+                // Create a UIDetailedTestCase for error display
+                const errorTc: UIDetailedTestCase = { 
+                    title: `Error Crítico en ${mode === 'initial' ? 'Generación' : 'Refinamiento'}`, 
+                    preconditions: errorMsg, 
+                    steps: [], 
+                    expectedResults: "N/A",
+                    isExpanded: true 
+                };
+                this.generatedHUData.detailedTestCases = [errorTc];
                 this.generatedHUData.generatedTestCaseTitles = "Error en el proceso.";
             }
         }
@@ -413,24 +494,45 @@ export class TestCaseGeneratorComponent implements OnInit {
         this.loadingScenarios = false; 
         this.cdr.detectChanges(); 
          setTimeout(() => {
-            const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-            textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+            if (this.componentState === 'editingForRefinement' && this.generatedHUData && this.generatedHUData.detailedTestCases) {
+                this.generatedHUData.detailedTestCases.forEach((tc, index) => {
+                    if (tc.isExpanded) {
+                        this.autoGrowTextareasInCardByIndex(index);
+                    }
+                });
+            }
         }, 0);
       })
     );
   }
 
   startRefinementMode(): void {
-    if (this.generatedHUData) {
+    if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
       this.componentState = 'editingForRefinement';
-      // this.generatedHUData.isEditingDetailedTestCases = true; // No es necesario, el estado del componente lo controla
       this.refinementTechnique = this.generatedHUData.originalInput.selectedTechnique; 
       this.userRefinementContext = this.generatedHUData.userTestCaseReanalysisContext || ''; 
+
+      this.generatedHUData.detailedTestCases.forEach((tc, index) => {
+        tc.isExpanded = index === 0; 
+      });
+      
       this.cdr.detectChanges();
       setTimeout(() => {
-        const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-        textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+        if (this.generatedHUData && this.generatedHUData.detailedTestCases.length > 0 && this.generatedHUData.detailedTestCases[0].isExpanded) {
+          this.autoGrowTextareasInCardByIndex(0);
+        }
       }, 0);
+    }
+  }
+
+  toggleTestCaseExpansion(tc: UIDetailedTestCase, tcIndex: number): void { // Parameter is UIDetailedTestCase
+    if (!this.generatedHUData || !this.generatedHUData.detailedTestCases) return;
+      
+    tc.isExpanded = !tc.isExpanded;
+    this.cdr.detectChanges();
+  
+    if (tc.isExpanded) {
+      setTimeout(() => this.autoGrowTextareasInCardByIndex(tcIndex), 0);
     }
   }
   
@@ -443,6 +545,7 @@ export class TestCaseGeneratorComponent implements OnInit {
       this.errorScenarios = "Por favor, selecciona una técnica para el refinamiento.";
       return;
     }
+
     this.generatedHUData.detailedTestCases.forEach(tc => {
         if (tc.steps) {
             tc.steps.forEach(step => {
@@ -460,9 +563,17 @@ export class TestCaseGeneratorComponent implements OnInit {
       this.userRefinementContext,
       'refinement'
     ).subscribe(() => {
-        this.componentState = 'previewingGenerated'; // Volver a previsualización después de refinar
-        // if(this.generatedHUData) this.generatedHUData.isEditingDetailedTestCases = false; // No es necesario
+        this.componentState = 'editingForRefinement'; 
         this.cdr.detectChanges();
+        setTimeout(() => {
+          if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
+            this.generatedHUData.detailedTestCases.forEach((tc, index) => {
+              if (tc.isExpanded) {
+                this.autoGrowTextareasInCardByIndex(index);
+              }
+            });
+          }
+        }, 0);
     });
   }
 
@@ -482,19 +593,26 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.generationCancelled.emit(); 
   }
 
-  addTestCaseStep(testCase: DetailedTestCase): void {
+  addTestCaseStep(testCase: UIDetailedTestCase): void { // Parameter is UIDetailedTestCase
     if (!testCase.steps) testCase.steps = [];
     testCase.steps.push({ numero_paso: testCase.steps.length + 1, accion: '' });
     this.cdr.detectChanges();
     setTimeout(() => {
-      const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-      if (textareas.length > 0) {
-        this.autoGrowTextarea(textareas[textareas.length -1] as HTMLTextAreaElement);
+      const tcIndex = this.generatedHUData?.detailedTestCases.indexOf(testCase);
+      if (tcIndex !== undefined && tcIndex !== -1) {
+        const cardId = `test-case-card-${this.generatedHUData!.id || 'temp'}-${tcIndex}`;
+        const cardElement = this.elRef.nativeElement.querySelector(`#${cardId}`);
+        if (cardElement) {
+          const textareas = cardElement.querySelectorAll('.test-case-steps-table textarea.table-input');
+          if (textareas.length > 0) {
+            this.autoGrowTextarea(textareas[textareas.length - 1] as HTMLTextAreaElement);
+          }
+        }
       }
     },0);
   }
 
-  deleteTestCaseStep(testCase: DetailedTestCase, stepIndex: number): void {
+  deleteTestCaseStep(testCase: UIDetailedTestCase, stepIndex: number): void { // Parameter is UIDetailedTestCase
     if (testCase.steps) {
       testCase.steps.splice(stepIndex, 1);
       testCase.steps.forEach((step: TestCaseStep, idx: number) => step.numero_paso = idx + 1);
@@ -502,12 +620,12 @@ export class TestCaseGeneratorComponent implements OnInit {
     }
   }
 
-  getTestCaseStepDragId(testCase: DetailedTestCase, step: TestCaseStep): string {
+  getTestCaseStepDragId(testCase: UIDetailedTestCase, step: TestCaseStep): string { // Parameter is UIDetailedTestCase
     const stepIndex = testCase.steps.indexOf(step);
     return `tc-${this.generatedHUData?.id || 'temp'}-step-${stepIndex}`;
   }
 
-  onTestCaseStepDragStart(event: DragEvent, step: TestCaseStep, testCase: DetailedTestCase): void {
+  onTestCaseStepDragStart(event: DragEvent, step: TestCaseStep, testCase: UIDetailedTestCase): void { // Parameter is UIDetailedTestCase
     this.draggedTestCaseStep = step;
     if (event.dataTransfer) {
       const stepIndex = testCase.steps.indexOf(step);
@@ -519,12 +637,12 @@ export class TestCaseGeneratorComponent implements OnInit {
     }
   }
 
-  onTestCaseStepDragOver(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase): void { 
+  onTestCaseStepDragOver(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: UIDetailedTestCase): void { // Parameter is UIDetailedTestCase
     event.preventDefault();
     if(this.draggedTestCaseStep && event.dataTransfer && targetStep) { 
         event.dataTransfer.dropEffect = 'move';
         this.dragOverTestCaseStepId = this.getTestCaseStepDragId(testCase, targetStep);
-    } else if (!targetStep && event.dataTransfer) {
+    } else if (!targetStep && event.dataTransfer) { 
         event.dataTransfer.dropEffect = 'move';
         this.dragOverTestCaseStepId = `tc-${this.generatedHUData?.id || 'temp'}-dropzone-end-tc-${testCase.title.replace(/\s/g, '')}`;
     }
@@ -534,7 +652,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.dragOverTestCaseStepId = null;
   }
 
-  onTestCaseStepDrop(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: DetailedTestCase): void {
+  onTestCaseStepDrop(event: DragEvent, targetStep: TestCaseStep | undefined, testCase: UIDetailedTestCase): void { // Parameter is UIDetailedTestCase
     event.preventDefault(); this.dragOverTestCaseStepId = null;
     document.querySelectorAll('.test-case-steps-table tbody tr[style*="opacity: 0.4"]')
         .forEach(el => (el as HTMLElement).style.opacity = '1');
@@ -549,7 +667,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     if (targetStep) {
         if (this.draggedTestCaseStep === targetStep) { this.draggedTestCaseStep = null; return; }
         toIndex = testCase.steps.indexOf(targetStep);
-    } else {
+    } else { 
         toIndex = testCase.steps.length; 
     }
 
@@ -575,30 +693,39 @@ export class TestCaseGeneratorComponent implements OnInit {
   confirmAndEmitHUDataToPlan() {
     if (this.generatedHUData) {
         this.componentState = 'submitting'; 
-        if (this.generatedHUData.detailedTestCases) {
-             this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
-                 this.generatedHUData.detailedTestCases.map(tc => (tc.title || "").trim() || "Caso de prueba sin título")
-             );
-             this.generatedHUData.detailedTestCases.forEach(tc => {
-                 tc.title = (tc.title || "").trim() || "Caso de prueba sin título";
-                 tc.preconditions = (tc.preconditions || "").trim() || "N/A";
-                 tc.expectedResults = (tc.expectedResults || "").trim() || "N/A";
-                 if (tc.steps) {
-                     tc.steps.forEach(step => {
-                         step.accion = (step.accion || "").trim() || "Acción no definida.";
-                     });
-                 } else {
-                    tc.steps = [{numero_paso: 1, accion: "Pasos no definidos."}];
-                 }
-                 if (tc.steps.length === 0) {
-                    tc.steps.push({numero_paso: 1, accion: "Pasos no definidos."});
-                 }
-             });
+        
+        // Create a new object conforming to OriginalHUData to emit
+        const dataToEmit: OriginalHUData = {
+            ...this.generatedHUData, // Spread all properties from UIHUData
+            detailedTestCases: this.generatedHUData.detailedTestCases.map(uiTc => {
+                uiTc.title = (uiTc.title || "").trim() || "Caso de prueba sin título";
+                uiTc.preconditions = (uiTc.preconditions || "").trim() || "N/A";
+                uiTc.expectedResults = (uiTc.expectedResults || "").trim() || "N/A";
+                if (uiTc.steps) {
+                    uiTc.steps.forEach(step => {
+                        step.accion = (step.accion || "").trim() || "Acción no definida.";
+                    });
+                } else {
+                   uiTc.steps = [{numero_paso: 1, accion: "Pasos no definidos."}];
+                }
+                if (uiTc.steps.length === 0) {
+                   uiTc.steps.push({numero_paso: 1, accion: "Pasos no definidos."});
+                }
+
+                const { isExpanded, ...originalTc } = uiTc; // Destructure to remove isExpanded
+                return originalTc as OriginalDetailedTestCase; // Cast to the original model type
+            })
+        };
+        
+        dataToEmit.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
+            dataToEmit.detailedTestCases.map(tc => tc.title)
+        );
+
+        if (this.refinementTechnique && dataToEmit.originalInput.selectedTechnique !== this.refinementTechnique) {
+            dataToEmit.originalInput.selectedTechnique = this.refinementTechnique;
         }
-        if (this.refinementTechnique && this.generatedHUData.originalInput.selectedTechnique !== this.refinementTechnique) {
-            this.generatedHUData.originalInput.selectedTechnique = this.refinementTechnique;
-        }
-        this.huGenerated.emit(this.generatedHUData);
+
+        this.huGenerated.emit(dataToEmit);
         this.resetToInitialForm(); 
     }
   }

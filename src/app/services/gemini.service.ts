@@ -181,48 +181,64 @@ ${additionalContext ? `3.  **Contexto Adicional del Usuario:** ${additionalConte
 PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS BASADA EN LAS IMÁGENES, LA TÉCNICA "${technique}" ${additionalContext ? 'Y EL CONTEXTO ADICIONAL' : ''}:
 `;
 
-  private readonly PROMPT_REFINE_DETAILED_TEST_CASES = (
-    originalInputType: 'text' | 'image',
-    originalDescription: string | undefined, 
-    originalAcceptanceCriteria: string | undefined, 
-    currentTestCasesJSON: string, 
-    newTechnique: string,
-    additionalUserContext: string
-  ): string => `
-Eres un Ingeniero de QA experto en el diseño y REFINAMIENTO de pruebas de caja negra.
-Tu tarea es revisar y refinar un conjunto de casos de prueba existentes, basándote en la información original de la HU (o imágenes), una nueva técnica de diseño de pruebas (o la misma para refinar), y contexto adicional proporcionado por el usuario.
+private readonly PROMPT_REFINE_DETAILED_TEST_CASES = (
+  originalInputType: 'text' | 'image',
+  originalDescription: string | undefined,
+  originalAcceptanceCriteria: string | undefined,
+  currentTestCasesJSON: string,
+  newTechnique: string,
+  additionalUserContext: string
+): string => `
+Eres un Ingeniero de QA experto y altamente colaborativo, especializado en el REFINAMIENTO PRECISO de pruebas de caja negra.
+Tu tarea es tomar un conjunto de casos de prueba existentes, que PUEDEN HABER SIDO MODIFICADOS POR EL USUARIO, y refinarlos meticulosamente.
+DEBES PRIORIZAR Y RESPETAR las ediciones del usuario en los casos actuales y el contexto adicional que te proporcione.
 
-**ENTRADA PROPORCIONADA:**
-1.  **Tipo de Entrada Original:** "${originalInputType}"
-${originalInputType === 'text' ? `2.  **Descripción Original de la HU:** ${originalDescription}\n3.  **Criterios de Aceptación Originales:** ${originalAcceptanceCriteria}` : `2.  **Imágenes Originales del Flujo de UI:** (Provistas en la solicitud. Refiérelas como "Imagen Original 1", "Imagen Original 2", etc. si es necesario para justificar cambios.)`}
-4.  **Casos de Prueba Actuales (Editados por el Usuario - JSON):**
-    \`\`\`json
-    ${currentTestCasesJSON}
-    \`\`\`
-5.  **Técnica de Diseño de Pruebas a Aplicar/Considerar para el Refinamiento:** "${newTechnique}"
-6.  **Contexto Adicional del Usuario para el Re-Análisis:** ${additionalUserContext || "Ninguno."}
+**ENTRADA PROPORCIONADA (ORDEN DE IMPORTANCIA PARA TU ANÁLISIS):**
 
-**INSTRUCCIONES PARA EL REFINAMIENTO Y REGENERACIÓN:**
-1.  **PRIORIZA LOS CASOS ACTUALES:** Los "Casos de Prueba Actuales" (JSON del punto 4) son la base principal. Tu objetivo es mejorarlos, corregirlos o complementarlos. NO los descartes a menos que sean fundamentalmente erróneos respecto a la entrada original (punto 2 o 3) y la nueva técnica/contexto (puntos 5 y 6).
-2.  **APLICA LA TÉCNICA "${newTechnique}":**
-    *   Verifica si los "Casos de Prueba Actuales" aplican correctamente la técnica "${newTechnique}" a la ${originalInputType === 'text' ? 'descripción/CAs originales' : 'funcionalidad inferida de las imágenes originales'}.
-    *   Si no, ajústalos. Si faltan casos clave según esta técnica (considerando el contexto adicional), añádelos.
-3.  **UTILIZA EL CONTEXTO ADICIONAL:** El "Contexto Adicional del Usuario" (punto 6) es crucial. Debe guiar tus modificaciones y adiciones a los "Casos de Prueba Actuales".
-4.  **COHERENCIA Y TRAZABILIDAD:** Asegúrate de que todos los casos refinados sigan siendo trazables a la ${originalInputType === 'text' ? 'HU/CAs originales' : 'funcionalidad de las imágenes originales'}, la técnica "${newTechnique}", y el contexto adicional.
-5.  **FORMATO DE SALIDA:** Sigue EXACTAMENTE el mismo formato JSON que los "Casos de Prueba Actuales": un array de objetos, donde cada objeto tiene "title" (string), "preconditions" (string), "steps" (array de objetos con "numero_paso" (integer) y "accion" (string)), y "expectedResults" (string).
-6.  **DETALLES DE LOS PASOS ("steps"):** Los pasos deben ser claros y accionables. Si es tipo 'image', las acciones deben referenciar las "Imágenes Originales" si es pertinente (ej: "En Imagen Original 1..."). "numero_paso" debe ser secuencial iniciando en 1 para cada caso.
-7.  **CONCISIÓN:** Mantén los títulos, precondiciones y resultados esperados concisos y relevantes. Los títulos deben comenzar con un verbo.
-8.  **CASO DE ERROR / NO REFINAMIENTO POSIBLE:** Si, a pesar de toda la información, no puedes generar un conjunto de casos refinados válidos (ej. el contexto es contradictorio o la información es fundamentalmente insuficiente incluso con los casos actuales), responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
-    \`\`\`json
-    [{"title": "Refinamiento no posible con el contexto actual", "preconditions": "N/A", "steps": [{"numero_paso": 1, "accion": "No se pudieron refinar/regenerar los casos de prueba basándose en la información y el contexto proporcionados."}], "expectedResults": "N/A"}]
-    \`\`\`
+1.  **CONTEXTO ADICIONAL DEL USUARIO PARA EL RE-ANÁLISIS (MÁXIMA PRIORIDAD):**
+  ${additionalUserContext ? `   **Contenido:** "${additionalUserContext}"\n   **Instrucción:** ESTE CONTEXTO ES FUNDAMENTAL. Debes interpretarlo como una directriz directa del usuario sobre cómo quiere que se enfoquen o corrijan los casos de prueba. Cualquier modificación que realices debe estar alineada con este contexto.` : '   **Contenido:** Ninguno.\n   **Instrucción:** No se proporcionó contexto adicional específico, enfócate en los puntos siguientes.'}
+
+2.  **CASOS DE PRUEBA ACTUALES (Editados/Validados por el Usuario - JSON):**
+  \`\`\`json
+  ${currentTestCasesJSON}
+  \`\`\`
+  **Instrucción:** Estos casos son tu PUNTO DE PARTIDA PRINCIPAL. El usuario ya los ha revisado o modificado. Tu objetivo es MEJORARLOS, CORREGIRLOS sutilmente o COMPLEMENTARLOS basándote en el CONTEXTO DEL USUARIO (punto 1) y la TÉCNICA (punto 4). NO LOS DESCARTES ni los reescribas por completo a menos que sean ABSOLUTAMENTE INCOMPATIBLES con el contexto del usuario o la técnica de forma flagrante.
+
+3.  **TIPO DE ENTRADA ORIGINAL DE LA HU:** "${originalInputType}"
+  ${originalInputType === 'text' ? `   **Descripción Original de la HU:** ${originalDescription}\n   **Criterios de Aceptación Originales:** ${originalAcceptanceCriteria}` : `   **Imágenes Originales del Flujo de UI:** (Provistas en la solicitud. Refiérelas como "Imagen Original 1", "Imagen Original 2", etc. si es necesario para justificar cambios.)`}
+  **Instrucción:** Utiliza esta información original como REFERENCIA para asegurar la trazabilidad y coherencia, pero las directrices del CONTEXTO DEL USUARIO (punto 1) y los CASOS ACTUALES (punto 2) tienen PRECEDENCIA si hay conflicto o necesidad de adaptación.
+
+4.  **TÉCNICA DE DISEÑO DE PRUEBAS A APLICAR/CONSIDERAR PARA EL REFINAMIENTO:** "${newTechnique}"
+  **Instrucción:** Aplica los principios de esta técnica para identificar posibles mejoras, omisiones o áreas de enfoque en los CASOS ACTUALES, SIEMPRE subordinado a las indicaciones del CONTEXTO DEL USUARIO.
+
+**INSTRUCCIONES ESPECÍFICAS PARA EL REFINAMIENTO Y REGENERACIÓN (SIGUE ESTRICTAMENTE):**
+
+A.  **MÁXIMA FIDELIDAD AL USUARIO:**
+  *   **Respeta el Contexto Adicional (Punto 1):** Si el usuario indica "enfocarse en X" o "corregir Y", tus cambios DEBEN reflejarlo directamente.
+  *   **Conserva las Ediciones del Usuario (Punto 2):** Si un caso actual ya fue modificado por el usuario, intenta preservar esa modificación. Solo ajústala si es estrictamente necesario para cumplir con el CONTEXTO ADICIONAL o para aplicar la TÉCNICA de forma coherente. Explica implícitamente tus cambios a través de la calidad del caso refinado.
+
+B.  **APLICACIÓN INTELIGENTE DE LA TÉCNICA (Punto 4):**
+  *   Usa la técnica "${newTechnique}" para evaluar los CASOS ACTUALES. ¿Hay omisiones obvias según la técnica Y el contexto del usuario? ¿Se pueden clarificar pasos o resultados esperados aplicando la técnica?
+  *   Añade nuevos casos SOLO si son claramente necesarios según la técnica Y el contexto del usuario, y no son redundantes con los casos actuales ya mejorados.
+
+C.  **COHERENCIA Y TRAZABILIDAD (Punto 3):**
+  *   Asegura que todos los casos refinados, incluso los nuevos, sigan siendo relevantes para la funcionalidad original (descripción/CAs/imágenes).
+
+D.  **FORMATO DE SALIDA (SIN CAMBIOS):**
+  *   Sigue EXACTAMENTE el mismo formato JSON que los "Casos de Prueba Actuales": un array de objetos, donde cada objeto tiene "title" (string), "preconditions" (string), "steps" (array de objetos con "numero_paso" (integer) y "accion" (string)), y "expectedResults" (string).
+  *   Los títulos deben comenzar con un verbo. "numero_paso" debe ser secuencial iniciando en 1 para cada caso.
+
+E.  **CASO DE ERROR / NO REFINAMIENTO POSIBLE:**
+  *   Si, a pesar de toda la información, y priorizando el contexto del usuario, no puedes generar un conjunto de casos refinados válidos (ej. el contexto es fundamentalmente contradictorio o la información es insuficiente), responde EXACTAMENTE y ÚNICAMENTE con el siguiente array JSON:
+      \`\`\`json
+      [{"title": "Refinamiento no posible con el contexto actual", "preconditions": "N/A", "steps": [{"numero_paso": 1, "accion": "No se pudieron refinar/regenerar los casos de prueba basándose en la información y el contexto proporcionados. Por favor, revise la consistencia de sus indicaciones."}], "expectedResults": "N/A"}]
+      \`\`\`
 
 **FORMATO DE SALIDA ESTRICTO JSON (SIN EXCEPCIONES):**
 *   La respuesta DEBE ser un array JSON válido, comenzando con '[' y terminando con ']'.
-*   Sigue la estructura detallada en el punto 5.
-*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
+*   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON (explicaciones, saludos, etc.).
 ---
-PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS Y REFINADOS:
+PROCEDE A GENERAR EL ARRAY JSON DE CASOS DE PRUEBA DETALLADOS Y REFINADOS, DANDO MÁXIMA PRIORIDAD A LAS INDICACIONES Y MODIFICACIONES DEL USUARIO:
 `;
 
 
@@ -303,54 +319,74 @@ Si las imágenes no forman una secuencia lógica, son incomprensibles, o no pued
 PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO BASADO EN LAS IMÁGENES PROPORCIONADAS:
 `;
 
-  private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string): string => `
-Eres un Ingeniero de QA experto en análisis forense de flujos de UI y refinamiento de documentación de pruebas.
-Tu tarea es REFINAR un informe de análisis de flujo existente, basándote en las imágenes originales y en un contexto editado del informe (que podría incluir correcciones o comentarios del usuario).
+private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string): string => `
+Eres un Ingeniero de QA experto en análisis forense de secuencias de imágenes y refinamiento de documentación de pruebas.
+Tu tarea es REFINAR un informe de análisis de flujo o secuencia de estados existente. Debes basarte en las imágenes originales y en el **contexto editado del informe (JSON proporcionado)**. Este contexto puede incluir correcciones a los pasos, comentarios del usuario, y crucialmente, **aclaraciones sobre la naturaleza o tipo de las imágenes y el flujo (ej. si no es una UI, si son datos, logs, etc.)** contenidas en el campo "user_provided_additional_context" del JSON.
+
 **ENTRADA PROPORCIONADA:**
-1.  **Imágenes Originales del Flujo Ejecutado:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto).
-2.  **Contexto del Informe Editado (JSON):** Un objeto JSON que representa el informe tal como fue editado o anotado por el usuario. Este JSON incluye "Nombre_del_Escenario", "Pasos_Analizados" (con las descripciones, elementos, datos de entrada y resultados esperados *editados*), "Resultado_Esperado_General_Flujo", y opcionalmente "user_provided_additional_context" con comentarios generales del usuario. El JSON es:
+1.  **Imágenes Originales del Flujo/Secuencia Ejecutada:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto).
+2.  **Contexto del Informe Editado (JSON):** Un objeto JSON que representa el informe tal como fue editado o anotado por el usuario. Este JSON incluye "Nombre_del_Escenario", "Pasos_Analizados" (con descripciones, elementos, datos de entrada y resultados esperados ya definidos por el usuario o una corrida previa), "Resultado_Esperado_General_Flujo", y muy importantemente, **"user_provided_additional_context"** con comentarios generales o directrices del usuario. El JSON es:
     \`\`\`json
     ${editedReportContextJSON}
     \`\`\`
 
 **INSTRUCCIONES DETALLADAS PARA EL REFINAMIENTO:**
-1.  **RE-ANALIZA LAS IMÁGENES CON EL NUEVO CONTEXTO:** Vuelve a examinar las imágenes originales, pero esta vez, considera las ediciones y el contexto adicional proporcionado en el JSON como la "verdad" o la intención a verificar.
-2.  **ENFOQUE EN "resultado_obtenido_paso_y_estado":** Para cada paso en "Pasos_Analizados" del JSON de contexto:
-    *   Toma la "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso" y "resultado_esperado_paso" del JSON de contexto como correctos.
-    *   Tu principal tarea es generar un NUEVO "resultado_obtenido_paso_y_estado" que refleje si, dadas esas acciones/entradas/elementos y expectativas del contexto, lo que se ve en las imágenes siguientes coincide. Actualiza el estado a "Exitosa", "Fallido", o "Exitosa con desviaciones" según corresponda.
-3.  **ACTUALIZA LA CONCLUSIÓN GENERAL:** Basado en los "resultado_obtenido_paso_y_estado" refinados, genera una nueva "Conclusion_General_Flujo". El "Nombre_del_Escenario" y "Resultado_Esperado_General_Flujo" del JSON de contexto deben mantenerse.
-4.  **MANTÉN LA ESTRUCTURA Y ORDEN:** El número de pasos y su orden deben coincidir con los de "Pasos_Analizados" en el JSON de contexto. Simplemente estás refinando los resultados obtenidos y la conclusión general.
 
-**CASO DE ERROR EN REFINAMIENTO:**
-Si, a pesar del contexto, las imágenes siguen sin permitir un refinamiento claro o hay una contradicción fundamental, produce un informe con un error específico en la "Conclusion_General_Flujo" y en el "resultado_obtenido_paso_y_estado" del primer paso problemático. Usa el "Nombre_del_Escenario" del contexto.
-Ejemplo de estructura de error:
-\`\`\`json
-[
-  {
-    "Nombre_del_Escenario": "Error Crítico en Re-Generación (Contextualizada)", 
-    "Pasos_Analizados": [
+1.  **PRIORIDAD ABSOLUTA AL "user_provided_additional_context":**
+    *   Este campo dentro del JSON de entrada es tu directriz principal. Si el usuario aclara que las imágenes son, por ejemplo, "resultados de una base de datos antes y después de una actualización" o "logs de un proceso batch", DEBES adaptar tu interpretación y la terminología utilizada en los campos que generes ("resultado_obtenido_paso_y_estado" y "Conclusion_General_Flujo") para que sean coherentes con esa naturaleza.
+    *   **NO ASUMAS que es una UI si el "user_provided_additional_context" sugiere otra cosa.**
+
+2.  **RE-ANALIZA LAS IMÁGENES CON EL CONTEXTO DEL USUARIO:**
+    *   Vuelve a examinar las imágenes originales.
+    *   Considera las ediciones ya hechas por el usuario en los campos como "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", y "resultado_esperado_paso" (contenidos en el JSON de entrada) como la base "correcta" de la acción o estado que se está analizando en cada paso.
+
+3.  **ENFOQUE PRINCIPAL: Generar NUEVOS "resultado_obtenido_paso_y_estado":**
+    *   Para cada paso en "Pasos_Analizados" del JSON de contexto:
+        *   Tu tarea principal es generar un **NUEVO y PRECISO** "resultado_obtenido_paso_y_estado".
+        *   Este debe reflejar fielmente si, dadas las acciones/entradas/elementos y expectativas definidas en el JSON de contexto (y cualquier aclaración en "user_provided_additional_context"), lo que se observa en las imágenes originales (especialmente en la "imagen_referencia_salida" si la tienes, o la siguiente a "imagen_referencia_entrada") coincide.
+        *   Actualiza el estado a "Exitosa", "Fallido", "Exitosa con desviaciones" o "Inconclusivo", según corresponda. La descripción debe ser coherente con el tipo de flujo indicado por el usuario (ej. para datos: "Conforme: El valor en la columna X es Y", "No Conforme: El log muestra un error Z").
+
+4.  **ACTUALIZAR LA CONCLUSIÓN GENERAL:**
+    *   Basado en los "resultado_obtenido_paso_y_estado" REFINADOS para todos los pasos, genera una nueva "Conclusion_General_Flujo".
+    *   El "Nombre_del_Escenario" y "Resultado_Esperado_General_Flujo" del JSON de contexto deben mantenerse, aunque la conclusión debe reflejar la nueva evaluación.
+
+5.  **MANTENER LA ESTRUCTURA Y ORDEN Y COMPLETAR "imagen_referencia_salida":**
+    *   El número de pasos y su orden deben coincidir con los de "Pasos_Analizados" en el JSON de contexto.
+    *   Si el campo "imagen_referencia_salida" no existe o está vacío en el JSON de entrada para un paso, debes inferirlo a partir de las imágenes originales y añadirlo/completarlo en el paso refinado. Este campo es crucial para evidenciar el resultado obtenido.
+
+6.  **CASO DE ERROR EN REFINAMIENTO:**
+    Si, a pesar del contexto (incluyendo el "user_provided_additional_context"), las imágenes siguen sin permitir un refinamiento claro o hay una contradicción fundamental que no puedes resolver, produce un informe con un error específico en la "Conclusion_General_Flujo" y en el "resultado_obtenido_paso_y_estado" del primer paso problemático. Usa el "Nombre_del_Escenario" del contexto.
+    Ejemplo de estructura de error:
+    \`\`\`json
+    [
       {
-        "numero_paso": 1, 
-        "descripcion_accion_observada": "Descripción del contexto",
-        "imagen_referencia_entrada": "Ref del contexto",
-        "elemento_clave_y_ubicacion_aproximada": "Elemento del contexto",
-        "dato_de_entrada_paso": "Dato del contexto",
-        "resultado_esperado_paso": "Esperado del contexto",
-        "resultado_obtenido_paso_y_estado": "No se pudo refinar el resultado obtenido debido a [razón específica o contradicción con las imágenes]."
+        "Nombre_del_Escenario": "Error Crítico en Re-Generación (Contextualizada)",
+        "Pasos_Analizados": [
+          {
+            "numero_paso": 1,
+            "descripcion_accion_observada": "Descripción del contexto",
+            "imagen_referencia_entrada": "Ref del contexto",
+            "elemento_clave_y_ubicacion_aproximada": "Elemento del contexto",
+            "dato_de_entrada_paso": "Dato del contexto",
+            "resultado_esperado_paso": "Esperado del contexto",
+            "resultado_obtenido_paso_y_estado": "No se pudo refinar el resultado obtenido. Razón: [especificar, ej: 'El contexto del usuario indica que esto es un log, pero las imágenes parecen ser de una UI, creando una contradicción no resoluble.' o 'Las imágenes originales son insuficientes para verificar el estado descrito en el contexto.'].",
+            "imagen_referencia_salida": "N/A si no se pudo determinar"
+          }
+        ],
+        "Resultado_Esperado_General_Flujo": "Esperado general del contexto",
+        "Conclusion_General_Flujo": "El refinamiento del flujo/secuencia no pudo completarse debido a [razón general, ej: 'contradicciones entre el contexto del usuario y las imágenes' o 'insuficiencia de las imágenes para el análisis solicitado']."
       }
-    ],
-    "Resultado_Esperado_General_Flujo": "Esperado general del contexto",
-    "Conclusion_General_Flujo": "El refinamiento del flujo no pudo completarse debido a [razón general]."
-  }
-]
-\`\`\`
+    ]
+    \`\`\`
 
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
-*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto, con la misma estructura que el prompt \`PROMPT_FLOW_ANALYSIS_FROM_IMAGES\`.
+*   La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto.
+*   La estructura del objeto y sus campos deben coincidir con la definida en el prompt \`PROMPT_FLOW_ANALYSIS_FROM_IMAGES\` (es decir, los campos "Nombre_del_Escenario", "Pasos_Analizados" con "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", "resultado_obtenido_paso_y_estado", "imagen_referencia_salida", y los campos generales "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo").
 *   **ABSOLUTAMENTE PROHIBIDO INCLUIR:** Cualquier texto fuera del array JSON.
 ---
-PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO REFINADO:
+PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO/SECUENCIA REFINADO, PONIENDO ESPECIAL ATENCIÓN AL "user_provided_additional_context" PARA ENTENDER LA NATURALEZA DE LAS IMÁGENES Y AJUSTAR LA INTERPRETACIÓN Y TERMINOLOGÍA SEGÚN SEA NECESARIO:
 `;
+
 
   private readonly PROMPT_COMPARE_IMAGE_FLOWS_AND_REPORT_BUGS = (): string => `
 Eres un Analista de QA meticuloso y experto en la detección de bugs visuales y funcionales mediante la comparación de flujos de interfaz de usuario.
