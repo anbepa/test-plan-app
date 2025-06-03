@@ -38,7 +38,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   showTestCaseGenerator: boolean = false;
   showParentFormComponent: boolean = false;
   showFlowComparisonComponent: boolean = false;
-  isModeSelected: boolean = false; // Importante: debe ser false inicialmente
+  isModeSelected: boolean = false; 
 
   draggableFlowImages: DraggableFlowImage[] = [];
   flowImagesBase64: string[] = [];
@@ -137,8 +137,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       this.showFlowComparisonComponent = true;
     } else {
       console.error('[TestPlanGenerator] SelectInitialMode - Unknown mode received:', mode, ". Resetting to selection.");
-      this.resetActiveGeneratorsAndGoToSelection(); // Vuelve a la pantalla de selección
-      return; // Importante salir aquí para no continuar con un estado inconsistente
+      this.resetActiveGeneratorsAndGoToSelection(); 
+      return; 
     }
 
     console.log('[TestPlanGenerator] SelectInitialMode - Flags state after setting:', {
@@ -157,7 +157,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.showTestCaseGenerator = false;
     this.showParentFormComponent = false;
     this.showFlowComparisonComponent = false;
-    this.isModeSelected = false; // Esto es clave para mostrar las tarjetas de selección
+    this.isModeSelected = false; 
 
     this.formError = null;
     this.flowAnalysisErrorGlobal = null;
@@ -717,7 +717,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
            .replace(/>/g, "&gt;")
            .replace(/"/g, "&quot;")
            .replace(/'/g, "&#039;");
-  }
+  };
 
   public getHuSummaryForStaticAI(): string {
     if (this.huList.length === 0) return "No hay Historias de Usuario, Análisis de Flujo ni Comparaciones definidas aún.";
@@ -1009,16 +1009,193 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     return fullPlanHtmlContent;
   }
 
-  public copyPreviewToClipboard(): void { /* ... (no change) ... */ }
-  public downloadWord(): void { /* ... (no change) ... */ }
-  public exportExecutionMatrix(hu: HUData): void { /* ... (no change) ... */ }
-  public exportFlowAnalysisReportToCsv(hu: HUData): void { /* ... (no change) ... */ }
-  public exportFlowAnalysisReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void { /* ... (no change) ... */ }
+  public copyPreviewToClipboard(): void {
+    const planText = this.generatePlanContentString();
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(planText)
+        .then(() => alert('Plan de pruebas copiado al portapapeles!'))
+        .catch(err => {
+            console.error('Error al copiar al portapapeles:', err);
+            alert('Error al copiar: ' + err);
+        });
+    } else {
+      alert('La API del portapapeles no es compatible con este navegador.');
+    }
+  }
+
+  public downloadWord(): void {
+    const htmlContent = this.generatePlanContentHtmlString();
+    if (htmlContent.includes('Plan de pruebas aún no generado')) {
+      alert('No hay contenido del plan para descargar.');
+      return;
+    }
+    try {
+      import('html-to-docx').then(module => {
+        const htmlToDocx = module.default; 
+        if (typeof htmlToDocx === 'function') {
+          const headerHtml = `<p style="font-size:10pt;color:#888888;text-align:right;">Plan de Pruebas - ${this.testPlanTitle || 'General'}</p>`;
+          
+          const fullHtmlForDocx = `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="UTF-8">
+                <style>
+                  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+                  p { margin-bottom: 10px; line-height: 1.5; }
+                  h1, .preview-section-title { font-size: 16pt; color: #2F5496; margin-bottom: 5px; font-weight: bold; }
+                  h2, .preview-hu-title { font-size: 14pt; color: #365F91; margin-bottom: 5px; font-weight: bold; }
+                  h3 { font-size: 12pt; color: #4F81BD; margin-bottom: 5px; font-weight: bold; }
+                  ul, ol { margin-top: 0; margin-bottom: 10px; padding-left: 30px; }
+                  li { margin-bottom: 5px; }
+                  table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+                  th, td { border: 1px solid #BFBFBF; padding: 5px; text-align: left; font-size:10pt; }
+                  th { background-color: #F2F2F2; font-weight: bold; }
+                  .bug-report-image { max-width: 90%; height: auto; display: block; margin: 5px 0; border: 1px solid #ccc; }
+                  pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: inherit; }
+                </style>
+              </head>
+              <body>
+                ${htmlContent}
+              </body>
+            </html>`;
+
+          htmlToDocx(fullHtmlForDocx, headerHtml, {
+            table: { row: { cantSplit: true } },
+            footer: true, 
+            pageNumber: true, 
+          }).then((fileBuffer: BlobPart) => { 
+            saveAs(new Blob([fileBuffer]), `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}.docx`);
+          }).catch((error: any) => {
+            console.error('Error al generar DOCX con html-to-docx:', error);
+            alert('Error al generar el archivo DOCX. Ver consola para detalles. Se descargará como HTML.');
+            this.downloadHtmlFallback(htmlContent);
+          });
+        } else {
+          console.error('htmlToDocx no es una función. La importación pudo haber fallado o el módulo no es compatible.');
+          alert('No se pudo generar el archivo DOCX. La librería no cargó correctamente. Se descargará como HTML.');
+           this.downloadHtmlFallback(htmlContent);
+        }
+      }).catch(error => {
+        console.error('Error al importar html-to-docx:', error);
+        alert('No se pudo cargar la librería para generar DOCX. Se descargará como HTML.');
+        this.downloadHtmlFallback(htmlContent);
+      });
+    } catch (e) {
+      console.error('Excepción general al intentar generar DOCX:', e);
+      alert('Error al intentar generar DOCX. Se descargará como HTML.');
+      this.downloadHtmlFallback(htmlContent);
+    }
+  }
+  
+  private downloadHtmlFallback(htmlContent: string): void {
+    const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8;' });
+    saveAs(blob, `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}_Fallback.html`);
+  }
+
+  public exportExecutionMatrix(hu: HUData): void {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
+      alert('No hay casos de prueba válidos para exportar o los casos generados indican un error.');
+      return;
+    }
+
+    const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
+    const csvRows = hu.detailedTestCases.map((tc, index) => {
+      const stepsString = Array.isArray(tc.steps) ? tc.steps.map(step => `${step.numero_paso}. ${step.accion}`).join('\n') : 'Pasos no disponibles.';
+      return [
+        this.escapeCsvField(hu.id + '_CP' + (index + 1)),
+        this.escapeCsvField(tc.title),
+        this.escapeCsvField(tc.preconditions),
+        this.escapeCsvField(stepsString),
+        this.escapeCsvField(tc.expectedResults)
+      ];
+    });
+
+    const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
+    saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  public exportFlowAnalysisReportToCsv(hu: HUData): void {
+    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados?.length || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+      alert('No hay datos de análisis de flujo válidos para exportar.');
+      return;
+    }
+    const report = hu.flowAnalysisReport[0];
+    const csvHeader = [
+      "Nombre del Escenario",
+      "Número de Paso",
+      "Descripción de la Acción Observada",
+      // "Imagen Ref. Entrada (IA)", // Removed as per user request
+      // "Elemento Clave (IA)",       // Removed as per user request
+      "Dato de Entrada (Paso)",
+      "Resultado Esperado (Paso)",
+      "Resultado Obtenido (Paso) y Estado",
+      "Resultado Esperado General del Flujo",
+      "Conclusión General del Flujo"
+    ];
+    const csvRows = report.Pasos_Analizados.map(paso => [
+      this.escapeCsvField(report.Nombre_del_Escenario),
+      this.escapeCsvField(paso.numero_paso),
+      this.escapeCsvField(paso.descripcion_accion_observada),
+      // this.escapeCsvField(paso.imagen_referencia_entrada), // Removed
+      // this.escapeCsvField(paso.elemento_clave_y_ubicacion_aproximada), // Removed
+      this.escapeCsvField(paso.dato_de_entrada_paso || 'N/A'),
+      this.escapeCsvField(paso.resultado_esperado_paso),
+      this.escapeCsvField(paso.resultado_obtenido_paso_y_estado),
+      this.escapeCsvField(report.Resultado_Esperado_General_Flujo),
+      this.escapeCsvField(report.Conclusion_General_Flujo)
+    ]);
+    const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
+    saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `AnalisisFlujo_${this.escapeFilename(hu.title || 'Reporte')}_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  public exportFlowAnalysisReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
+    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0] || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+        alert(language === 'en' ? 'No valid flow analysis report to export.' : 'No hay informe de análisis de flujo válido para exportar.');
+        return;
+    }
+    const report = hu.flowAnalysisReport[0];
+    const date = new Date().toISOString().split('T')[0];
+    const title = language === 'en' 
+        ? `Flow Analysis Report: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`
+        : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
+
+    let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#333}.report-container{max-width:900px;margin:auto}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2{font-size:1.4em;color:#4a6d7c;margin-top:20px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0}table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:.9em}th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{background-color:#f2f2f2;font-weight:600}img.flow-step-image{max-width:150px;max-height:100px;border:1px solid #ccc;border-radius:4px;display:block;margin:5px 0;background-color:#fff;object-fit:contain}tr.status-success td:first-child{border-left:5px solid #28a745!important}tr.status-failure td:first-child{border-left:5px solid #dc3545!important}tr.status-deviation td:first-child{border-left:5px solid #ffc107!important}.conclusion-section p{margin-bottom:8px} .conclusion-section strong{color:#555}</style></head><body><div class="report-container"><h1>${title}</h1><p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${date}</p>`;
+    
+    html += `<h2>${language === 'en' ? 'Analyzed Steps' : 'Pasos Analizados'}:</h2>`;
+    if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
+        html += `<table><thead><tr>
+        <th>${language === 'en' ? 'Step' : 'Paso'}</th>
+        <th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th>
+        <th>${language === 'en' ? 'Input Data' : 'Dato Entrada'}</th>
+        <th>${language === 'en' ? 'Expected Result' : 'Res. Esperado'}</th>
+        <th>${language === 'en' ? 'Actual Result & Status' : 'Res. Obtenido y Estado'}</th>
+        <th>${language === 'en' ? 'Step Image' : 'Imagen Paso'}</th>
+        </tr></thead><tbody>`;
+        report.Pasos_Analizados.forEach(paso => {
+            const imgSrc = this.getFlowStepImage(hu, paso);
+            html += `<tr class="${this.getFlowStepStatusClass(paso)}">
+            <td>${paso.numero_paso}</td>
+            <td>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</td>
+            <td>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || 'N/A')}</td>
+            <td>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</td>
+            <td>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</td>
+            <td>${imgSrc ? `<img src="${imgSrc}" alt="Imagen para paso original ${paso.numero_paso}" class="flow-step-image">` : 'N/A'}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+    } else {
+        html += `<p><em>${language === 'en' ? 'No detailed steps were analyzed or found.' : 'No se pudieron determinar pasos detallados o no se encontraron.'}</em></p>`;
+    }
+
+    html += `<div class="conclusion-section"><h2>${language === 'en' ? 'General Conclusions' : 'Conclusiones Generales'}:</h2><p><strong>${language === 'en' ? 'Overall Expected Result of the Flow' : 'Resultado Esperado General del Flujo'}:</strong> ${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</p><p><strong>${language === 'en' ? 'Overall Conclusion of the Flow' : 'Conclusión General del Flujo'}:</strong> ${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</p></div>`;
+    html += `</div></body></html>`;
+    saveAs(new Blob([html], { type: 'text/html;charset=utf-8;' }), `AnalisisFlujo_${this.escapeFilename(hu.title || 'Reporte')}_${language === 'en' ? 'ENG' : 'ESP'}_${date}.html`);
+  }
     
   public isAnyHuTextBased = (): boolean => this.huList.some(hu => hu.originalInput.generationMode === 'text');
   public trackHuById = (i: number, hu: HUData): string => hu.id;
 
-  // Método restaurado
   private escapeCsvField = (f: string | number | undefined | null): string => {
       if (f === null || f === undefined) return '';
       const stringValue = String(f);
@@ -1030,11 +1207,27 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   public getFlowStepImage(hu: HUData, paso: FlowAnalysisStep): string | null {
     if (!hu.originalInput.imagesBase64?.length || !hu.originalInput.imageMimeTypes) return null;
-    const match = paso.imagen_referencia_entrada.match(/Imagen (\d+)/i);
+    
+    const match = paso.imagen_referencia_entrada?.match(/Imagen (?:[AB]\.?)?(\d+)/i);
     if (match?.[1]) {
-      const imageIndex = parseInt(match[1], 10) - 1;
-      if (imageIndex >= 0 && imageIndex < hu.originalInput.imagesBase64.length) {
-        return `data:${hu.originalInput.imageMimeTypes[imageIndex]};base64,${hu.originalInput.imagesBase64[imageIndex]}`;
+      const imageIndex = parseInt(match[1], 10) - 1; 
+      
+      let imagesToUse: string[] | undefined;
+      let mimeTypesToUse: string[] | undefined;
+
+      if (paso.imagen_referencia_entrada?.toUpperCase().startsWith("IMAGEN A")) {
+          imagesToUse = hu.originalInput.imagesBase64FlowA;
+          mimeTypesToUse = hu.originalInput.imageMimeTypesFlowA;
+      } else if (paso.imagen_referencia_entrada?.toUpperCase().startsWith("IMAGEN B")) {
+          imagesToUse = hu.originalInput.imagesBase64FlowB;
+          mimeTypesToUse = hu.originalInput.imageMimeTypesFlowB;
+      } else {
+          imagesToUse = hu.originalInput.imagesBase64;
+          mimeTypesToUse = hu.originalInput.imageMimeTypes;
+      }
+
+      if (imagesToUse && mimeTypesToUse && imageIndex >= 0 && imageIndex < imagesToUse.length) {
+        return `data:${mimeTypesToUse[imageIndex]};base64,${imagesToUse[imageIndex]}`;
       }
     }
     return null;

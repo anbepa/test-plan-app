@@ -36,7 +36,19 @@
               "entry": "src/server.ts"
             },
             "allowedCommonJsDependencies": [
-              "file-saver"
+              "file-saver",
+              "html-to-docx"
+            ],
+            "externalDependencies": [
+              "url",
+              "crypto",
+              "fs",
+              "path",
+              "util",
+              "stream",
+              "http",
+              "https",
+              "zlib"
             ]
           },
           "configurations": {
