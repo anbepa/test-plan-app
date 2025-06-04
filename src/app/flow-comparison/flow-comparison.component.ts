@@ -1,4 +1,3 @@
-// anbepa/test-plan-app/test-plan-app-114d3b7ac03726fd5931cc480f86ec71001e021a/src/app/flow-comparison/flow-comparison.component.ts
 // src/app/flow-comparison/flow-comparison.component.ts
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
@@ -7,7 +6,6 @@ import { HUData, BugReportItem, ImageAnnotation } from '../models/hu-data.model'
 import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
-// import { saveAs } from 'file-saver'; // Not used in this component directly
 import { ImageAnnotationEditorComponent, AnnotationEditorOutput } from '../image-annotation-editor/image-annotation-editor.component';
 
 interface DraggableFlowImage {
@@ -54,7 +52,7 @@ export class FlowComparisonComponent implements OnInit {
   imageToEditUrl: string | ArrayBuffer | null = null;
   imageToEditFlowType: 'A' | 'B' | null = null;
   existingAnnotationsForEditor: ImageAnnotation[] = [];
-  currentImageBeingEdited: DraggableFlowImage | null = null; 
+  currentImageBeingEditedId: string | null = null;
 
   @ViewChild('comparisonFlowForm') comparisonFlowFormDirective!: NgForm;
   @ViewChild('imageFilesInputFlowA') imageFilesInputFlowARef: ElementRef<HTMLInputElement> | undefined;
@@ -76,11 +74,19 @@ export class FlowComparisonComponent implements OnInit {
     this.resetForm();
   }
 
+  public get imageBeingEditedObject(): DraggableFlowImage | null {
+    if (!this.currentImageBeingEditedId || !this.imageToEditFlowType) {
+      return null;
+    }
+    const targetArray = this.imageToEditFlowType === 'A' ? this.draggableImagesFlowA : this.draggableImagesFlowB;
+    return targetArray.find(img => img.id === this.currentImageBeingEditedId) || null;
+  }
+
   resetForm(): void {
     this.formError = null;
     this.draggableImagesFlowA = []; this.imageUploadErrorFlowA = null; this.annotationsByImageFlowA.clear();
     this.draggableImagesFlowB = []; this.imageUploadErrorFlowB = null; this.annotationsByImageFlowB.clear();
-    
+
     const keptSprint = this.currentFlowSprint;
     this.currentFlowTitle = '';
     this.userBugComparisonReanalysisContext = '';
@@ -88,15 +94,19 @@ export class FlowComparisonComponent implements OnInit {
     this.loadingBugComparison = false;
     this.bugComparisonError = null;
 
-    this.closeImageEditor(); 
+    this.closeImageEditor();
 
     if (isPlatformBrowser(this.platformId)) {
       if (this.imageFilesInputFlowARef?.nativeElement) this.imageFilesInputFlowARef.nativeElement.value = '';
       if (this.imageFilesInputFlowBRef?.nativeElement) this.imageFilesInputFlowBRef.nativeElement.value = '';
     }
 
-    this.comparisonFlowFormDirective?.resetForm({ currentFlowSprint: keptSprint });
+    if (this.comparisonFlowFormDirective) {
+        this.comparisonFlowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
+    }
      this.currentFlowSprint = keptSprint;
+     this.currentFlowTitle = '';
+
      setTimeout(() => {
         if (this.comparisonFlowFormDirective?.form) {
             this.comparisonFlowFormDirective.form.markAsPristine();
@@ -111,14 +121,12 @@ export class FlowComparisonComponent implements OnInit {
     if (!this.comparisonFlowFormDirective || !this.comparisonFlowFormDirective.form) {
       return true;
     }
-    return !this.currentFlowSprint || !this.currentFlowTitle ||
-           (this.draggableImagesFlowA.length === 0 && this.draggableImagesFlowB.length === 0) || // At least one flow must have images
-           (this.draggableImagesFlowB.length === 0); // Flow B is now mandatory
+    return !this.currentFlowSprint || !this.currentFlowTitle || (this.draggableImagesFlowB.length === 0);
   }
-  
+
   private getMimeTypeFromDataUrl(dataUrl: string): string {
     const match = dataUrl.match(/^data:(.*?);base64,/);
-    return match ? match[1] : 'image/png'; // Fallback
+    return match ? match[1] : 'image/png';
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
@@ -147,8 +155,8 @@ export class FlowComparisonComponent implements OnInit {
     } else return;
 
     this.formError = null;
-    currentDraggableImagesRef.length = 0; 
-    currentAnnotationsMapRef.clear(); 
+    currentDraggableImagesRef.length = 0;
+    currentAnnotationsMapRef.clear();
 
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
@@ -200,7 +208,7 @@ export class FlowComparisonComponent implements OnInit {
                 next: (processedImages) => {
                     processedImages.forEach(img => {
                         currentDraggableImagesRef.push(img);
-                        currentAnnotationsMapRef.set(img.id, []); 
+                        currentAnnotationsMapRef.set(img.id, []);
                     });
                 },
                 complete: () => { this.comparisonFlowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); },
@@ -225,7 +233,7 @@ export class FlowComparisonComponent implements OnInit {
   processComparison(): void {
     this.formError = null; this.bugComparisonError = null;
     if (this.isFormInvalid()) {
-      this.formError = "Por favor, completa todos los campos requeridos y carga imágenes para el Flujo B (el Flujo A es opcional).";
+      this.formError = "Por favor, completa todos los campos requeridos (Título, Sprint) y carga imágenes para el Flujo B.";
       if (this.comparisonFlowFormDirective?.form) {
         Object.values(this.comparisonFlowFormDirective.form.controls).forEach(control => {
           if (control.invalid && control.enabled) control.markAsTouched();
@@ -239,15 +247,23 @@ export class FlowComparisonComponent implements OnInit {
 
     this.loadingBugComparison = true;
 
-    let contextWithAnnotations = this.userBugComparisonReanalysisContext || '';
+    let combinedUserContext = this.userBugComparisonReanalysisContext || '';
+
+    // Add note if Flow A is empty
+    if (this.draggableImagesFlowA.length === 0 && this.draggableImagesFlowB.length > 0) {
+        const flowAEmptyNote = "NOTA PARA IA: El Flujo A (Referencia/Esperado) no se ha proporcionado. El análisis debe centrarse exclusivamente en el Flujo B, sus anotaciones y el contexto proporcionado para identificar problemas o bugs.";
+        combinedUserContext = flowAEmptyNote + (combinedUserContext ? `\n\nCONTEXTO ADICIONAL DEL USUARIO:\n${combinedUserContext}` : "");
+    }
+
+
     const allAnnotationsFlowA: ImageAnnotation[] = [];
     this.draggableImagesFlowA.forEach((imgItem, imgIndex) => {
         const annotations = this.annotationsByImageFlowA.get(imgItem.id);
         if (annotations && annotations.length > 0) {
             annotations.forEach(ann => {
                 allAnnotationsFlowA.push({
-                    ...ann, // sequence, description, x, y, width, height
-                    imageFilename: imgItem.file.name, 
+                    ...ann,
+                    imageFilename: imgItem.file.name,
                     flowType: 'A',
                     imageIndex: imgIndex + 1
                 });
@@ -255,11 +271,11 @@ export class FlowComparisonComponent implements OnInit {
         }
     });
     if (allAnnotationsFlowA.length > 0) {
-        contextWithAnnotations += "\n\n--- ANOTACIONES FLUJO A ---";
-        contextWithAnnotations += "\n" + JSON.stringify(allAnnotationsFlowA.map(a => ({
-            imagen: `A.${a.imageIndex} (${a.imageFilename})`,
-            seq: a.sequence, desc: a.description, box: [a.x, a.y, a.width, a.height]
-        })));
+        combinedUserContext += (combinedUserContext ? "\n\n" : "") + "--- ANOTACIONES JSON FLUJO A (para referencia de IA) ---\n" +
+                                  JSON.stringify(allAnnotationsFlowA.map(a => ({
+                                    imagen_ref_ia: `A.${a.imageIndex} (nombre_original: ${a.imageFilename})`,
+                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height]
+                                  })));
     }
 
     const allAnnotationsFlowB: ImageAnnotation[] = [];
@@ -277,14 +293,14 @@ export class FlowComparisonComponent implements OnInit {
         }
     });
      if (allAnnotationsFlowB.length > 0) {
-        contextWithAnnotations += "\n\n--- ANOTACIONES FLUJO B ---";
-        contextWithAnnotations += "\n" + JSON.stringify(allAnnotationsFlowB.map(a => ({
-            imagen: `B.${a.imageIndex} (${a.imageFilename})`,
-            seq: a.sequence, desc: a.description, box: [a.x, a.y, a.width, a.height]
-        })));
-    }
-     if (allAnnotationsFlowA.length > 0 || allAnnotationsFlowB.length > 0) {
-      contextWithAnnotations += "\n-------------------------------";
+        combinedUserContext += (combinedUserContext ? "\n\n" : "") + "--- ANOTACIONES JSON FLUJO B (para referencia de IA) ---\n" +
+                                   JSON.stringify(allAnnotationsFlowB.map(a => ({
+                                    imagen_ref_ia: `B.${a.imageIndex} (nombre_original: ${a.imageFilename})`,
+                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height]
+                                  })));
+     }
+     if (allAnnotationsFlowA.length > 0 || allAnnotationsFlowB.length > 0 || this.userBugComparisonReanalysisContext) {
+        combinedUserContext += (combinedUserContext ? "\n" : "") + "-------------------------------";
      }
 
     const huDataToEmit: HUData = {
@@ -294,32 +310,32 @@ export class FlowComparisonComponent implements OnInit {
           imagesBase64FlowA: this.draggableImagesFlowA.map(img => img.annotatedBase64 || img.base64),
           imageMimeTypesFlowA: this.draggableImagesFlowA.map(img => img.annotatedPreview ? this.getMimeTypeFromDataUrl(img.annotatedPreview as string) : img.mimeType),
           imageFilenamesFlowA: this.draggableImagesFlowA.map(img => img.file.name),
-          annotationsFlowA: allAnnotationsFlowA, // Store the processed, flat list
+          annotationsFlowA: allAnnotationsFlowA,
           imagesBase64FlowB: this.draggableImagesFlowB.map(img => img.annotatedBase64 || img.base64),
           imageMimeTypesFlowB: this.draggableImagesFlowB.map(img => img.annotatedPreview ? this.getMimeTypeFromDataUrl(img.annotatedPreview as string) : img.mimeType),
           imageFilenamesFlowB: this.draggableImagesFlowB.map(img => img.file.name),
-          annotationsFlowB: allAnnotationsFlowB, // Store the processed, flat list
+          annotationsFlowB: allAnnotationsFlowB,
         },
         id: finalId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
         generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
         editingScope: false, loadingScope: false, errorScope: null, isScopeDetailsOpen: false,
         editingScenarios: false, loadingScenarios: false, errorScenarios: null, showRegenTechniquePicker: false,
         regenSelectedTechnique: '', userTestCaseReanalysisContext: '', isScenariosDetailsOpen: false,
-        isEditingDetailedTestCases: false, 
+        isEditingDetailedTestCases: false,
         flowAnalysisReport: undefined, loadingFlowAnalysis: false, errorFlowAnalysis: null,
         isFlowAnalysisDetailsOpen: false, isEditingFlowReportDetails: false, userReanalysisContext: '',
-        bugComparisonReport: undefined, 
-        loadingBugComparison: true, 
+        bugComparisonReport: undefined,
+        loadingBugComparison: true,
         errorBugComparison: null,
-        isBugComparisonDetailsOpen: true, 
-        userBugComparisonReanalysisContext: contextWithAnnotations,
+        isBugComparisonDetailsOpen: true,
+        userBugComparisonReanalysisContext: combinedUserContext.trim(),
       };
     this.currentHUData = huDataToEmit;
 
     this.geminiService.compareImageFlows(
       huDataToEmit.originalInput.imagesBase64FlowA!, huDataToEmit.originalInput.imageMimeTypesFlowA!,
       huDataToEmit.originalInput.imagesBase64FlowB!, huDataToEmit.originalInput.imageMimeTypesFlowB!,
-      contextWithAnnotations
+      combinedUserContext.trim()
     ).pipe(
       tap(report => {
         if (this.currentHUData) {
@@ -327,13 +343,13 @@ export class FlowComparisonComponent implements OnInit {
           this.currentHUData.errorBugComparison = null;
           if (this.isBugReportInErrorState(report)) {
             const firstError = report.find(item => item.titulo_bug.startsWith("Error"));
-            this.currentHUData.errorBugComparison = `${firstError?.titulo_bug}: ${firstError?.resultado_actual || 'Detalles no disponibles en el error.'}`;
+            this.currentHUData.errorBugComparison = `${firstError?.titulo_bug || 'Error desconocido'}: ${firstError?.resultado_actual || 'Detalles no disponibles.'}`;
             this.bugComparisonError = this.currentHUData.errorBugComparison;
           }
         }
       }),
       catchError(error => {
-        this.bugComparisonError = (typeof error === 'string' ? error : error.message) || 'Error al generar comparación.';
+        this.bugComparisonError = (typeof error === 'string' ? error : (error.message || 'Error desconocido')) || 'Error al generar comparación.';
         if (this.currentHUData) {
             this.currentHUData.errorBugComparison = this.bugComparisonError;
             this.currentHUData.bugComparisonReport = [{ titulo_bug: "Error Crítico en Comparación", id_bug:"ERR-CRIT", prioridad:"Alta", severidad:"Crítica", pasos_para_reproducir: [], resultado_actual: this.bugComparisonError ?? "Error desconocido", resultado_esperado: "Reporte de bugs." } as BugReportItem];
@@ -345,9 +361,9 @@ export class FlowComparisonComponent implements OnInit {
         if (this.currentHUData) this.currentHUData.loadingBugComparison = false;
         this.cdr.detectChanges();
         if (this.currentHUData && !this.currentHUData.errorBugComparison && this.currentHUData.bugComparisonReport) {
-          this.comparisonGenerated.emit({ ...this.currentHUData }); 
+          this.comparisonGenerated.emit({ ...this.currentHUData });
         }
-         this.resetForm(); 
+         this.resetForm();
       })
     ).subscribe();
   }
@@ -377,27 +393,27 @@ export class FlowComparisonComponent implements OnInit {
       event.preventDefault();
       let currentDraggedImage: DraggableFlowImage | null = null;
       let currentDraggableImages: DraggableFlowImage[] = [];
-  
+
       if (flowType === 'A') { currentDraggedImage = this.draggedImageFlowA; currentDraggableImages = this.draggableImagesFlowA; this.dragOverImageIdFlowA = null; }
       else if (flowType === 'B') { currentDraggedImage = this.draggedImageFlowB; currentDraggableImages = this.draggableImagesFlowB; this.dragOverImageIdFlowB = null; }
       else return;
-  
+
       const draggedHtmlElement = document.querySelector('.image-preview-item[style*="opacity: 0.4"]');
       if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
-  
+
       if (!currentDraggedImage || currentDraggedImage.id === targetImage.id) {
         if (flowType === 'A') this.draggedImageFlowA = null; else if (flowType === 'B') this.draggedImageFlowB = null;
         return;
       }
-  
+
       const fromIndex = currentDraggableImages.findIndex(img => img.id === currentDraggedImage!.id);
       const toIndex = currentDraggableImages.findIndex(img => img.id === targetImage.id);
-  
+
       if (fromIndex !== -1 && toIndex !== -1) {
         const itemToMove = currentDraggableImages.splice(fromIndex, 1)[0];
         currentDraggableImages.splice(toIndex, 0, itemToMove);
       }
-  
+
       if (flowType === 'A') this.draggedImageFlowA = null; else if (flowType === 'B') this.draggedImageFlowB = null;
       this.cdr.detectChanges();
     }
@@ -410,62 +426,72 @@ export class FlowComparisonComponent implements OnInit {
     if (flowType === 'A') { this.draggedImageFlowA = null; this.dragOverImageIdFlowA = null; }
     else if (flowType === 'B') { this.draggedImageFlowB = null; this.dragOverImageIdFlowB = null; }
   }
-  
+
   handleCancelFlowForm() { this.resetForm(); this.cancelComparison.emit(); }
-  
-  isBugReportInErrorState = (r?: BugReportItem[]): boolean => 
-    !r || r.length === 0 ? false : r.some(b => 
+
+  isBugReportInErrorState = (r?: BugReportItem[]): boolean =>
+    !r || r.length === 0 ? false : r.some(b =>
         b.titulo_bug.startsWith("Error de API") ||
         b.titulo_bug.startsWith("Error de Formato") ||
         b.titulo_bug.startsWith("Error de Parsing JSON") ||
         b.titulo_bug.startsWith("Error Crítico") ||
         b.titulo_bug.startsWith("Error en Análisis de Imágenes") ||
-        b.titulo_bug.startsWith("Error en el Análisis de Imágenes") 
+        b.titulo_bug.startsWith("Error en el Análisis de Imágenes")
     );
 
   openImageEditorForSpecificImage(imageItem: DraggableFlowImage, flowType: 'A' | 'B'): void {
-    this.currentImageBeingEdited = imageItem;
+    this.currentImageBeingEditedId = imageItem.id;
     this.imageToEditUrl = imageItem.annotatedPreview || imageItem.preview;
     this.imageToEditFlowType = flowType;
 
     const currentMap = flowType === 'A' ? this.annotationsByImageFlowA : this.annotationsByImageFlowB;
     const annotations = currentMap.get(imageItem.id) || [];
-    this.existingAnnotationsForEditor = JSON.parse(JSON.stringify(annotations)); 
-    
+    this.existingAnnotationsForEditor = JSON.parse(JSON.stringify(annotations));
+
     this.showImageEditor = true;
     this.cdr.detectChanges();
   }
 
   onAnnotationsApplied(output: AnnotationEditorOutput): void {
-    if (this.currentImageBeingEdited && this.imageToEditFlowType) {
-      const targetMap = this.imageToEditFlowType === 'A' ? this.annotationsByImageFlowA : this.annotationsByImageFlowB;
-      
-      const imageArrayIndex = (this.imageToEditFlowType === 'A' ? this.draggableImagesFlowA : this.draggableImagesFlowB)
-        .findIndex(img => img.id === this.currentImageBeingEdited!.id);
+    if (this.currentImageBeingEditedId && this.imageToEditFlowType) {
+        const targetArray = this.imageToEditFlowType === 'A' ? this.draggableImagesFlowA : this.draggableImagesFlowB;
+        const imageToUpdate = targetArray.find(img => img.id === this.currentImageBeingEditedId);
 
-      const updatedAnnotations = output.annotations.map(ann => ({
-          ...ann,
-          imageFilename: this.currentImageBeingEdited!.file.name,
-          flowType: this.imageToEditFlowType === null ? undefined : this.imageToEditFlowType, // Corrected assignment
-          imageIndex: imageArrayIndex + 1 
-      }));
+        if (imageToUpdate) {
+            const imageIndexInDraggableArray = targetArray.indexOf(imageToUpdate);
+            const targetMap = this.imageToEditFlowType === 'A' ? this.annotationsByImageFlowA : this.annotationsByImageFlowB;
 
-      targetMap.set(this.currentImageBeingEdited.id, updatedAnnotations);
-      
-      if (output.annotatedImageDataUrl) {
-          this.currentImageBeingEdited.annotatedPreview = output.annotatedImageDataUrl;
-          this.currentImageBeingEdited.annotatedBase64 = output.annotatedImageDataUrl.split(',')[1];
-      }
+            const updatedAnnotations = output.annotations.map(ann => ({
+                ...ann,
+                imageFilename: imageToUpdate.file.name,
+                flowType: this.imageToEditFlowType!,
+                imageIndex: imageIndexInDraggableArray + 1
+            }));
+
+            targetMap.set(imageToUpdate.id, updatedAnnotations);
+
+            if (output.annotatedImageDataUrl && typeof output.annotatedImageDataUrl === 'string' && output.annotatedImageDataUrl.startsWith('data:')) {
+                imageToUpdate.annotatedPreview = output.annotatedImageDataUrl;
+                imageToUpdate.annotatedBase64 = output.annotatedImageDataUrl.split(',')[1];
+            } else {
+                imageToUpdate.annotatedPreview = undefined;
+                imageToUpdate.annotatedBase64 = undefined;
+            }
+            this.cdr.detectChanges();
+        } else {
+            console.warn("onAnnotationsApplied: Could not find image with ID", this.currentImageBeingEditedId, "in target array.");
+        }
     }
     this.closeImageEditor();
   }
+
 
   closeImageEditor(): void {
     this.showImageEditor = false;
     this.imageToEditUrl = null;
     this.imageToEditFlowType = null;
     this.existingAnnotationsForEditor = [];
-    this.currentImageBeingEdited = null;
+    this.currentImageBeingEditedId = null;
     this.cdr.detectChanges();
   }
 }

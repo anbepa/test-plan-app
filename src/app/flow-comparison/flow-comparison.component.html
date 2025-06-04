@@ -91,8 +91,8 @@
 *ngIf="showImageEditor"
 [imageUrl]="imageToEditUrl"
 [existingAnnotations]="existingAnnotationsForEditor"
-[currentImageFilename]="currentImageBeingEdited?.file?.name || 'imagen.png'"
-[imageMimeType]="currentImageBeingEdited?.mimeType"
+[currentImageFilename]="imageBeingEditedObject?.file?.name || 'imagen_desconocida.png'"
+[imageMimeType]="imageBeingEditedObject?.mimeType"
 (annotationsApplied)="onAnnotationsApplied($event)"
 (editorClosed)="closeImageEditor()">
 </app-image-annotation-editor>
