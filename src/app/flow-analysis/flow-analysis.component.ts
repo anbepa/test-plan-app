@@ -2,7 +2,8 @@
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HUData, FlowAnalysisReportItem, FlowAnalysisStep, GenerationMode, ImageAnnotation } from '../models/hu-data.model'; // Ajusta la ruta si es necesario
+import { ImageAnnotationEditorComponent, AnnotationEditorOutput } from '../image-annotation-editor/image-annotation-editor.component'; // Ajusta la ruta si es necesario
+import { HUData, FlowAnalysisReportItem, FlowAnalysisStep, ImageAnnotation } from '../models/hu-data.model'; // Ajusta la ruta si es necesario
 import { GeminiService } from '../services/gemini.service'; // Ajusta la ruta si es necesario
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, Subscription, forkJoin } from 'rxjs';
@@ -10,21 +11,21 @@ import { saveAs } from 'file-saver';
 
 interface DraggableFlowImage {
   file: File;
-  preview: string | ArrayBuffer;
-  base64: string;
+  preview: string | ArrayBuffer; // Original preview
+  base64: string; // Original base64
   mimeType: string;
-  id: string;
-  annotations?: ImageAnnotation[];
-  annotatedPreview?: string | ArrayBuffer;
-  annotatedBase64?: string;
+  id: string; // Unique ID for dnd and map keys
+  annotations?: ImageAnnotation[]; 
+  annotatedPreview?: string | ArrayBuffer; 
+  annotatedBase64?: string; 
 }
 
-type ComponentState = 'form' | 'displayingReport' | 'submittingToPlan';
+type ComponentState = 'form' | 'displayingReport'; 
 
 @Component({
   selector: 'app-flow-analysis',
   standalone: true,
-  imports: [FormsModule, CommonModule],
+  imports: [FormsModule, CommonModule, ImageAnnotationEditorComponent],
   templateUrl: './flow-analysis.component.html',
   styleUrls: ['./flow-analysis.component.css']
 })
@@ -34,12 +35,12 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   @Output() cancelAnalysis = new EventEmitter<void>();
 
   componentState: ComponentState = 'form';
+  isSubmitting: boolean = false;
   generatedAnalysisData: HUData | null = null;
 
   draggableImages: DraggableFlowImage[] = [];
-  imagesBase64: string[] = [];
-  imageMimeTypes: string[] = [];
   imageUploadError: string | null = null;
+  annotationsByImage: Map<string, ImageAnnotation[]> = new Map();
 
   formError: string | null = null;
   currentFlowTitle: string = '';
@@ -51,12 +52,15 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   draggedImage: DraggableFlowImage | null = null;
   dragOverImageId: string | null = null;
 
-  // Para edición del informe
   isEditingFlowReportDetails: boolean = false;
-  userReanalysisContext: string = '';
+  userReanalysisContext: string = ''; 
   draggedFlowStep: FlowAnalysisStep | null = null;
   dragOverFlowStepId: string | null = null;
 
+  showImageEditor: boolean = false;
+  imageToEditUrl: string | ArrayBuffer | null = null;
+  existingAnnotationsForEditor: ImageAnnotation[] = [];
+  currentImageBeingEditedId: string | null = null;
 
   @ViewChild('flowAnalysisForm') flowAnalysisFormDirective!: NgForm;
   private formStatusSubscription!: Subscription;
@@ -79,62 +83,59 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     }
   }
 
+  get imageBeingEditedObject(): DraggableFlowImage | null {
+    if (!this.currentImageBeingEditedId) return null;
+    return this.draggableImages.find(img => img.id === this.currentImageBeingEditedId) || null;
+  }
+
   resetToForm(): void {
     this.componentState = 'form';
+    this.isSubmitting = false;
     this.generatedAnalysisData = null;
     this.formError = null;
     this.draggableImages = [];
-    this.imagesBase64 = [];
-    this.imageMimeTypes = [];
+    this.annotationsByImage.clear(); 
     this.imageUploadError = null;
-    
     const keptSprint = this.currentFlowSprint || this.initialSprint;
     this.currentFlowTitle = '';
-    
     this.loadingFlowAnalysis = false;
     this.flowAnalysisError = null;
     this.isEditingFlowReportDetails = false;
     this.userReanalysisContext = '';
-
+    this.closeImageEditor(); // <- Llamada a método ahora definido
 
     if (isPlatformBrowser(this.platformId) && this.flowAnalysisImageInputRef?.nativeElement) {
       this.flowAnalysisImageInputRef.nativeElement.value = '';
     }
-    
     if (this.flowAnalysisFormDirective) {
-        this.flowAnalysisFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
+      this.flowAnalysisFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
     }
     this.currentFlowSprint = keptSprint;
-
-     setTimeout(() => {
-        if (this.flowAnalysisFormDirective?.form) {
-            this.flowAnalysisFormDirective.form.markAsPristine();
-            this.flowAnalysisFormDirective.form.markAsUntouched();
-            this.flowAnalysisFormDirective.form.updateValueAndValidity();
-        }
-        this.cdr.detectChanges();
-     },0);
+    setTimeout(() => {
+      if (this.flowAnalysisFormDirective?.form) {
+        this.flowAnalysisFormDirective.form.markAsPristine();
+        this.flowAnalysisFormDirective.form.markAsUntouched();
+        this.flowAnalysisFormDirective.form.updateValueAndValidity();
+      }
+      this.cdr.detectChanges();
+    }, 0);
   }
 
   isFormInvalid(): boolean {
-    if (!this.flowAnalysisFormDirective || !this.flowAnalysisFormDirective.form) {
-      return true;
-    }
-    const commonRequiredFields = !this.currentFlowSprint || !this.currentFlowTitle;
-    return commonRequiredFields || this.draggableImages.length === 0;
+    if (!this.flowAnalysisFormDirective || !this.flowAnalysisFormDirective.form) return true;
+    return !this.currentFlowSprint || !this.currentFlowTitle || this.draggableImages.length === 0;
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
       const nameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
       const parts = nameWithoutExtension.split(/[^0-9]+/g).filter(Boolean).map(p => parseInt(p, 10));
-      return {
-          main: parts.length > 0 && !isNaN(parts[0]) ? parts[0] : Infinity,
-          sub: parts.length > 1 && !isNaN(parts[1]) ? parts[1] : (parts.length > 0 && !isNaN(parts[0]) ? 0 : Infinity)
-      };
+      return { main: parts.length > 0 && !isNaN(parts[0]) ? parts[0] : Infinity, sub: parts.length > 1 && !isNaN(parts[1]) ? parts[1] : (parts.length > 0 && !isNaN(parts[0]) ? 0 : Infinity) };
   }
 
   onFileSelected(event: Event): void {
-    this.imageUploadError = null; this.formError = null; this.draggableImages = [];
+    // ... (lógica como en la respuesta anterior, asegurándose de llamar a this.annotationsByImage.set(newImageId, []))
+    this.imageUploadError = null; this.formError = null; 
+    this.draggableImages.length = 0; this.annotationsByImage.clear();
     const maxImages = 20;
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
@@ -151,36 +152,41 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
             if (validationErrorFound) continue; 
             if (file.size > 4 * 1024 * 1024) { this.imageUploadError = `"${file.name}" excede 4MB.`; validationErrorFound = true; }
             if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) { this.imageUploadError = `Formato inválido: "${file.name}".`; validationErrorFound = true; }
-            if (validationErrorFound) { element.value = ""; this.draggableImages = []; this.updateBase64Arrays(); return; }
+            if (validationErrorFound) { element.value = ""; this.draggableImages = []; this.annotationsByImage.clear(); this.cdr.detectChanges(); return; }
+            
             const readerObservable = new Observable<DraggableFlowImage>(observer => {
                 const reader = new FileReader();
-                reader.onload = () => { observer.next({ file, preview: reader.result!, base64: (reader.result as string).split(',')[1], mimeType: file.type, id: 'S_' + file.name + '_' + Date.now() + Math.random().toString(16).slice(2) }); observer.complete(); };
+                const newImageId = 'FLOW_IMG_' + file.name + '_' + Date.now() + Math.random().toString(16).slice(2);
+                reader.onload = () => { 
+                    observer.next({ file, preview: reader.result!, base64: (reader.result as string).split(',')[1], mimeType: file.type, id: newImageId, annotations: [] }); 
+                    observer.complete(); 
+                };
                 reader.onerror = error => { this.imageUploadError = `Error al leer "${file.name}".`; observer.error(error); };
                 reader.readAsDataURL(file);
             });
             fileProcessingObservables.push(readerObservable);
         }
-        if (validationErrorFound) { this.draggableImages = []; this.updateBase64Arrays(); return; }
+        if (validationErrorFound) { this.draggableImages = []; this.annotationsByImage.clear(); this.cdr.detectChanges(); return; }
         if (fileProcessingObservables.length > 0) {
             forkJoin(fileProcessingObservables).subscribe({
-                next: (processedImages) => { processedImages.forEach(img => this.draggableImages.push(img)); this.updateBase64Arrays(); },
-                error: () => { element.value = ""; this.draggableImages = []; this.updateBase64Arrays(); },
-                complete: () => { this.flowAnalysisFormDirective?.form.updateValueAndValidity(); }
+                next: (processedImages) => { 
+                    processedImages.forEach(img => {
+                        this.draggableImages.push(img);
+                        this.annotationsByImage.set(img.id, []); // Inicializar mapa
+                    });
+                },
+                error: () => { element.value = ""; this.draggableImages = []; this.annotationsByImage.clear(); },
+                complete: () => { this.flowAnalysisFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); }
             });
         }
-    } else { this.draggableImages = []; this.updateBase64Arrays(); this.flowAnalysisFormDirective?.form.updateValueAndValidity(); }
+    } else { this.draggableImages = []; this.annotationsByImage.clear(); this.flowAnalysisFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); }
   }
   
-  private updateBase64Arrays(): void {
-    this.imagesBase64 = this.draggableImages.map(di => di.annotatedBase64 || di.base64);
-    this.imageMimeTypes = this.draggableImages.map(di => di.annotatedPreview ? this.getMimeTypeFromDataUrl(di.annotatedPreview as string) : di.mimeType);
-    this.cdr.detectChanges();
-  }
   private getMimeTypeFromDataUrl(dataUrl: string): string { const match = dataUrl.match(/^data:(.*?);base64,/); return match ? match[1] : 'image/png'; }
   onImageDragStart(event: DragEvent, image: DraggableFlowImage): void { this.draggedImage = image; if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', image.id); (event.target as HTMLElement).style.opacity = '0.4'; } }
   onImageDragOver(event: DragEvent, targetImage?: DraggableFlowImage): void { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; this.dragOverImageId = targetImage ? targetImage.id : null; }
   onImageDragLeave(event: DragEvent): void { this.dragOverImageId = null; }
-  onImageDrop(event: DragEvent, targetImage: DraggableFlowImage): void { event.preventDefault(); this.dragOverImageId = null; const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; if (!this.draggedImage || this.draggedImage.id === targetImage.id) { this.draggedImage = null; return; } const fromI = this.draggableImages.findIndex(i => i.id === this.draggedImage!.id), toI = this.draggableImages.findIndex(i => i.id === targetImage.id); if (fromI!==-1 && toI!==-1) { const item = this.draggableImages.splice(fromI,1)[0]; this.draggableImages.splice(toI,0,item); this.updateBase64Arrays(); } this.draggedImage = null; }
+  onImageDrop(event: DragEvent, targetImage: DraggableFlowImage): void { event.preventDefault(); this.dragOverImageId = null; const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; if (!this.draggedImage || this.draggedImage.id === targetImage.id) { this.draggedImage = null; return; } const fromI = this.draggableImages.findIndex(i => i.id === this.draggedImage!.id), toI = this.draggableImages.findIndex(i => i.id === targetImage.id); if (fromI!==-1 && toI!==-1) { const item = this.draggableImages.splice(fromI,1)[0]; this.draggableImages.splice(toI,0,item); } this.draggedImage = null; this.cdr.detectChanges(); }
   onImageDragEnd(event?: DragEvent): void { if (event?.target instanceof HTMLElement) (event.target as HTMLElement).style.opacity = '1'; else { const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; } this.draggedImage = null; this.dragOverImageId = null; }
   
   generateIdFromTitle(title: string): string {
@@ -191,6 +197,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   }
 
   processFlowAnalysis(): void {
+    // ... (lógica como en la respuesta anterior, incluyendo construcción de annotationsContextString y huData)
     this.formError = null; this.flowAnalysisError = null;
     if (this.isFormInvalid()) {
       this.formError = "Por favor, completa todos los campos requeridos (Título, Sprint) y carga imágenes.";
@@ -200,14 +207,33 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     }
     const finalId = this.generateIdFromTitle(this.currentFlowTitle);
     if (!finalId) { this.formError = "El título es necesario para generar el ID del flujo."; return; }
-    this.updateBase64Arrays();
+
+    let annotationsContextString = '';
+    let allAnnotationsForHU: ImageAnnotation[] = [];
+    this.draggableImages.forEach((imgItem, index) => {
+      const annotations = this.annotationsByImage.get(imgItem.id);
+      if (annotations && annotations.length > 0) {
+        annotationsContextString += `Para Imagen ${index + 1} (${imgItem.file.name}):\n`;
+        annotations.forEach(ann => {
+          annotationsContextString += `  - Anotación #${ann.sequence} ('${ann.description}') en coordenadas normalizadas (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+          allAnnotationsForHU.push({ ...ann, imageFilename: imgItem.file.name, imageIndex: index + 1 });
+        });
+      }
+    });
+    if(annotationsContextString) {
+        annotationsContextString = "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (priorizar para el análisis):\n" + annotationsContextString;
+    }
+
+    const imagesBase64ForService = this.draggableImages.map(img => img.annotatedBase64 || img.base64);
+    const imageMimeTypesForService = this.draggableImages.map(img => img.annotatedPreview ? this.getMimeTypeFromDataUrl(img.annotatedPreview as string) : img.mimeType);
 
     const huData: HUData = {
       originalInput: {
         id: finalId, title: this.currentFlowTitle, sprint: this.currentFlowSprint,
         selectedTechnique: '', generationMode: 'flowAnalysis',
-        imagesBase64: [...this.imagesBase64], imageMimeTypes: [...this.imageMimeTypes],
-        imageFilenames: this.draggableImages.map(img => img.file.name)
+        imagesBase64: imagesBase64ForService, imageMimeTypes: imageMimeTypesForService,
+        imageFilenames: this.draggableImages.map(img => img.file.name),
+        annotationsFlowA: allAnnotationsForHU, // Usamos este campo para almacenar las anotaciones del flujo
       },
       id: finalId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
       generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
@@ -216,38 +242,91 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
       showRegenTechniquePicker: false, regenSelectedTechnique: '', userTestCaseReanalysisContext: '',
       isScenariosDetailsOpen: false, isEditingDetailedTestCases: false,
       flowAnalysisReport: undefined, loadingFlowAnalysis: true, errorFlowAnalysis: null,
-      isFlowAnalysisDetailsOpen: true, isEditingFlowReportDetails: false, userReanalysisContext: '',
+      isFlowAnalysisDetailsOpen: true, isEditingFlowReportDetails: false, 
+      userReanalysisContext: annotationsContextString.trim(), 
       bugComparisonReport: undefined, loadingBugComparison: false, errorBugComparison: null,
       isBugComparisonDetailsOpen: false, userBugComparisonReanalysisContext: ''
     };
     this.loadingFlowAnalysis = true;
-    this.geminiService.generateFlowAnalysisFromImages(huData.originalInput.imagesBase64!, huData.originalInput.imageMimeTypes!).pipe(
-        tap(report => {
+    this.geminiService.generateFlowAnalysisFromImages(
+        huData.originalInput.imagesBase64!, 
+        huData.originalInput.imageMimeTypes!,
+        annotationsContextString.trim() 
+    ).pipe(
+        tap(report => { /* ... (igual que antes) ... */
             huData.flowAnalysisReport = report;
             huData.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
                 huData.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
             }
         }),
-        catchError(error => {
+        catchError(error => { /* ... (igual que antes) ... */
             huData.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al generar análisis de flujo.';
             huData.flowAnalysisReport = [{ Nombre_del_Escenario: "Error Crítico en Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: huData.errorFlowAnalysis!, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "El análisis de flujo no pudo completarse." }];
             return of(huData.flowAnalysisReport);
         }),
-        finalize(() => {
+        finalize(() => { /* ... (igual que antes, actualizando componentState) ... */
             huData.loadingFlowAnalysis = false;
             this.loadingFlowAnalysis = false;
-            this.generatedAnalysisData = huData; // Guardar el HUData generado
+            this.generatedAnalysisData = huData;
             if (huData.errorFlowAnalysis) {
                 this.flowAnalysisError = huData.errorFlowAnalysis;
-                this.componentState = 'form'; // Volver al formulario si hay error
+                this.componentState = 'form';
             } else {
                 this.flowAnalysisError = null;
-                this.componentState = 'displayingReport'; // Mostrar el informe
+                this.componentState = 'displayingReport';
             }
             this.cdr.detectChanges();
         })
     ).subscribe();
+  }
+
+  // **MÉTODOS COMPLETOS**
+  handleCancelFlowForm() {
+    this.resetToForm(); 
+    this.cancelAnalysis.emit(); 
+  }
+
+  openImageEditorFor(imageItem: DraggableFlowImage): void {
+    this.currentImageBeingEditedId = imageItem.id;
+    this.imageToEditUrl = imageItem.annotatedPreview || imageItem.preview;
+    const annotations = this.annotationsByImage.get(imageItem.id) || [];
+    this.existingAnnotationsForEditor = JSON.parse(JSON.stringify(annotations));
+    this.showImageEditor = true;
+    this.cdr.detectChanges();
+  }
+
+  onAnnotationsApplied(output: AnnotationEditorOutput): void {
+    if (this.currentImageBeingEditedId) {
+        const imageToUpdate = this.draggableImages.find(img => img.id === this.currentImageBeingEditedId);
+        if (imageToUpdate) {
+            const imageIndexInDraggableArray = this.draggableImages.indexOf(imageToUpdate);
+            const updatedAnnotations = output.annotations.map(ann => ({
+                ...ann,
+                imageFilename: imageToUpdate.file.name,
+                imageIndex: imageIndexInDraggableArray + 1
+            }));
+            this.annotationsByImage.set(imageToUpdate.id, updatedAnnotations);
+            imageToUpdate.annotations = updatedAnnotations;
+            if (output.annotatedImageDataUrl) {
+                imageToUpdate.annotatedPreview = output.annotatedImageDataUrl;
+                imageToUpdate.annotatedBase64 = output.annotatedImageDataUrl.split(',')[1];
+            } else {
+                imageToUpdate.annotatedPreview = undefined; 
+                imageToUpdate.annotatedBase64 = undefined;
+            }
+            this.cdr.detectChanges();
+        }
+    }
+    this.closeImageEditor();
+  }
+
+  closeImageEditor(): void {
+    this.showImageEditor = false;
+    this.imageToEditUrl = null;
+    this.existingAnnotationsForEditor = [];
+    this.currentImageBeingEditedId = null;
+    this.cdr.detectChanges();
   }
 
   regenerateFlowAnalysis(): void {
@@ -255,13 +334,31 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         alert("Solo se puede re-analizar un flujo con imágenes y un informe previo."); return;
     }
     this.loadingFlowAnalysis = true; this.flowAnalysisError = null;
-    this.generatedAnalysisData.loadingFlowAnalysis = true; this.generatedAnalysisData.errorFlowAnalysis = null;
+    if(this.generatedAnalysisData) { // Chequeo para el compilador
+        this.generatedAnalysisData.loadingFlowAnalysis = true; 
+        this.generatedAnalysisData.errorFlowAnalysis = null;
+    }
     
+    let contextForRefinement = '';
+    // Reconstruir el contexto de anotaciones desde originalInput si está allí
+    const originalAnnotations = this.generatedAnalysisData.originalInput.annotationsFlowA;
+    if (originalAnnotations && originalAnnotations.length > 0) {
+        contextForRefinement += "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (para análisis inicial):\n";
+        originalAnnotations.forEach(ann => {
+             contextForRefinement += `Para Imagen ${ann.imageIndex} (${ann.imageFilename}):\n  - Anotación #${ann.sequence} ('${ann.description}') en coords (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+        });
+    }
+    // Añadir el contexto de texto libre para el refinamiento del informe
+    if (this.userReanalysisContext.trim()) {
+        contextForRefinement += (contextForRefinement ? "\n\n" : "") + "CONTEXTO ADICIONAL TEXTUAL PARA RE-ANÁLISIS DEL INFORME:\n" + this.userReanalysisContext.trim();
+    }
+    this.generatedAnalysisData.userReanalysisContext = contextForRefinement.trim(); // Guardar contexto combinado
+
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
         this.generatedAnalysisData.originalInput.imagesBase64!, 
         this.generatedAnalysisData.originalInput.imageMimeTypes!, 
         this.generatedAnalysisData.flowAnalysisReport[0], 
-        this.userReanalysisContext
+        this.generatedAnalysisData.userReanalysisContext // Usar el contexto guardado/combinado
     ).pipe(
         tap(report => {
             if (this.generatedAnalysisData) {
@@ -331,7 +428,8 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     }
   }
   
-  public getFlowStepDragId(paso: FlowAnalysisStep, hu: HUData): string {
+  getFlowStepDragId(paso: FlowAnalysisStep, hu: HUData | null): string {
+    if (!hu) return `flow-step-${paso.numero_paso}-${Math.random().toString(16).slice(2,8)}`;
     const report = hu.flowAnalysisReport?.[0];
     if (report && report.Pasos_Analizados) {
         const stepIndex = report.Pasos_Analizados.indexOf(paso);
@@ -342,8 +440,8 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     return `flow-step-${paso.numero_paso}-${Math.random().toString(16).slice(2,8)}`;
   }
 
-  public onFlowStepDragStart(event: DragEvent, paso: FlowAnalysisStep, hu: HUData): void {
-    if (this.isEditingFlowReportDetails) { event.preventDefault(); return; } // Check against local edit state
+  onFlowStepDragStart(event: DragEvent, paso: FlowAnalysisStep, hu: HUData | null): void {
+    if (!hu || this.isEditingFlowReportDetails) { event.preventDefault(); return; } 
     this.draggedFlowStep = paso;
     if (event.dataTransfer && hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
       const stepIndex = hu.flowAnalysisReport[0].Pasos_Analizados.indexOf(paso);
@@ -355,82 +453,89 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     }
   }
 
-  public onFlowStepDragOver(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData): void {
+  onFlowStepDragOver(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData | null): void {
     event.preventDefault();
-     if (this.draggedFlowStep && event.dataTransfer && targetPaso) {
+     if (this.draggedFlowStep && event.dataTransfer && targetPaso && hu) {
         event.dataTransfer.dropEffect = 'move';
         this.dragOverFlowStepId = this.getFlowStepDragId(targetPaso, hu);
-     } else if (!targetPaso) { 
-        this.dragOverFlowStepId = null; 
+     } else if (!targetPaso && event.dataTransfer) { // Permite soltar al final de la lista si targetPaso es undefined
+        event.dataTransfer.dropEffect = 'move';
+        this.dragOverFlowStepId = `dropzone-end-flow-${hu?.id || 'temp'}`; // ID especial o null
      }
   }
 
-  public onFlowStepDragLeave(event: DragEvent): void {
+  onFlowStepDragLeave(event: DragEvent): void {
     this.dragOverFlowStepId = null;
   }
 
-  public onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep, hu: HUData): void {
+  onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData | null): void { // targetPaso puede ser undefined
     event.preventDefault(); this.dragOverFlowStepId = null;
     document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
 
-    if (!this.draggedFlowStep || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados || hu.flowAnalysisReport[0].Pasos_Analizados.length === 0) {
+    if (!this.draggedFlowStep || !hu || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
         this.draggedFlowStep = null; return;
     }
-    if(this.draggedFlowStep === targetPaso) { this.draggedFlowStep = null; return; }
-
+    
     const pasosAnalizados = hu.flowAnalysisReport[0].Pasos_Analizados;
     const fromIndex = pasosAnalizados.indexOf(this.draggedFlowStep);
-    const toIndex = pasosAnalizados.indexOf(targetPaso);
+    let toIndex = -1;
+
+    if (targetPaso) { // Si se suelta sobre un paso existente
+        if (this.draggedFlowStep === targetPaso) { this.draggedFlowStep = null; return; }
+        toIndex = pasosAnalizados.indexOf(targetPaso);
+    } else { // Si se suelta al final de la lista (targetPaso es undefined)
+        toIndex = pasosAnalizados.length; // Para insertar al final
+    }
+
 
     if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
       const itemToMove = pasosAnalizados.splice(fromIndex, 1)[0];
-      pasosAnalizados.splice(toIndex, 0, itemToMove);
+      if (targetPaso || toIndex < pasosAnalizados.length) { // Si se suelta sobre un paso o antes del final
+        pasosAnalizados.splice(toIndex, 0, itemToMove);
+      } else { // Si se suelta al final (toIndex es pasosAnalizados.length)
+        pasosAnalizados.push(itemToMove);
+      }
       pasosAnalizados.forEach((paso, index) => { paso.numero_paso = index + 1; });
       this.cdr.detectChanges(); 
     }
     this.draggedFlowStep = null;
   }
 
-  public onFlowStepDragEnd(event: DragEvent): void {
+  onFlowStepDragEnd(event: DragEvent): void {
     document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
     this.draggedFlowStep = null; this.dragOverFlowStepId = null;
   }
 
-  confirmAndAddToPlan(): void {
-    this.componentState = 'submittingToPlan';
-    if (this.generatedAnalysisData) {
-      this.analysisGenerated.emit({ ...this.generatedAnalysisData }); // Emitir copia
-    }
-    // El resetActiveGeneratorsAndGoToSelection lo hará el padre
+  isFlowAnalysisReportInErrorState(r?: FlowAnalysisReportItem): boolean {
+    if (!r) return true; // Si no hay reporte, considerarlo estado de error para lógica de UI
+    return ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(r.Nombre_del_Escenario);
   }
 
-  handleCancelFlowForm() {
-    this.resetToForm(); // Volver al formulario dentro de este componente
-    this.cancelAnalysis.emit(); // Notificar al padre para que vuelva a la selección inicial
-  }
-
-  // --- MÉTODOS AUXILIARES para exportación y visualización del informe ---
-  isFlowAnalysisReportInErrorState(report?: FlowAnalysisReportItem): boolean {
-    return !report || ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(report.Nombre_del_Escenario);
-  }
-
-  getFlowStepImage(hu: HUData, paso: FlowAnalysisStep): string | null {
+  getFlowStepImage(hu: HUData | null, paso: FlowAnalysisStep): string | null {
+    if (!hu || !hu.originalInput.imagesBase64 || !hu.originalInput.imageMimeTypes || !hu.originalInput.imageFilenames) return null;
+    
     const imageRefToUse = paso.imagen_referencia_salida || paso.imagen_referencia_entrada;
     if (!imageRefToUse) return null;
-    let imagesToUse: string[] | undefined = hu.originalInput.imagesBase64;
-    let mimeTypesToUse: string[] | undefined = hu.originalInput.imageMimeTypes;
-    let filenamesToUse: string[] | undefined = hu.originalInput.imageFilenames;
+    
+    let imagesToUse: string[] = hu.originalInput.imagesBase64;
+    let mimeTypesToUse: string[] = hu.originalInput.imageMimeTypes;
+    let filenamesToUse: string[] = hu.originalInput.imageFilenames;
 
-    if (!imagesToUse?.length || !mimeTypesToUse?.length || !filenamesToUse?.length) return null;
     const filenameInRefMatch = imageRefToUse.match(/\(([^)]+)\)$/);
     let imageIndex = -1;
-    if (filenameInRefMatch?.[1]) {
-        imageIndex = filenamesToUse.findIndex(fn => fn === filenameInRefMatch[1]);
+
+    if (filenameInRefMatch && filenameInRefMatch[1]) {
+        const targetFilename = filenameInRefMatch[1];
+        imageIndex = filenamesToUse.findIndex(fn => fn === targetFilename);
     }
+    
     if (imageIndex === -1) {
-        const numberMatch = imageRefToUse.match(/Imagen (\d+)/i);
-        if (numberMatch?.[1]) imageIndex = parseInt(numberMatch[1], 10) - 1;
+        const numberMatch = imageRefToUse.match(/Imagen (\d+)/i); // Asume "Imagen X"
+        if (numberMatch && numberMatch[1]) {
+          imageIndex = parseInt(numberMatch[1], 10) - 1;
+        }
     }
+    
     if (imageIndex >= 0 && imageIndex < imagesToUse.length && imageIndex < mimeTypesToUse.length) {
       return `data:${mimeTypesToUse[imageIndex]};base64,${imagesToUse[imageIndex]}`;
     }
@@ -444,23 +549,25 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     if (status.includes('fallido') || status.includes('fallida') || status.includes('error')) return 'status-failure';
     return '';
   }
-
-  exportFlowAnalysisReportToCsv(hu: HUData): void {
-    if (!hu || hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados?.length || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+  
+  exportFlowAnalysisReportToCsv(): void {
+    if (!this.generatedAnalysisData || !this.generatedAnalysisData.flowAnalysisReport?.[0]?.Pasos_Analizados?.length || this.isFlowAnalysisReportInErrorState(this.generatedAnalysisData.flowAnalysisReport[0])) {
       alert('No hay datos de análisis de flujo válidos para exportar.'); return;
     }
-    const report = hu.flowAnalysisReport[0];
+    const hu = this.generatedAnalysisData;
+    const report = hu.flowAnalysisReport![0];
     const csvHeader = ["Nombre del Escenario", "Número de Paso", "Descripción de la Acción Observada", "Dato de Entrada (Paso)", "Resultado Esperado (Paso)", "Resultado Obtenido (Paso) y Estado", "Resultado Esperado General del Flujo", "Conclusión General del Flujo"];
     const csvRows = report.Pasos_Analizados.map(paso => [this.escapeCsvField(report.Nombre_del_Escenario), this.escapeCsvField(paso.numero_paso), this.escapeCsvField(paso.descripcion_accion_observada), this.escapeCsvField(paso.dato_de_entrada_paso || 'N/A'), this.escapeCsvField(paso.resultado_esperado_paso), this.escapeCsvField(paso.resultado_obtenido_paso_y_estado), this.escapeCsvField(report.Resultado_Esperado_General_Flujo), this.escapeCsvField(report.Conclusion_General_Flujo)]);
     const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
     saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `AnalisisFlujo_${this.escapeFilename(hu.title || 'Reporte')}_${new Date().toISOString().split('T')[0]}.csv`);
   }
 
-  exportFlowAnalysisReportToHtmlLocalized(hu: HUData, language: 'es' | 'en'): void {
-    if (!hu || hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0] || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
+  exportFlowAnalysisReportToHtmlLocalized(language: 'es' | 'en'): void {
+    if (!this.generatedAnalysisData || !this.generatedAnalysisData.flowAnalysisReport?.[0] || this.isFlowAnalysisReportInErrorState(this.generatedAnalysisData.flowAnalysisReport[0])) {
         alert(language === 'en' ? 'No valid flow analysis report to export.' : 'No hay informe de análisis de flujo válido para exportar.'); return;
     }
-    const report = hu.flowAnalysisReport[0];
+    const hu = this.generatedAnalysisData;
+    const report = hu.flowAnalysisReport![0];
     const date = new Date().toISOString().split('T')[0];
     const title = language === 'en' ? `Flow Analysis Report: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}` : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
     let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#333}.report-container{max-width:900px;margin:auto}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2{font-size:1.4em;color:#4a6d7c;margin-top:20px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0}table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:.9em}th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{background-color:#f2f2f2;font-weight:600}img.flow-step-image{max-width:150px;max-height:100px;border:1px solid #ccc;border-radius:4px;display:block;margin:5px 0;background-color:#fff;object-fit:contain}tr.status-success td:first-child{border-left:5px solid #28a745!important}tr.status-failure td:first-child{border-left:5px solid #dc3545!important}tr.status-deviation td:first-child{border-left:5px solid #ffc107!important}.conclusion-section p{margin-bottom:8px} .conclusion-section strong{color:#555}</style></head><body><div class="report-container"><h1>${title}</h1><p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${date}</p>`;
@@ -480,4 +587,23 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   private escapeCsvField = (f: string | number | undefined | null): string => { if (f === null || f === undefined) return ''; const s = String(f); return (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) ? `"${s.replace(/"/g, '""')}"` : s; };
   private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
   private escapeHtmlForExport = (u: string | undefined | null): string => { if (!u) return ''; return u.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); };
+
+  confirmAndAddToPlan(): void {
+    if (this.generatedAnalysisData) {
+      this.isSubmitting = true; 
+      let finalContextForHuData = '';
+      const originalAnnotations = this.generatedAnalysisData.originalInput.annotationsFlowA; 
+      if(originalAnnotations && originalAnnotations.length > 0){
+        finalContextForHuData += "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (para análisis inicial):\n";
+        originalAnnotations.forEach(ann => {
+            finalContextForHuData += `Para Imagen ${ann.imageIndex} (${ann.imageFilename}):\n  - Anotación #${ann.sequence} ('${ann.description}') en coordenadas normalizadas (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+        });
+      }
+      if (this.userReanalysisContext.trim()) { 
+        finalContextForHuData += (finalContextForHuData ? "\n\n" : "") + "CONTEXTO ADICIONAL TEXTUAL PARA RE-ANÁLISIS DEL INFORME:\n" + this.userReanalysisContext.trim();
+      }
+      this.generatedAnalysisData.userReanalysisContext = finalContextForHuData.trim();
+      this.analysisGenerated.emit({ ...this.generatedAnalysisData });
+    }
+  }
 }

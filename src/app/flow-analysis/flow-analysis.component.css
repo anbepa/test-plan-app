@@ -434,4 +434,14 @@
         font-size: 0.85em; padding: 6px; 
     }
     .flow-analysis-steps-table textarea.form-control.table-input { min-height: 30px; }
+
+
+    .image-preview-item .edit-annotation-btn {
+        margin-top: 5px;
+        padding: 4px 8px; /* Más pequeño */
+        font-size: 0.75em; /* Más pequeño */
+        width: auto; /* Ajustar al contenido */
+        min-width: 60px;
+        line-height: 1.2;
+    }
 }
