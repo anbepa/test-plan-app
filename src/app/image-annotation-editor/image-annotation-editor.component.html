@@ -1,28 +1,28 @@
 <div class="editor-overlay">
-    <div class="editor-container">
-      <h3>Editor de Anotaciones de Imagen</h3>
-      <div class="canvas-area">
-        <canvas #canvasElement class="annotation-canvas"></canvas>
-        <img *ngIf="imageUrl" [src]="imageUrl" class="base-image">
-        <p *ngIf="!imageUrl">Cargando imagen o no se proporcionó URL.</p>
+  <div class="editor-container">
+    <h3>Editor de Anotaciones de Imagen</h3>
+    <div class="canvas-area">
+      <canvas #canvasElement class="annotation-canvas"></canvas>
+      <img *ngIf="imageUrl" [src]="imageUrl" class="base-image" #baseImageElement>
+      <p *ngIf="!imageUrl">Cargando imagen o no se proporcionó URL.</p>
+    </div>
+
+    <div class="annotations-list">
+      <h4>Anotaciones (para: {{ currentImageFilename || 'Imagen actual' }}):</h4>
+      <div *ngIf="currentAnnotations.length === 0" class="no-annotations-message">
+        No hay anotaciones. Dibuja un rectángulo en la imagen o haz clic en "Añadir Anotación".
       </div>
-  
-      <div class="annotations-list">
-        <h4>Anotaciones:</h4>
-        <div *ngIf="currentAnnotations.length === 0" class="no-annotations-message">
-          No hay anotaciones. Dibuja un rectángulo en la imagen o haz clic en "Añadir Anotación".
-        </div>
-        <div *ngFor="let ann of currentAnnotations; let i = index" class="annotation-item">
-          <span>#{{ ann.sequence }}:</span>
-          <input type="text" [(ngModel)]="ann.description" placeholder="Descripción de la anotación" (input)="drawCanvas()">
-          <button (click)="removeAnnotation(i)" class="button-small button-cancel">Eliminar</button>
-        </div>
-        <button (click)="addAnnotation()" class="button-secondary button-small">Añadir Anotación Manual</button>
+      <div *ngFor="let ann of currentAnnotations; let i = index" class="annotation-item">
+        <span>#{{ ann.sequence }}:</span>
+        <input type="text" [(ngModel)]="ann.description" placeholder="Descripción de la anotación" (input)="drawCanvas()">
+        <button (click)="removeAnnotation(i)" class="button-small button-cancel">Eliminar</button>
       </div>
-  
-      <div class="editor-actions">
-        <button (click)="saveAnnotations()" class="button-primary">Guardar y Cerrar</button>
-        <button (click)="closeEditor()" class="button-secondary">Cancelar</button>
-      </div>
+      <button (click)="addAnnotation()" class="button-secondary button-small">Añadir Anotación Manual</button>
+    </div>
+
+    <div class="editor-actions">
+      <button (click)="saveAnnotationsAndClose()" class="button-primary">Guardar y Cerrar</button>
+      <button (click)="cancelAndClose()" class="button-secondary">Cancelar</button>
     </div>
   </div>
+</div>

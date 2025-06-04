@@ -1,8 +1,15 @@
+// anbepa/test-plan-app/test-plan-app-114d3b7ac03726fd5931cc480f86ec71001e021a/src/app/image-annotation-editor/image-annotation-editor.component.ts
 // src/app/image-annotation-editor/image-annotation-editor.component.ts
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ImageAnnotation } from '../models/hu-data.model';
+
+export interface AnnotationEditorOutput {
+  annotations: ImageAnnotation[];
+  annotatedImageDataUrl: string | null; 
+  originalImageFilename: string;
+}
 
 @Component({
   selector: 'app-image-annotation-editor',
@@ -14,10 +21,15 @@ import { ImageAnnotation } from '../models/hu-data.model';
 export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges {
   @Input() imageUrl: string | ArrayBuffer | null = null;
   @Input() existingAnnotations: ImageAnnotation[] = [];
-  @Output() annotationsChanged = new EventEmitter<ImageAnnotation[]>();
+  @Input() currentImageFilename: string = 'imagen_desconocida.png';
+  @Input() imageMimeType: string | undefined = 'image/png'; // Added input for MIME type
+  
+  @Output() annotationsApplied = new EventEmitter<AnnotationEditorOutput>();
   @Output() editorClosed = new EventEmitter<void>();
 
   @ViewChild('canvasElement') canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('baseImageElement') baseImageRef!: ElementRef<HTMLImageElement>;
+  
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private image!: HTMLImageElement;
@@ -25,49 +37,72 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
   currentAnnotations: ImageAnnotation[] = [];
   selectedAnnotationIndex: number | null = null;
   isDrawing: boolean = false;
-  startX!: number;
-  startY!: number;
+  startX!: number; // Normalized
+  startY!: number; // Normalized
 
   constructor() {}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['existingAnnotations'] && changes['existingAnnotations'].currentValue) {
-      // Deep copy to ensure we work on a mutable array
-      this.currentAnnotations = JSON.parse(JSON.stringify(changes['existingAnnotations'].currentValue));
+    if (changes['existingAnnotations']) {
+      this.currentAnnotations = JSON.parse(JSON.stringify(changes['existingAnnotations'].currentValue || []));
+      this.currentAnnotations.forEach(ann => {
+        ann.imageFilename = this.currentImageFilename; 
+      });
       this.drawCanvas();
     }
     if (changes['imageUrl'] && changes['imageUrl'].currentValue) {
       this.loadImage();
     }
+     if (changes['currentImageFilename'] && this.currentAnnotations) {
+        this.currentAnnotations.forEach(ann => ann.imageFilename = this.currentImageFilename);
+    }
   }
 
   ngAfterViewInit(): void {
-    this.canvas = this.canvasRef.nativeElement;
-    this.ctx = this.canvas.getContext('2d')!;
-    this.loadImage();
+    if (this.canvasRef) {
+        this.canvas = this.canvasRef.nativeElement;
+        const context = this.canvas.getContext('2d');
+        if (context) {
+            this.ctx = context;
+            this.loadImage();
 
-    this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
-    this.canvas.addEventListener('mouseout', this.onMouseUp.bind(this));
+            this.canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+            this.canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+            this.canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
+            this.canvas.addEventListener('mouseout', this.onMouseUp.bind(this));
+        } else {
+            console.error('Failed to get 2D context from canvas');
+        }
+    } else {
+        console.error('CanvasRef is not available in AfterViewInit');
+    }
   }
 
   loadImage(): void {
-    if (!this.imageUrl) {
+    if (!this.imageUrl || !this.ctx) {
       return;
     }
     this.image = new Image();
     this.image.onload = () => {
-      this.canvas.width = this.image.width;
-      this.canvas.height = this.image.height;
+      if (this.baseImageRef && this.baseImageRef.nativeElement) {
+        this.canvas.width = this.baseImageRef.nativeElement.naturalWidth || this.baseImageRef.nativeElement.width;
+        this.canvas.height = this.baseImageRef.nativeElement.naturalHeight || this.baseImageRef.nativeElement.height;
+      } else {
+        this.canvas.width = this.image.naturalWidth;
+        this.canvas.height = this.image.naturalHeight;
+      }
       this.drawCanvas();
+    };
+    this.image.onerror = (error) => {
+      console.error('Error loading image for annotation editor:', error);
     };
     this.image.src = this.imageUrl as string;
   }
 
   drawCanvas(): void {
-    if (!this.ctx || !this.image) return;
-
+    if (!this.ctx || !this.image || !this.image.complete || this.image.naturalHeight === 0) {
+        return;
+    }
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(this.image, 0, 0, this.canvas.width, this.canvas.height);
 
@@ -77,7 +112,9 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
   }
 
   drawRectangle(annotation: ImageAnnotation, isSelected: boolean = false): void {
+    if (!this.ctx || !this.canvas) return;
     const { x, y, width, height, description, sequence } = annotation;
+    
     const rectX = x * this.canvas.width;
     const rectY = y * this.canvas.height;
     const rectWidth = width * this.canvas.width;
@@ -87,112 +124,138 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
 
+    this.ctx.fillStyle = 'white'; 
+    const text = `${sequence}: ${description ? description.substring(0, 20) + (description.length > 20 ? '...' : '') : 'Sin desc.'}`;
+    const textMetrics = this.ctx.measureText(text);
+    const textBgPadding = 2;
+    this.ctx.fillRect(rectX, rectY - 16 - textBgPadding, textMetrics.width + (2 * textBgPadding), 16 + (2 * textBgPadding));
+    
     this.ctx.fillStyle = isSelected ? 'blue' : 'red';
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText(`${sequence}: ${description.substring(0, 20)}...`, rectX, rectY - 5);
+    this.ctx.font = '12px Arial';
+    this.ctx.fillText(text, rectX + textBgPadding, rectY - textBgPadding - 2);
   }
 
   onMouseDown(event: MouseEvent): void {
+    if(!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
-    this.startX = (event.clientX - rect.left) / this.canvas.width;
-    this.startY = (event.clientY - rect.top) / this.canvas.height;
-    this.isDrawing = true;
+    const clickX = (event.clientX - rect.left);
+    const clickY = (event.clientY - rect.top);
+
     this.selectedAnnotationIndex = null;
+    for (let i = this.currentAnnotations.length - 1; i >= 0; i--) { 
+      const ann = this.currentAnnotations[i];
+      const annCanvasX = ann.x * this.canvas.width;
+      const annCanvasY = ann.y * this.canvas.height;
+      const annCanvasWidth = ann.width * this.canvas.width;
+      const annCanvasHeight = ann.height * this.canvas.height;
 
-    // Check if clicking on an existing annotation
-    this.currentAnnotations.forEach((ann, index) => {
-      const annX = ann.x * this.canvas.width;
-      const annY = ann.y * this.canvas.height;
-      const annWidth = ann.width * this.canvas.width;
-      const annHeight = ann.height * this.canvas.height;
-
-      if (event.offsetX >= annX && event.offsetX <= annX + annWidth &&
-          event.offsetY >= annY && event.offsetY <= annY + annHeight) {
-        this.selectedAnnotationIndex = index;
-        this.isDrawing = false; // Not drawing, but moving existing
+      if (clickX >= annCanvasX && clickX <= annCanvasX + annCanvasWidth &&
+          clickY >= annCanvasY && clickY <= annCanvasY + annCanvasHeight) {
+        this.selectedAnnotationIndex = i;
+        this.isDrawing = false; 
+        this.startX = clickX / this.canvas.width; 
+        this.startY = clickY / this.canvas.height;
+        this.drawCanvas();
+        return;
       }
-    });
-    this.drawCanvas();
+    }
+    
+    this.isDrawing = true;
+    this.startX = clickX / this.canvas.width;
+    this.startY = clickY / this.canvas.height;
+    this.drawCanvas(); 
   }
 
   onMouseMove(event: MouseEvent): void {
-    if (!this.isDrawing && this.selectedAnnotationIndex === null) return;
+    if (!this.isDrawing) return; 
+    if (!this.canvas) return;
 
     const rect = this.canvas.getBoundingClientRect();
     const currentX = (event.clientX - rect.left) / this.canvas.width;
     const currentY = (event.clientY - rect.top) / this.canvas.height;
 
-    if (this.isDrawing) {
-      // Logic for drawing new rectangle
-      this.drawCanvas(); // Redraw to clear previous temporary rect
-      this.ctx.strokeStyle = 'red';
-      this.ctx.lineWidth = 2;
-      this.ctx.strokeRect(this.startX * this.canvas.width, this.startY * this.canvas.height,
-                          (currentX - this.startX) * this.canvas.width, (currentY - this.startY) * this.canvas.height);
-    } else if (this.selectedAnnotationIndex !== null) {
-      // Logic for moving existing rectangle (simplified: move by delta)
-      const dx = currentX - this.startX;
-      const dy = currentY - this.startY;
-      const ann = this.currentAnnotations[this.selectedAnnotationIndex];
-      ann.x += dx;
-      ann.y += dy;
-      this.startX = currentX;
-      this.startY = currentY;
-      this.drawCanvas();
-    }
+    this.drawCanvas(); 
+
+    const tempWidth = (currentX - this.startX) * this.canvas.width;
+    const tempHeight = (currentY - this.startY) * this.canvas.height;
+    this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(this.startX * this.canvas.width, this.startY * this.canvas.height, tempWidth, tempHeight);
   }
 
   onMouseUp(event: MouseEvent): void {
-    if (this.isDrawing) {
-      const rect = this.canvas.getBoundingClientRect();
-      const endX = (event.clientX - rect.left) / this.canvas.width;
-      const endY = (event.clientY - rect.top) / this.canvas.height;
-
-      const newWidth = Math.abs(endX - this.startX);
-      const newHeight = Math.abs(endY - this.startY);
-      const newX = Math.min(this.startX, endX);
-      const newY = Math.min(this.startY, endY);
-
-      if (newWidth > 0.01 && newHeight > 0.01) { // Avoid tiny clicks
-        this.currentAnnotations.push({
-          sequence: this.currentAnnotations.length + 1,
-          description: '', // User will fill this
-          x: newX,
-          y: newY,
-          width: newWidth,
-          height: newHeight
-        });
-      }
+    if (!this.isDrawing) {
+      this.isDrawing = false; 
+      return;
     }
     this.isDrawing = false;
-    this.selectedAnnotationIndex = null; // Deselect after move/draw
+    if (!this.canvas) return;
+
+    const rect = this.canvas.getBoundingClientRect();
+    const endX = (event.clientX - rect.left) / this.canvas.width;
+    const endY = (event.clientY - rect.top) / this.canvas.height;
+
+    const newWidth = Math.abs(endX - this.startX);
+    const newHeight = Math.abs(endY - this.startY);
+
+    if (newWidth > 0.01 && newHeight > 0.01) { 
+      const newX = Math.min(this.startX, endX);
+      const newY = Math.min(this.startY, endY);
+      this.currentAnnotations.push({
+        sequence: this.currentAnnotations.length + 1,
+        description: `Anotación ${this.currentAnnotations.length + 1}`,
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight,
+        imageFilename: this.currentImageFilename
+      });
+    }
     this.drawCanvas();
   }
 
   addAnnotation(): void {
     this.currentAnnotations.push({
       sequence: this.currentAnnotations.length + 1,
-      description: '',
-      x: 0.1, // Default position
-      y: 0.1,
-      width: 0.2,
-      height: 0.1
+      description: `Anotación ${this.currentAnnotations.length + 1}`,
+      x: 0.1, y: 0.1, width: 0.2, height: 0.1, 
+      imageFilename: this.currentImageFilename
     });
     this.drawCanvas();
   }
 
   removeAnnotation(index: number): void {
     this.currentAnnotations.splice(index, 1);
-    this.currentAnnotations.forEach((ann, i) => ann.sequence = i + 1); // Re-sequence
+    this.currentAnnotations.forEach((ann, i) => ann.sequence = i + 1);
+    this.selectedAnnotationIndex = null;
     this.drawCanvas();
   }
 
-  saveAnnotations(): void {
-    this.annotationsChanged.emit(this.currentAnnotations);
+  getAnnotatedImageDataUrl(): string | null {
+    if (!this.canvas || !this.image || !this.image.complete || this.image.naturalHeight === 0) {
+      return null;
+    }
+    this.drawCanvas(); // Ensure it's current
+    try {
+      // Use the provided mimeType or fallback to 'image/png'
+      return this.canvas.toDataURL(this.imageMimeType || 'image/png');
+    } catch (e) {
+      console.error("Error generating data URL from canvas:", e);
+      return null;
+    }
+  }
+
+  saveAnnotationsAndClose(): void {
+    const annotatedImageDataUrl = this.getAnnotatedImageDataUrl();
+    this.annotationsApplied.emit({
+      annotations: JSON.parse(JSON.stringify(this.currentAnnotations)), 
+      annotatedImageDataUrl: annotatedImageDataUrl,
+      originalImageFilename: this.currentImageFilename
+    });
     this.editorClosed.emit();
   }
 
-  closeEditor(): void {
+  cancelAndClose(): void {
     this.editorClosed.emit();
   }
 }
