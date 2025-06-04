@@ -1,0 +1,152 @@
+<div *ngIf="componentState === 'form'" class="form-section" aria-labelledby="flow-analysis-section-title-form">
+    <div class="form-header-actions">
+      <h2 id="flow-analysis-section-title-form">Datos de Entrada para Análisis de Flujo por Imágenes</h2>
+      <button type="button" (click)="handleCancelFlowForm()" class="button-secondary button-small" [disabled]="loadingFlowAnalysis">Cancelar</button>
+    </div>
+  
+    <form (ngSubmit)="processFlowAnalysis()" #flowAnalysisForm="ngForm">
+      <div class="form-grid">
+        <div class="form-group">
+            <label for="flowCurrentId">ID (Generado desde Título):</label>
+            <input id="flowCurrentId" type="text" name="flowCurrentId" [value]="generateIdFromTitle(currentFlowTitle)" readonly placeholder="Se genera desde el título" class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="flowCurrentTitle">Título del Análisis de Flujo:<span class="required-indicator">*</span></label>
+            <input id="flowCurrentTitle" type="text" name="currentFlowTitle" [(ngModel)]="currentFlowTitle" required placeholder="Título descriptivo" class="form-control">
+            <div *ngIf="flowAnalysisForm.controls['currentFlowTitle']?.invalid && (flowAnalysisForm.controls['currentFlowTitle']?.dirty || flowAnalysisForm.controls['currentFlowTitle']?.touched || flowAnalysisForm.submitted)" class="validation-error" role="alert">
+                El título es requerido.
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="flowCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
+            <input id="flowCurrentSprint" type="text" name="currentFlowSprint" [(ngModel)]="currentFlowSprint" required placeholder="Ej: Sprint 1" class="form-control">
+            <div *ngIf="flowAnalysisForm.controls['currentFlowSprint']?.invalid && (flowAnalysisForm.controls['currentFlowSprint']?.dirty || flowAnalysisForm.controls['currentFlowSprint']?.touched || flowAnalysisForm.submitted)" class="validation-error" role="alert">
+                Sprint es requerido.
+            </div>
+        </div>
+        <div class="form-group full-width">
+          <label for="flowAnalysisImagesInput">Cargar Imágenes del Flujo (JPG, PNG - Máx. 4MB c/u, Máx. 20):<span class="required-indicator">*</span></label>
+          <input type="file" id="flowAnalysisImagesInput" name="flowAnalysisImages" (change)="onFileSelected($event)" accept="image/jpeg, image/png"
+                 multiple #flowAnalysisImageInput>
+          <div *ngIf="imageUploadError" class="validation-error" role="alert">{{ imageUploadError }}</div>
+          <div *ngIf="flowAnalysisForm.submitted && draggableImages.length === 0" class="validation-error" role="alert">
+            Debes seleccionar al menos una imagen.
+          </div>
+          
+          <div *ngIf="draggableImages.length > 0" class="image-preview-container multiple-previews"
+               (dragover)="onImageDragOver($event)" (dragleave)="onImageDragLeave($event)">
+            <p>Imágenes del Flujo ({{ draggableImages.length }}). Arrastra para reordenar:</p>
+            <div *ngFor="let imgItem of draggableImages; let i = index"
+                 class="image-preview-item" [class.drag-over-element]="dragOverImageId === imgItem.id"
+                 draggable="true" (dragstart)="onImageDragStart($event, imgItem)"
+                 (drop)="onImageDrop($event, imgItem)" (dragend)="onImageDragEnd($event)"
+                 (dragover)="onImageDragOver($event, imgItem)">
+              <span class="image-order-badge">{{i + 1}}</span>
+              <img [src]="imgItem.preview" [alt]="'Previsualización ' + imgItem.file.name" class="image-preview">
+              <span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="button-primary" [disabled]="isFormInvalid() || loadingFlowAnalysis">
+          <span *ngIf="loadingFlowAnalysis" class="spinner"></span>
+          {{ loadingFlowAnalysis ? 'Generando Análisis...' : 'Generar Informe de Análisis de Flujo' }}
+        </button>
+      </div>
+      <div *ngIf="formError || flowAnalysisError" class="error-message" role="alert">
+        <p *ngIf="formError">{{ formError }}</p>
+        <p *ngIf="flowAnalysisError && !formError">Error en Análisis: {{ flowAnalysisError }}</p>
+      </div>
+    </form>
+  </div>
+  
+  <div *ngIf="componentState === 'displayingReport' && generatedAnalysisData" class="results-section flow-analysis-results" aria-labelledby="flow-analysis-report-title">
+    <div class="form-header-actions">
+        <h2 id="flow-analysis-report-title">Informe de Análisis de Flujo: {{ generatedAnalysisData.title }}</h2>
+        <div>
+            <button type="button" (click)="resetToForm()" class="button-secondary button-small" [disabled]="loadingFlowAnalysis">Generar Otro Análisis</button>
+            <button type="button" (click)="confirmAndAddToPlan()" class="button-primary button-small" [disabled]="loadingFlowAnalysis">Confirmar y Añadir al Plan</button>
+        </div>
+    </div>
+  
+    <div *ngIf="loadingFlowAnalysis" class="loading-message"><span class="spinner"></span> Cargando...</div>
+    <div *ngIf="flowAnalysisError && !loadingFlowAnalysis" class="error-message" role="alert">
+        <p><strong>Error en el Análisis:</strong> {{ flowAnalysisError }}</p>
+        <ng-container *ngIf="generatedAnalysisData.flowAnalysisReport && generatedAnalysisData.flowAnalysisReport.length > 0 && isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport[0]) && generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados && generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados.length > 0 && generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados[0].elemento_clave_y_ubicacion_aproximada?.includes('Respuesta')">
+            <p><small>Respuesta IA: {{ generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados[0].elemento_clave_y_ubicacion_aproximada }}</small></p>
+        </ng-container>
+    </div>
+  
+    <div *ngIf="!loadingFlowAnalysis && !flowAnalysisError && generatedAnalysisData.flowAnalysisReport && generatedAnalysisData.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport[0])">
+        <div class="flow-analysis-report-details">
+            <h4>Nombre del Escenario:</h4>
+            <ng-container *ngIf="!isEditingFlowReportDetails; else editNombreEscenarioFA">
+                <pre class="generated-text report-field">{{ generatedAnalysisData.flowAnalysisReport[0].Nombre_del_Escenario }}</pre>
+            </ng-container>
+            <ng-template #editNombreEscenarioFA>
+                <input type="text" class="form-control full-width-input" [(ngModel)]="generatedAnalysisData.flowAnalysisReport[0].Nombre_del_Escenario" placeholder="Nombre del Escenario">
+            </ng-template>
+  
+            <h4>Pasos Analizados <span *ngIf="!isEditingFlowReportDetails">(Arrastra las filas para reordenar)</span>:</h4>
+            <div *ngIf="generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados && generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados.length > 0; else noStepsAnalyzedFA"
+                 class="detailed-test-cases-table-container"
+                 (dragover)="onFlowStepDragOver($event, generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados?.[0], generatedAnalysisData)"
+                 (dragleave)="onFlowStepDragLeave($event)">
+                <table class="detailed-test-cases-table flow-analysis-steps-table">
+                    <thead><tr><th>Paso N°</th><th>Acción/Observación</th><th>Imagen Ref. (IA)</th><th>Elemento Clave y Ubicación</th><th>Dato Entrada</th><th>Res. Esperado</th><th>Res. Obtenido y Estado</th><th>Imagen Paso</th><th *ngIf="isEditingFlowReportDetails">Acción</th></tr></thead>
+                    <tbody>
+                        <tr *ngFor="let paso of generatedAnalysisData.flowAnalysisReport[0].Pasos_Analizados; let i = index"
+                            [attr.draggable]="!isEditingFlowReportDetails"
+                            (dragstart)="onFlowStepDragStart($event, paso, generatedAnalysisData)"
+                            (drop)="onFlowStepDrop($event, paso, generatedAnalysisData)"
+                            (dragend)="onFlowStepDragEnd($event)"
+                            (dragover)="onFlowStepDragOver($event, paso, generatedAnalysisData)"
+                            (dragleave)="onFlowStepDragLeave($event)"
+                            [class.drag-over-flow-step]="dragOverFlowStepId === getFlowStepDragId(paso, generatedAnalysisData)"
+                            [ngClass]="getFlowStepStatusClass(paso)">
+                            <td>{{ paso.numero_paso }}</td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editDescAccionFA_local">{{ paso.descripcion_accion_observada }}</ng-container><ng-template #editDescAccionFA_local><textarea class="form-control table-input" [(ngModel)]="paso.descripcion_accion_observada" rows="3"></textarea></ng-template></td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editImgRefFA_local">{{ paso.imagen_referencia_entrada }}</ng-container><ng-template #editImgRefFA_local><input type="text" class="form-control table-input" [(ngModel)]="paso.imagen_referencia_entrada"></ng-template></td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editElemClaveFA_local">{{ paso.elemento_clave_y_ubicacion_aproximada }}</ng-container><ng-template #editElemClaveFA_local><textarea class="form-control table-input" [(ngModel)]="paso.elemento_clave_y_ubicacion_aproximada" rows="3"></textarea></ng-template></td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editDatoEntradaFA_local">{{ paso.dato_de_entrada_paso || 'N/A' }}</ng-container><ng-template #editDatoEntradaFA_local><input type="text" class="form-control table-input" [(ngModel)]="paso.dato_de_entrada_paso"></ng-template></td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editResEsperadoPasoFA_local">{{ paso.resultado_esperado_paso }}</ng-container><ng-template #editResEsperadoPasoFA_local><textarea class="form-control table-input" [(ngModel)]="paso.resultado_esperado_paso" rows="3"></textarea></ng-template></td>
+                            <td><ng-container *ngIf="!isEditingFlowReportDetails; else editResObtenidoPasoFA_local">{{ paso.resultado_obtenido_paso_y_estado }}</ng-container><ng-template #editResObtenidoPasoFA_local><input type="text" class="form-control table-input" [(ngModel)]="paso.resultado_obtenido_paso_y_estado"></ng-template></td>
+                            <td><img *ngIf="getFlowStepImage(generatedAnalysisData, paso)" [src]="getFlowStepImage(generatedAnalysisData, paso)" [alt]="'Imagen para paso ' + paso.numero_paso" class="flow-step-image"><span *ngIf="!getFlowStepImage(generatedAnalysisData, paso)">N/A</span></td>
+                            <td *ngIf="isEditingFlowReportDetails"><button (click)="deleteFlowAnalysisStep(0, i)" class="button-cancel button-small-icon" title="Eliminar paso"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:1em;height:1em"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H14A2.75 2.75 0 0011.25 1H8.75zM10 4.75a.75.75 0 01.75.75V15.5a.75.75 0 01-1.5 0V5.5A.75.75 0 0110 4.75zM7.515 7.31l-.53 7.422a.75.75 0 101.49.107l.53-7.422a.75.75 0 00-1.49-.107zM12.485 7.31a.75.75 0 00-1.49.107l.53 7.422a.75.75 0 101.49-.107l-.53-7.422z" clip-rule="evenodd" /></svg></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <ng-template #noStepsAnalyzedFA><p>No se pudieron analizar pasos detallados o no se encontraron.</p></ng-template>
+            <div *ngIf="isEditingFlowReportDetails" class="actions" style="justify-content:flex-start;margin-top:10px;border-top:none;padding-top:5px;">
+              <button (click)="addFlowAnalysisStep(0)" class="button-secondary button-small-icon" title="Añadir nuevo paso"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:1em;height:1em;margin-right:5px"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>Añadir Paso</button>
+            </div>
+    
+            <h4>Resultado Esperado General del Flujo:</h4>
+            <ng-container *ngIf="!isEditingFlowReportDetails; else editResEsperadoGeneralFA_local"><pre class="generated-text report-field">{{ generatedAnalysisData.flowAnalysisReport[0].Resultado_Esperado_General_Flujo }}</pre></ng-container>
+            <ng-template #editResEsperadoGeneralFA_local><textarea class="form-control full-width-input" [(ngModel)]="generatedAnalysisData.flowAnalysisReport[0].Resultado_Esperado_General_Flujo" rows="3" placeholder="Resultado Esperado General"></textarea></ng-template>
+    
+            <h4>Conclusión General del Flujo (Generada por IA):</h4>
+            <pre class="generated-text report-field">{{ generatedAnalysisData.flowAnalysisReport[0].Conclusion_General_Flujo }}</pre>
+        </div>
+        <div *ngIf="!loadingFlowAnalysis && !flowAnalysisError && generatedAnalysisData.flowAnalysisReport && generatedAnalysisData.flowAnalysisReport.length > 0 && !isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport[0]) && isEditingFlowReportDetails" class="form-group full-width" style="margin-top:15px;">
+            <label [attr.for]="'userReanalysisContext-'+generatedAnalysisData.id">Contexto adicional para Re-Análisis (opcional):</label>
+            <textarea [attr.id]="'userReanalysisContext-'+generatedAnalysisData.id" name="userReanalysisContext" class="form-control" rows="3" [(ngModel)]="userReanalysisContext" placeholder="Ej: El paso 3 debería mostrar un error..."></textarea>
+        </div>
+        <div class="actions">
+            <button (click)="toggleEditFlowReportDetails()" class="button-edit" [disabled]="loadingFlowAnalysis">{{ isEditingFlowReportDetails ? 'Finalizar Edición' : 'Editar Informe' }}</button>
+            <button (click)="regenerateFlowAnalysis()" class="button-generate" [disabled]="loadingFlowAnalysis || isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport ? generatedAnalysisData.flowAnalysisReport[0] : undefined)"><span *ngIf="loadingFlowAnalysis" class="spinner-inline"></span>Re-Analizar Flujo</button>
+            <button (click)="exportFlowAnalysisReportToHtmlLocalized(generatedAnalysisData, 'es')" class="button-secondary" [disabled]="loadingFlowAnalysis || isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport ? generatedAnalysisData.flowAnalysisReport[0] : undefined)">Exportar Informe ESP (.html)</button>
+            <button (click)="exportFlowAnalysisReportToHtmlLocalized(generatedAnalysisData, 'en')" class="button-secondary" [disabled]="loadingFlowAnalysis || isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport ? generatedAnalysisData.flowAnalysisReport[0] : undefined)">Exportar Informe ENG (.html)</button>
+            <button (click)="exportFlowAnalysisReportToCsv(generatedAnalysisData)" class="button-secondary" [disabled]="loadingFlowAnalysis || isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport ? generatedAnalysisData.flowAnalysisReport[0] : undefined)">Exportar Datos (.csv)</button>
+        </div>
+    </div>
+    <div *ngIf="!loadingFlowAnalysis && !flowAnalysisError && (!generatedAnalysisData.flowAnalysisReport || generatedAnalysisData.flowAnalysisReport.length === 0 || isFlowAnalysisReportInErrorState(generatedAnalysisData.flowAnalysisReport?.[0]))" class="no-content-message">
+        <p>No se generó el informe de análisis de flujo o la respuesta fue vacía/errónea.</p>
+    </div>
+  </div>
+  
+  <div *ngIf="componentState === 'submittingToPlan'" class="loading-message">
+      <span class="spinner"></span> Añadiendo al plan de pruebas...
+  </div>

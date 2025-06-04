@@ -9,19 +9,10 @@ import { Observable, of, Subscription, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { FlowComparisonComponent } from '../flow-comparison/flow-comparison.component';
+import { FlowAnalysisComponent } from '../flow-analysis/flow-analysis.component';
+
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
-
-interface DraggableFlowImage {
-  file: File;
-  preview: string | ArrayBuffer;
-  base64: string;
-  mimeType: string;
-  id: string;
-  annotations?: ImageAnnotation[];
-  annotatedPreview?: string | ArrayBuffer; 
-  annotatedBase64?: string;
-}
 
 @Component({
   selector: 'app-test-plan-generator',
@@ -32,33 +23,25 @@ interface DraggableFlowImage {
     FormsModule,
     CommonModule,
     TestCaseGeneratorComponent,
-    FlowComparisonComponent
+    FlowComparisonComponent,
+    FlowAnalysisComponent
   ]
 })
 export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
   currentGenerationMode: GenerationMode | null = null;
   showTestCaseGenerator: boolean = false;
-  showParentFormComponent: boolean = false;
+  showFlowAnalysisComponent: boolean = false; 
   showFlowComparisonComponent: boolean = false;
   isModeSelected: boolean = false;
-
-  draggableFlowImages: DraggableFlowImage[] = [];
-  flowImagesBase64: string[] = [];
-  flowImageMimeTypes: string[] = [];
-  flowImageUploadError: string | null = null;
   
-  formError: string | null = null;
-
-  currentFlowTitle: string = '';
-  currentFlowSprint: string = '';
+  formError: string | null = null; 
+  currentFlowSprint: string = 'Sprint Actual'; 
 
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
 
-  loadingFlowAnalysisGlobal: boolean = false;
-  flowAnalysisErrorGlobal: string | null = null;
-  bugComparisonErrorGlobal: string | null = null;
+  bugComparisonErrorGlobal: string | null = null; 
 
   testPlanTitle: string = '';
 
@@ -92,94 +75,44 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
 
-  draggedFlowImage: DraggableFlowImage | null = null;
-  dragOverFlowImageId: string | null = null;
-
-  draggedFlowStep: FlowAnalysisStep | null = null;
-  dragOverFlowStepId: string | null = null;
-
-  @ViewChild('flowForm') flowFormDirective!: NgForm;
-  private formStatusSubscription!: Subscription;
-  @ViewChild('flowAnalysisImageInput') flowAnalysisImageInputRef: ElementRef<HTMLInputElement> | undefined;
-
   constructor(
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef
   ) {}
 
-  ngAfterViewInit(): void {
-    if (this.flowFormDirective && this.flowFormDirective.statusChanges) {
-      this.formStatusSubscription = this.flowFormDirective.statusChanges.subscribe(() => {
-        this.cdr.detectChanges();
-      });
-    }
-  }
-
-  ngOnDestroy(): void {
-    if (this.formStatusSubscription) {
-      this.formStatusSubscription.unsubscribe();
-    }
-  }
+  ngAfterViewInit(): void { }
+  ngOnDestroy(): void { }
 
   selectInitialMode(mode: GenerationMode): void {
-    console.log('[TestPlanGenerator] SelectInitialMode - Mode received:', mode);
     this.currentGenerationMode = mode;
     this.isModeSelected = true;
 
     this.showTestCaseGenerator = false;
-    this.showParentFormComponent = false;
+    this.showFlowAnalysisComponent = false; 
     this.showFlowComparisonComponent = false;
 
     if (mode === 'text' || mode === 'image') {
       this.showTestCaseGenerator = true;
     } else if (mode === 'flowAnalysis') {
-      this.showParentFormComponent = true;
-      this.onParentGenerationModeChange();
+      this.showFlowAnalysisComponent = true; 
     } else if (mode === 'flowComparison') {
       this.showFlowComparisonComponent = true;
     } else {
-      console.error('[TestPlanGenerator] SelectInitialMode - Unknown mode received:', mode, ". Resetting to selection.");
       this.resetActiveGeneratorsAndGoToSelection();
       return;
     }
-
-    console.log('[TestPlanGenerator] SelectInitialMode - Flags state after setting:', {
-        isModeSelected: this.isModeSelected,
-        currentMode: this.currentGenerationMode,
-        showTC: this.showTestCaseGenerator,
-        showParent: this.showParentFormComponent,
-        showComparison: this.showFlowComparisonComponent
-    });
     this.cdr.detectChanges();
   }
 
   private resetActiveGeneratorsAndGoToSelection(): void {
-    console.log('[TestPlanGenerator] resetActiveGeneratorsAndGoToSelection called.');
     this.currentGenerationMode = null;
     this.showTestCaseGenerator = false;
-    this.showParentFormComponent = false;
+    this.showFlowAnalysisComponent = false;
     this.showFlowComparisonComponent = false;
     this.isModeSelected = false;
-
     this.formError = null;
-    this.flowAnalysisErrorGlobal = null;
     this.bugComparisonErrorGlobal = null;
-    
-    const keptSprint = this.currentFlowSprint;
-    this.currentFlowTitle = '';
-    this.draggableFlowImages = [];
-    this.flowImagesBase64 = [];
-    this.flowImageMimeTypes = [];
-    this.flowImageUploadError = null;
-
-    if (isPlatformBrowser(this.platformId) && this.flowAnalysisImageInputRef?.nativeElement) {
-      this.flowAnalysisImageInputRef.nativeElement.value = '';
-    }
-    if (this.flowFormDirective?.form) {
-      this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
-      this.currentFlowSprint = keptSprint;
-    }
     this.cdr.detectChanges();
   }
 
@@ -191,6 +124,17 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   onGenerationCancelledFromChild() {
+    this.resetActiveGeneratorsAndGoToSelection();
+  }
+
+  onAnalysisDataGenerated(huData: HUData) {
+    this.huList.push(huData);
+    this.updateTestPlanTitle();
+    this.updatePreview();
+    this.resetActiveGeneratorsAndGoToSelection();
+  }
+
+  onAnalysisCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
@@ -209,380 +153,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.resetActiveGeneratorsAndGoToSelection();
   }
   
-  onParentGenerationModeChange(): void {
-    if (this.currentGenerationMode !== 'flowAnalysis') {
-        return;
-    }
-    this.formError = null;
-    this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
-    const keptSprint = this.currentFlowSprint;
-    this.currentFlowTitle = '';
-
-    if (isPlatformBrowser(this.platformId)) {
-      if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
-    }
-
-    if (this.flowFormDirective && this.flowFormDirective.form) {
-        this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
-        this.currentFlowSprint = keptSprint;
-         setTimeout(() => {
-            if (this.flowFormDirective?.form) {
-              this.flowFormDirective.form.markAsPristine();
-              this.flowFormDirective.form.markAsUntouched();
-              this.flowFormDirective.form.updateValueAndValidity();
-            }
-            this.cdr.detectChanges();
-        },0);
-    } else {
-        this.cdr.detectChanges();
-    }
-  }
-
-  isParentFormInvalidForCurrentMode(): boolean {
-    if (!this.flowFormDirective || !this.flowFormDirective.form || this.currentGenerationMode !== 'flowAnalysis') {
-      return true;
-    }
-    const commonRequiredFields = !this.currentFlowSprint || !this.currentFlowTitle;
-    return commonRequiredFields || this.draggableFlowImages.length === 0;
-  }
-
-  private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
-      const nameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
-      const parts = nameWithoutExtension.split(/[^0-9]+/g).filter(Boolean).map(p => parseInt(p, 10));
-      return {
-          main: parts.length > 0 && !isNaN(parts[0]) ? parts[0] : Infinity,
-          sub: parts.length > 1 && !isNaN(parts[1]) ? parts[1] : (parts.length > 0 && !isNaN(parts[0]) ? 0 : Infinity)
-      };
-  }
-
-  onFlowFileSelected(event: Event): void {
-    if (this.currentGenerationMode !== 'flowAnalysis') return;
-    this.flowImageUploadError = null;
-    this.formError = null;
-    this.draggableFlowImages.length = 0;
-    const maxImages = 20;
-
-    const element = event.currentTarget as HTMLInputElement;
-    const fileList: FileList | null = element.files;
-
-    if (fileList && fileList.length > 0) {
-        if (fileList.length > maxImages) {
-            this.flowImageUploadError = `Puedes seleccionar un máximo de ${maxImages} imágenes.`;
-            element.value = ""; return;
-        }
-        let filesArray = Array.from(fileList);
-        filesArray.sort((a, b) => {
-            const parsedA = this.parseFileNameForSorting(a.name);
-            const parsedB = this.parseFileNameForSorting(b.name);
-            if (parsedA.main !== parsedB.main) return parsedA.main - parsedB.main;
-            return parsedA.sub - parsedB.sub;
-        });
-        
-        const fileProcessingObservables: Observable<DraggableFlowImage>[] = [];
-        let validationErrorFound = false;
-
-        for (const file of filesArray) {
-            if (validationErrorFound) continue;
-            if (file.size > 4 * 1024 * 1024) {
-                 this.flowImageUploadError = `"${file.name}" excede 4MB.`; validationErrorFound = true;
-            }
-            if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) {
-                this.flowImageUploadError = `Formato inválido: "${file.name}". Solo JPG/PNG.`; validationErrorFound = true;
-            }
-            if (validationErrorFound) {
-                element.value = ""; this.draggableFlowImages.length = 0; this.updateParentArraysFromDraggable(); this.cdr.detectChanges(); return;
-            }
-            const readerObservable = new Observable<DraggableFlowImage>(observer => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    observer.next({ file, preview: reader.result!, base64: (reader.result as string).split(',')[1], mimeType: file.type, id: 'S_' + file.name + '_' + Date.now() + Math.random().toString(16).slice(2) });
-                    observer.complete();
-                };
-                reader.onerror = error => { this.flowImageUploadError = `Error al leer "${file.name}".`; observer.error(error); };
-                reader.readAsDataURL(file);
-            });
-            fileProcessingObservables.push(readerObservable);
-        }
-        if (validationErrorFound) { this.draggableFlowImages.length = 0; this.updateParentArraysFromDraggable(); this.cdr.detectChanges(); return; }
-
-        if (fileProcessingObservables.length > 0) {
-            forkJoin(fileProcessingObservables).subscribe({
-                next: (processedImages) => {
-                    processedImages.forEach(img => this.draggableFlowImages.push(img));
-                    this.updateParentArraysFromDraggable();
-                },
-                complete: () => { this.flowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); },
-                error: () => { element.value = ""; this.draggableFlowImages.length = 0; this.updateParentArraysFromDraggable(); this.flowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); }
-            });
-        }
-    } else {
-        this.draggableFlowImages.length = 0;
-        this.updateParentArraysFromDraggable();
-        this.flowFormDirective?.form.updateValueAndValidity();
-        this.cdr.detectChanges();
-    }
-  }
-
-  private updateParentArraysFromDraggable(): void {
-    if (this.currentGenerationMode === 'flowAnalysis') {
-        // Ensure annotated versions are preferred if available (though flow analysis doesn't have annotation editor directly in this component)
-        this.flowImagesBase64 = this.draggableFlowImages.map(di => di.annotatedBase64 || di.base64);
-        this.flowImageMimeTypes = this.draggableFlowImages.map(di => di.annotatedPreview ? this.getMimeTypeFromDataUrl(di.annotatedPreview as string) : di.mimeType);
-    }
-    this.cdr.detectChanges();
-  }
-  
-  private getMimeTypeFromDataUrl(dataUrl: string): string {
-    const match = dataUrl.match(/^data:(.*?);base64,/);
-    return match ? match[1] : 'image/png'; // Fallback
-  }
-
-  public onParentImageDragStart(event: DragEvent, image: DraggableFlowImage): void {
-    if (this.currentGenerationMode !== 'flowAnalysis') return;
-    this.draggedFlowImage = image;
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', image.id);
-      (event.target as HTMLElement).style.opacity = '0.4';
-    }
-  }
-
-  public onParentImageDragOver(event: DragEvent, targetImage?: DraggableFlowImage): void {
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    if (this.currentGenerationMode === 'flowAnalysis') {
-        this.dragOverFlowImageId = targetImage ? targetImage.id : null;
-    }
-  }
-  public onParentImageDragLeave(event: DragEvent): void {
-    if (this.currentGenerationMode === 'flowAnalysis') {
-        this.dragOverFlowImageId = null;
-    }
-  }
-  public onParentImageDrop(event: DragEvent, targetImage: DraggableFlowImage): void {
-    event.preventDefault();
-    if (this.currentGenerationMode !== 'flowAnalysis') return;
-    
-    this.dragOverFlowImageId = null;
-    const draggedHtmlElement = document.querySelector('.image-preview-item[style*="opacity: 0.4"]');
-    if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
-
-    if (!this.draggedFlowImage || this.draggedFlowImage.id === targetImage.id) {
-      this.draggedFlowImage = null;
-      return;
-    }
-    const fromIndex = this.draggableFlowImages.findIndex(img => img.id === this.draggedFlowImage!.id);
-    const toIndex = this.draggableFlowImages.findIndex(img => img.id === targetImage.id);
-
-    if (fromIndex !== -1 && toIndex !== -1) {
-      const itemToMove = this.draggableFlowImages.splice(fromIndex, 1)[0];
-      this.draggableFlowImages.splice(toIndex, 0, itemToMove);
-      this.updateParentArraysFromDraggable(); // Update after reorder
-    }
-    this.draggedFlowImage = null;
-  }
-  public onParentImageDragEnd(event?: DragEvent): void {
-    if (event?.target instanceof HTMLElement) (event.target as HTMLElement).style.opacity = '1';
-    else {
-       const draggedHtmlElement = document.querySelector('.image-preview-item[style*="opacity: 0.4"]');
-       if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
-    }
-    if (this.currentGenerationMode === 'flowAnalysis') {
-      this.draggedFlowImage = null; this.dragOverFlowImageId = null;
-    }
-  }
-
-  public getFlowStepDragId(paso: FlowAnalysisStep, hu: HUData): string {
-    const report = hu.flowAnalysisReport?.[0];
-    if (report && report.Pasos_Analizados) {
-        const stepIndex = report.Pasos_Analizados.indexOf(paso);
-        if (stepIndex !== -1) {
-            return `flow-${hu.id}-step-${stepIndex}`;
-        }
-    }
-    return `flow-step-${paso.numero_paso}-${Math.random().toString(16).slice(2,8)}`;
-  }
-
-  public onFlowStepDragStart(event: DragEvent, paso: FlowAnalysisStep, hu: HUData): void {
-    if (hu.isEditingFlowReportDetails) { event.preventDefault(); return; }
-    this.draggedFlowStep = paso;
-    if (event.dataTransfer && hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
-      const stepIndex = hu.flowAnalysisReport[0].Pasos_Analizados.indexOf(paso);
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', stepIndex.toString());
-      const targetElement = event.target as HTMLElement;
-      const rowElement = targetElement.closest('tr');
-      if (rowElement) rowElement.style.opacity = '0.4';
-    }
-  }
-
-  public onFlowStepDragOver(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData): void {
-    event.preventDefault();
-     if (this.draggedFlowStep && event.dataTransfer && targetPaso) {
-        event.dataTransfer.dropEffect = 'move';
-        this.dragOverFlowStepId = this.getFlowStepDragId(targetPaso, hu);
-     } else if (!targetPaso) { // Allows dropping at the end of the list
-        this.dragOverFlowStepId = null; // Or a special ID for "end of list"
-     }
-  }
-
-  public onFlowStepDragLeave(event: DragEvent): void {
-    this.dragOverFlowStepId = null;
-  }
-
-  public onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep, hu: HUData): void {
-    event.preventDefault(); this.dragOverFlowStepId = null;
-    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
-
-    if (!this.draggedFlowStep || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados || hu.flowAnalysisReport[0].Pasos_Analizados.length === 0) {
-        this.draggedFlowStep = null; return;
-    }
-    if(this.draggedFlowStep === targetPaso) { this.draggedFlowStep = null; return; }
-
-    const pasosAnalizados = hu.flowAnalysisReport[0].Pasos_Analizados;
-    const fromIndex = pasosAnalizados.indexOf(this.draggedFlowStep);
-    const toIndex = pasosAnalizados.indexOf(targetPaso);
-
-    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-      const itemToMove = pasosAnalizados.splice(fromIndex, 1)[0];
-      pasosAnalizados.splice(toIndex, 0, itemToMove);
-      pasosAnalizados.forEach((paso, index) => { paso.numero_paso = index + 1; });
-      this.cdr.detectChanges(); this.updatePreview();
-    }
-    this.draggedFlowStep = null;
-  }
-
-  public onFlowStepDragEnd(event: DragEvent): void {
-    document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
-    this.draggedFlowStep = null; this.dragOverFlowStepId = null;
-  }
-
-  generateIdFromFlowTitle(title: string, mode: GenerationMode | null): string {
-    if (!title || !mode) return '';
-    let prefix = "UNKNOWN_";
-    if (mode === 'flowAnalysis') prefix = "FLOW_";
-    const sanitizedTitle = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
-    return `${prefix}${sanitizedTitle.substring(0, 20)}_${Date.now().toString().slice(-4)}`;
-  }
-
-  addAndGenerateFlowData(): void {
-    this.formError = null;
-    this.flowAnalysisErrorGlobal = null;
-
-    if (this.currentGenerationMode !== 'flowAnalysis') {
-        this.formError = "Modo de generación no válido para esta acción.";
-        return;
-    }
-    if (this.isParentFormInvalidForCurrentMode()) {
-      this.formError = "Por favor, completa todos los campos requeridos para el flujo de análisis.";
-      if (this.draggableFlowImages.length === 0) {
-        this.formError = "Por favor, selecciona al menos una imagen para el análisis de flujo.";
-      }
-       if (this.flowFormDirective?.form) {
-        Object.values(this.flowFormDirective.form.controls).forEach(control => {
-          if (control.invalid && control.enabled) control.markAsTouched();
-        });
-      }
-      return;
-    }
-
-    const finalFlowId = this.generateIdFromFlowTitle(this.currentFlowTitle, this.currentGenerationMode);
-    if (!finalFlowId) { this.formError = "El título es necesario para generar el ID del flujo."; return; }
-    
-    // Ensure we use the (potentially annotated) base64 and correct mime types
-    const imagesBase64ForService = this.draggableFlowImages.map(img => img.annotatedBase64 || img.base64);
-    const imageMimeTypesForService = this.draggableFlowImages.map(img => img.annotatedPreview ? this.getMimeTypeFromDataUrl(img.annotatedPreview as string) : img.mimeType);
-    const imageFilenamesForService = this.draggableFlowImages.map(img => img.file.name);
-
-
-    const newHu: HUData = {
-      originalInput: {
-        id: finalFlowId, title: this.currentFlowTitle, sprint: this.currentFlowSprint,
-        selectedTechnique: '', // Not applicable for this mode directly from this form
-        generationMode: this.currentGenerationMode!, // Cast as it's checked
-        imagesBase64: imagesBase64ForService, 
-        imageMimeTypes: imageMimeTypesForService,
-        imageFilenames: imageFilenamesForService
-        // annotationsFlowA/B are not relevant for pure flowAnalysis mode from this component's form
-      },
-      id: finalFlowId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
-      generatedScope: '', // Not applicable
-      detailedTestCases: [], // Not applicable
-      generatedTestCaseTitles: '', // Not applicable
-      editingScope: false, 
-      editingScenarios: false, 
-      loadingScope: false, errorScope: null,
-      loadingScenarios: false, errorScenarios: null, 
-      showRegenTechniquePicker: false, 
-      regenSelectedTechnique: '', 
-      userTestCaseReanalysisContext: '', 
-      isScopeDetailsOpen: false, // Not applicable
-      isScenariosDetailsOpen: false, // Not applicable
-      isEditingDetailedTestCases: false, // Not applicable
-
-      flowAnalysisReport: undefined, // Will be filled by the service
-      loadingFlowAnalysis: true, // Set for this specific HUData instance too
-      errorFlowAnalysis: null,
-      isFlowAnalysisDetailsOpen: true, // Open by default when generated
-      isEditingFlowReportDetails: false,
-      userReanalysisContext: '', // For future re-analysis of this specific flow
-
-      bugComparisonReport: undefined, // Not applicable
-      loadingBugComparison: false, // Not applicable
-      errorBugComparison: null, // Not applicable
-      isBugComparisonDetailsOpen: false, // Not applicable
-      userBugComparisonReanalysisContext: '', // Not applicable
-    };
-    this.huList.push(newHu);
-    this.updateTestPlanTitle();
-
-    this.loadingFlowAnalysisGlobal = true;
-    this.flowAnalysisErrorGlobal = null;
-
-    this.geminiService.generateFlowAnalysisFromImages(newHu.originalInput.imagesBase64!, newHu.originalInput.imageMimeTypes!).pipe(
-        tap(report => {
-            newHu.flowAnalysisReport = report;
-            newHu.errorFlowAnalysis = null;
-            if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
-                newHu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles en el error.'}`;
-                this.flowAnalysisErrorGlobal = newHu.errorFlowAnalysis ?? null;
-            }
-        }),
-        catchError(error => {
-            newHu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al generar análisis de flujo.';
-            this.flowAnalysisErrorGlobal = newHu.errorFlowAnalysis ?? null;
-            // Provide a fallback error report structure
-            newHu.flowAnalysisReport = [{
-                Nombre_del_Escenario: "Error Crítico en Generación",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: newHu.errorFlowAnalysis!, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "El análisis de flujo no pudo completarse."
-            }];
-            return of(newHu.flowAnalysisReport);
-        }),
-        finalize(() => {
-            newHu.loadingFlowAnalysis = false;
-            this.checkOverallLoadingStatus();
-            this.updatePreview();
-            this.resetParentCurrentInputs(); // Reset form after generation attempt
-            this.resetActiveGeneratorsAndGoToSelection(); // Go back to selection screen
-        })
-    ).subscribe({
-        error: (err) => {
-            console.error("Error en suscripción de generación (análisis de flujo):", err);
-            this.flowAnalysisErrorGlobal = (this.flowAnalysisErrorGlobal || "Error general en análisis de flujo.");
-            newHu.loadingFlowAnalysis = false;
-            this.checkOverallLoadingStatus();
-            this.cdr.detectChanges();
-        }
-    });
-  }
-
-  public checkOverallLoadingStatus(): void {
-    this.loadingFlowAnalysisGlobal = this.huList.some(huItem => huItem.loadingFlowAnalysis);
-    this.cdr.detectChanges();
-  }
-
   public toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
     if (section === 'scope') {
       if (hu.originalInput.generationMode === 'text') {
@@ -594,7 +164,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     } else if (section === 'scenarios') {
        alert("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan.");
     }
-    if (!hu.editingScope) { // If finishing edit
+    if (!hu.editingScope) {
         this.updatePreview();
     }
     this.cdr.detectChanges();
@@ -605,41 +175,18 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     let detailsOpenProp: keyof TestPlanGeneratorComponent;
 
     switch (baseName) {
-      case 'repositoryLink':
-        editingProp = 'editingRepositoryLink';
-        detailsOpenProp = 'isRepositoryLinkDetailsOpen';
-        break;
-      case 'outOfScope':
-        editingProp = 'editingOutOfScope';
-        detailsOpenProp = 'isOutOfScopeDetailsOpen';
-        break;
-      case 'strategy':
-        editingProp = 'editingStrategy';
-        detailsOpenProp = 'isStrategyDetailsOpen';
-        break;
-      case 'limitations':
-        editingProp = 'editingLimitations';
-        detailsOpenProp = 'isLimitationsDetailsOpen';
-        break;
-      case 'assumptions':
-        editingProp = 'editingAssumptions';
-        detailsOpenProp = 'isAssumptionsDetailsOpen';
-        break;
-      case 'team':
-        editingProp = 'editingTeam';
-        detailsOpenProp = 'isTeamDetailsOpen';
-        break;
-      default:
-        return; // Should not happen
+      case 'repositoryLink': editingProp = 'editingRepositoryLink'; detailsOpenProp = 'isRepositoryLinkDetailsOpen'; break;
+      case 'outOfScope': editingProp = 'editingOutOfScope'; detailsOpenProp = 'isOutOfScopeDetailsOpen'; break;
+      case 'strategy': editingProp = 'editingStrategy'; detailsOpenProp = 'isStrategyDetailsOpen'; break;
+      case 'limitations': editingProp = 'editingLimitations'; detailsOpenProp = 'isLimitationsDetailsOpen'; break;
+      case 'assumptions': editingProp = 'editingAssumptions'; detailsOpenProp = 'isAssumptionsDetailsOpen'; break;
+      case 'team': editingProp = 'editingTeam'; detailsOpenProp = 'isTeamDetailsOpen'; break;
+      default: return;
     }
     const wasEditing = this[editingProp] as boolean;
     (this[editingProp] as any) = !wasEditing;
-    if (this[editingProp]) { // If starting to edit
-        (this[detailsOpenProp] as any) = true; // Open details
-    }
-    if (wasEditing && !(this[editingProp] as boolean)) { // If finishing edit
-        this.updatePreview();
-    }
+    if (this[editingProp]) { (this[detailsOpenProp] as any) = true; }
+    if (wasEditing && !(this[editingProp] as boolean)) { this.updatePreview(); }
     this.cdr.detectChanges();
   }
 
@@ -647,83 +194,13 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
       alert('Alcance solo se regenera para HUs con descripción/criterios.'); return;
     }
-    hu.editingScope = false; // Ensure not in edit mode before regenerating
-    hu.isScopeDetailsOpen = true; // Keep details open
-    hu.loadingScope = true;
-    hu.errorScope = null;
+    hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
         tap(scopeText => { hu.generatedScope = scopeText; hu.errorScope = null; }),
         catchError(error => { hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.'; return of(''); }),
         finalize(() => { hu.loadingScope = false; this.updatePreview(); this.cdr.detectChanges(); })
       ).subscribe();
-  }
-
-  public regenerateFlowAnalysis(hu: HUData): void {
-    if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.originalInput.imagesBase64?.length || !hu.flowAnalysisReport?.length) {
-        alert("Solo se puede re-analizar un flujo con imágenes y un informe previo."); return;
-    }
-    hu.loadingFlowAnalysis = true; hu.errorFlowAnalysis = null; this.loadingFlowAnalysisGlobal = true; this.flowAnalysisErrorGlobal = null;
-    
-    this.geminiService.refineFlowAnalysisFromImagesAndContext(
-        hu.originalInput.imagesBase64!, hu.originalInput.imageMimeTypes!, hu.flowAnalysisReport[0], hu.userReanalysisContext
-    ).pipe(
-        tap(report => {
-            hu.flowAnalysisReport = report; hu.errorFlowAnalysis = null;
-            if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
-                hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles en el error.'}`;
-                this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
-            }
-            hu.isEditingFlowReportDetails = false; // Exit edit mode on successful re-generation
-        }),
-        catchError(error => {
-            hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis.';
-            this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
-            // Ensure a fallback report structure on error
-            hu.flowAnalysisReport = hu.flowAnalysisReport || [{ Nombre_del_Escenario: "Error Crítico en Re-Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis!, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "Re-análisis fallido." }];
-            return of(hu.flowAnalysisReport);
-        }),
-        finalize(() => { hu.loadingFlowAnalysis = false; this.checkOverallLoadingStatus(); this.updatePreview(); this.cdr.detectChanges(); })
-    ).subscribe();
-  }
-
-  public toggleEditFlowReportDetails(hu: HUData): void {
-    hu.isEditingFlowReportDetails = !hu.isEditingFlowReportDetails;
-    if (!hu.isEditingFlowReportDetails && hu.flowAnalysisReport?.[0]?.Pasos_Analizados) {
-        // Re-number steps if finishing editing and steps exist
-        hu.flowAnalysisReport[0].Pasos_Analizados.forEach((paso, index) => {
-            paso.numero_paso = index + 1;
-        });
-        this.updatePreview();
-    }
-    this.cdr.detectChanges();
-  }
-
-  public deleteFlowAnalysisStep(hu: HUData, reportIndex: number, stepIndex: number): void {
-    if (hu.flowAnalysisReport?.[reportIndex]?.Pasos_Analizados) {
-        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.splice(stepIndex, 1);
-        // Re-number remaining steps
-        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.forEach((paso, idx) => {
-            paso.numero_paso = idx + 1;
-        });
-        this.updatePreview(); this.cdr.detectChanges();
-    }
-  }
-
-  public addFlowAnalysisStep(hu: HUData, reportIndex: number): void {
-    if (hu.flowAnalysisReport?.[reportIndex] && hu.flowAnalysisReport[reportIndex].Pasos_Analizados) {
-        const newStep: FlowAnalysisStep = {
-            numero_paso: hu.flowAnalysisReport[reportIndex].Pasos_Analizados.length + 1,
-            descripcion_accion_observada: '',
-            imagen_referencia_entrada: 'Nueva', // User should update this if needed
-            elemento_clave_y_ubicacion_aproximada: '',
-            dato_de_entrada_paso: '',
-            resultado_esperado_paso: '',
-            resultado_obtenido_paso_y_estado: ''
-        };
-        hu.flowAnalysisReport[reportIndex].Pasos_Analizados.push(newStep);
-        this.updatePreview(); this.cdr.detectChanges();
-    }
   }
 
   public deleteBugReportItem(hu: HUData, bugIndex: number): void {
@@ -748,11 +225,10 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         imagesArray = hu.originalInput.imagesBase64FlowB;
         mimeTypesArray = hu.originalInput.imageMimeTypesFlowB;
         filenamesArray = hu.originalInput.imageFilenamesFlowB;
-    } else { return null; } // For bug comparison, flowType A or B is mandatory.
+    } else { return null; }
 
     if (!imagesArray?.length || !mimeTypesArray?.length || !filenamesArray?.length) return null;
     
-    // Attempt to find by filename if present in imageNameRef (e.g., "Imagen B.1 (some_file.jpg)")
     const filenameInRefMatch = imageNameRef.match(/\(([^)]+)\)$/);
     let imageIndex = -1;
 
@@ -761,14 +237,13 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         imageIndex = filenamesArray.findIndex(fn => fn === targetFilename);
     }
     
-    // If not found by filename or filename not in ref, try by number (e.g., "Imagen B.1")
     if (imageIndex === -1) {
         const numberMatch = imageNameRef.match(/Imagen (?:[AB]\.)?(\d+)/i);
         if (numberMatch?.[1]) {
           imageIndex = parseInt(numberMatch[1], 10) - 1;
         }
     }
-
+    
     if (imageIndex >= 0 && imageIndex < imagesArray.length && imageIndex < mimeTypesArray.length) {
       return `data:${mimeTypesArray[imageIndex]};base64,${imagesArray[imageIndex]}`;
     }
@@ -780,7 +255,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         alert(language === 'en' ? 'No valid bug comparison report available for export.' : 'No hay reporte de comparación de bugs válido para exportar.'); return;
     }
     const date = new Date().toISOString().split('T')[0];
-    // MODIFICATION 1: Remove ID from main title
     const mainReportTitle = language === 'en' 
         ? `Bug Comparison Report: ${this.escapeHtmlForExport(hu.title)}` 
         : `Reporte de Comparación de Bugs: ${this.escapeHtmlForExport(hu.title)}`;
@@ -788,7 +262,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     let html = `<html><head><meta charset="UTF-8"><title>${mainReportTitle}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.5;color:#333}.report-container{max-width:900px;margin:auto}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2.bug-title{font-size:1.3em;color:#c0392b;margin-top:25px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0;}.bug-item{border:1px solid #ddd;border-radius:5px;padding:15px;margin-bottom:20px;background:#f9f9f9;box-shadow:0 2px 4px rgba(0,0,0,0.05);}.bug-meta p,.bug-details p{margin-bottom:8px;font-size:.95em}.bug-meta strong,.bug-details strong{color:#555;font-weight:600;}.bug-details pre{white-space:pre-wrap;word-wrap:break-word;background:#fff;border:1px solid #eee;padding:10px;border-radius:4px;font-family:Consolas,monospace,sans-serif;margin:3px 0 10px;font-size:0.9em;}.bug-steps{margin-left:20px;list-style-type:decimal;padding-left:15px;}.bug-steps li{margin-bottom:4px;}.image-ref{font-style:italic;color:#777;font-size:.9em}.bug-report-image{max-width:100%;height:auto;max-height:250px;border:1px solid #ccc;border-radius:4px;display:block;margin:10px 0;background-color:#fff;object-fit:contain;}</style></head><body><div class="report-container"><h1>${mainReportTitle}</h1>`;
     
     hu.bugComparisonReport.forEach((bug, i) => {
-        // MODIFICATION 2: Clean bug title
         const cleanBugTitle = (bug.titulo_bug || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
         html += `<div class="bug-item"><h2 class="bug-title">${language === 'en' ? 'Bug' : 'Bug'} #${i + 1}: ${this.escapeHtmlForExport(cleanBugTitle)}</h2><div class="bug-meta"><p><strong>${language === 'en' ? 'Priority' : 'Prioridad'}:</strong> ${this.escapeHtmlForExport(bug.prioridad)} | <strong>${language === 'en' ? 'Severity' : 'Severidad'}:</strong> ${this.escapeHtmlForExport(bug.severidad)}</p><p><strong>${language === 'en' ? 'Report Date' : 'Fecha de Reporte'}:</strong> ${this.escapeHtmlForExport(bug.fecha_reporte || date)}</p></div><div class="bug-details">`;
         if (bug.descripcion_diferencia_general) html += `<p><strong>${language === 'en' ? 'General Description of Difference' : 'Descripción General de la Diferencia'}:</strong></p><pre>${this.escapeHtmlForExport(bug.descripcion_diferencia_general)}</pre>`;
@@ -802,6 +275,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     html += `</div></body></html>`;
     saveAs(new Blob([html], { type: 'text/html;charset=utf-8;' }), `Reporte_Comparacion_Bugs_${this.escapeFilename(hu.title)}_${language === 'en' ? 'ENG' : 'ESP'}_${date}.html`);
   }
+
 
   private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
   private escapeHtmlForExport = (u: string | undefined | null): string => { if (!u) return ''; return u.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); };
@@ -867,36 +341,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   public formatSimpleScenarioTitles(titles: string[]): string {
     if (!titles || titles.length === 0) return 'No se generaron escenarios.';
     return titles.map((title, index) => `${index + 1}. ${title}`).join('\n');
-  }
-
-  public resetParentCurrentInputs(): void {
-    const keptSprint = this.currentFlowSprint;
-
-    if (this.flowFormDirective) {
-        this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
-    }
-    this.currentFlowSprint = keptSprint;
-    this.currentFlowTitle = '';
-
-    this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
-    this.formError = null;
-    this.flowAnalysisErrorGlobal = null;
-    this.bugComparisonErrorGlobal = null;
-
-
-    if (isPlatformBrowser(this.platformId)) {
-      if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
-    }
-    setTimeout(() => {
-        if(this.flowFormDirective?.form) {
-            this.flowFormDirective.form.patchValue({
-                currentFlowSprint: this.currentFlowSprint,
-                currentFlowTitle: this.currentFlowTitle
-            });
-            this.flowFormDirective.form.updateValueAndValidity();
-        }
-        this.cdr.detectChanges();
-    }, 0);
   }
 
   public updateTestPlanTitle(): void {
@@ -1060,13 +504,11 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     if (bugComparisonHUs_html.length > 0) {
         fullPlanHtmlContent += `<p><span class="preview-section-title">REPORTE DE COMPARACIÓN DE FLUJOS (BUGS):</span></p>\n`;
         bugComparisonHUs_html.forEach(hu => {
-            // Use the cleaned title for the preview section header as well
             const cleanedComparisonTitle = hu.title.replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
             fullPlanHtmlContent += `<p><span class="preview-hu-title">Comparación ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(cleanedComparisonTitle)}</span></p>\n`;
             
             if (hu.bugComparisonReport && hu.bugComparisonReport.length > 0 && !this.isBugReportInErrorState(hu.bugComparisonReport)) {
                 hu.bugComparisonReport.forEach(bug => {
-                    // Clean bug title for display in preview
                     const cleanBugTitlePreview = (bug.titulo_bug || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
                     fullPlanHtmlContent += `  <div style="margin-left:15px; border-left: 2px solid #c0392b; padding-left:10px; margin-bottom:10px;"><strong>Bug: ${this.escapeHtmlForExport(cleanBugTitlePreview)}</strong><br>\n`;
                     fullPlanHtmlContent += `    Prioridad: ${this.escapeHtmlForExport(bug.prioridad)}, Severidad: ${this.escapeHtmlForExport(bug.severidad)}<br>\n`;
@@ -1210,6 +652,66 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`);
   }
 
+  // --- MÉTODOS AUXILIARES RESTAURADOS PARA exportFlowAnalysisReport... ---
+  public isFlowAnalysisReportInErrorState(r?: FlowAnalysisReportItem): boolean {
+    return !r ||
+    ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(r.Nombre_del_Escenario);
+  }
+
+  public getFlowStepImage(hu: HUData, paso: FlowAnalysisStep): string | null {
+    const imageRefToUse = paso.imagen_referencia_salida || paso.imagen_referencia_entrada;
+    if (!imageRefToUse) return null;
+    
+    let imagesToUse: string[] | undefined;
+    let mimeTypesToUse: string[] | undefined;
+    let filenamesToUse: string[] | undefined;
+
+    if (imageRefToUse.toUpperCase().startsWith("IMAGEN A")) {
+        imagesToUse = hu.originalInput.imagesBase64FlowA;
+        mimeTypesToUse = hu.originalInput.imageMimeTypesFlowA;
+        filenamesToUse = hu.originalInput.imageFilenamesFlowA;
+    } else if (imageRefToUse.toUpperCase().startsWith("IMAGEN B")) {
+        imagesToUse = hu.originalInput.imagesBase64FlowB;
+        mimeTypesToUse = hu.originalInput.imageMimeTypesFlowB;
+        filenamesToUse = hu.originalInput.imageFilenamesFlowB;
+    } else { 
+        imagesToUse = hu.originalInput.imagesBase64;
+        mimeTypesToUse = hu.originalInput.imageMimeTypes;
+        filenamesToUse = hu.originalInput.imageFilenames;
+    }
+
+    if (!imagesToUse?.length || !mimeTypesToUse?.length || !filenamesToUse?.length) return null;
+
+    const filenameInRefMatch = imageRefToUse.match(/\(([^)]+)\)$/);
+    let imageIndex = -1;
+
+    if (filenameInRefMatch && filenameInRefMatch[1]) {
+        const targetFilename = filenameInRefMatch[1];
+        imageIndex = filenamesToUse.findIndex(fn => fn === targetFilename);
+    }
+    
+    if (imageIndex === -1) {
+        const numberMatch = imageRefToUse.match(/Imagen (?:[AB]\.)?(\d+)/i);
+        if (numberMatch?.[1]) {
+          imageIndex = parseInt(numberMatch[1], 10) - 1;
+        }
+    }
+    
+    if (imageIndex >= 0 && imageIndex < imagesToUse.length && imageIndex < mimeTypesToUse.length) {
+      return `data:${mimeTypesToUse[imageIndex]};base64,${imagesToUse[imageIndex]}`;
+    }
+    return null;
+  }
+
+  public getFlowStepStatusClass(paso: FlowAnalysisStep): string {
+    const status = (paso.resultado_obtenido_paso_y_estado || '').toLowerCase();
+    if (status.includes('exitosa con desviaciones') || status.includes('parcialmente exitosa')) return 'status-deviation';
+    if (status.includes('exitosa')) return 'status-success';
+    if (status.includes('fallido') || status.includes('fallida') || status.includes('error')) return 'status-failure';
+    return '';
+  }
+  // --- FIN DE MÉTODOS AUXILIARES RESTAURADOS ---
+
   public exportFlowAnalysisReportToCsv(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'flowAnalysis' || !hu.flowAnalysisReport?.[0]?.Pasos_Analizados?.length || this.isFlowAnalysisReportInErrorState(hu.flowAnalysisReport[0])) {
       alert('No hay datos de análisis de flujo válidos para exportar.');
@@ -1264,7 +766,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         <th>${language === 'en' ? 'Step Image' : 'Imagen Paso'}</th>
         </tr></thead><tbody>`;
         report.Pasos_Analizados.forEach(paso => {
-            const imgSrc = this.getFlowStepImage(hu, paso);
+            const imgSrc = this.getFlowStepImage(hu, paso); // Usa el método local
             html += `<tr class="${this.getFlowStepStatusClass(paso)}">
             <td>${paso.numero_paso}</td>
             <td>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</td>
@@ -1295,68 +797,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       }
       return stringValue;
   };
-
-  public getFlowStepImage(hu: HUData, paso: FlowAnalysisStep): string | null {
-    // Prefer image_referencia_salida if available, otherwise use imagen_referencia_entrada
-    const imageRefToUse = paso.imagen_referencia_salida || paso.imagen_referencia_entrada;
-    if (!imageRefToUse) return null;
-    
-    let imagesToUse: string[] | undefined;
-    let mimeTypesToUse: string[] | undefined;
-    let filenamesToUse: string[] | undefined;
-
-    // Determine which set of images to use based on the reference (A, B, or general)
-    if (imageRefToUse.toUpperCase().startsWith("IMAGEN A")) {
-        imagesToUse = hu.originalInput.imagesBase64FlowA;
-        mimeTypesToUse = hu.originalInput.imageMimeTypesFlowA;
-        filenamesToUse = hu.originalInput.imageFilenamesFlowA;
-    } else if (imageRefToUse.toUpperCase().startsWith("IMAGEN B")) {
-        imagesToUse = hu.originalInput.imagesBase64FlowB;
-        mimeTypesToUse = hu.originalInput.imageMimeTypesFlowB;
-        filenamesToUse = hu.originalInput.imageFilenamesFlowB;
-    } else { // General flow (not A/B specific, like from the direct flow analysis form)
-        imagesToUse = hu.originalInput.imagesBase64;
-        mimeTypesToUse = hu.originalInput.imageMimeTypes;
-        filenamesToUse = hu.originalInput.imageFilenames;
-    }
-
-    if (!imagesToUse?.length || !mimeTypesToUse?.length || !filenamesToUse?.length) return null;
-
-    // Attempt to find by filename if present in imageNameRef (e.g., "Imagen 1 (some_file.jpg)")
-    const filenameInRefMatch = imageRefToUse.match(/\(([^)]+)\)$/);
-    let imageIndex = -1;
-
-    if (filenameInRefMatch && filenameInRefMatch[1]) {
-        const targetFilename = filenameInRefMatch[1];
-        imageIndex = filenamesToUse.findIndex(fn => fn === targetFilename);
-    }
-    
-    // If not found by filename or filename not in ref, try by number (e.g., "Imagen 1")
-    if (imageIndex === -1) {
-        const numberMatch = imageRefToUse.match(/Imagen (?:[AB]\.)?(\d+)/i);
-        if (numberMatch?.[1]) {
-          imageIndex = parseInt(numberMatch[1], 10) - 1;
-        }
-    }
-    
-    if (imageIndex >= 0 && imageIndex < imagesToUse.length && imageIndex < mimeTypesToUse.length) {
-      return `data:${mimeTypesToUse[imageIndex]};base64,${imagesToUse[imageIndex]}`;
-    }
-    return null;
-  }
-
-
-  public getFlowStepStatusClass(paso: FlowAnalysisStep): string {
-    const status = (paso.resultado_obtenido_paso_y_estado || '').toLowerCase();
-    if (status.includes('exitosa con desviaciones') || status.includes('parcialmente exitosa')) return 'status-deviation';
-    if (status.includes('exitosa')) return 'status-success';
-    if (status.includes('fallido') || status.includes('fallida') || status.includes('error')) return 'status-failure';
-    return '';
-  }
-  
-  public isFlowAnalysisReportInErrorState = (r?: FlowAnalysisReportItem): boolean =>
-    !r ||
-    ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(r.Nombre_del_Escenario);
 
   public isBugReportInErrorState = (r?: BugReportItem[]): boolean =>
     !r || r.length === 0 ? false : r.some(b =>
