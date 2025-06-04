@@ -2,7 +2,7 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy, ElementRef, Inject, PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HUData, GenerationMode, FlowAnalysisReportItem, FlowAnalysisStep, BugReportItem, DetailedTestCase, TestCaseStep } from '../models/hu-data.model';
+import { HUData, GenerationMode, FlowAnalysisReportItem, FlowAnalysisStep, BugReportItem, DetailedTestCase, TestCaseStep, ImageAnnotation } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, Subscription, forkJoin } from 'rxjs';
@@ -18,6 +18,7 @@ interface DraggableFlowImage {
   base64: string;
   mimeType: string;
   id: string;
+  annotations?: ImageAnnotation[]; // para que este componente también pueda manejar anotaciones si se usa
 }
 
 @Component({
@@ -38,7 +39,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   showTestCaseGenerator: boolean = false;
   showParentFormComponent: boolean = false;
   showFlowComparisonComponent: boolean = false;
-  isModeSelected: boolean = false; 
+  isModeSelected: boolean = false;
 
   draggableFlowImages: DraggableFlowImage[] = [];
   flowImagesBase64: string[] = [];
@@ -137,8 +138,8 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       this.showFlowComparisonComponent = true;
     } else {
       console.error('[TestPlanGenerator] SelectInitialMode - Unknown mode received:', mode, ". Resetting to selection.");
-      this.resetActiveGeneratorsAndGoToSelection(); 
-      return; 
+      this.resetActiveGeneratorsAndGoToSelection();
+      return;
     }
 
     console.log('[TestPlanGenerator] SelectInitialMode - Flags state after setting:', {
@@ -157,17 +158,17 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.showTestCaseGenerator = false;
     this.showParentFormComponent = false;
     this.showFlowComparisonComponent = false;
-    this.isModeSelected = false; 
+    this.isModeSelected = false;
 
     this.formError = null;
     this.flowAnalysisErrorGlobal = null;
     this.bugComparisonErrorGlobal = null;
     
-    const keptSprint = this.currentFlowSprint; 
-    this.currentFlowTitle = ''; 
-    this.draggableFlowImages = []; 
-    this.flowImagesBase64 = []; 
-    this.flowImageMimeTypes = []; 
+    const keptSprint = this.currentFlowSprint;
+    this.currentFlowTitle = '';
+    this.draggableFlowImages = [];
+    this.flowImagesBase64 = [];
+    this.flowImageMimeTypes = [];
     this.flowImageUploadError = null;
 
     if (isPlatformBrowser(this.platformId) && this.flowAnalysisImageInputRef?.nativeElement) {
@@ -175,7 +176,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
     if (this.flowFormDirective?.form) {
       this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
-      this.currentFlowSprint = keptSprint; 
+      this.currentFlowSprint = keptSprint;
     }
     this.cdr.detectChanges();
   }
@@ -202,7 +203,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
-  resetToInitialSelection(): void { 
+  resetToInitialSelection(): void {
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
@@ -558,15 +559,36 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public toggleStaticEdit(baseName: StaticSectionBaseName): void {
-    let editingProp: keyof TestPlanGeneratorComponent, detailsOpenProp: keyof TestPlanGeneratorComponent;
+    let editingProp: keyof TestPlanGeneratorComponent;
+    let detailsOpenProp: keyof TestPlanGeneratorComponent;
+
     switch (baseName) {
-      case 'repositoryLink': editingProp = 'editingRepositoryLink'; detailsOpenProp = 'isRepositoryLinkDetailsOpen'; break;
-      case 'outOfScope': editingProp = 'editingOutOfScope'; detailsOpenProp = 'isOutOfScopeDetailsOpen'; break;
-      case 'strategy': editingProp = 'editingStrategy'; detailsOpenProp = 'isStrategyDetailsOpen'; break;
-      case 'limitations': editingProp = 'editingLimitations'; detailsOpenProp = 'isLimitationsDetailsOpen'; break;
-      case 'assumptions': editingProp = 'editingAssumptions'; detailsOpenProp = 'isAssumptionsDetailsOpen'; break;
-      case 'team': editingProp = 'editingTeam'; detailsOpenProp = 'isTeamDetailsOpen'; break;
-      default: return;
+      case 'repositoryLink':
+        editingProp = 'editingRepositoryLink';
+        detailsOpenProp = 'isRepositoryLinkDetailsOpen';
+        break;
+      case 'outOfScope':
+        editingProp = 'editingOutOfScope';
+        detailsOpenProp = 'isOutOfScopeDetailsOpen';
+        break;
+      case 'strategy':
+        editingProp = 'editingStrategy';
+        detailsOpenProp = 'isStrategyDetailsOpen';
+        break;
+      case 'limitations':
+        editingProp = 'editingLimitations';
+        detailsOpenProp = 'isLimitationsDetailsOpen';
+        break;
+      case 'assumptions':
+        editingProp = 'editingAssumptions';
+        detailsOpenProp = 'isAssumptionsDetailsOpen';
+        break;
+      case 'team':
+        editingProp = 'editingTeam';
+        detailsOpenProp = 'isTeamDetailsOpen';
+        break;
+      default:
+        return;
     }
     const wasEditing = this[editingProp] as boolean;
     (this[editingProp] as any) = !wasEditing;
@@ -600,7 +622,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
         hu.originalInput.imagesBase64!, hu.originalInput.imageMimeTypes!, hu.flowAnalysisReport[0], hu.userReanalysisContext
     ).pipe(
-        tap(report => { 
+        tap(report => {
             hu.flowAnalysisReport = report; hu.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
                 hu.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles en el error.'}`;
@@ -608,7 +630,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
             }
             hu.isEditingFlowReportDetails = false;
         }),
-        catchError(error => { 
+        catchError(error => {
             hu.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al re-generar análisis.';
             this.flowAnalysisErrorGlobal = hu.errorFlowAnalysis ?? null;
             hu.flowAnalysisReport = hu.flowAnalysisReport || [{ Nombre_del_Escenario: "Error Crítico en Re-Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: hu.errorFlowAnalysis ?? "Error desconocido", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "Re-análisis fallido." }];
@@ -672,7 +694,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         imagesArray = hu.originalInput.imagesBase64FlowB;
         mimeTypesArray = hu.originalInput.imageMimeTypesFlowB;
     } else {
-        imagesArray = hu.originalInput.imagesBase64; 
+        imagesArray = hu.originalInput.imagesBase64;
         mimeTypesArray = hu.originalInput.imageMimeTypes;
     }
 
@@ -711,7 +733,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
 
   private escapeHtmlForExport = (u: string | undefined | null): string => {
-    if (!u) return ''; 
+    if (!u) return '';
     return u.replace(/&/g, "&amp;")
            .replace(/</g, "&lt;")
            .replace(/>/g, "&gt;")
@@ -733,12 +755,15 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public regenerateStaticSectionWithAI(section: 'outOfScope' | 'strategy' | 'limitations' | 'assumptions'): void {
-    let sectionNameDisplay = '', currentContent = '', loadingFlag: keyof TestPlanGeneratorComponent | null = null, errorFlag: keyof TestPlanGeneratorComponent | null = null, detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
+    let sectionNameDisplay = '', currentContent = '', loadingFlag: keyof TestPlanGeneratorComponent | null = null, errorFlag: keyof TestPlanGeneratorComponent | null = null;
+    let detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
+
     switch (section) {
       case 'outOfScope': sectionNameDisplay = 'Fuera del Alcance'; currentContent = this.outOfScopeContent; loadingFlag = 'loadingOutOfScopeAI'; errorFlag = 'errorOutOfScopeAI'; detailsOpenFlag = 'isOutOfScopeDetailsOpen'; break;
       case 'strategy': sectionNameDisplay = 'Estrategia'; currentContent = this.strategyContent; loadingFlag = 'loadingStrategyAI'; errorFlag = 'errorStrategyAI'; detailsOpenFlag = 'isStrategyDetailsOpen'; break;
       case 'limitations': sectionNameDisplay = 'Limitaciones'; currentContent = this.limitationsContent; loadingFlag = 'loadingLimitationsAI'; errorFlag = 'errorLimitationsAI'; detailsOpenFlag = 'isLimitationsDetailsOpen'; break;
       case 'assumptions': sectionNameDisplay = 'Supuestos'; currentContent = this.assumptionsContent; loadingFlag = 'loadingAssumptionsAI'; errorFlag = 'errorAssumptionsAI'; detailsOpenFlag = 'isAssumptionsDetailsOpen'; break;
+      default: return; // Asegura que no se caiga si se llama con un valor inesperado
     }
     if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
 
@@ -780,16 +805,16 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
 
   public resetParentCurrentInputs(): void {
-    const keptSprint = this.currentFlowSprint; 
+    const keptSprint = this.currentFlowSprint;
 
-    if (this.flowFormDirective) { 
+    if (this.flowFormDirective) {
         this.flowFormDirective.resetForm({ currentFlowSprint: keptSprint, currentFlowTitle: '' });
     }
     this.currentFlowSprint = keptSprint;
-    this.currentFlowTitle = ''; 
+    this.currentFlowTitle = '';
 
     this.draggableFlowImages = []; this.flowImagesBase64 = []; this.flowImageMimeTypes = []; this.flowImageUploadError = null;
-    this.formError = null; 
+    this.formError = null;
     this.flowAnalysisErrorGlobal = null;
     this.bugComparisonErrorGlobal = null;
 
@@ -798,7 +823,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
       if (this.flowAnalysisImageInputRef?.nativeElement) this.flowAnalysisImageInputRef.nativeElement.value = '';
     }
     setTimeout(() => {
-        if(this.flowFormDirective?.form) { 
+        if(this.flowFormDirective?.form) {
             this.flowFormDirective.form.patchValue({
                 currentFlowSprint: this.currentFlowSprint,
                 currentFlowTitle: this.currentFlowTitle
@@ -824,7 +849,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  public generatePlanContentString(): string { 
+  public generatePlanContentString(): string {
     if (this.huList.length === 0 && !this.testPlanTitle) return 'Plan de pruebas aún no generado. Añade entradas.';
 
     let fullPlanContent = '';
@@ -893,7 +918,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                     }
                     fullPlanContent += `    Res.Esp. (Ref A: ${bug.imagen_referencia_flujo_a || 'N/A'}): ${bug.resultado_esperado}\n    Res.Act. (Ref B: ${bug.imagen_referencia_flujo_b || 'N/A'}): ${bug.resultado_actual}\n\n`;
                 });
-            } else if (hu.errorBugComparison) { 
+            } else if (hu.errorBugComparison) {
                 fullPlanContent += `  Error en comparación: ${hu.errorBugComparison}\n\n`;
             } else {
                 fullPlanContent += `  No se reportaron diferencias o hubo un error en la generación.\n\n`;
@@ -905,7 +930,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     return fullPlanContent;
   }
 
-  public generatePlanContentHtmlString(): string { 
+  public generatePlanContentHtmlString(): string {
     if (this.huList.length === 0 && !this.testPlanTitle) { return '<p style="text-align:center; color:#6c757d;">Plan de pruebas aún no generado. Añade entradas.</p>'; }
 
     let fullPlanHtmlContent = '';
@@ -947,7 +972,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                  if (report.Pasos_Analizados && report.Pasos_Analizados.length > 0) {
                     fullPlanHtmlContent += `  <p style="margin-left:15px;"><strong>Pasos:</strong></p>\n<ul style="margin-left:30px;">`;
                     report.Pasos_Analizados.forEach((paso) => {
-                        fullPlanHtmlContent += `<li>Paso ${paso.numero_paso}: ${this.escapeHtmlForExport(paso.descripcion_accion_observada)} (Ref. IA: ${this.escapeHtmlForExport(paso.imagen_referencia_entrada)}, Elem.IA: ${this.escapeHtmlForExport(paso.elemento_clave_y_ubicacion_aproximada)})<br>\n`;
+                        fullPlanHtmlContent += `<li>Paso ${paso.numero_paso}: ${this.escapeHtmlForExport(paso.descripcion_accion_observada)} (Ref IA: ${this.escapeHtmlForExport(paso.imagen_referencia_entrada)}, Elem.IA: ${this.escapeHtmlForExport(paso.elemento_clave_y_ubicacion_aproximada)})<br>\n`;
                         fullPlanHtmlContent += `      <em>Dato de Entrada (Paso):</em> ${this.escapeHtmlForExport(paso.dato_de_entrada_paso || 'N/A')}<br>\n`;
                         fullPlanHtmlContent += `      <em>Resultado Esperado (Paso):</em> ${this.escapeHtmlForExport(paso.resultado_esperado_paso)}<br>\n`;
                         fullPlanHtmlContent += `      <em>Resultado Obtenido (Paso):</em> ${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</li>\n`;
@@ -1031,7 +1056,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
     try {
       import('html-to-docx').then(module => {
-        const htmlToDocx = module.default; 
+        const htmlToDocx = module.default;
         if (typeof htmlToDocx === 'function') {
           const headerHtml = `<p style="font-size:10pt;color:#888888;text-align:right;">Plan de Pruebas - ${this.testPlanTitle || 'General'}</p>`;
           
@@ -1062,9 +1087,9 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
           htmlToDocx(fullHtmlForDocx, headerHtml, {
             table: { row: { cantSplit: true } },
-            footer: true, 
-            pageNumber: true, 
-          }).then((fileBuffer: BlobPart) => { 
+            footer: true,
+            pageNumber: true,
+          }).then((fileBuffer: BlobPart) => {
             saveAs(new Blob([fileBuffer]), `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}.docx`);
           }).catch((error: any) => {
             console.error('Error al generar DOCX con html-to-docx:', error);
@@ -1156,7 +1181,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     }
     const report = hu.flowAnalysisReport[0];
     const date = new Date().toISOString().split('T')[0];
-    const title = language === 'en' 
+    const title = language === 'en'
         ? `Flow Analysis Report: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`
         : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
 
@@ -1210,7 +1235,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     
     const match = paso.imagen_referencia_entrada?.match(/Imagen (?:[AB]\.?)?(\d+)/i);
     if (match?.[1]) {
-      const imageIndex = parseInt(match[1], 10) - 1; 
+      const imageIndex = parseInt(match[1], 10) - 1;
       
       let imagesToUse: string[] | undefined;
       let mimeTypesToUse: string[] | undefined;

@@ -2,11 +2,12 @@
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HUData, GenerationMode, BugReportItem } from '../models/hu-data.model';
+import { HUData, GenerationMode, BugReportItem, ImageAnnotation } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
+import { ImageAnnotationEditorComponent } from '../image-annotation-editor/image-annotation-editor.component'; // Importa el nuevo componente
 
 interface DraggableFlowImage {
   file: File;
@@ -19,7 +20,7 @@ interface DraggableFlowImage {
 @Component({
   selector: 'app-flow-comparison',
   standalone: true,
-  imports: [FormsModule, CommonModule],
+  imports: [FormsModule, CommonModule, ImageAnnotationEditorComponent],
   templateUrl: './flow-comparison.component.html',
   styleUrls: ['./flow-comparison.component.css']
 })
@@ -32,22 +33,30 @@ export class FlowComparisonComponent implements OnInit {
   imagesBase64FlowA: string[] = [];
   imageMimeTypesFlowA: string[] = [];
   imageUploadErrorFlowA: string | null = null;
+  annotationsFlowA: ImageAnnotation[] = []; // Para almacenar anotaciones del Flujo A
 
   draggableImagesFlowB: DraggableFlowImage[] = [];
   imagesBase64FlowB: string[] = [];
   imageMimeTypesFlowB: string[] = [];
   imageUploadErrorFlowB: string | null = null;
+  annotationsFlowB: ImageAnnotation[] = []; // Para almacenar anotaciones del Flujo B
 
   formError: string | null = null;
   currentFlowTitle: string = '';
   currentFlowSprint: string = '';
-  userBugComparisonReanalysisContext: string = '';
+  userBugComparisonReanalysisContext: string = ''; // Este campo ahora puede incluir anotaciones serializadas
 
   loadingBugComparison: boolean = false;
   bugComparisonError: string | null = null;
 
   // Store the generated HUData for potential re-analysis within this component
   private currentHUData: HUData | null = null;
+
+  // ESTADO DEL EDITOR DE IMÁGENES
+  showImageEditor: boolean = false;
+  imageToEditUrl: string | ArrayBuffer | null = null;
+  imageToEditFlowType: 'A' | 'B' | null = null;
+  existingAnnotationsForEditor: ImageAnnotation[] = [];
 
 
   @ViewChild('comparisonFlowForm') comparisonFlowFormDirective!: NgForm;
@@ -73,8 +82,8 @@ export class FlowComparisonComponent implements OnInit {
 
   resetForm(): void {
     this.formError = null;
-    this.draggableImagesFlowA = []; this.imagesBase64FlowA = []; this.imageMimeTypesFlowA = []; this.imageUploadErrorFlowA = null;
-    this.draggableImagesFlowB = []; this.imagesBase64FlowB = []; this.imageMimeTypesFlowB = []; this.imageUploadErrorFlowB = null;
+    this.draggableImagesFlowA = []; this.imagesBase64FlowA = []; this.imageMimeTypesFlowA = []; this.imageUploadErrorFlowA = null; this.annotationsFlowA = [];
+    this.draggableImagesFlowB = []; this.imagesBase64FlowB = []; this.imageMimeTypesFlowB = []; this.imageUploadErrorFlowB = null; this.annotationsFlowB = [];
     
     const keptSprint = this.currentFlowSprint;
     this.currentFlowTitle = '';
@@ -82,6 +91,12 @@ export class FlowComparisonComponent implements OnInit {
     this.currentHUData = null;
     this.loadingBugComparison = false;
     this.bugComparisonError = null;
+
+    // Reiniciar estado del editor
+    this.showImageEditor = false;
+    this.imageToEditUrl = null;
+    this.imageToEditFlowType = null;
+    this.existingAnnotationsForEditor = [];
 
     if (isPlatformBrowser(this.platformId)) {
       if (this.imageFilesInputFlowARef?.nativeElement) this.imageFilesInputFlowARef.nativeElement.value = '';
@@ -104,7 +119,9 @@ export class FlowComparisonComponent implements OnInit {
     if (!this.comparisonFlowFormDirective || !this.comparisonFlowFormDirective.form) {
       return true;
     }
-    return !this.currentFlowSprint || !this.currentFlowTitle || this.draggableImagesFlowA.length === 0 || this.draggableImagesFlowB.length === 0;
+    // VALIDACIÓN MODIFICADA: Ahora el Flujo A es opcional, pero al menos uno debe estar presente.
+    return !this.currentFlowSprint || !this.currentFlowTitle ||
+           (this.draggableImagesFlowA.length === 0 && this.draggableImagesFlowB.length === 0);
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
@@ -119,26 +136,29 @@ export class FlowComparisonComponent implements OnInit {
   onFileSelected(event: Event, flowType: 'A' | 'B'): void {
     let currentDraggableImagesRef!: DraggableFlowImage[];
     let currentUploadErrorProp!: 'imageUploadErrorFlowA' | 'imageUploadErrorFlowB';
+    let currentAnnotationsRef!: ImageAnnotation[];
     const maxImages = 10;
 
     if (flowType === 'A') {
         currentDraggableImagesRef = this.draggableImagesFlowA;
         this.imageUploadErrorFlowA = null; currentUploadErrorProp = 'imageUploadErrorFlowA';
+        currentAnnotationsRef = this.annotationsFlowA;
     } else if (flowType === 'B') {
         currentDraggableImagesRef = this.draggableImagesFlowB;
         this.imageUploadErrorFlowB = null; currentUploadErrorProp = 'imageUploadErrorFlowB';
+        currentAnnotationsRef = this.annotationsFlowB;
     } else return;
 
     this.formError = null;
     currentDraggableImagesRef.length = 0;
+    currentAnnotationsRef.length = 0; // Reset annotations when files change
 
     const element = event.currentTarget as HTMLInputElement;
     const fileList: FileList | null = element.files;
 
     if (fileList && fileList.length > 0) {
         if (fileList.length > maxImages) {
-            this[currentUploadErrorProp] = `Puedes seleccionar un máximo de ${maxImages} imágenes.`;
-            element.value = ""; return;
+            this[currentUploadErrorProp] = `Puedes seleccionar un máximo de ${maxImages} imágenes.`; element.value = ""; return;
         }
         let filesArray = Array.from(fileList);
         filesArray.sort((a, b) => {
@@ -163,6 +183,7 @@ export class FlowComparisonComponent implements OnInit {
             if (validationErrorFound) {
                 element.value = "";
                 currentDraggableImagesRef.length = 0;
+                currentAnnotationsRef.length = 0; // Asegurarse de que las anotaciones también se reseteen
                 this.updateBase64Arrays(flowType);
                 this.cdr.detectChanges();
                 return;
@@ -179,7 +200,7 @@ export class FlowComparisonComponent implements OnInit {
             });
             fileProcessingObservables.push(readerObservable);
         }
-        if (validationErrorFound) { currentDraggableImagesRef.length = 0; this.updateBase64Arrays(flowType); this.cdr.detectChanges(); return; }
+        if (validationErrorFound) { currentDraggableImagesRef.length = 0; currentAnnotationsRef.length = 0; this.updateBase64Arrays(flowType); this.cdr.detectChanges(); return; }
 
         if (fileProcessingObservables.length > 0) {
             forkJoin(fileProcessingObservables).subscribe({
@@ -188,11 +209,12 @@ export class FlowComparisonComponent implements OnInit {
                     this.updateBase64Arrays(flowType);
                 },
                 complete: () => { this.comparisonFlowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); },
-                error: () => { element.value = ""; currentDraggableImagesRef.length = 0; this.updateBase64Arrays(flowType); this.comparisonFlowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); }
+                error: () => { element.value = ""; currentDraggableImagesRef.length = 0; currentAnnotationsRef.length = 0; this.updateBase64Arrays(flowType); this.comparisonFlowFormDirective?.form.updateValueAndValidity(); this.cdr.detectChanges(); }
             });
         }
     } else {
         currentDraggableImagesRef.length = 0;
+        currentAnnotationsRef.length = 0;
         this.updateBase64Arrays(flowType);
         this.comparisonFlowFormDirective?.form.updateValueAndValidity();
         this.cdr.detectChanges();
@@ -220,7 +242,7 @@ export class FlowComparisonComponent implements OnInit {
   processComparison(): void {
     this.formError = null; this.bugComparisonError = null;
     if (this.isFormInvalid()) {
-      this.formError = "Por favor, completa todos los campos requeridos y carga imágenes para ambos flujos.";
+      this.formError = "Por favor, completa todos los campos requeridos y carga al menos un conjunto de imágenes (Flujo A o Flujo B).";
       if (this.comparisonFlowFormDirective?.form) {
         Object.values(this.comparisonFlowFormDirective.form.controls).forEach(control => {
           if (control.invalid && control.enabled) control.markAsTouched();
@@ -234,6 +256,19 @@ export class FlowComparisonComponent implements OnInit {
 
     this.loadingBugComparison = true;
 
+    // Prepara el userContext incluyendo las anotaciones
+    let contextWithAnnotations = this.userBugComparisonReanalysisContext;
+    if (this.annotationsFlowA.length > 0 || this.annotationsFlowB.length > 0) {
+      contextWithAnnotations += "\n\n--- ANOTACIONES ADICIONALES ---";
+      if (this.annotationsFlowA.length > 0) {
+        contextWithAnnotations += "\nFlujo A Anotaciones: " + JSON.stringify(this.annotationsFlowA.map(a => ({ seq: a.sequence, desc: a.description, box: [a.x, a.y, a.width, a.height] })));
+      }
+      if (this.annotationsFlowB.length > 0) {
+        contextWithAnnotations += "\nFlujo B Anotaciones: " + JSON.stringify(this.annotationsFlowB.map(a => ({ seq: a.sequence, desc: a.description, box: [a.x, a.y, a.width, a.height] })));
+      }
+      contextWithAnnotations += "\n-------------------------------";
+    }
+
     const huDataToEmit: HUData = {
         originalInput: {
           id: finalId, title: this.currentFlowTitle, sprint: this.currentFlowSprint,
@@ -243,6 +278,8 @@ export class FlowComparisonComponent implements OnInit {
           imageMimeTypesFlowA: [...this.imageMimeTypesFlowA],
           imagesBase64FlowB: [...this.imagesBase64FlowB],
           imageMimeTypesFlowB: [...this.imageMimeTypesFlowB],
+          annotationsFlowA: [...this.annotationsFlowA], // Guardar las anotaciones en HUData
+          annotationsFlowB: [...this.annotationsFlowB], // Guardar las anotaciones en HUData
         },
         id: finalId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
         generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
@@ -257,14 +294,14 @@ export class FlowComparisonComponent implements OnInit {
         loadingBugComparison: true, // Set for this specific HUData instance too
         errorBugComparison: null,
         isBugComparisonDetailsOpen: true, // Open by default when generated
-        userBugComparisonReanalysisContext: this.userBugComparisonReanalysisContext,
+        userBugComparisonReanalysisContext: contextWithAnnotations, // Pasar el contexto completo
       };
     this.currentHUData = huDataToEmit; // Store for re-analysis
 
     this.geminiService.compareImageFlows(
       this.imagesBase64FlowA, this.imageMimeTypesFlowA,
       this.imagesBase64FlowB, this.imageMimeTypesFlowB,
-      this.userBugComparisonReanalysisContext // Pass context here
+      contextWithAnnotations // Pasar el userContext que incluye las anotaciones
     ).pipe(
       tap(report => {
         if (this.currentHUData) {
@@ -359,7 +396,7 @@ export class FlowComparisonComponent implements OnInit {
       if (draggedHtmlElement) (draggedHtmlElement as HTMLElement).style.opacity = '1';
     }
     if (flowType === 'A') { this.draggedImageFlowA = null; this.dragOverImageIdFlowA = null; }
-    else if (flowType === 'B') { this.draggedImageFlowB = null; this.dragOverImageIdFlowB = null; }
+    else if (flowType === 'B') { this.draggedImageFlowB = null; this.dragOverImageIdFlowB = null; } // CORRECCIÓN
   }
 
   handleCancelFlowForm() {
@@ -376,4 +413,41 @@ export class FlowComparisonComponent implements OnInit {
         b.titulo_bug.startsWith("Error en el Análisis de Imágenes")
     );
 
+  // --- MÉTODOS PARA EL EDITOR DE IMÁGENES ---
+  openImageEditor(flowType: 'A' | 'B'): void {
+    let images: DraggableFlowImage[] = [];
+    if (flowType === 'A') {
+      images = this.draggableImagesFlowA;
+      this.existingAnnotationsForEditor = [...this.annotationsFlowA];
+    } else if (flowType === 'B') {
+      images = this.draggableImagesFlowB;
+      this.existingAnnotationsForEditor = [...this.annotationsFlowB];
+    }
+
+    if (images.length > 0) {
+      // Para simplificar, abrimos el editor con la primera imagen cargada.
+      // En un caso real, podrías querer un selector de imagen si hay varias.
+      this.imageToEditUrl = images[0].preview;
+      this.imageToEditFlowType = flowType;
+      this.showImageEditor = true;
+    } else {
+      alert(`No hay imágenes en el Flujo ${flowType} para editar.`);
+    }
+  }
+
+  onAnnotationsSaved(annotations: ImageAnnotation[]): void {
+    if (this.imageToEditFlowType === 'A') {
+      this.annotationsFlowA = annotations;
+    } else if (this.imageToEditFlowType === 'B') {
+      this.annotationsFlowB = annotations;
+    }
+    this.closeImageEditor();
+  }
+
+  closeImageEditor(): void {
+    this.showImageEditor = false;
+    this.imageToEditUrl = null;
+    this.imageToEditFlowType = null;
+    this.existingAnnotationsForEditor = [];
+  }
 }

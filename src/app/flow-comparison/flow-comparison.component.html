@@ -20,23 +20,28 @@
         <div class="form-group">
             <label for="compFlowCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
             <input id="compFlowCurrentSprint" type="text" name="currentFlowSprint" [(ngModel)]="currentFlowSprint" required placeholder="Ej: Sprint Actual" class="form-control">
-            <div *ngIf="comparisonFlowForm.controls['currentFlowSprint']?.invalid && (comparisonFlowForm.controls['currentFlowSprint']?.dirty || comparisonFlowForm.controls['currentFlowSprint']?.touched || comparisonFlowForm.submitted)" class="validation-error" role="alert">
+            <div *ngIf="comparisonFlowForm.controls['currentFlowSprint']?.invalid && (comparisonFlowForm.controls['currentFlowSprint']?.dirty || comparisonFlowForm.controls['currentSprint']?.touched || comparisonFlowForm.submitted)" class="validation-error" role="alert">
                 Sprint es requerido.
             </div>
         </div>
         
         <div class="form-group full-width">
             <h3 class="flow-comparison-subtitle">Flujo A (Referencia/Esperado)</h3>
-            <label for="imageFilesFlowA">Cargar Imágenes Flujo A (JPG, PNG - Máx. 4MB c/u, Máx. 10):<span class="required-indicator">*</span></label>
-            <input type="file" id="imageFilesFlowA" name="imageFilesFlowA" (change)="onFileSelected($event, 'A')" accept="image/jpeg, image/png"
+            <label for="imageFilesFlowA">Cargar Imágenes Flujo A (JPG, PNG - Máx. 4MB c/u, Máx. 10):</label> <input type="file" id="imageFilesFlowA" name="imageFilesFlowA" (change)="onFileSelected($event, 'A')" accept="image/jpeg, image/png"
                    multiple #imageFilesInputFlowA>
             <div *ngIf="imageUploadErrorFlowA" class="validation-error" role="alert">{{ imageUploadErrorFlowA }}</div>
-            <div *ngIf="comparisonFlowForm.submitted && draggableImagesFlowA.length === 0" class="validation-error" role="alert">Debes seleccionar imágenes para Flujo A.</div>
+            <div *ngIf="comparisonFlowForm.submitted && draggableImagesFlowA.length === 0 && draggableImagesFlowB.length === 0" class="validation-error" role="alert">Debes seleccionar imágenes para al menos un flujo (Flujo A o Flujo B).</div>
             <div *ngIf="draggableImagesFlowA.length > 0" class="image-preview-container multiple-previews"
                  (dragover)="onImageDragOver($event, undefined, 'A')" (dragleave)="onImageDragLeave($event, 'A')">
                 <p>Imágenes Flujo A ({{ draggableImagesFlowA.length }}). Arrastra para reordenar:</p>
                 <div *ngFor="let imgItem of draggableImagesFlowA; let i = index" class="image-preview-item" [class.drag-over-element]="dragOverImageIdFlowA === imgItem.id" draggable="true" (dragstart)="onImageDragStart($event, imgItem, 'A')" (drop)="onImageDrop($event, imgItem, 'A')" (dragend)="onImageDragEnd($event, 'A')" (dragover)="onImageDragOver($event, imgItem, 'A')">
                     <span class="image-order-badge">{{i + 1}}</span><img [src]="imgItem.preview" [alt]="'Flujo A: ' + imgItem.file.name" class="image-preview"><span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
+                </div>
+                <button type="button" class="button-small button-secondary" (click)="openImageEditor('A')" [disabled]="draggableImagesFlowA.length === 0">
+                    Editar Anotaciones (Flujo A)
+                </button>
+                <div *ngIf="annotationsFlowA.length > 0" class="annotations-summary">
+                  Anotaciones: {{ annotationsFlowA.length }}
                 </div>
             </div>
         </div>
@@ -44,13 +49,19 @@
             <h3 class="flow-comparison-subtitle">Flujo B (Actual/A Comparar)</h3>
             <label for="imageFilesFlowB">Cargar Imágenes Flujo B (JPG, PNG - Máx. 4MB c/u, Máx. 10):<span class="required-indicator">*</span></label>
             <input type="file" id="imageFilesFlowB" name="imageFilesFlowB" (change)="onFileSelected($event, 'B')" accept="image/jpeg, image/png"
-                   multiple #imageFilesInputFlowB>
+                   multiple #imageFilesInputFlowB required>
             <div *ngIf="imageUploadErrorFlowB" class="validation-error" role="alert">{{ imageUploadErrorFlowB }}</div>
              <div *ngIf="comparisonFlowForm.submitted && draggableImagesFlowB.length === 0" class="validation-error" role="alert">Debes seleccionar imágenes para Flujo B.</div>
             <div *ngIf="draggableImagesFlowB.length > 0" class="image-preview-container multiple-previews" (dragover)="onImageDragOver($event, undefined, 'B')" (dragleave)="onImageDragLeave($event, 'B')">
                 <p>Imágenes Flujo B ({{ draggableImagesFlowB.length }}). Arrastra para reordenar:</p>
                 <div *ngFor="let imgItem of draggableImagesFlowB; let i = index" class="image-preview-item" [class.drag-over-element]="dragOverImageIdFlowB === imgItem.id" draggable="true" (dragstart)="onImageDragStart($event, imgItem, 'B')" (drop)="onImageDrop($event, imgItem, 'B')" (dragend)="onImageDragEnd($event, 'B')" (dragover)="onImageDragOver($event, imgItem, 'B')">
                     <span class="image-order-badge">{{i + 1}}</span><img [src]="imgItem.preview" [alt]="'Flujo B: ' + imgItem.file.name" class="image-preview"><span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
+                </div>
+                <button type="button" class="button-small button-secondary" (click)="openImageEditor('B')" [disabled]="draggableImagesFlowB.length === 0">
+                  Editar Anotaciones (Flujo B)
+                </button>
+                <div *ngIf="annotationsFlowB.length > 0" class="annotations-summary">
+                  Anotaciones: {{ annotationsFlowB.length }}
                 </div>
             </div>
         </div>
@@ -75,3 +86,11 @@
       </div>
     </form>
 </div>
+
+<app-image-annotation-editor
+  *ngIf="showImageEditor"
+  [imageUrl]="imageToEditUrl"
+  [existingAnnotations]="existingAnnotationsForEditor"
+  (annotationsChanged)="onAnnotationsSaved($event)"
+  (editorClosed)="closeImageEditor()">
+</app-image-annotation-editor>

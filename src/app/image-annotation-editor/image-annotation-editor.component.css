@@ -1,0 +1,132 @@
+/* src/app/image-annotation-editor/image-annotation-editor.component.css */
+.editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .editor-container {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    max-width: 90%;
+    max-height: 90%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .editor-container h3 {
+    color: #3b5a6b;
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  
+  .canvas-area {
+    position: relative;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    display: inline-block; /* Para ajustar el tamaño del contenedor al canvas */
+    max-width: 100%; /* Asegura que no se desborde en el contenedor */
+    height: auto;
+  }
+  
+  .annotation-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+  }
+  
+  .base-image {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  
+  .annotations-list {
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+  }
+  
+  .annotations-list h4 {
+    color: #4a6d7c;
+    margin-bottom: 10px;
+  }
+  
+  .no-annotations-message {
+    font-style: italic;
+    color: #6c757d;
+    margin-bottom: 15px;
+  }
+  
+  .annotation-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+  
+  .annotation-item input {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+  }
+  
+  .editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+  }
+  
+  /* Estilos de botones básicos para reusar */
+  .button-primary, .button-secondary, .button-small, .button-cancel {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+  }
+  
+  .button-primary {
+    background-color: #4a6d7c;
+    color: #fff;
+  }
+  .button-primary:hover {
+    background-color: #3b5a6b;
+  }
+  
+  .button-secondary {
+    background-color: #e9ecef;
+    color: #343a40;
+  }
+  .button-secondary:hover {
+    background-color: #dee2e6;
+  }
+  
+  .button-cancel {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  .button-cancel:hover {
+    background-color: #f1c0c5;
+  }

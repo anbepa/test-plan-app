@@ -37,7 +37,8 @@
             },
             "allowedCommonJsDependencies": [
               "file-saver",
-              "html-to-docx"
+              "html-to-docx",
+              "node-fetch" // AÑADIDO: para el proxy
             ],
             "externalDependencies": [
               "url",

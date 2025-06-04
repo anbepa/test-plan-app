@@ -58,6 +58,16 @@ export interface BugReportItem {
   descripcion_diferencia_general?: string;
 }
 
+// --- NUEVA INTERFAZ PARA ANOTACIONES DE IMAGEN ---
+export interface ImageAnnotation {
+  sequence: number; // Número de secuencia para identificar y ordenar
+  description: string; // Breve descripción del error o paso
+  x: number; // Coordenada X del inicio del rectángulo (0-1, normalizado)
+  y: number; // Coordenada Y del inicio del rectángulo (0-1, normalizado)
+  width: number; // Ancho del rectángulo (0-1, normalizado)
+  height: number; // Alto del rectángulo (0-1, normalizado)
+}
+
 // --- Tipo para el Modo de Generación ---
 export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
 
@@ -69,7 +79,7 @@ export interface HUData {
     sprint: string;
     description?: string;
     acceptanceCriteria?: string;
-    selectedTechnique: string; 
+    selectedTechnique: string;
     generationMode: GenerationMode;
     imagesBase64?: string[];
     imageMimeTypes?: string[];
@@ -77,38 +87,41 @@ export interface HUData {
     imageMimeTypesFlowA?: string[];
     imagesBase64FlowB?: string[];
     imageMimeTypesFlowB?: string[];
+    // NUEVAS PROPIEDADES PARA ANOTACIONES
+    annotationsFlowA?: ImageAnnotation[];
+    annotationsFlowB?: ImageAnnotation[];
   };
   id: string;
   title: string;
   sprint: string;
   generatedScope: string;
   detailedTestCases: DetailedTestCase[];
-  generatedTestCaseTitles: string; 
-  
+  generatedTestCaseTitles: string;
+
   editingScope: boolean;
   loadingScope: boolean;
   errorScope: string | null;
   isScopeDetailsOpen: boolean;
 
-  editingScenarios: boolean; 
+  editingScenarios: boolean;
   loadingScenarios: boolean;
   errorScenarios: string | null;
-  showRegenTechniquePicker: boolean; 
-  regenSelectedTechnique: string; 
-  userTestCaseReanalysisContext: string; 
+  showRegenTechniquePicker: boolean;
+  regenSelectedTechnique: string;
+  userTestCaseReanalysisContext: string;
   isScenariosDetailsOpen: boolean;
-  isEditingDetailedTestCases?: boolean; 
+  isEditingDetailedTestCases?: boolean;
 
   flowAnalysisReport?: FlowAnalysisReportItem[];
   loadingFlowAnalysis?: boolean;
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
-  isEditingFlowReportDetails?: boolean; 
+  isEditingFlowReportDetails?: boolean;
   userReanalysisContext?: string;
 
   bugComparisonReport?: BugReportItem[];
   loadingBugComparison?: boolean;
   errorBugComparison?: string | null;
   isBugComparisonDetailsOpen?: boolean;
-  userBugComparisonReanalysisContext?: string; // NUEVA PROPIEDAD
+  userBugComparisonReanalysisContext?: string;
 }
