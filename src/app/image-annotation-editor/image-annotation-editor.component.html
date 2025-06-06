@@ -12,10 +12,34 @@
       <div *ngIf="currentAnnotations.length === 0" class="no-annotations-message">
         No hay anotaciones. Dibuja un rectángulo en la imagen o haz clic en "Añadir Anotación".
       </div>
-      <div *ngFor="let ann of currentAnnotations; let i = index" class="annotation-item">
-        <span>#{{ ann.sequence }}:</span>
-        <input type="text" [(ngModel)]="ann.description" placeholder="Descripción de la anotación" (input)="drawCanvas()">
-        <button (click)="removeAnnotation(i)" class="button-small button-cancel">Eliminar</button>
+      <div *ngFor="let ann of currentAnnotations; let i = index" class="annotation-item" [class.selected]="i === selectedAnnotationIndex">
+        <div class="annotation-item-header" (click)="selectAnnotation(i)">
+          <span>#{{ ann.sequence }}:</span>
+          <input type="text" [(ngModel)]="ann.description" placeholder="Descripción de la anotación" (input)="drawCanvas(); $event.stopPropagation()">
+          <button (click)="removeAnnotation(i); $event.stopPropagation()" class="button-small button-cancel" title="Eliminar anotación">Eliminar</button>
+        </div>
+        <div *ngIf="i === selectedAnnotationIndex" class="annotation-details">
+          <div class="form-group">
+            <label>Tipo de Elemento/Acción:</label>
+            <select [(ngModel)]="ann.elementType" (change)="drawCanvas()">
+              <option value="">Seleccionar tipo</option>
+              <option value="Campo de Entrada">Campo de Entrada</option>
+              <option value="Botón">Botón</option>
+              <option value="Enlace">Enlace</option>
+              <option value="Mensaje/Etiqueta">Mensaje/Etiqueta</option>
+              <option value="Elemento de Datos">Elemento de Datos (DB/API)</option>
+              <option value="Log de Evento">Log de Evento</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Valor/Texto Asociado:</label>
+            <input type="text" [(ngModel)]="ann.elementValue" placeholder="Ej: 'usuario@mail.com', 'Login exitoso', 'Código: 200'" (input)="drawCanvas()">
+          </div>
+          <div class="coords-display">
+            Coordenadas (Normalizado): X: {{ ann.x | number:'1.2-2' }}, Y: {{ ann.y | number:'1.2-2' }}, W: {{ ann.width | number:'1.2-2' }}, H: {{ ann.height | number:'1.2-2' }}
+          </div>
+        </div>
       </div>
       <button (click)="addAnnotation()" class="button-secondary button-small">Añadir Anotación Manual</button>
     </div>

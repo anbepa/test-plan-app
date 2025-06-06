@@ -24,6 +24,7 @@ export interface FlowAnalysisStep {
   resultado_esperado_paso: string;
   resultado_obtenido_paso_y_estado: string;
   imagen_referencia_salida?: string; // Nombre o identificador de la imagen resultado del paso
+  userStepContext?: string; // NUEVO: Notas del usuario para este paso específico
 }
 
 export interface FlowAnalysisReportItem {
@@ -31,6 +32,8 @@ export interface FlowAnalysisReportItem {
   Pasos_Analizados: FlowAnalysisStep[];
   Resultado_Esperado_General_Flujo: string;
   Conclusion_General_Flujo: string;
+  // user_provided_additional_context se usa en GeminiService como un string para el prompt,
+  // no directamente en el modelo de reporte que Gemini devuelve.
 }
 
 // --- Interfaces para Reporte de Bugs (Comparación de Flujos) ---
@@ -71,6 +74,8 @@ export interface ImageAnnotation {
   imageFilename?: string; // Nombre del archivo original de la imagen a la que pertenece
   flowType?: 'A' | 'B'; // Para saber a qué flujo pertenece, si es general para la HU
   imageIndex?: number; // Para saber a qué imagen dentro del flujo A o B pertenece
+  elementType?: string; // NUEVO: Ej: 'Input Field', 'Button', 'Data Element', 'Log Entry'
+  elementValue?: string; // NUEVO: Ej: 'user@example.com', 'Login Successful', 'Error Code: 500'
 }
 
 // --- Tipo para el Modo de Generación ---
@@ -97,8 +102,8 @@ export interface HUData {
     imageFilenamesFlowB?: string[];
     // Almacena todas las anotaciones, pueden ser filtradas o mapeadas después.
     // Para Gemini, el contexto adicional se construirá con esta información.
-    annotationsFlowA?: ImageAnnotation[];
-    annotationsFlowB?: ImageAnnotation[];
+    annotationsFlowA?: ImageAnnotation[]; // Ahora se usará para cualquier flujo de análisis/comparación
+    annotationsFlowB?: ImageAnnotation[]; // Para flujos de comparación
   };
   id: string;
   title: string;
@@ -126,7 +131,8 @@ export interface HUData {
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
   isEditingFlowReportDetails?: boolean;
-  userReanalysisContext?: string; // Contexto para regenerar análisis de flujo
+  userReanalysisContext?: string; // Contexto general para regenerar análisis de flujo
+  // Las anotaciones por paso se almacenarán dentro de flowAnalysisReport[0].Pasos_Analizados[n].userStepContext
 
   bugComparisonReport?: BugReportItem[];
   loadingBugComparison?: boolean;

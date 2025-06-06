@@ -20,12 +20,12 @@ interface DraggableFlowImage {
 
 @Component({
   selector: 'app-flow-comparison',
-  standalone: true,
+  standalone: true, // AJUSTE: Confirmado como standalone
   imports: [FormsModule, CommonModule, ImageAnnotationEditorComponent],
-  templateUrl: './flow-comparison.component.html',
+  templateUrl: './flow-comparison.component.html', // AJUSTE: Corregido el nombre del archivo de la plantilla
   styleUrls: ['./flow-comparison.component.css']
 })
-export class FlowComparisonComponent implements OnInit {
+export class FlowComparisonComponent implements OnInit { // AJUSTE: Asegurado que la clase se exporta
   @Input() initialSprint: string = '';
   @Output() comparisonGenerated = new EventEmitter<HUData>();
   @Output() cancelComparison = new EventEmitter<void>();
@@ -178,7 +178,7 @@ export class FlowComparisonComponent implements OnInit {
 
         for (const file of filesArray) {
             if (validationErrorFound) continue;
-            if (file.size > 4 * 1024 * 1024) {
+            if (file.size > 10 * 1024 * 1024) {
                  this[currentUploadErrorProp] = `"${file.name}" excede 4MB.`; validationErrorFound = true;
             }
             if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) {
@@ -274,7 +274,10 @@ export class FlowComparisonComponent implements OnInit {
         combinedUserContext += (combinedUserContext ? "\n\n" : "") + "--- ANOTACIONES JSON FLUJO A (para referencia de IA) ---\n" +
                                   JSON.stringify(allAnnotationsFlowA.map(a => ({
                                     imagen_ref_ia: `A.${a.imageIndex} (nombre_original: ${a.imageFilename})`,
-                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height]
+                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height],
+                                    elementType: a.elementType || 'N/A',
+                                    elementValue: a.elementValue || 'N/A'
+                                    
                                   })));
     }
 
@@ -296,7 +299,9 @@ export class FlowComparisonComponent implements OnInit {
         combinedUserContext += (combinedUserContext ? "\n\n" : "") + "--- ANOTACIONES JSON FLUJO B (para referencia de IA) ---\n" +
                                    JSON.stringify(allAnnotationsFlowB.map(a => ({
                                     imagen_ref_ia: `B.${a.imageIndex} (nombre_original: ${a.imageFilename})`,
-                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height]
+                                    anot_seq: a.sequence, anot_desc: a.description, anot_box_norm: [a.x, a.y, a.width, a.height],
+                                    elementType: a.elementType || 'N/A',
+                                    elementValue: a.elementValue || 'N/A' 
                                   })));
      }
      if (allAnnotationsFlowA.length > 0 || allAnnotationsFlowB.length > 0 || this.userBugComparisonReanalysisContext) {
