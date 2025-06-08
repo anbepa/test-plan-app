@@ -570,17 +570,75 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     const report = hu.flowAnalysisReport![0];
     const date = new Date().toISOString().split('T')[0];
     const title = language === 'en' ? `Flow Analysis Report: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}` : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
-    let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#333}.report-container{max-width:900px;margin:auto}h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}h2{font-size:1.4em;color:#4a6d7c;margin-top:20px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0}table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:.9em}th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}th{background-color:#f2f2f2;font-weight:600}img.flow-step-image{max-width:150px;max-height:100px;border:1px solid #ccc;border-radius:4px;display:block;margin:5px 0;background-color:#fff;object-fit:contain}tr.status-success td:first-child{border-left:5px solid #28a745!important}tr.status-failure td:first-child{border-left:5px solid #dc3545!important}tr.status-deviation td:first-child{border-left:5px solid #ffc107!important}.conclusion-section p{margin-bottom:8px} .conclusion-section strong{color:#555}</style></head><body><div class="report-container"><h1>${title}</h1><p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${date}</p>`;
+    let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>
+    body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#333}
+    .report-container{max-width:900px;margin:auto}
+    h1{color:#3b5a6b;border-bottom:2px solid #e9ecef;padding-bottom:10px}
+    h2{font-size:1.4em;color:#4a6d7c;margin-top:20px;margin-bottom:10px;padding-bottom:5px;border-bottom:1px dashed #e0e0e0}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:.9em}
+    th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
+    th{background-color:#f2f2f2;font-weight:600}
+    
+    /* ANTERIOR: .flow-step-image (eliminado o modificado, ya no se usa directamente) */
+
+    /* NUEVO: Estilos para la fila y la imagen de evidencia */
+    tr.evidence-row td { 
+      padding: 10px; 
+      text-align: center; 
+      background-color: #fdfdfd; 
+      border-top: none; /* Une visualmente la evidencia a la fila superior */
+    }
+    img.evidence-image {
+        max-width: 750px; /* Tamaño más grande */
+        height: auto;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        display: block;
+        margin: 5px auto; /* Centrar la imagen */
+        background-color: #fff;
+        object-fit: contain;
+    }
+
+    tr.status-success td:first-child{border-left:5px solid #28a745!important}
+    tr.status-failure td:first-child{border-left:5px solid #dc3545!important}
+    tr.status-deviation td:first-child{border-left:5px solid #ffc107!important}
+    .conclusion-section p{margin-bottom:8px} .conclusion-section strong{color:#555}
+    </style></head><body><div class="report-container"><h1>${title}</h1><p><strong>${language === 'en' ? 'Date' : 'Fecha'}:</strong> ${date}</p>`;
+    
     html += `<h2>${language === 'en' ? 'Analyzed Steps' : 'Pasos Analizados'}:</h2>`;
     if (report.Pasos_Analizados?.length) {
-        html += `<table><thead><tr><th>${language === 'en' ? 'Step' : 'Paso'}</th><th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th><th>${language === 'en' ? 'Input Data' : 'Dato Entrada'}</th><th>${language === 'en' ? 'Expected Result' : 'Res. Esperado'}</th><th>${language === 'en' ? 'Actual Result & Status' : 'Res. Obtenido y Estado'}</th><th>${language === 'en' ? 'Step Image' : 'Imagen Paso'}</th></tr></thead><tbody>`;
+        // La cabecera ahora tiene una columna menos
+        html += `<table><thead><tr>
+        <th>${language === 'en' ? 'Step' : 'Paso'}</th>
+        <th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th>
+        <th>${language === 'en' ? 'Input Data' : 'Dato Entrada'}</th>
+        <th>${language === 'en' ? 'Expected Result' : 'Res. Esperado'}</th>
+        <th>${language === 'en' ? 'Actual Result & Status' : 'Res. Obtenido y Estado'}</th>
+        </tr></thead><tbody>`;
         report.Pasos_Analizados.forEach(paso => {
             const imgSrc = this.getFlowStepImage(hu, paso);
-            html += `<tr class="${this.getFlowStepStatusClass(paso)}"><td>${paso.numero_paso}</td><td>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</td><td>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || 'N/A')}</td><td>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</td><td>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</td><td>${imgSrc ? `<img src="${imgSrc}" alt="Imagen para paso original ${paso.numero_paso}" class="flow-step-image">` : 'N/A'}</td></tr>`;
+            // Fila principal sin la imagen
+            html += `<tr class="${this.getFlowStepStatusClass(paso)}">
+            <td>${paso.numero_paso}</td>
+            <td>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</td>
+            <td>${this.escapeHtmlForExport(paso.dato_de_entrada_paso || 'N/A')}</td>
+            <td>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</td>
+            <td>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</td>
+            </tr>`;
+            // Fila adicional para la imagen si existe
+            if (imgSrc) {
+              html += `<tr class="evidence-row">
+                <td colspan="5">
+                  <img src="${imgSrc}" alt="Evidencia para paso ${paso.numero_paso}" class="evidence-image">
+                </td>
+              </tr>`;
+            }
         });
         html += `</tbody></table>`;
     } else { html += `<p><em>${language === 'en' ? 'No detailed steps were analyzed.' : 'No se analizaron pasos detallados.'}</em></p>`; }
     html += `<div class="conclusion-section"><h2>${language === 'en' ? 'General Conclusions' : 'Conclusiones Generales'}:</h2><p><strong>${language === 'en' ? 'Overall Expected Result' : 'Resultado Esperado General'}:</strong> ${this.escapeHtmlForExport(report.Resultado_Esperado_General_Flujo)}</p><p><strong>${language === 'en' ? 'Overall Conclusion' : 'Conclusión General'}:</strong> ${this.escapeHtmlForExport(report.Conclusion_General_Flujo)}</p></div></div></body></html>`;
+    
+ 
     saveAs(new Blob([html], { type: 'text/html;charset=utf-8;' }), `AnalisisFlujo_${this.escapeFilename(hu.title || 'Reporte')}_${language === 'en' ? 'ENG' : 'ESP'}_${date}.html`);
   }
 
