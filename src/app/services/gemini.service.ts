@@ -245,49 +245,54 @@ La funcionalidad X depende de un sistema externo no disponible para pruebas exha
 PROCEDE A GENERAR TU RESPUESTA PARA LA SECCIÓN "${sectionName}":
 `;
 
-  private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext?: string): string => `
+private readonly PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext?: string): string => `
 Eres un Ingeniero de QA experto en análisis forense de flujos de interfaz de usuario a partir de imágenes y en la documentación de pruebas.
 Tu tarea es analizar una secuencia de imágenes que representan un flujo de usuario YA EJECUTADO, y generar un informe detallado en formato JSON. Este informe debe documentar las acciones observadas, los datos de entrada (si son visibles o inferibles), los elementos clave, y los resultados esperados y obtenidos para cada paso, culminando en una conclusión general.
 Las imágenes se proporcionan en el orden en que ocurrieron los pasos del flujo.
+
 **ENTRADA PROPORCIONADA:**
 * **Imágenes del Flujo Ejecutado:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto. La primera imagen es "Imagen 1", la segunda "Imagen 2", etc.).
-* **(OPCIONAL) CONTEXTO ADICIONAL CON ANOTACIONES DEL USUARIO:** (Si se proporciona, este texto describirá anotaciones específicas hechas por el usuario sobre las imágenes, indicando el número de imagen y los detalles de cada anotación. Estas anotaciones señalan áreas de interés o elementos clave. DEBES CONSIDERAR ESTAS ANOTACIONES PARA ENTENDER EL FOCO DEL USUARIO Y MEJORAR TU ANÁLISIS. Ejemplo: "Para Imagen 1 (nombre_original_del_archivo.png): - Anotación #1 ('Botón de login') en coordenadas normalizadas (x:0.12, y:0.34, w:0.20, h:0.05). - Anotación #2 ... Para Imagen 2 (...)").
+${/* ¡NUEVA SECCIÓN! Aquí es donde inyectamos dinámicamente el contexto si existe. */''}
+${annotationsContext ? `* **(OPCIONAL) CONTEXTO ADICIONAL CON ANOTACIONES DEL USUARIO:** (Si se proporciona, este texto describirá anotaciones específicas hechas por el usuario sobre las imágenes, indicando el número de imagen y los detalles de cada anotación. Estas anotaciones señalan áreas de interés o elementos clave. DEBES CONSIDERAR ESTAS ANOTACIONES PARA ENTENDER EL FOCO DEL USUARIO Y MEJORAR TU ANÁLISIS. Ejemplo: "Para Imagen 1 (nombre_original_del_archivo.png): - Anotación #1 ('Botón de login') en coordenadas normalizadas (x:0.12, y:0.34, w:0.20, h:0.05). - Anotación #2 ... Para Imagen 2 (...)").` : ''}
+
 **INSTRUCCIONES DETALLADAS PARA EL ANÁLISIS Y GENERACIÓN DEL INFORME:**
-1.  **SECUENCIA DE IMÁGENES Y ANOTACIONES:** Analiza las imágenes EN EL ORDEN ESTRICTO proporcionado. Si se provee CONTEXTO ADICIONAL CON ANOTACIONES, utilízalo como guía principal para identificar elementos y acciones importantes señaladas por el usuario en las imágenes correspondientes.
-2.  **IDENTIFICACIÓN DE PASOS Y ACCIONES:**
-    * Para cada paso, describe la "descripcion_accion_observada": ¿Qué acción parece haber realizado el usuario o qué cambio de estado importante ocurrió para llegar a la imagen actual desde la anterior? Considera las anotaciones si existen para la imagen o imágenes involucradas en este paso.
-    * Indica la "imagen_referencia_entrada": ¿Cuál es la imagen principal que muestra el estado ANTES o DURANTE la acción de este paso? (Ej: "Imagen 1", "Imagen 3". Si el contexto de anotaciones incluye nombres de archivo originales, puedes usar eso como referencia adicional para tu entendimiento, pero en tu respuesta usa "Imagen X").
-    * Identifica el "elemento_clave_y_ubicacion_aproximada": ¿Cuál fue el elemento principal de la UI con el que se interactuó (botón, campo, enlace) y su ubicación aproximada en esa imagen? Si hay una anotación para este elemento, prioriza su descripción. (Ej: "Botón 'Siguiente' (descrito en anotación #2 de Imagen 1) en la parte inferior", "Campo 'Email' en el centro").
-    * Si es visible o claramente inferible, indica el "dato_de_entrada_paso" (Ej: "usuario@ejemplo.com", "Contraseña123", "Opción 'Sí' seleccionada"). Si no hay dato de entrada explícito para la acción (ej. solo clic en un enlace), usa "N/A".
-    * Define el "resultado_esperado_paso": ¿Qué se esperaba que sucediera INMEDIATAMENTE después de esta acción específica?
-    * Describe el "resultado_obtenido_paso_y_estado": ¿Qué se observa en la imagen(es) SIGUIENTE(s) como resultado de la acción? Indica si el paso fue "Exitosa", "Fallido", o "Exitosa con desviaciones". (Ej: "Se navega a Imagen 2, mostrando formulario de dirección. Estado: Exitosa").
-3.  **CONCLUSIONES GENERALES DEL FLUJO:**
-    * "Nombre_del_Escenario": Un título descriptivo para el flujo completo analizado. (Ej: "Proceso de Registro de Nuevo Usuario", "Validación de Carrito de Compras").
-    * "Resultado_Esperado_General_Flujo": ¿Cuál era el objetivo o resultado final esperado para TODO el flujo?
-    * "Conclusion_General_Flujo": Basado en todos los pasos, ¿el flujo completo fue exitoso, fallido, o exitoso con observaciones? Proporciona una breve justificación.
-4.  **NÚMERO DE PASO:** Asegúrate que "numero_paso" sea un entero secuencial comenzando en 1 para cada paso analizado.
+1.  **SECUENCIA DE IMÁGENES Y ANOTACIONES:** Analiza las imágenes EN EL ORDEN ESTRICTO proporcionado. ${annotationsContext ? 'Si se provee CONTEXTO ADICIONAL CON ANOTACIONES, utilízalo como guía principal para identificar elementos y acciones importantes señaladas por el usuario en las imágenes correspondientes.' : ''}
+2.  **IDENTIFICACIÓN DE PASOS Y ACCIONES:**
+    * Para cada paso, describe la "descripcion_accion_observada": ¿Qué acción parece haber realizado el usuario o qué cambio de estado importante ocurrió para llegar a la imagen actual desde la anterior? ${annotationsContext ? 'Considera las anotaciones si existen para la imagen o imágenes involucradas en este paso.' : ''}
+    * Indica la "imagen_referencia_entrada": ¿Cuál es la imagen principal que muestra el estado ANTES o DURANTE la acción de este paso? (Ej: "Imagen 1", "Imagen 3". ${annotationsContext ? 'Si el contexto de anotaciones incluye nombres de archivo originales, puedes usar eso como referencia adicional para tu entendimiento, pero en tu respuesta usa "Imagen X".' : ''}).
+    * Identifica el "elemento_clave_y_ubicacion_aproximada": ¿Cuál fue el elemento principal de la UI con el que se interactuó (botón, campo, enlace) y su ubicación aproximada en esa imagen? ${annotationsContext ? 'Si hay una anotación para este elemento, prioriza su descripción.' : ''} (Ej: "Botón 'Siguiente' (descrito en anotación #2 de Imagen 1) en la parte inferior", "Campo 'Email' en el centro").
+    * Si es visible o claramente inferible, indica el "dato_de_entrada_paso" (Ej: "usuario@ejemplo.com", "Contraseña123", "Opción 'Sí' seleccionada"). Si no hay dato de entrada explícito para la acción (ej. solo clic en un enlace), usa "N/A".
+    * Define el "resultado_esperado_paso": ¿Qué se esperaba que sucediera INMEDIATAMENTE después de esta acción específica?
+    * Describe el "resultado_obtenido_paso_y_estado": ¿Qué se observa en la imagen(es) SIGUIENTE(s) como resultado de la acción? Indica si el paso fue "Exitosa", "Fallido", o "Exitosa con desviaciones". (Ej: "Se navega a Imagen 2, mostrando formulario de dirección. Estado: Exitosa").
+3.  **CONCLUSIONES GENERALES DEL FLUJO:**
+    * "Nombre_del_Escenario": Un título descriptivo para el flujo completo analizado. (Ej: "Proceso de Registro de Nuevo Usuario", "Validación de Carrito de Compras").
+    * "Resultado_Esperado_General_Flujo": ¿Cuál era el objetivo o resultado final esperado para TODO el flujo?
+    * "Conclusion_General_Flujo": Basado en todos los pasos, ¿el flujo completo fue exitoso, fallido, o exitoso con observaciones? Proporciona una breve justificación.
+4.  **NÚMERO DE PASO:** Asegúrate que "numero_paso" sea un entero secuencial comenzando en 1 para cada paso analizado.
+
 **CASO DE IMÁGENES NO INTERPRETABLES / ERROR INTERNO:**
 Si las imágenes no forman una secuencia lógica, son incomprensibles, o no puedes generar un informe válido (incluso con anotaciones), responde **EXACTAMENTE y ÚNICAMENTE** con el siguiente array JSON:
 \`\`\`json
 [
-  {
-    "Nombre_del_Escenario": "Secuencia de imágenes no interpretable",
-    "Pasos_Analizados": [
-      {
-        "numero_paso": 1,
-        "descripcion_accion_observada": "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis, incluso considerando las anotaciones del usuario si fueron provistas.",
-        "imagen_referencia_entrada": "N/A",
-        "elemento_clave_y_ubicacion_aproximada": "N/A",
-        "dato_de_entrada_paso": "N/A",
-        "resultado_esperado_paso": "N/A",
-        "resultado_obtenido_paso_y_estado": "Análisis no concluyente."
-      }
-    ],
-    "Resultado_Esperado_General_Flujo": "N/A",
-    "Conclusion_General_Flujo": "El análisis de flujo no pudo completarse debido a la calidad, secuencia de las imágenes o información de anotaciones."
-  }
+  {
+    "Nombre_del_Escenario": "Secuencia de imágenes no interpretable",
+    "Pasos_Analizados": [
+      {
+        "numero_paso": 1,
+        "descripcion_accion_observada": "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis, incluso considerando las anotaciones del usuario si fueron provistas.",
+        "imagen_referencia_entrada": "N/A",
+        "elemento_clave_y_ubicacion_aproximada": "N/A",
+        "dato_de_entrada_paso": "N/A",
+        "resultado_esperado_paso": "N/A",
+        "resultado_obtenido_paso_y_estado": "Análisis no concluyente."
+      }
+    ],
+    "Resultado_Esperado_General_Flujo": "N/A",
+    "Conclusion_General_Flujo": "El análisis de flujo no pudo completarse debido a la calidad, secuencia de las imágenes o información de anotaciones."
+  }
 ]
 \`\`\`
+
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
 * La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto. Tu respuesta debe comenzar con '[{' y terminar con '}]'.
 * El objeto principal debe tener las propiedades EXACTAS: "Nombre_del_Escenario" (string), "Pasos_Analizados" (ARRAY de objetos JSON), "Resultado_Esperado_General_Flujo" (string), "Conclusion_General_Flujo" (string).
@@ -296,6 +301,7 @@ Si las imágenes no forman una secuencia lógica, son incomprensibles, o no pued
 ---
 PROCEDE A GENERAR EL ARRAY JSON DEL INFORME DE ANÁLISIS DE FLUJO BASADO EN LAS IMÁGENES Y EL CONTEXTO DE ANOTACIONES (SI SE PROPORCIONA):
 `;
+
 
 private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string): string => `
 Eres un Ingeniero de QA experto en análisis forense de secuencias de imágenes y refinamiento de documentación de pruebas.
