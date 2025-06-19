@@ -2,19 +2,19 @@
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { ImageAnnotationEditorComponent, AnnotationEditorOutput } from '../image-annotation-editor/image-annotation-editor.component'; // Ajusta la ruta si es necesario
-import { HUData, FlowAnalysisReportItem, FlowAnalysisStep, ImageAnnotation } from '../models/hu-data.model'; // Ajusta la ruta si es necesario
-import { GeminiService } from '../services/gemini.service'; // Ajusta la ruta si es necesario
+import { ImageAnnotationEditorComponent, AnnotationEditorOutput } from '../image-annotation-editor/image-annotation-editor.component';
+import { HUData, FlowAnalysisReportItem, FlowAnalysisStep, ImageAnnotation } from '../models/hu-data.model';
+import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, Subscription, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 
 interface DraggableFlowImage {
   file: File;
-  preview: string | ArrayBuffer; // Original preview
-  base64: string; // Original base64
+  preview: string | ArrayBuffer;
+  base64: string;
   mimeType: string;
-  id: string; // Unique ID for dnd and map keys
+  id: string;
   annotations?: ImageAnnotation[]; 
   annotatedPreview?: string | ArrayBuffer; 
   annotatedBase64?: string; 
@@ -102,7 +102,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     this.flowAnalysisError = null;
     this.isEditingFlowReportDetails = false;
     this.userReanalysisContext = '';
-    this.closeImageEditor(); // <- Llamada a método ahora definido
+    this.closeImageEditor();
 
     if (isPlatformBrowser(this.platformId) && this.flowAnalysisImageInputRef?.nativeElement) {
       this.flowAnalysisImageInputRef.nativeElement.value = '';
@@ -133,7 +133,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   }
 
   onFileSelected(event: Event): void {
-    // ... (lógica como en la respuesta anterior, asegurándose de llamar a this.annotationsByImage.set(newImageId, []))
     this.imageUploadError = null; this.formError = null; 
     this.draggableImages.length = 0; this.annotationsByImage.clear();
     const maxImages = 20;
@@ -172,7 +171,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
                 next: (processedImages) => { 
                     processedImages.forEach(img => {
                         this.draggableImages.push(img);
-                        this.annotationsByImage.set(img.id, []); // Inicializar mapa
+                        this.annotationsByImage.set(img.id, []);
                     });
                 },
                 error: () => { element.value = ""; this.draggableImages = []; this.annotationsByImage.clear(); },
@@ -197,7 +196,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   }
 
   processFlowAnalysis(): void {
-    // ... (lógica como en la respuesta anterior, incluyendo construcción de annotationsContextString y huData)
     this.formError = null; this.flowAnalysisError = null;
     if (this.isFormInvalid()) {
       this.formError = "Por favor, completa todos los campos requeridos (Título, Sprint) y carga imágenes.";
@@ -208,6 +206,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     const finalId = this.generateIdFromTitle(this.currentFlowTitle);
     if (!finalId) { this.formError = "El título es necesario para generar el ID del flujo."; return; }
 
+    // MEJORA: Construcción del contexto de anotaciones enriquecido
     let annotationsContextString = '';
     let allAnnotationsForHU: ImageAnnotation[] = [];
     this.draggableImages.forEach((imgItem, index) => {
@@ -216,10 +215,18 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         annotationsContextString += `Para Imagen ${index + 1} (${imgItem.file.name}):\n`;
         annotations.forEach(ann => {
           annotationsContextString += `  - Anotación #${ann.sequence} ('${ann.description}') en coordenadas normalizadas (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+          // Añadimos la información enriquecida si existe
+          if (ann.elementType) {
+            annotationsContextString += `    - Tipo de Elemento: '${ann.elementType}'\n`;
+          }
+          if (ann.elementValue) {
+            annotationsContextString += `    - Valor/Texto Asociado: '${ann.elementValue}'\n`;
+          }
           allAnnotationsForHU.push({ ...ann, imageFilename: imgItem.file.name, imageIndex: index + 1 });
         });
       }
     });
+
     if(annotationsContextString) {
         annotationsContextString = "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (priorizar para el análisis):\n" + annotationsContextString;
     }
@@ -233,7 +240,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         selectedTechnique: '', generationMode: 'flowAnalysis',
         imagesBase64: imagesBase64ForService, imageMimeTypes: imageMimeTypesForService,
         imageFilenames: this.draggableImages.map(img => img.file.name),
-        annotationsFlowA: allAnnotationsForHU, // Usamos este campo para almacenar las anotaciones del flujo
+        annotationsFlowA: allAnnotationsForHU,
       },
       id: finalId.trim(), title: this.currentFlowTitle.trim(), sprint: this.currentFlowSprint.trim(),
       generatedScope: '', detailedTestCases: [], generatedTestCaseTitles: '',
@@ -247,25 +254,26 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
       bugComparisonReport: undefined, loadingBugComparison: false, errorBugComparison: null,
       isBugComparisonDetailsOpen: false, userBugComparisonReanalysisContext: ''
     };
+
     this.loadingFlowAnalysis = true;
     this.geminiService.generateFlowAnalysisFromImages(
         huData.originalInput.imagesBase64!, 
         huData.originalInput.imageMimeTypes!,
         annotationsContextString.trim() 
     ).pipe(
-        tap(report => { /* ... (igual que antes) ... */
+        tap(report => {
             huData.flowAnalysisReport = report;
             huData.errorFlowAnalysis = null;
             if (this.isFlowAnalysisReportInErrorState(report?.[0])) {
                 huData.errorFlowAnalysis = `${report[0].Nombre_del_Escenario}: ${report[0].Pasos_Analizados?.[0]?.descripcion_accion_observada || 'Detalles no disponibles.'}`;
             }
         }),
-        catchError(error => { /* ... (igual que antes) ... */
+        catchError(error => {
             huData.errorFlowAnalysis = (typeof error === 'string' ? error : error.message) || 'Error al generar análisis de flujo.';
             huData.flowAnalysisReport = [{ Nombre_del_Escenario: "Error Crítico en Generación", Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: huData.errorFlowAnalysis!, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso:"N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis fallido."}], Resultado_Esperado_General_Flujo: "N/A", Conclusion_General_Flujo: "El análisis de flujo no pudo completarse." }];
             return of(huData.flowAnalysisReport);
         }),
-        finalize(() => { /* ... (igual que antes, actualizando componentState) ... */
+        finalize(() => {
             huData.loadingFlowAnalysis = false;
             this.loadingFlowAnalysis = false;
             this.generatedAnalysisData = huData;
@@ -281,7 +289,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     ).subscribe();
   }
 
-  // **MÉTODOS COMPLETOS**
   handleCancelFlowForm() {
     this.resetToForm(); 
     this.cancelAnalysis.emit(); 
@@ -334,31 +341,35 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         alert("Solo se puede re-analizar un flujo con imágenes y un informe previo."); return;
     }
     this.loadingFlowAnalysis = true; this.flowAnalysisError = null;
-    if(this.generatedAnalysisData) { // Chequeo para el compilador
+    if(this.generatedAnalysisData) {
         this.generatedAnalysisData.loadingFlowAnalysis = true; 
         this.generatedAnalysisData.errorFlowAnalysis = null;
     }
     
     let contextForRefinement = '';
-    // Reconstruir el contexto de anotaciones desde originalInput si está allí
     const originalAnnotations = this.generatedAnalysisData.originalInput.annotationsFlowA;
     if (originalAnnotations && originalAnnotations.length > 0) {
         contextForRefinement += "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (para análisis inicial):\n";
         originalAnnotations.forEach(ann => {
              contextForRefinement += `Para Imagen ${ann.imageIndex} (${ann.imageFilename}):\n  - Anotación #${ann.sequence} ('${ann.description}') en coords (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+             if (ann.elementType) {
+                contextForRefinement += `    - Tipo de Elemento: '${ann.elementType}'\n`;
+             }
+             if (ann.elementValue) {
+                contextForRefinement += `    - Valor/Texto Asociado: '${ann.elementValue}'\n`;
+             }
         });
     }
-    // Añadir el contexto de texto libre para el refinamiento del informe
     if (this.userReanalysisContext.trim()) {
         contextForRefinement += (contextForRefinement ? "\n\n" : "") + "CONTEXTO ADICIONAL TEXTUAL PARA RE-ANÁLISIS DEL INFORME:\n" + this.userReanalysisContext.trim();
     }
-    this.generatedAnalysisData.userReanalysisContext = contextForRefinement.trim(); // Guardar contexto combinado
+    this.generatedAnalysisData.userReanalysisContext = contextForRefinement.trim();
 
     this.geminiService.refineFlowAnalysisFromImagesAndContext(
         this.generatedAnalysisData.originalInput.imagesBase64!, 
         this.generatedAnalysisData.originalInput.imageMimeTypes!, 
         this.generatedAnalysisData.flowAnalysisReport[0], 
-        this.generatedAnalysisData.userReanalysisContext // Usar el contexto guardado/combinado
+        this.generatedAnalysisData.userReanalysisContext
     ).pipe(
         tap(report => {
             if (this.generatedAnalysisData) {
@@ -458,9 +469,9 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
      if (this.draggedFlowStep && event.dataTransfer && targetPaso && hu) {
         event.dataTransfer.dropEffect = 'move';
         this.dragOverFlowStepId = this.getFlowStepDragId(targetPaso, hu);
-     } else if (!targetPaso && event.dataTransfer) { // Permite soltar al final de la lista si targetPaso es undefined
+     } else if (!targetPaso && event.dataTransfer) {
         event.dataTransfer.dropEffect = 'move';
-        this.dragOverFlowStepId = `dropzone-end-flow-${hu?.id || 'temp'}`; // ID especial o null
+        this.dragOverFlowStepId = `dropzone-end-flow-${hu?.id || 'temp'}`;
      }
   }
 
@@ -468,7 +479,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     this.dragOverFlowStepId = null;
   }
 
-  onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData | null): void { // targetPaso puede ser undefined
+  onFlowStepDrop(event: DragEvent, targetPaso: FlowAnalysisStep | undefined, hu: HUData | null): void {
     event.preventDefault(); this.dragOverFlowStepId = null;
     document.querySelectorAll('.flow-analysis-steps-table tbody tr[style*="opacity: 0.4"]').forEach(el => (el as HTMLElement).style.opacity = '1');
 
@@ -480,19 +491,19 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     const fromIndex = pasosAnalizados.indexOf(this.draggedFlowStep);
     let toIndex = -1;
 
-    if (targetPaso) { // Si se suelta sobre un paso existente
+    if (targetPaso) {
         if (this.draggedFlowStep === targetPaso) { this.draggedFlowStep = null; return; }
         toIndex = pasosAnalizados.indexOf(targetPaso);
-    } else { // Si se suelta al final de la lista (targetPaso es undefined)
-        toIndex = pasosAnalizados.length; // Para insertar al final
+    } else {
+        toIndex = pasosAnalizados.length;
     }
 
 
     if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
       const itemToMove = pasosAnalizados.splice(fromIndex, 1)[0];
-      if (targetPaso || toIndex < pasosAnalizados.length) { // Si se suelta sobre un paso o antes del final
+      if (targetPaso || toIndex < pasosAnalizados.length) {
         pasosAnalizados.splice(toIndex, 0, itemToMove);
-      } else { // Si se suelta al final (toIndex es pasosAnalizados.length)
+      } else {
         pasosAnalizados.push(itemToMove);
       }
       pasosAnalizados.forEach((paso, index) => { paso.numero_paso = index + 1; });
@@ -507,7 +518,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
   }
 
   isFlowAnalysisReportInErrorState(r?: FlowAnalysisReportItem): boolean {
-    if (!r) return true; // Si no hay reporte, considerarlo estado de error para lógica de UI
+    if (!r) return true;
     return ["Error de API", "Error de Formato de Respuesta", "Error de Formato (No JSON Array)", "Error de Formato (No Array)", "Error de Formato (Faltan Campos)", "Error de Parsing JSON", "Secuencia de imágenes no interpretable", "Error Crítico en Generación", "Error Crítico en Re-Generación", "Error Crítico en Re-Generación (Contextualizada)", "Respuesta Vacía de IA"].includes(r.Nombre_del_Escenario);
   }
 
@@ -530,7 +541,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     }
     
     if (imageIndex === -1) {
-        const numberMatch = imageRefToUse.match(/Imagen (\d+)/i); // Asume "Imagen X"
+        const numberMatch = imageRefToUse.match(/Imagen (\d+)/i);
         if (numberMatch && numberMatch[1]) {
           imageIndex = parseInt(numberMatch[1], 10) - 1;
         }
@@ -578,27 +589,22 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:.9em}
     th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
     th{background-color:#f2f2f2;font-weight:600}
-    
-    /* ANTERIOR: .flow-step-image (eliminado o modificado, ya no se usa directamente) */
-
-    /* NUEVO: Estilos para la fila y la imagen de evidencia */
     tr.evidence-row td { 
       padding: 10px; 
       text-align: center; 
       background-color: #fdfdfd; 
-      border-top: none; /* Une visualmente la evidencia a la fila superior */
+      border-top: none;
     }
     img.evidence-image {
-        max-width: 750px; /* Tamaño más grande */
+        max-width: 500px;
         height: auto;
         border: 1px solid #ccc;
         border-radius: 4px;
         display: block;
-        margin: 5px auto; /* Centrar la imagen */
+        margin: 5px auto;
         background-color: #fff;
         object-fit: contain;
     }
-
     tr.status-success td:first-child{border-left:5px solid #28a745!important}
     tr.status-failure td:first-child{border-left:5px solid #dc3545!important}
     tr.status-deviation td:first-child{border-left:5px solid #ffc107!important}
@@ -607,7 +613,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     
     html += `<h2>${language === 'en' ? 'Analyzed Steps' : 'Pasos Analizados'}:</h2>`;
     if (report.Pasos_Analizados?.length) {
-        // La cabecera ahora tiene una columna menos
         html += `<table><thead><tr>
         <th>${language === 'en' ? 'Step' : 'Paso'}</th>
         <th>${language === 'en' ? 'Action/Observation' : 'Acción/Observación'}</th>
@@ -617,7 +622,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         </tr></thead><tbody>`;
         report.Pasos_Analizados.forEach(paso => {
             const imgSrc = this.getFlowStepImage(hu, paso);
-            // Fila principal sin la imagen
             html += `<tr class="${this.getFlowStepStatusClass(paso)}">
             <td>${paso.numero_paso}</td>
             <td>${this.escapeHtmlForExport(paso.descripcion_accion_observada)}</td>
@@ -625,7 +629,6 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
             <td>${this.escapeHtmlForExport(paso.resultado_esperado_paso)}</td>
             <td>${this.escapeHtmlForExport(paso.resultado_obtenido_paso_y_estado)}</td>
             </tr>`;
-            // Fila adicional para la imagen si existe
             if (imgSrc) {
               html += `<tr class="evidence-row">
                 <td colspan="5">
@@ -655,6 +658,12 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
         finalContextForHuData += "INFORMACIÓN DE ANOTACIONES PROPORCIONADA POR EL USUARIO (para análisis inicial):\n";
         originalAnnotations.forEach(ann => {
             finalContextForHuData += `Para Imagen ${ann.imageIndex} (${ann.imageFilename}):\n  - Anotación #${ann.sequence} ('${ann.description}') en coordenadas normalizadas (x:${ann.x.toFixed(2)}, y:${ann.y.toFixed(2)}, w:${ann.width.toFixed(2)}, h:${ann.height.toFixed(2)}).\n`;
+            if (ann.elementType) {
+                finalContextForHuData += `    - Tipo de Elemento: '${ann.elementType}'\n`;
+            }
+            if (ann.elementValue) {
+                finalContextForHuData += `    - Valor/Texto Asociado: '${ann.elementValue}'\n`;
+            }
         });
       }
       if (this.userReanalysisContext.trim()) { 
