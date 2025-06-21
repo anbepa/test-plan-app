@@ -3,7 +3,7 @@ import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterVie
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ImageAnnotation } from '../models/hu-data.model';
-import { GeminiService, AIAnnotationResult } from '../services/gemini.service';
+import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize } from 'rxjs/operators';
 import { of } from 'rxjs';
 
@@ -60,6 +60,9 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
   isAnnotatingWithAI: boolean = false;
   annotatingAIIndex: number | null = null;
   aiAnnotationError: string | null = null;
+
+  // Tipos de anotación disponibles para el dropdown
+  public readonly annotationTypes: ImageAnnotation['type'][] = ['trigger', 'input', 'verification', 'observation'];
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -124,18 +127,24 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
 
   private drawRectangle(annotation: ImageAnnotation, isSelected: boolean = false): void {
       if (!this.ctx || !this.canvas) return;
-      const { x, y, width, height, description, sequence } = annotation;
+      const { x, y, width, height, description, sequence, type } = annotation;
       const rectXpx = x * this.canvas.width;
       const rectYpx = y * this.canvas.height;
       const rectWidthPx = width * this.canvas.width;
       const rectHeightPx = height * this.canvas.height;
   
-      this.ctx.strokeStyle = isSelected ? 'blue' : 'red';
-      this.ctx.lineWidth = isSelected ? 3 : 2;
+      let color = 'red'; // Default for observation
+      if (type === 'trigger') color = 'blue';
+      if (type === 'input') color = 'orange';
+      if (type === 'verification') color = 'green';
+      if (isSelected) color = 'purple';
+
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = isSelected ? 4 : 2;
       this.ctx.strokeRect(rectXpx, rectYpx, rectWidthPx, rectHeightPx);
   
-      this.ctx.fillStyle = 'white';
-      const text = `${sequence}: ${description ? description.substring(0, 25) + (description.length > 25 ? '...' : '') : '(Sin desc.)'}`;
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      const text = `${sequence}: [${type.toUpperCase()}] ${description ? description.substring(0, 25) + (description.length > 25 ? '...' : '') : '(Sin desc.)'}`;
       this.ctx.font = '12px Arial';
       const textMetrics = this.ctx.measureText(text);
       const textBgPadding = 3;
@@ -146,7 +155,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
         if (textBgY + textBgHeight > this.canvas.height - textBgPadding) { textBgY = rectYpx + textBgPadding; }
       }
       this.ctx.fillRect(rectXpx, textBgY, textMetrics.width + (2 * textBgPadding), textBgHeight);
-      this.ctx.fillStyle = isSelected ? 'blue' : 'red';
+      this.ctx.fillStyle = color;
       this.ctx.fillText(text, rectXpx + textBgPadding, textBgY + 14 + textBgPadding / 2 );
   
       if (isSelected) { this.drawResizeHandles(annotation); }
@@ -164,7 +173,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
       { type: 'left', px: normX, py: normY + normHeight / 2 }, { type: 'right', px: normX + normWidth, py: normY + normHeight / 2 },
       { type: 'bottomLeft', px: normX, py: normY + normHeight }, { type: 'bottom', px: normX + normWidth / 2, py: normY + normHeight }, { type: 'bottomRight', px: normX + normWidth, py: normY + normHeight },
     ];
-    this.ctx.fillStyle = 'blue';
+    this.ctx.fillStyle = 'purple';
     this.ctx.strokeStyle = 'white';
     this.ctx.lineWidth = 1;
     handles.forEach(handle => {
@@ -214,6 +223,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
         this.dragOffsetXnorm = normPos.x - this.currentAnnotations[i].x;
         this.dragOffsetYnorm = normPos.y - this.currentAnnotations[i].y;
         this.updateCursor();
+        this.cdr.detectChanges();
         return;
       }
     }
@@ -223,6 +233,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
     this.startXnorm = normPos.x;
     this.startYnorm = normPos.y;
     this.updateCursor();
+    this.cdr.detectChanges();
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -234,20 +245,19 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
 
     if (this.currentAction === 'drawing') {
       this.drawCanvas();
-      this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+      this.ctx.strokeStyle = 'rgba(128, 0, 128, 0.7)';
       this.ctx.lineWidth = 2;
       const currentRectX = Math.min(this.startXnorm, normPos.x) * this.canvas.width;
       const currentRectY = Math.min(this.startYnorm, normPos.y) * this.canvas.height;
       const currentRectWidth = Math.abs(normPos.x - this.startXnorm) * this.canvas.width;
       const currentRectHeight = Math.abs(normPos.y - this.startYnorm) * this.canvas.height;
       this.ctx.strokeRect(currentRectX, currentRectY, currentRectWidth, currentRectHeight);
-    } else { // CORRECCIÓN: Se reemplaza el `else if` erróneo con un `else` simple
+    } else {
       if (this.currentAction === 'moving' && this.selectedAnnotationIndex !== null) {
         const ann = this.currentAnnotations[this.selectedAnnotationIndex];
         ann.x = normPos.x - this.dragOffsetXnorm;
         ann.y = normPos.y - this.dragOffsetYnorm;
       } else if (this.currentAction === 'resizing' && this.selectedAnnotationIndex !== null && this.activeResizeHandle) {
-         // Lógica de redimensionamiento (basada en el original que funcionaba)
          const ann = this.currentAnnotations[this.selectedAnnotationIndex];
          const deltaXnorm = normPos.x - this.lastKnownMouseXnorm;
          const deltaYnorm = normPos.y - this.lastKnownMouseYnorm;
@@ -272,13 +282,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
       const finalWidth = Math.abs(normPos.x - this.startXnorm);
       const finalHeight = Math.abs(normPos.y - this.startYnorm);
       if (finalWidth >= this.MIN_ANNOTATION_SIZE_NORM && finalHeight >= this.MIN_ANNOTATION_SIZE_NORM) {
-        this.currentAnnotations.push({
-          sequence: this.currentAnnotations.length + 1,
-          description: `Anotación ${this.currentAnnotations.length + 1}`,
-          x: finalX, y: finalY, width: finalWidth, height: finalHeight,
-          imageFilename: this.currentImageFilename
-        });
-        this.selectedAnnotationIndex = this.currentAnnotations.length - 1;
+        this.addAnnotation(finalX, finalY, finalWidth, finalHeight);
       }
     }
     if(this.currentAction === 'resizing' && this.selectedAnnotationIndex !== null){
@@ -295,26 +299,60 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
   private updateCursor(event?: MouseEvent | null): void {
     if (!this.isImageLoadedAndCanvasReady || !this.canvas) return;
     let cursorStyle = 'crosshair';
-    // ... Lógica del cursor sin cambios
+    if (event) {
+        const normPos = this.getNormalizedMousePosition(event);
+        if (this.selectedAnnotationIndex !== null) {
+            const handle = this.getClickedResizeHandle(normPos.x, normPos.y, this.currentAnnotations[this.selectedAnnotationIndex]);
+            if (handle) {
+                if (handle.includes('Top') || handle.includes('Bottom')) cursorStyle = 'ns-resize';
+                else if (handle.includes('Left') || handle.includes('Right')) cursorStyle = 'ew-resize';
+                if ((handle.includes('Top') && handle.includes('Left')) || (handle.includes('Bottom') && handle.includes('Right'))) cursorStyle = 'nwse-resize';
+                if ((handle.includes('Top') && handle.includes('Right')) || (handle.includes('Bottom') && handle.includes('Left'))) cursorStyle = 'nesw-resize';
+            } else if (this.isPointInAnnotation(normPos.x, normPos.y, this.currentAnnotations[this.selectedAnnotationIndex])) {
+                cursorStyle = 'move';
+            }
+        }
+    }
+    this.canvas.style.cursor = cursorStyle;
   }
 
   private getClickedResizeHandle(mouseXnorm: number, mouseYnorm: number, annotation: ImageAnnotation): ResizeHandleType | null {
-    // ... Lógica de manejadores sin cambios
+    const handleSizeNormX = this.RESIZE_HANDLE_SIZE_PX / this.canvasRect.width;
+    const handleSizeNormY = this.RESIZE_HANDLE_SIZE_PX / this.canvasRect.height;
+    
+    const handles = [
+        { type: 'topLeft', x: annotation.x, y: annotation.y },
+        { type: 'top', x: annotation.x + annotation.width / 2, y: annotation.y },
+        { type: 'topRight', x: annotation.x + annotation.width, y: annotation.y },
+        { type: 'left', x: annotation.x, y: annotation.y + annotation.height / 2 },
+        { type: 'right', x: annotation.x + annotation.width, y: annotation.y + annotation.height / 2 },
+        { type: 'bottomLeft', x: annotation.x, y: annotation.y + annotation.height },
+        { type: 'bottom', x: annotation.x + annotation.width / 2, y: annotation.y + annotation.height },
+        { type: 'bottomRight', x: annotation.x + annotation.width, y: annotation.y + annotation.height }
+    ];
+
+    for (const handle of handles) {
+        if (Math.abs(mouseXnorm - handle.x) < handleSizeNormX / 2 && Math.abs(mouseYnorm - handle.y) < handleSizeNormY / 2) {
+            return handle.type as ResizeHandleType;
+        }
+    }
     return null;
   }
 
-  public addAnnotation(): void {
+  public addAnnotation(x = 0.1, y = 0.1, width = 0.2, height = 0.1): void {
     if (!this.isImageLoadedAndCanvasReady) return;
     const newAnnotation: ImageAnnotation = {
       sequence: this.currentAnnotations.length + 1,
       description: `Anotación ${this.currentAnnotations.length + 1}`,
-      x: 0.1, y: 0.1, width: 0.2, height: 0.1,
+      x, y, width, height,
+      type: 'observation', // Default type
       imageFilename: this.currentImageFilename
     };
     this.currentAnnotations.push(newAnnotation);
     this.selectedAnnotationIndex = this.currentAnnotations.length - 1;
     this.drawCanvas();
     this.updateCursor();
+    this.cdr.detectChanges();
   }
 
   public removeAnnotation(index: number): void {
@@ -325,11 +363,13 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
     this.currentAnnotations.forEach((ann, i) => ann.sequence = i + 1);
     this.drawCanvas();
     this.updateCursor();
+    this.cdr.detectChanges();
   }
 
   public selectAnnotation(index: number): void {
     this.selectedAnnotationIndex = index;
     this.drawCanvas();
+    this.cdr.detectChanges();
   }
 
   public getAnnotatedImageDataUrl(): string | null {
@@ -369,7 +409,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
     cropCanvas.width = sWidth; cropCanvas.height = sHeight;
     cropCtx.drawImage(this.image, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
     const base64Data = cropCanvas.toDataURL(this.imageMimeType || 'image/png').split(',')[1];
-    const mimeType = this.getMimeTypeFromDataUrl(cropCanvas.toDataURL(this.imageMimeType));
+    const mimeType = this.getMimeTypeFromDataUrl(cropCanvas.toDataURL(this.imageMimeType || 'image/png'));
     this.geminiService.analyzeAnnotationArea(base64Data, mimeType).pipe(
       catchError(error => { this.aiAnnotationError = error.message || 'Error con IA.'; return of(null); }),
       finalize(() => { this.isAnnotatingWithAI = false; this.annotatingAIIndex = null; this.cdr.detectChanges(); })
@@ -383,6 +423,7 @@ export class ImageAnnotationEditorComponent implements AfterViewInit, OnChanges 
             targetAnnotation.description = result.elementValue || result.elementType;
           }
           this.drawCanvas();
+          this.cdr.detectChanges();
         }
       }
     });

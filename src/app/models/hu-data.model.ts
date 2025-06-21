@@ -1,4 +1,3 @@
-// anbepa/test-plan-app/test-plan-app-114d3b7ac03726fd5931cc480f86ec71001e021a/src/app/models/hu-data.model.ts
 // src/app/models/hu-data.model.ts
 
 // Definiciones para Casos de Prueba Detallados
@@ -18,13 +17,13 @@ export interface DetailedTestCase {
 export interface FlowAnalysisStep {
   numero_paso: number;
   descripcion_accion_observada: string;
-  imagen_referencia_entrada: string; // Nombre o identificador de la imagen (ej: "Imagen 1", "A.1.png")
+  imagen_referencia_entrada: string;
   elemento_clave_y_ubicacion_aproximada: string;
   dato_de_entrada_paso?: string;
   resultado_esperado_paso: string;
   resultado_obtenido_paso_y_estado: string;
-  imagen_referencia_salida?: string; // Nombre o identificador de la imagen resultado del paso
-  userStepContext?: string; // NUEVO: Notas del usuario para este paso específico
+  imagen_referencia_salida?: string;
+  userStepContext?: string;
 }
 
 export interface FlowAnalysisReportItem {
@@ -32,8 +31,6 @@ export interface FlowAnalysisReportItem {
   Pasos_Analizados: FlowAnalysisStep[];
   Resultado_Esperado_General_Flujo: string;
   Conclusion_General_Flujo: string;
-  // user_provided_additional_context se usa en GeminiService como un string para el prompt,
-  // no directamente en el modelo de reporte que Gemini devuelve.
 }
 
 // --- Interfaces para Reporte de Bugs (Comparación de Flujos) ---
@@ -58,12 +55,12 @@ export interface BugReportItem {
   pasos_para_reproducir: BugReportStep[];
   resultado_esperado: string;
   resultado_actual: string;
-  imagen_referencia_flujo_a?: string; // Nombre o identificador de la imagen de Flujo A
-  imagen_referencia_flujo_b?: string; // Nombre o identificador de la imagen de Flujo B
+  imagen_referencia_flujo_a?: string;
+  imagen_referencia_flujo_b?: string;
   descripcion_diferencia_general?: string;
 }
 
-// --- INTERFAZ PARA ANOTACIONES DE IMAGEN ---
+// --- INTERFAZ ENRIQUECIDA PARA ANOTACIONES DE IMAGEN ---
 export interface ImageAnnotation {
   sequence: number;
   description: string;
@@ -71,12 +68,35 @@ export interface ImageAnnotation {
   y: number; // Normalizado (0-1)
   width: number; // Normalizado (0-1)
   height: number; // Normalizado (0-1)
-  imageFilename?: string; // Nombre del archivo original de la imagen a la que pertenece
-  flowType?: 'A' | 'B'; // Para saber a qué flujo pertenece, si es general para la HU
-  imageIndex?: number; // Para saber a qué imagen dentro del flujo A o B pertenece
-  elementType?: string; // NUEVO: Ej: 'Input Field', 'Button', 'Data Element', 'Log Entry'
-  elementValue?: string; // NUEVO: Ej: 'user@example.com', 'Login Successful', 'Error Code: 500'
+  type: 'trigger' | 'input' | 'verification' | 'observation'; // Tipo semántico de la anotación
+  imageFilename?: string;
+  flowType?: 'A' | 'B';
+  imageIndex?: number;
+  elementType?: string; // (Opcional, de la IA) Ej: 'Botón', 'Campo de Entrada'
+  elementValue?: string; // (Opcional, de la IA o usuario) Ej: 'admin', 'Login exitoso'
 }
+
+// --- INTERFACES PARA EL NUEVO FLUJO GUIADO ---
+export interface AIPreAnalysisResult {
+    description: string;
+    elements: { element: string, type: string }[];
+}
+
+export interface GuidedFlowStepContext {
+    step: number;
+    image: {
+        file: File;
+        base64: string;
+        mimeType: string;
+        filename: string;
+        preview: string | ArrayBuffer;
+        annotatedPreview?: string | ArrayBuffer;
+    };
+    aiPreAnalysis: AIPreAnalysisResult | null;
+    userDescription: string;
+    annotations: ImageAnnotation[];
+}
+
 
 // --- Tipo para el Modo de Generación ---
 export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
@@ -91,19 +111,20 @@ export interface HUData {
     acceptanceCriteria?: string;
     selectedTechnique: string;
     generationMode: GenerationMode;
-    imagesBase64?: string[]; // Puede ser original o anotada si es relevante para el modo
+    imagesBase64?: string[];
     imageMimeTypes?: string[];
-    imageFilenames?: string[]; // Nombres originales de los archivos para referencia
-    imagesBase64FlowA?: string[]; // Puede ser original o anotada
+    imageFilenames?: string[];
+    imagesBase64FlowA?: string[];
     imageMimeTypesFlowA?: string[];
     imageFilenamesFlowA?: string[];
-    imagesBase64FlowB?: string[]; // Puede ser original o anotada
+    imagesBase64FlowB?: string[];
     imageMimeTypesFlowB?: string[];
     imageFilenamesFlowB?: string[];
-    // Almacena todas las anotaciones, pueden ser filtradas o mapeadas después.
-    // Para Gemini, el contexto adicional se construirá con esta información.
-    annotationsFlowA?: ImageAnnotation[]; // Ahora se usará para cualquier flujo de análisis/comparación
-    annotationsFlowB?: ImageAnnotation[]; // Para flujos de comparación
+    annotationsFlowA?: ImageAnnotation[];
+    annotationsFlowB?: ImageAnnotation[];
+
+    // NUEVO: Para almacenar el resultado del flujo guiado
+    guidedFlowSteps?: GuidedFlowStepContext[];
   };
   id: string;
   title: string;
@@ -131,12 +152,11 @@ export interface HUData {
   errorFlowAnalysis?: string | null;
   isFlowAnalysisDetailsOpen?: boolean;
   isEditingFlowReportDetails?: boolean;
-  userReanalysisContext?: string; // Contexto general para regenerar análisis de flujo
-  // Las anotaciones por paso se almacenarán dentro de flowAnalysisReport[0].Pasos_Analizados[n].userStepContext
-
+  userReanalysisContext?: string;
+  
   bugComparisonReport?: BugReportItem[];
   loadingBugComparison?: boolean;
   errorBugComparison?: string | null;
   isBugComparisonDetailsOpen?: boolean;
-  userBugComparisonReanalysisContext?: string; // Contexto para comparar flujos
+  userBugComparisonReanalysisContext?: string;
 }

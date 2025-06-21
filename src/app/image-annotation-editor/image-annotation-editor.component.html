@@ -23,28 +23,33 @@
           <button (click)="removeAnnotation(i); $event.stopPropagation()" class="button-small button-cancel" title="Eliminar anotación">Eliminar</button>
         </div>
         <div *ngIf="i === selectedAnnotationIndex" class="annotation-details">
+          
           <div class="form-group">
-            <label>Tipo de Elemento/Acción:</label>
-            <select [(ngModel)]="ann.elementType" (change)="drawCanvas()">
-              <option value="">Seleccionar tipo</option>
-              <option value="Campo de Entrada">Campo de Entrada</option>
-              <option value="Botón">Botón</option>
-              <option value="Enlace">Enlace</option>
-              <option value="Mensaje/Etiqueta">Mensaje/Etiqueta</option>
-              <option value="Elemento de Datos">Elemento de Datos (DB/API)</option>
-              <option value="Log de Evento">Log de Evento</option>
-              <option value="Otro">Otro</option>
+            <label>Tipo Semántico de Anotación:</label>
+            <select [(ngModel)]="ann.type" (change)="drawCanvas()">
+              <option *ngFor="let type of annotationTypes" [value]="type">{{ type | titlecase }}</option>
             </select>
           </div>
+
+          <div *ngIf="ann.type === 'input'" class="form-group">
+            <label>Valor del Campo de Entrada:</label>
+            <input type="text" [(ngModel)]="ann.elementValue" placeholder="Ej: 'usuario@mail.com', '12345'" (input)="drawCanvas()">
+          </div>
+
           <div class="form-group">
-            <label>Valor/Texto Asociado:</label>
-            <input type="text" [(ngModel)]="ann.elementValue" placeholder="Ej: 'usuario@mail.com', 'Login exitoso', 'Código: 200'" (input)="drawCanvas()">
+            <label>Tipo de Elemento (Detectado por IA):</label>
+            <input type="text" [(ngModel)]="ann.elementType" placeholder="Ej: 'Botón', 'Campo de Entrada'" (input)="drawCanvas()">
+          </div>
+
+          <div *ngIf="ann.type !== 'input'" class="form-group">
+            <label>Valor/Texto Asociado (Detectado por IA):</label>
+            <input type="text" [(ngModel)]="ann.elementValue" placeholder="Ej: 'Login exitoso', 'Código: 200'" (input)="drawCanvas()">
           </div>
           
           <div class="ai-assistant-action">
             <button (click)="annotateWithAI(i)" class="button-primary button-small" [disabled]="isAnnotatingWithAI">
               <span *ngIf="isAnnotatingWithAI && annotatingAIIndex === i" class="spinner-inline"></span>
-              {{ (isAnnotatingWithAI && annotatingAIIndex === i) ? 'Analizando...' : 'Anotar con IA' }}
+              {{ (isAnnotatingWithAI && annotatingAIIndex === i) ? 'Analizando...' : 'Identificar con IA' }}
             </button>
           </div>
 
@@ -57,7 +62,7 @@
     </div>
 
     <div class="editor-actions">
-      <button (click)="saveAnnotationsAndClose()" class="button-primary">Guardar y Cerrar</button>
+      <button (click)="saveAnnotationsAndClose()" class="button-primary">Aplicar Anotaciones y Cerrar</button>
       <button (click)="cancelAndClose()" class="button-secondary">Cancelar</button>
     </div>
   </div>

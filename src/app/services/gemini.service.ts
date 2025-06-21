@@ -11,7 +11,9 @@ import {
   DetailedTestCase,
   TestCaseStep,
   HUData,
-  ImageAnnotation
+  ImageAnnotation,
+  AIPreAnalysisResult,
+  GuidedFlowStepContext
 } from '../models/hu-data.model';
 
 // --- Interfaces Internas del Servicio ---
@@ -32,7 +34,7 @@ interface GeminiSafetySetting {
 }
 // AJUSTE: Nueva acción añadida para el análisis de anotaciones
 interface ProxyRequestBody {
-  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis' | 'refineDetailedTestCases' | 'analyzeAnnotationArea';
+  action: 'generateScope' | 'generateTextCases' | 'generateImageCases' | 'enhanceStaticSection' | 'generateFlowAnalysis' | 'compareImageFlows' | 'refineFlowAnalysis' | 'refineDetailedTestCases' | 'analyzeAnnotationArea' | 'preAnalyzeSingleImage' | 'analyzeNextImageStep';
   payload: any;
 }
 interface GeminiCandidate {
@@ -80,6 +82,83 @@ export class GeminiService {
 
   // --- Definiciones de Prompts (completas y correctas) ---
   // ... (PROMPT_SCOPE, PROMPT_SCENARIOS_DETAILED_TEXT_BASED, etc. se mantienen sin cambios) ...
+
+
+// --- NUEVOS PROMPTS PARA EL FLUJO GUIADO ---
+
+private readonly PROMPT_INITIAL_IMAGE_ANALYSIS = (): string => `
+Analiza esta captura de pantalla de una aplicación. Identifica los elementos interactivos principales (botones, campos de texto, enlaces, etc.) y describe el propósito general de la pantalla en una o dos frases.
+**FORMATO DE SALIDA ESTRICTO JSON:**
+* La respuesta DEBE ser un único objeto JSON válido.
+* El objeto debe tener EXACTAMENTE dos propiedades: "description" (string) y "elements" (array de objetos).
+* Cada objeto en el array "elements" debe tener "element" (string, el texto o nombre del elemento) y "type" (string, ej: 'Botón', 'Campo de Texto').
+* **PROHIBIDO:** No incluyas explicaciones, saludos, despedidas, o cualquier texto fuera del objeto JSON.
+**Ejemplo:**
+\`\`\`json
+{
+  "description": "Esta parece ser una pantalla de inicio de sesión para acceder a una plataforma.",
+  "elements": [
+    {"element": "Campo 'Correo Electrónico'", "type": "Campo de Texto"},
+    {"element": "Campo 'Contraseña'", "type": "Campo de Texto"},
+    {"element": "Botón 'Iniciar Sesión'", "type": "Botón"},
+    {"element": "Enlace '¿Olvidaste tu contraseña?'", "type": "Enlace"}
+  ]
+}
+\`\`\`
+PROCEDE A ANALIZAR LA IMAGEN Y DEVOLVER EL OBJETO JSON:
+`;
+
+private readonly PROMPT_SEQUENTIAL_IMAGE_ANALYSIS = (previousStepContext: string): string => `
+Actúa como un analista de QA experto. Estás analizando un flujo de usuario paso a paso.
+**CONTEXTO DEL PASO ANTERIOR:**
+${previousStepContext}
+
+**TU TAREA:**
+Te proporciono la NUEVA imagen que resultó de la acción descrita en el contexto anterior.
+Analiza esta nueva pantalla y responde con un objeto JSON que describa:
+1.  Qué ha cambiado y cuál es el propósito de esta nueva pantalla.
+2.  Si esta pantalla es un resultado esperado y lógico después de la acción anterior.
+3.  Los nuevos elementos interactivos clave que ves.
+
+**FORMATO DE SALIDA ESTRICTO JSON (igual al del análisis inicial):**
+* Un único objeto JSON con "description" (string) y "elements" (array de objetos con "element" y "type").
+* **PROHIBIDO:** No incluyas texto fuera del objeto JSON.
+
+PROCEDE A ANALIZAR LA NUEVA IMAGEN Y DEVOLVER EL OBJETO JSON:
+`;
+
+private readonly PROMPT_FINAL_FLOW_ANALYSIS_FROM_CONTEXT = (structuredContext: string): string => `
+Eres un Ingeniero de QA experto en la generación de informes detallados a partir de secuencias de prueba estructuradas.
+A continuación, se te proporciona un array JSON que representa una secuencia de pasos de un flujo de QA, donde cada paso fue validado y anotado por un usuario.
+
+**ENTRADA (FLUJO ESTRUCTURADO):**
+\`\`\`json
+${structuredContext}
+\`\`\`
+
+**INSTRUCCIONES:**
+Basándote en este flujo estructurado, genera un informe de análisis de flujo detallado en español.
+1.  **Nombre_del_Escenario:** Crea un título descriptivo para el flujo completo.
+2.  **Pasos_Analizados:** Convierte cada objeto del array de entrada en un paso del informe.
+    * \`descripcion_accion_observada\`: Usa la descripción del 'trigger' de cada paso.
+    * \`imagen_referencia_entrada\`: Usa el nombre del archivo de imagen del paso.
+    * \`elemento_clave_y_ubicacion_aproximada\`: Usa la descripción del elemento 'trigger'.
+    * \`dato_de_entrada_paso\`: Concatena los valores de las anotaciones de tipo 'input' de ese paso.
+    * \`resultado_esperado_paso\`: Infiere el resultado inmediato esperado basado en la acción.
+    * \`resultado_obtenido_paso_y_estado\`: Describe el estado de la siguiente imagen (basado en la descripción y los puntos de verificación del siguiente paso) y determina si el estado es "Exitosa", "Fallido", etc.
+3.  **Resultado_Esperado_General_Flujo:** Describe el objetivo final que se esperaba alcanzar al final de todo el flujo.
+4.  **Conclusion_General_Flujo:** Concluye si el flujo completo fue exitoso basándote en la suma de los resultados de los pasos.
+
+**FORMATO DE SALIDA ESTRICTO JSON (SIN EXCEPCIONES):**
+* La respuesta DEBE ser un array JSON válido con UN ÚNICO objeto.
+* La estructura del objeto y sus campos deben ser EXACTAMENTE: "Nombre_del_Escenario", "Pasos_Analizados" (array de objetos), "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo".
+* La estructura de cada objeto en "Pasos_Analizados" debe ser: "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", "resultado_obtenido_paso_y_estado".
+* **ABSOLUTAMENTE PROHIBIDO:** No incluyas texto fuera del array JSON.
+
+PROCEDE A GENERAR EL INFORME JSON FINAL:
+`;
+
+
 
   private readonly PROMPT_SCOPE = (description: string, acceptanceCriteria: string): string => `
 Eres un analista de QA experimentado.
@@ -748,6 +827,82 @@ PROCEDE A ANALIZAR LA IMAGEN Y DEVOLVER EL OBJETO JSON:
       }];
     }
   }
+
+
+
+
+// --- MÉTODOS PARA EL NUEVO FLUJO GUIADO ---
+
+preAnalyzeSingleImage(imageBase64: string, mimeType: string): Observable<AIPreAnalysisResult> {
+  const promptText = this.PROMPT_INITIAL_IMAGE_ANALYSIS();
+  const imagePart: GeminiInlineDataPart = { inlineData: { mimeType, data: imageBase64 } };
+  const geminiPayload = {
+    contents: [{ parts: [{ text: promptText }, imagePart] }],
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.2 }
+  };
+  const requestToProxy: ProxyRequestBody = { action: 'preAnalyzeSingleImage', payload: geminiPayload };
+  return this.sendAIAnalysisRequest(requestToProxy);
+}
+
+analyzeNextImageInFlow(imageBase64: string, mimeType: string, previousStepContext: string): Observable<AIPreAnalysisResult> {
+  const promptText = this.PROMPT_SEQUENTIAL_IMAGE_ANALYSIS(previousStepContext);
+  const imagePart: GeminiInlineDataPart = { inlineData: { mimeType, data: imageBase64 } };
+  const geminiPayload = {
+    contents: [{ parts: [{ text: promptText }, imagePart] }],
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.3 }
+  };
+  const requestToProxy: ProxyRequestBody = { action: 'analyzeNextImageStep', payload: geminiPayload };
+  return this.sendAIAnalysisRequest(requestToProxy);
+}
+
+generateFinalFlowReport(structuredContextJSON: string): Observable<FlowAnalysisReportItem[]> {
+  const promptText = this.PROMPT_FINAL_FLOW_ANALYSIS_FROM_CONTEXT(structuredContextJSON);
+  const geminiPayload = {
+    contents: [{ parts: [{ text: promptText }] }],
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.1, topP: 0.95, topK: 40 },
+    safetySettings: [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+    ]
+  };
+  const requestToProxy: ProxyRequestBody = { action: 'generateFlowAnalysis', payload: geminiPayload };
+  return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
+    map(response => this.parseFlowAnalysisResponse(
+      this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '',
+      'generateFlowAnalysis'
+    )),
+    catchError(this.handleError)
+  );
+}
+
+private sendAIAnalysisRequest(requestToProxy: ProxyRequestBody): Observable<AIPreAnalysisResult> {
+  return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
+    map(response => {
+      const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
+      if (!rawText) throw new Error('Respuesta vacía de la IA.');
+      let jsonText = rawText;
+      if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+      if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+      jsonText = jsonText.trim();
+      try {
+        const parsed: AIPreAnalysisResult = JSON.parse(jsonText);
+        if (typeof parsed.description !== 'string' || !Array.isArray(parsed.elements)) {
+          throw new Error('El JSON de respuesta no tiene el formato esperado.');
+        }
+        return parsed;
+      } catch (e: any) {
+        console.error('[GeminiService] Error parseando JSON para análisis de imagen:', e.message, "\nRespuesta Cruda:", rawText);
+        throw new Error(`Error interpretando la respuesta de la IA: ${e.message}`);
+      }
+    }),
+    catchError(this.handleError)
+  );
+}
+
+
+
 
   public generateFlowAnalysisFromImages(
     imagesBase64: string[], 
