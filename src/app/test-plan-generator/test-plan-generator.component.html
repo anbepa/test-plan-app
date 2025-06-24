@@ -145,6 +145,14 @@
                                         hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable'">
                         Exportar Matriz (.csv)
                     </button>
+                    <button (click)="exportExecutionMatrixToHtml(hu)" class="button-secondary"
+                            [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 ||
+                                        hu.detailedTestCases[0].title?.startsWith('Error') ||
+                                        hu.detailedTestCases[0].title === 'Información Insuficiente' ||
+                                        hu.detailedTestCases[0].title === 'Refinamiento no posible con el contexto actual' ||
+                                        hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable'">
+                        Exportar Matriz (.html)
+                    </button>
                 </div>
               </div>
             </details>
