@@ -892,7 +892,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
         reader.onload = function(e) {
           const div = document.createElement('div');
           div.className = 'evidencia-block';
-          div.innerHTML = '<div class="evidencia-label">Evidencia ' + (grid.children.length+1) + '</div><img src="' + e.target.result + '" alt="Evidencia" />';
+          div.innerHTML = '<div class="evidencia-label"><span contenteditable="true" class="evidencia-nombre-span">Evidencia ' + (grid.children.length+1) + '</span><button class="btn btn-danger btn-evidencia-eliminar" onclick="this.parentElement.parentElement.remove()">Eliminar</button></div><img src="' + e.target.result + '" alt="Evidencia" />';
           grid.appendChild(div);
         };
         reader.readAsDataURL(files[i]);
@@ -909,7 +909,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
                 const grid = document.getElementById('evid-grid-' + idx);
                 const div = document.createElement('div');
                 div.className = 'evidencia-block';
-                div.innerHTML = '<div class="evidencia-label">Evidencia ' + (grid.children.length+1) + '</div><img src="' + e.target.result + '" alt="Evidencia" />';
+                div.innerHTML = '<div class="evidencia-label"><span contenteditable="true" class="evidencia-nombre-span">Evidencia ' + (grid.children.length+1) + '</span><button class="btn btn-danger btn-evidencia-eliminar" onclick="this.parentElement.parentElement.remove()">Eliminar</button></div><img src="' + e.target.result + '" alt="Evidencia" />';
                 grid.appendChild(div);
               };
               reader.readAsDataURL(blob);
@@ -955,7 +955,10 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
     .evidencias-grid { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 18px; }
     .evidencia-block { width: 600px; background: #f8fafc; border-radius: 8px; box-shadow: 0 1px 4px rgba(44,62,80,0.07); padding: 10px; margin-bottom: 8px; position:relative; }
     .evidencia-block img { width: 100%; max-width: 600px; border-radius: 6px; border: 1px solid #bbb; margin-bottom: 6px; }
-    .evidencia-label { font-size: 0.98em; color: #444; margin-bottom: 4px; font-weight: 500; }
+    .evidencia-label { font-size: 0.98em; color: #444; margin-bottom: 4px; font-weight: 500; display: flex; align-items: center; }
+    .evidencia-nombre-span { display: inline-block; min-width: 60px; font-size: 1em; font-weight: 500; outline: none; border: none; background: transparent; margin-right: 8px; }
+    .btn-evidencia-eliminar { background: #c0392b; color: #fff; border: none; border-radius: 4px; padding: 2px 8px; font-size: 0.95em; cursor: pointer; margin-left: 4px; }
+    .btn-evidencia-eliminar:hover { background: #922b1a; }
     .footer { margin-top: 40px; color: #888; font-size: 0.95em; text-align: center; }
     .btn { background: #2f5496; color: #fff; border: none; border-radius: 4px; padding: 7px 16px; cursor: pointer; font-weight: 500; transition: background 0.2s; margin: 2px; }
     .btn:hover { background: #1d3557; }
