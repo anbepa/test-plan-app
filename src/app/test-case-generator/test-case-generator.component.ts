@@ -76,6 +76,10 @@ export class TestCaseGeneratorComponent implements OnInit {
   @ViewChild('huForm') huFormDirective!: NgForm;
   @ViewChild('imageFilesInput') imageFilesInputRef: ElementRef<HTMLInputElement> | undefined;
 
+  // IDs de los archivos de Google Drive para las plantillas
+  private readonly macTemplateId = '1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
+  private readonly windowsTemplateId = '1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
+
   constructor(
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
@@ -749,5 +753,23 @@ export class TestCaseGeneratorComponent implements OnInit {
     });
     const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
     saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${hu.id}_${new Date().toISOString().split('T')[0]}.csv`);
+  }
+
+  downloadTemplate(os: 'mac' | 'windows'): void {
+    let fileId = '';
+    if (os === 'mac') {
+      fileId = this.macTemplateId;
+    } else if (os === 'windows') {
+      fileId = this.windowsTemplateId;
+    }
+    if (!fileId) return;
+    const url = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    // Forzar descarga automática
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 }

@@ -75,6 +75,9 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
 
+  public macTemplateUrl = 'https://drive.google.com/uc?export=download&id=1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
+  public windowsTemplateUrl = 'https://drive.google.com/uc?export=download&id=1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
+
   constructor(
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
@@ -85,6 +88,10 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void { }
 
   selectInitialMode(mode: GenerationMode): void {
+    if (mode === 'flowAnalysis' || mode === 'flowComparison') {
+      // Inhabilitado temporalmente
+      return;
+    }
     this.currentGenerationMode = mode;
     this.isModeSelected = true;
 
@@ -94,10 +101,6 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
 
     if (mode === 'text' || mode === 'image') {
       this.showTestCaseGenerator = true;
-    } else if (mode === 'flowAnalysis') {
-      this.showFlowAnalysisComponent = true; 
-    } else if (mode === 'flowComparison') {
-      this.showFlowComparisonComponent = true;
     } else {
       this.resetActiveGeneratorsAndGoToSelection();
       return;
@@ -626,7 +629,7 @@ export class TestPlanGeneratorComponent implements AfterViewInit, OnDestroy {
   }
   
   private downloadHtmlFallback(htmlContent: string): void {
-    const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8' });
     saveAs(blob, `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}_Fallback.html`);
   }
 

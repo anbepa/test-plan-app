@@ -281,6 +281,12 @@
                     [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title?.startsWith('Error')">
                 Exportar Matriz (.csv)
             </button>
+            <button type="button" class="button-secondary" (click)="downloadTemplate('mac')">
+                Plantilla ejecutar Mac
+            </button>
+            <button type="button" class="button-secondary" (click)="downloadTemplate('windows')">
+                Plantilla ejecutar Windows
+            </button>
             <button type="button" (click)="startRefinementMode()" class="button-edit" 
                     *ngIf="componentState === 'previewingGenerated'"
                     [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title?.startsWith('Error')">
