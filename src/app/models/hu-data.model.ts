@@ -99,64 +99,26 @@ export interface GuidedFlowStepContext {
 
 
 // --- Tipo para el Modo de Generación ---
-export type GenerationMode = 'text' | 'image' | 'flowAnalysis' | 'flowComparison';
+export type GenerationMode = 'text' | 'image';
 
 // --- Interfaz Principal HUData ---
 export interface HUData {
-  originalInput: {
-    id: string;
-    title: string;
-    sprint: string;
-    description?: string;
-    acceptanceCriteria?: string;
-    selectedTechnique: string;
-    generationMode: GenerationMode;
-    imagesBase64?: string[];
-    imageMimeTypes?: string[];
-    imageFilenames?: string[];
-    imagesBase64FlowA?: string[];
-    imageMimeTypesFlowA?: string[];
-    imageFilenamesFlowA?: string[];
-    imagesBase64FlowB?: string[];
-    imageMimeTypesFlowB?: string[];
-    imageFilenamesFlowB?: string[];
-    annotationsFlowA?: ImageAnnotation[];
-    annotationsFlowB?: ImageAnnotation[];
-
-    // NUEVO: Para almacenar el resultado del flujo guiado
-    guidedFlowSteps?: GuidedFlowStepContext[];
-  };
   id: string;
   title: string;
   sprint: string;
-  generatedScope: string;
-  detailedTestCases: DetailedTestCase[];
-  generatedTestCaseTitles: string;
-
-  editingScope: boolean;
-  loadingScope: boolean;
-  errorScope: string | null;
-  isScopeDetailsOpen: boolean;
-
-  editingScenarios: boolean;
-  loadingScenarios: boolean;
-  errorScenarios: string | null;
-  showRegenTechniquePicker: boolean;
-  regenSelectedTechnique: string;
-  userTestCaseReanalysisContext: string;
-  isScenariosDetailsOpen: boolean;
-  isEditingDetailedTestCases?: boolean;
-
-  flowAnalysisReport?: FlowAnalysisReportItem[];
-  loadingFlowAnalysis?: boolean;
-  errorFlowAnalysis?: string | null;
-  isFlowAnalysisDetailsOpen?: boolean;
-  isEditingFlowReportDetails?: boolean;
-  userReanalysisContext?: string;
-  
-  bugComparisonReport?: BugReportItem[];
-  loadingBugComparison?: boolean;
-  errorBugComparison?: string | null;
-  isBugComparisonDetailsOpen?: boolean;
-  userBugComparisonReanalysisContext?: string;
+  originalInput: {
+    generationMode: GenerationMode;
+    description?: string;
+    acceptanceCriteria?: string;
+    imagesBase64?: string[];
+    selectedTechnique?: string;
+  };
+  generatedScope?: string;
+  generatedTestCaseTitles?: string;
+  detailedTestCases?: DetailedTestCase[];
+  editingScope?: boolean;
+  isScopeDetailsOpen?: boolean;
+  loadingScope?: boolean;
+  errorScope?: string | null;
+  // ... otros campos necesarios para 'text' e 'image' ...
 }

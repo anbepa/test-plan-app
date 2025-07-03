@@ -322,11 +322,11 @@ ${existingContent}
 **Resumen de Historias de Usuario/Flujos en el Plan (para contexto):**
 ${huSummary}
 **INSTRUCCIONES:**
-1.  **ANALIZA EL CONTEXTO:** Considera el resumen de HUs/Flujos para que tu contribución sea relevante.
-2.  **MEJORA Y EXPANDE:** Si el contenido existente es un placeholder (ej: "No se probarán...", "No tener los permisos...") o está vacío, genera contenido nuevo y relevante para la sección "${sectionName}" basado en el contexto general. Si ya hay contenido, añade 2-3 puntos o ideas adicionales que lo complementen, sin repetir lo existente.
-3.  **FORMATO:** Responde ÚNICAMENTE con el texto adicional o mejorado para la sección. No uses encabezados, títulos de sección, ni introducciones/despedidas. Si añades múltiples puntos, usa saltos de línea entre ellos.
-4.  **CONCISIÓN Y RELEVANCIA:** Sé conciso y asegúrate de que tus adiciones sean relevantes para un plan de pruebas y la sección "${sectionName}".
-5.  **NO REPITAS:** Si el contenido existente ya es bueno y completo para el contexto, y no puedes añadir nada valioso, responde con una cadena vacía.
+1.  **ANALIZA EL CONTEXTO:** Considera el resumen de HUs/Flujos para que tu contribución sea relevante.
+2.  **MEJORA Y EXPANDE:** Si el contenido existente es un placeholder (ej: "No se probarán...", "No tener los permisos...") o está vacío, genera contenido nuevo y relevante para la sección "${sectionName}" basado en el contexto general. Si ya hay contenido, añade 2-3 puntos o ideas adicionales que lo complementen, sin repetir lo existente.
+3.  **FORMATO:** Responde ÚNICAMENTE con el texto adicional o mejorado para la sección. No uses encabezados, títulos de sección, ni introducciones/despedidas. Si añades múltiples puntos, usa saltos de línea entre ellos.
+4.  **CONCISIÓN Y RELEVANCIA:** Sé conciso y asegúrate de que tus adiciones sean relevantes para un plan de pruebas y la sección "${sectionName}".
+5.  **NO REPITAS:** Si el contenido existente ya es bueno y completo para el contexto, y no puedes añadir nada valioso, responde con una cadena vacía.
 **EJEMPLO DE RESPUESTA (si se añaden dos puntos a "Limitaciones"):**
 Se cuenta con un ambiente de pruebas con datos limitados.
 La funcionalidad X depende de un sistema externo no disponible para pruebas exhaustivas.
@@ -401,53 +401,53 @@ private readonly PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedRe
 Eres un Ingeniero de QA experto en análisis forense de secuencias de imágenes y refinamiento de documentación de pruebas.
 Tu tarea es REFINAR un informe de análisis de flujo o secuencia de estados existente. Debes basarte en las imágenes originales y en el **contexto editado del informe (JSON proporcionado)**. Este contexto puede incluir correcciones a los pasos, comentarios del usuario, y crucialmente, **aclaraciones sobre la naturaleza o tipo de las imágenes y el flujo (ej. si no es una UI, si son datos, logs, etc.)** contenidas en el campo "user_provided_additional_context" del JSON.
 **ENTRADA PROPORCIONADA:**
-1.  **Imágenes Originales del Flujo/Secuencia Ejecutada:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto).
-2.  **Contexto del Informe Editado (JSON):** Un objeto JSON que representa el informe tal como fue editado o anotado por el usuario. Este JSON incluye "Nombre_del_Escenario", "Pasos_Analizados" (con descripciones, elementos, datos de entrada y resultados esperados ya definidos por el usuario o una corrida previa), "Resultado_Esperado_General_Flujo", y muy importantemente, **"user_provided_additional_context"** con comentarios generales o directrices del usuario. El JSON es:
-    \`\`\`json
-    ${editedReportContextJSON}
-    \`\`\`
+1.  **Imágenes Originales del Flujo/Secuencia Ejecutada:** (Las imágenes adjuntas en base64 en la solicitud, en orden secuencial estricto).
+2.  **Contexto del Informe Editado (JSON):** Un objeto JSON que representa el informe tal como fue editado o anotado por el usuario. Este JSON incluye "Nombre_del_Escenario", "Pasos_Analizados" (con descripciones, elementos, datos de entrada y resultados esperados ya definidos por el usuario o una corrida previa), "Resultado_Esperado_General_Flujo", y muy importantemente, **"user_provided_additional_context"** con comentarios generales o directrices del usuario. El JSON es:
+  \`\`\`json
+  ${editedReportContextJSON}
+  \`\`\`
 **INSTRUCCIONES DETALLADAS PARA EL REFINAMIENTO:**
-1.  **PRIORIDAD ABSOLUTA AL "user_provided_additional_context":**
-    * Este campo dentro del JSON de entrada es tu directriz principal. Si el usuario aclara que las imágenes son, por ejemplo, "resultados de una base de datos antes y después de una actualización" o "logs de un proceso batch", DEBES adaptar tu interpretación y la terminología utilizada en los campos que generes ("resultado_obtenido_paso_y_estado" y "Conclusion_General_Flujo") para que sean coherentes con esa naturaleza.
-    * **NO ASUMAS que es una UI si el "user_provided_additional_context" sugiere otra cosa.**
-2.  **RE-ANALIZA LAS IMÁGENES CON EL CONTEXTO DEL USUARIO:**
-    * Vuelve a examinar las imágenes originales.
-    * Considera las ediciones ya hechas por el usuario en los campos como "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", y "resultado_esperado_paso" (contenidos en el JSON de entrada) como la base "correcta" de la acción o estado que se está analizando en cada paso.
-3.  **ENFOQUE PRINCIPAL: Generar NUEVOS "resultado_obtenido_paso_y_estado":**
-    * Para cada paso en "Pasos_Analizados" del JSON de contexto:
-        * Tu tarea principal es generar un **NUEVO y PRECISO** "resultado_obtenido_paso_y_estado".
-        * Este debe reflejar fielmente si, dadas las acciones/entradas/elementos y expectativas definidas en el JSON de contexto (y cualquier aclaración en "user_provided_additional_context"), lo que se observa en las imágenes originales (especialmente en la "imagen_referencia_salida" si la tienes, o la siguiente a "imagen_referencia_entrada") coincide.
-        * Actualiza el estado a "Exitosa", "Fallido", "Exitosa con desviaciones" o "Inconclusivo", según corresponda. La descripción debe ser coherente con el tipo de flujo indicado por el usuario (ej. para datos: "Conforme: El valor en la columna X es Y", "No Conforme: El log muestra un error Z").
-4.  **ACTUALIZAR LA CONCLUSIÓN GENERAL:**
-    * Basado en los "resultado_obtenido_paso_y_estado" REFINADOS para todos los pasos, genera una nueva "Conclusion_General_Flujo".
-    * El "Nombre_del_Escenario" y "Resultado_Esperado_General_Flujo" del JSON de contexto deben mantenerse, aunque la conclusión debe reflejar la nueva evaluación.
-5.  **MANTENER LA ESTRUCTURA Y ORDEN Y COMPLETAR "imagen_referencia_salida":**
-    * El número de pasos y su orden deben coincidir con los de "Pasos_Analizados" en el JSON de contexto.
-    * Si el campo "imagen_referencia_salida" no existe o está vacío en el JSON de entrada para un paso, debes inferirlo a partir de las imágenes originales y añadirlo/completarlo en el paso refinado. Este campo es crucial para evidenciar el resultado obtenido.
-6.  **CASO DE ERROR EN REFINAMIENTO:**
-    Si, a pesar del contexto (incluyendo el "user_provided_additional_context"), las imágenes siguen sin permitir un refinamiento claro o hay una contradicción fundamental que no puedes resolver, produce un informe con un error específico en la "Conclusion_General_Flujo" y en el "resultado_obtenido_paso_y_estado" del primer paso problemático. Usa el "Nombre_del_Escenario" del contexto.
-    Ejemplo de estructura de error:
-    \`\`\`json
-    [
-      {
-        "Nombre_del_Escenario": "Error Crítico en Re-Generación (Contextualizada)",
-        "Pasos_Analizados": [
-          {
-            "numero_paso": 1,
-            "descripcion_accion_observada": "Descripción del contexto",
-            "imagen_referencia_entrada": "Ref del contexto",
-            "elemento_clave_y_ubicacion_aproximada": "Elemento del contexto",
-            "dato_de_entrada_paso": "Dato del contexto",
-            "resultado_esperado_paso": "Esperado del contexto",
-            "resultado_obtenido_paso_y_estado": "No se pudo refinar el resultado obtenido. Razón: [especificar, ej: 'El contexto del usuario indica que esto es un log, pero las imágenes parecen ser de una UI, creando una contradicción no resoluble.' o 'Las imágenes originales son insuficientes para verificar el estado descrito en el contexto.'].",
-            "imagen_referencia_salida": "N/A si no se pudo determinar"
-          }
-        ],
-        "Resultado_Esperado_General_Flujo": "Esperado general del contexto",
-        "Conclusion_General_Flujo": "El refinamiento del flujo/secuencia no pudo completarse debido a [razón general, ej: 'contradicciones entre el contexto del usuario y las imágenes' o 'insuficiencia de las imágenes para el análisis solicitado']."
-      }
-    ]
-    \`\`\`
+1.  **PRIORIDAD ABSOLUTA AL "user_provided_additional_context":**
+    * Este campo dentro del JSON de entrada es tu directriz principal. Si el usuario aclara que las imágenes son, por ejemplo, "resultados de una base de datos antes y después de una actualización" o "logs de un proceso batch", DEBES adaptar tu interpretación y la terminología utilizada en los campos que generes ("resultado_obtenido_paso_y_estado" y "Conclusion_General_Flujo") para que sean coherentes con esa naturaleza.
+    * **NO ASUMAS que es una UI si el "user_provided_additional_context" sugiere otra cosa.**
+2.  **RE-ANALIZA LAS IMÁGENES CON EL CONTEXTO DEL USUARIO:**
+    * Vuelve a examinar las imágenes originales.
+    * Considera las ediciones ya hechas por el usuario en los campos como "descripcion_accion_observada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", y "resultado_esperado_paso" (contenidos en el JSON de entrada) como la base "correcta" de la acción o estado que se está analizando en cada paso.
+3.  **ENFOQUE PRINCIPAL: Generar NUEVOS "resultado_obtenido_paso_y_estado":**
+    * Para cada paso en "Pasos_Analizados" del JSON de contexto:
+        * Tu tarea principal es generar un **NUEVO y PRECISO** "resultado_obtenido_paso_y_estado".
+        * Este debe reflejar fielmente si, dadas las acciones/entradas/elementos y expectativas definidas en el JSON de contexto (y cualquier aclaración en "user_provided_additional_context"), lo que se observa en las imágenes originales (especialmente en la "imagen_referencia_salida" si la tienes, o la siguiente a "imagen_referencia_entrada") coincide.
+        * Actualiza el estado a "Exitosa", "Fallido", "Exitosa con desviaciones" o "Inconclusivo", según corresponda. La descripción debe ser coherente con el tipo de flujo indicado por el usuario (ej. para datos: "Conforme: El valor en la columna X es Y", "No Conforme: El log muestra un error Z").
+4.  **ACTUALIZAR LA CONCLUSIÓN GENERAL:**
+    * Basado en los "resultado_obtenido_paso_y_estado" REFINADOS para todos los pasos, genera una nueva "Conclusion_General_Flujo".
+    * El "Nombre_del_Escenario" y "Resultado_Esperado_General_Flujo" del JSON de contexto deben mantenerse, aunque la conclusión debe reflejar la nueva evaluación.
+5.  **MANTENER LA ESTRUCTURA Y ORDEN Y COMPLETAR "imagen_referencia_salida":**
+    * El número de pasos y su orden deben coincidir con los de "Pasos_Analizados" en el JSON de contexto.
+    * Si el campo "imagen_referencia_salida" no existe o está vacío en el JSON de entrada para un paso, debes inferirlo a partir de las imágenes originales y añadirlo/completarlo en el paso refinado. Este campo es crucial para evidenciar el resultado obtenido.
+6.  **CASO DE ERROR EN REFINAMIENTO:**
+    Si, a pesar del contexto (incluyendo el "user_provided_additional_context"), las imágenes siguen sin permitir un refinamiento claro o hay una contradicción fundamental que no puedes resolver, produce un informe con un error específico en la "Conclusion_General_Flujo" y en el "resultado_obtenido_paso_y_estado" del primer paso problemático. Usa el "Nombre_del_Escenario" del contexto.
+    Ejemplo de estructura de error:
+    \`\`\`json
+    [
+      {
+        "Nombre_del_Escenario": "Error Crítico en Re-Generación (Contextualizada)",
+        "Pasos_Analizados": [
+          {
+            "numero_paso": 1,
+            "descripcion_accion_observada": "Descripción del contexto",
+            "imagen_referencia_entrada": "Ref del contexto",
+            "elemento_clave_y_ubicacion_aproximada": "Elemento del contexto",
+            "dato_de_entrada_paso": "Dato del contexto",
+            "resultado_esperado_paso": "Esperado del contexto",
+            "resultado_obtenido_paso_y_estado": "No se pudo refinar el resultado obtenido. Razón: [especificar, ej: 'El contexto del usuario indica que esto es un log, pero las imágenes parecen ser de una UI, creando una contradicción no resoluble.' o 'Las imágenes originales son insuficientes para verificar el estado descrito en el contexto.'].",
+            "imagen_referencia_salida": "N/A si no se pudo determinar"
+          }
+        ],
+        "Resultado_Esperado_General_Flujo": "Esperado general del contexto",
+        "Conclusion_General_Flujo": "El refinamiento del flujo/secuencia no pudo completarse debido a [razón general, ej: 'contradicciones entre el contexto del usuario y las imágenes' o 'insuficiencia de las imágenes para el análisis solicitado']."
+      }
+    ]
+    \`\`\`
 **FORMATO DE SALIDA ESTRICTO JSON EN ESPAÑOL (SIN EXCEPCIONES):**
 * La respuesta DEBE ser un array JSON válido que contenga UN ÚNICO objeto.
 * La estructura del objeto y sus campos deben coincidir con la definida en el prompt \`PROMPT_FLOW_ANALYSIS_FROM_IMAGES\` (es decir, los campos "Nombre_del_Escenario", "Pasos_Analizados" con "numero_paso", "descripcion_accion_observada", "imagen_referencia_entrada", "elemento_clave_y_ubicacion_aproximada", "dato_de_entrada_paso", "resultado_esperado_paso", "resultado_obtenido_paso_y_estado", "imagen_referencia_salida", y los campos generales "Resultado_Esperado_General_Flujo", "Conclusion_General_Flujo").
@@ -606,227 +606,227 @@ PROCEDE A ANALIZAR LA IMAGEN Y DEVOLVER EL OBJETO JSON:
     return this.sendGenerationRequestThroughProxy(requestToProxy);
   }
 
-  public generateDetailedTestCasesImageBased(imagesBase64: string[], mimeTypes: string[], technique: string, additionalContext?: string): Observable<DetailedTestCase[]> {
-    const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique, additionalContext);
-    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64, index) => ({
-      inlineData: { mimeType: mimeTypes[index], data: base64 }
-    }));
-    const geminiPayload = {
-      contents: [{ parts: ([{ text: promptText }] as GeminiPart[]).concat(imageParts) }],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-      ]
-    };
-    const requestToProxy: ProxyRequestBody = { action: 'generateImageCases', payload: geminiPayload };
-    return this.sendGenerationRequestThroughProxy(requestToProxy);
-  }
+  public generateDetailedTestCasesImageBased(imagesBase64: string[], technique: string, additionalContext?: string): Observable<DetailedTestCase[]> {
+    const promptText = this.PROMPT_SCENARIOS_DETAILED_IMAGE_BASED(technique, additionalContext);
+    const imageParts: GeminiInlineDataPart[] = imagesBase64.map((base64) => ({
+      inlineData: { mimeType: 'image/png', data: base64 }
+    }));
+    const geminiPayload = {
+      contents: [{ parts: ([{ text: promptText }] as GeminiPart[]).concat(imageParts) }],
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.2, topP: 0.95, topK: 40 },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+      ]
+    };
+    const requestToProxy: ProxyRequestBody = { action: 'generateImageCases', payload: geminiPayload };
+    return this.sendGenerationRequestThroughProxy(requestToProxy);
+  }
 
-  public refineDetailedTestCases(
-    originalHuInput: HUData['originalInput'],
-    editedTestCases: DetailedTestCase[],
-    newTechnique: string,
-    userReanalysisContext: string
-  ): Observable<DetailedTestCase[]> {
-    const currentTestCasesJSON = JSON.stringify(editedTestCases, null, 2);
-    const promptText = this.PROMPT_REFINE_DETAILED_TEST_CASES(
-        originalHuInput.generationMode as 'text' | 'image',
-        originalHuInput.description,
-        originalHuInput.acceptanceCriteria,
-        currentTestCasesJSON,
-        newTechnique,
-        userReanalysisContext
-    );
-    const parts: GeminiPart[] = [{ text: promptText }];
-    if (originalHuInput.generationMode === 'image' && originalHuInput.imagesBase64 && originalHuInput.imageMimeTypes) {
-        const imageParts: GeminiInlineDataPart[] = originalHuInput.imagesBase64.map((base64, index) => ({
-            inlineData: { mimeType: originalHuInput.imageMimeTypes![index], data: base64 }
-        }));
-        parts.push(...imageParts);
-    }
-    const geminiPayload = {
-        contents: [{ parts: parts }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
-        safetySettings: [
-             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-        ]
-    };
-    const requestToProxy: ProxyRequestBody = { action: 'refineDetailedTestCases', payload: geminiPayload };
-    return this.sendGenerationRequestThroughProxy(requestToProxy);
-  }
+  public refineDetailedTestCases(
+    originalHuInput: HUData['originalInput'],
+    editedTestCases: DetailedTestCase[],
+    newTechnique: string,
+    userReanalysisContext: string
+  ): Observable<DetailedTestCase[]> {
+    const currentTestCasesJSON = JSON.stringify(editedTestCases, null, 2);
+    const promptText = this.PROMPT_REFINE_DETAILED_TEST_CASES(
+        originalHuInput.generationMode as 'text' | 'image',
+        originalHuInput.description,
+        originalHuInput.acceptanceCriteria,
+        currentTestCasesJSON,
+        newTechnique,
+        userReanalysisContext
+    );
+    const parts: GeminiPart[] = [{ text: promptText }];
+    if (originalHuInput.generationMode === 'image' && originalHuInput.imagesBase64) {
+        const imageParts: GeminiInlineDataPart[] = originalHuInput.imagesBase64.map((base64) => ({
+            inlineData: { mimeType: 'image/png', data: base64 }
+        }));
+        parts.push(...imageParts);
+    }
+    const geminiPayload = {
+        contents: [{ parts: parts }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.3, topP: 0.95, topK: 40 },
+        safetySettings: [
+             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+        ]
+    };
+    const requestToProxy: ProxyRequestBody = { action: 'refineDetailedTestCases', payload: geminiPayload };
+    return this.sendGenerationRequestThroughProxy(requestToProxy);
+  }
 
-  private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
-    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
-      map(response => {
-        const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
-        if (!rawText) {
-          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API.", steps: [{numero_paso: 1, accion: "Respuesta vacía de la API."}], expectedResults: "N/A" }];
-        }
-        let jsonText = rawText;
-        if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-        if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
-        jsonText = jsonText.trim();
-        if (!jsonText.startsWith("[")) {
-            return [{ title: "Error de Formato (No JSON Array)", preconditions: "Respuesta no fue array JSON.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
-        }
-        try {
-          let parsedResponse: any[] = JSON.parse(jsonText);
-          if (!Array.isArray(parsedResponse)) {
-             return [{ title: "Error de Formato (No Array)", preconditions: "Respuesta JSON no tuvo formato array.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
-          }
-          if (parsedResponse.length === 0) {
-             return [];
-          }
-          if (parsedResponse.length === 1 && (
-                parsedResponse[0].title === "Información Insuficiente" ||
-                parsedResponse[0].title === "Imágenes no interpretables o técnica no aplicable" ||
-                parsedResponse[0].title === "Refinamiento no posible con el contexto actual")
-              ) {
-              if (!Array.isArray(parsedResponse[0].steps) || parsedResponse[0].steps.length === 0) {
-                 parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps || (parsedResponse[0].preconditions || "Detalle no disponible en los pasos.")}];
-              } else if (typeof parsedResponse[0].steps[0] === 'string') {
-                parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps[0]}];
-              } else if (typeof parsedResponse[0].steps[0] === 'object' && !parsedResponse[0].steps[0].hasOwnProperty('accion')) {
-                parsedResponse[0].steps = [{numero_paso: 1, accion: JSON.stringify(parsedResponse[0].steps[0])}];
-              }
-              return [{
-                title: parsedResponse[0].title,
-                preconditions: parsedResponse[0].preconditions || "N/A",
-                steps: parsedResponse[0].steps,
-                expectedResults: parsedResponse[0].expectedResults || "N/A"
-              }] as DetailedTestCase[];
-          }
-          return parsedResponse.map((tc: any, tcIndex: number) => {
-            let formattedSteps: TestCaseStep[];
-            if (Array.isArray(tc.steps)) {
-                formattedSteps = tc.steps.map((step: any, index: number) => ({
-                    numero_paso: Number.isInteger(step.numero_paso) ? step.numero_paso : (index + 1),
-                    accion: typeof step.accion === 'string' ? step.accion.trim() : "Paso no descrito"
-                }));
-            } else if (typeof tc.steps === 'string') {
-                formattedSteps = tc.steps.split('\n').map((line: string, index: number) => ({
-                    numero_paso: index + 1,
-                    accion: line.replace(/^\d+\.\s*/, '').trim()
-                })).filter((step: TestCaseStep) => step.accion.length > 0);
-            } else {
-                formattedSteps = [{ numero_paso: 1, accion: "Pasos no proporcionados o en formato incorrecto." }];
-            }
-            if (formattedSteps.length === 0) {
-                formattedSteps.push({ numero_paso: 1, accion: "No se pudieron determinar los pasos." });
-            }
-            return {
-              title: tc.title || `Caso de Prueba Sin Título ${tcIndex + 1}`,
-              preconditions: tc.preconditions || "N/A",
-              steps: formattedSteps,
-              expectedResults: tc.expectedResults || "Resultados no proporcionados"
-            };
-          }) as DetailedTestCase[];
-        } catch (e: any) {
-          console.error(`[GeminiService] Error parseando JSON para ${requestToProxy.action}:`, e.message, "\nRespuesta Cruda:", rawText);
-          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar respuesta JSON.", steps: [{numero_paso:1, accion: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}`}], expectedResults: "Verificar consola." }];
-        }
-      }),
-      catchError(this.handleError)
-    );
-  }
+  private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
+    return this.http.post<GeminiResponse>(this.proxyApiUrl, requestToProxy).pipe(
+      map(response => {
+        const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
+        if (!rawText) {
+          return [{ title: "Error de API", preconditions: "Respuesta vacía de la API.", steps: [{numero_paso: 1, accion: "Respuesta vacía de la API."}], expectedResults: "N/A" }];
+        }
+        let jsonText = rawText;
+        if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+        if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+        jsonText = jsonText.trim();
+        if (!jsonText.startsWith("[")) {
+          return [{ title: "Error de Formato (No JSON Array)", preconditions: "Respuesta no fue array JSON.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
+        }
+        try {
+          let parsedResponse: any[] = JSON.parse(jsonText);
+          if (!Array.isArray(parsedResponse)) {
+            return [{ title: "Error de Formato (No Array)", preconditions: "Respuesta JSON no tuvo formato array.", steps: [{numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0,200)}`}], expectedResults: "N/A" }];
+          }
+          if (parsedResponse.length === 0) {
+            return [];
+          }
+          if (parsedResponse.length === 1 && (
+              parsedResponse[0].title === "Información Insuficiente" ||
+              parsedResponse[0].title === "Imágenes no interpretables o técnica no aplicable" ||
+              parsedResponse[0].title === "Refinamiento no posible con el contexto actual")
+              ) {
+            if (!Array.isArray(parsedResponse[0].steps) || parsedResponse[0].steps.length === 0) {
+              parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps || (parsedResponse[0].preconditions || "Detalle no disponible en los pasos.")}];
+            } else if (typeof parsedResponse[0].steps[0] === 'string') {
+              parsedResponse[0].steps = [{numero_paso: 1, accion: parsedResponse[0].steps[0]}];
+            } else if (typeof parsedResponse[0].steps[0] === 'object' && !parsedResponse[0].steps[0].hasOwnProperty('accion')) {
+              parsedResponse[0].steps = [{numero_paso: 1, accion: JSON.stringify(parsedResponse[0].steps[0])}];
+            }
+            return [{
+              title: parsedResponse[0].title,
+              preconditions: parsedResponse[0].preconditions || "N/A",
+              steps: parsedResponse[0].steps,
+              expectedResults: parsedResponse[0].expectedResults || "N/A"
+            }] as DetailedTestCase[];
+          }
+          return parsedResponse.map((tc: any, tcIndex: number) => {
+            let formattedSteps: TestCaseStep[];
+            if (Array.isArray(tc.steps)) {
+              formattedSteps = tc.steps.map((step: any, index: number) => ({
+                numero_paso: Number.isInteger(step.numero_paso) ? step.numero_paso : (index + 1),
+                accion: typeof step.accion === 'string' ? step.accion.trim() : "Paso no descrito"
+              }));
+            } else if (typeof tc.steps === 'string') {
+              formattedSteps = tc.steps.split('\n').map((line: string, index: number) => ({
+                numero_paso: index + 1,
+                accion: line.replace(/^\d+\.\s*/, '').trim()
+              })).filter((step: TestCaseStep) => step.accion.length > 0);
+            } else {
+              formattedSteps = [{ numero_paso: 1, accion: "Pasos no proporcionados o en formato incorrecto." }];
+            }
+            if (formattedSteps.length === 0) {
+              formattedSteps.push({ numero_paso: 1, accion: "No se pudieron determinar los pasos." });
+            }
+            return {
+              title: tc.title || `Caso de Prueba Sin Título ${tcIndex + 1}`,
+              preconditions: tc.preconditions || "N/A",
+              steps: formattedSteps,
+              expectedResults: tc.expectedResults || "Resultados no proporcionados"
+            };
+          }) as DetailedTestCase[];
+        } catch (e: any) {
+          console.error(`[GeminiService] Error parseando JSON para ${requestToProxy.action}:`, e.message, "\nRespuesta Cruda:", rawText);
+          return [{ title: "Error de Parsing JSON", preconditions: "No se pudo interpretar respuesta JSON.", steps: [{numero_paso:1, accion: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}`}], expectedResults: "Verificar consola." }];
+        }
+      }),
+      catchError(this.handleError)
+    );
+  }
 
-  private parseFlowAnalysisResponse(rawText: string, action: string): FlowAnalysisReportItem[] {
-    if (!rawText) {
-      console.warn(`[GeminiService] API (via proxy) para ${action} no retornó contenido.`);
-      return [{
-        Nombre_del_Escenario: "Error de API",
-        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "Respuesta vacía de la API (via proxy).", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-        Resultado_Esperado_General_Flujo: "N/A",
-        Conclusion_General_Flujo: "Error de comunicación con la API."
-      }];
-    }
+  private parseFlowAnalysisResponse(rawText: string, action: string): FlowAnalysisReportItem[] {
+    if (!rawText) {
+      console.warn(`[GeminiService] API (via proxy) para ${action} no retornó contenido.`);
+      return [{
+        Nombre_del_Escenario: "Error de API",
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "Respuesta vacía de la API (via proxy).", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+        Resultado_Esperado_General_Flujo: "N/A",
+        Conclusion_General_Flujo: "Error de comunicación con la API."
+      }];
+    }
 
-    let jsonText = rawText;
-    if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-    if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
-    jsonText = jsonText.trim();
+    let jsonText = rawText;
+    if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+    if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+    jsonText = jsonText.trim();
 
-    if (!jsonText.startsWith("[")) {
-        console.warn(`[GeminiService] Respuesta no JSON (o no array) de ${action}: `, rawText);
-        return [{
-            Nombre_del_Escenario: "Error de Formato (No JSON Array)",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta de la API (via proxy) no fue un array JSON válido para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-            Resultado_Esperado_General_Flujo: "N/A",
-            Conclusion_General_Flujo: "Error de formato en la API."
-        }];
-    }
+    if (!jsonText.startsWith("[")) {
+      console.warn(`[GeminiService] Respuesta no JSON (o no array) de ${action}: `, rawText);
+      return [{
+        Nombre_del_Escenario: "Error de Formato (No JSON Array)",
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta de la API (via proxy) no fue un array JSON válido para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+        Resultado_Esperado_General_Flujo: "N/A",
+        Conclusion_General_Flujo: "Error de formato en la API."
+      }];
+    }
 
-    try {
-      const flowAnalysisReportArray: any[] = JSON.parse(jsonText);
-      if (!Array.isArray(flowAnalysisReportArray)) {
-         console.warn(`[GeminiService] Respuesta JSON para ${action} no es un array después de parsear.`, rawText);
-         return [{
-            Nombre_del_Escenario: "Error de Formato (No Array)",
-            Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-            Resultado_Esperado_General_Flujo: "N/A",
-            Conclusion_General_Flujo: "Error de formato en la API."
-        }];
-      }
-       if (flowAnalysisReportArray.length === 0) {
-           console.info(`[GeminiService] Respuesta JSON para ${action} es un array vacío.`, rawText);
-            return [{
-                Nombre_del_Escenario: "Respuesta Vacía de IA",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La IA devolvió un array vacío inesperadamente.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "La IA no generó contenido."
-            }];
-       }
+    try {
+      const flowAnalysisReportArray: any[] = JSON.parse(jsonText);
+      if (!Array.isArray(flowAnalysisReportArray)) {
+        console.warn(`[GeminiService] Respuesta JSON para ${action} no es un array después de parsear.`, rawText);
+        return [{
+          Nombre_del_Escenario: "Error de Formato (No Array)",
+          Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) no tuvo el formato de array esperado para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0,200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+          Resultado_Esperado_General_Flujo: "N/A",
+          Conclusion_General_Flujo: "Error de formato en la API."
+        }];
+      }
+      if (flowAnalysisReportArray.length === 0) {
+        console.info(`[GeminiService] Respuesta JSON para ${action} es un array vacío.`, rawText);
+        return [{
+          Nombre_del_Escenario: "Respuesta Vacía de IA",
+          Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: "La IA devolvió un array vacío inesperadamente.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+          Resultado_Esperado_General_Flujo: "N/A",
+          Conclusion_General_Flujo: "La IA no generó contenido."
+        }];
+      }
 
-       const flowAnalysisReportItem = flowAnalysisReportArray[0] as FlowAnalysisReportItem;
+      const flowAnalysisReportItem = flowAnalysisReportArray[0] as FlowAnalysisReportItem;
 
-       if (flowAnalysisReportItem.Nombre_del_Escenario === "Secuencia de imágenes no interpretable" ||
-           flowAnalysisReportItem.Nombre_del_Escenario === "Error Crítico en Re-Generación (Contextualizada)") {
-           if (!Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || flowAnalysisReportItem.Pasos_Analizados.length === 0) {
-               flowAnalysisReportItem.Pasos_Analizados = [{ numero_paso: 1, descripcion_accion_observada: "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}];
-           }
-           return [flowAnalysisReportItem];
-       }
+      if (flowAnalysisReportItem.Nombre_del_Escenario === "Secuencia de imágenes no interpretable" ||
+          flowAnalysisReportItem.Nombre_del_Escenario === "Error Crítico en Re-Generación (Contextualizada)") {
+        if (!Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || flowAnalysisReportItem.Pasos_Analizados.length === 0) {
+          flowAnalysisReportItem.Pasos_Analizados = [{ numero_paso: 1, descripcion_accion_observada: "Las imágenes proporcionadas no forman una secuencia lógica interpretable o carecen de información suficiente para el análisis.", imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: "N/A", dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}];
+        }
+        return [flowAnalysisReportItem];
+      }
 
-       if (!flowAnalysisReportItem.Nombre_del_Escenario || !Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || !flowAnalysisReportItem.Resultado_Esperado_General_Flujo || !flowAnalysisReportItem.Conclusion_General_Flujo) {
-            console.warn(`[GeminiService] Respuesta JSON para ${action} malformado (faltan campos clave).`, rawText);
-             return [{
-                Nombre_del_Escenario: "Error de Formato (Faltan Campos)",
-                Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) está malformada para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0, 200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-                Resultado_Esperado_General_Flujo: "N/A",
-                Conclusion_General_Flujo: "Error de formato en la respuesta de la API."
-            }];
-       }
+      if (!flowAnalysisReportItem.Nombre_del_Escenario || !Array.isArray(flowAnalysisReportItem.Pasos_Analizados) || !flowAnalysisReportItem.Resultado_Esperado_General_Flujo || !flowAnalysisReportItem.Conclusion_General_Flujo) {
+        console.warn(`[GeminiService] Respuesta JSON para ${action} malformado (faltan campos clave).`, rawText);
+        return [{
+          Nombre_del_Escenario: "Error de Formato (Faltan Campos)",
+          Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `La respuesta JSON de la API (via proxy) está malformada para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Respuesta cruda: ${rawText.substring(0, 200)}`, dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+          Resultado_Esperado_General_Flujo: "N/A",
+          Conclusion_General_Flujo: "Error de formato en la respuesta de la API."
+        }];
+      }
 
-      flowAnalysisReportItem.Pasos_Analizados = flowAnalysisReportItem.Pasos_Analizados.map((paso: any, index: number) => ({
-        numero_paso: paso.numero_paso || (index + 1),
-        descripcion_accion_observada: paso.descripcion_accion_observada || "Descripción no proporcionada",
-        imagen_referencia_entrada: paso.imagen_referencia_entrada || "N/A",
-        elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada || "N/A",
-        dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A",
-        resultado_esperado_paso: paso.resultado_esperado_paso || "N/A",
-        resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado || "Estado no determinado",
-        imagen_referencia_salida: paso.imagen_referencia_salida || undefined,
+      flowAnalysisReportItem.Pasos_Analizados = flowAnalysisReportItem.Pasos_Analizados.map((paso: any, index: number) => ({
+        numero_paso: paso.numero_paso || (index + 1),
+        descripcion_accion_observada: paso.descripcion_accion_observada || "Descripción no proporcionada",
+        imagen_referencia_entrada: paso.imagen_referencia_entrada || "N/A",
+        elemento_clave_y_ubicacion_aproximada: paso.elemento_clave_y_ubicacion_aproximada || "N/A",
+        dato_de_entrada_paso: paso.dato_de_entrada_paso || "N/A",
+        resultado_esperado_paso: paso.resultado_esperado_paso || "N/A",
+        resultado_obtenido_paso_y_estado: paso.resultado_obtenido_paso_y_estado || "Estado no determinado",
+        imagen_referencia_salida: paso.imagen_referencia_salida || undefined,
         userStepContext: paso.userStepContext || undefined
-      }));
+      }));
 
-      return [flowAnalysisReportItem];
+      return [flowAnalysisReportItem];
 
-    } catch (e: any) {
-      console.error(`[GeminiService] Error parseando JSON para ${action}:`, e.message, "\nRespuesta Cruda:", rawText);
-      return [{
-        Nombre_del_Escenario: "Error de Parsing JSON",
-        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `No se pudo interpretar la respuesta JSON de la API (via proxy) para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}` , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
-        Resultado_Esperado_General_Flujo: "N/A",
-        Conclusion_General_Flujo: "Error al procesar la respuesta de la API."
-      }];
-    }
-  }
+    } catch (e: any) {
+      console.error(`[GeminiService] Error parseando JSON para ${action}:`, e.message, "\nRespuesta Cruda:", rawText);
+      return [{
+        Nombre_del_Escenario: "Error de Parsing JSON",
+        Pasos_Analizados: [{ numero_paso: 1, descripcion_accion_observada: `No se pudo interpretar la respuesta JSON de la API (via proxy) para ${action}.`, imagen_referencia_entrada: "N/A", elemento_clave_y_ubicacion_aproximada: `Error: ${e.message}. Respuesta cruda: ${rawText.substring(0,500)}` , dato_de_entrada_paso: "N/A", resultado_esperado_paso: "N/A", resultado_obtenido_paso_y_estado: "Análisis no concluyente.", userStepContext: "N/A"}],
+        Resultado_Esperado_General_Flujo: "N/A",
+        Conclusion_General_Flujo: "Error al procesar la respuesta de la API."
+      }];
+    }
+  }
 
 
 
