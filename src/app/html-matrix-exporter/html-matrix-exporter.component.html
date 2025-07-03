@@ -2,91 +2,1094 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Matriz de Casos de Prueba</title>
+  <title>Matriz de Casos de Prueba - Electron</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
-    body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; margin: 20px; background-color: #f4f7f9; color: #333; }
-    .container { max-width: 1200px; margin: auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .export-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #dee2e6; }
-    .export-bar h1 { margin: 0; font-size: 1.8em; color: #3b5a6b; }
-    .btn { padding: 10px 18px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.95em; font-weight: 600; transition: background-color 0.2s ease, transform 0.1s ease; }
-    .btn-primary { background-color: #007bff; color: white; }
-    .btn-primary:hover { background-color: #0056b3; }
-    .btn-secondary { background-color: #6c757d; color: white; }
-    .btn-secondary:hover { background-color: #5a6268; }
-    .btn-danger { background-color: #dc3545; color: white; }
-    .btn-danger:hover { background-color: #c82333; }
-    .escenarios-tabs-bar { display: flex; border-bottom: 2px solid #dee2e6; margin-bottom: 20px; }
-    .tab { padding: 10px 20px; cursor: pointer; background-color: #f8f9fa; border: 1px solid #dee2e6; border-bottom: none; margin-right: 5px; border-radius: 5px 5px 0 0; }
-    .tab.active { background-color: #007bff; color: white; border-color: #007bff; }
-    .escenario-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    .escenario-table th, .escenario-table td { border: 1px solid #cbd5e1; padding: 12px; }
-    .escenario-table th { background-color: #e3eafc; text-align: left; font-weight: bold; }
-    .escenario-table tr:nth-child(even) { background-color: #f8fafc; }
-    .escenario-table td[contenteditable="true"] { background-color: #fff; }
-    .escenario-table td[contenteditable="true"]:focus { outline: 2px solid #007bff; background-color: #eef4ff; }
-    .evidencias-section { margin-top: 25px; border-top: 1px solid #dee2e6; padding-top: 20px; }
-    .evidencias-section h3 { margin-top: 0; }
-    .evidencias-actions button { margin-right: 10px; }
-    .evidencias-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; margin-top: 20px; }
-    .evidencia-block { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 10px; text-align: center; }
-    .evidencia-block img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 10px; }
-    .evidencia-block input[type='text'] { width: calc(100% - 20px); padding: 5px; border: 1px solid #cbd5e1; border-radius: 3px; margin-bottom: 10px; }
-    .evidencia-block .delete-evidencia { float: right; cursor: pointer; color: #dc3545; font-weight: bold; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6fa;
+      margin: 0;
+      padding: 0;
+      color: #222;
+    }
+
+    header {
+      background: #f8fafc;
+      color: #222;
+      padding: 1rem 1rem 0.7rem 1rem;
+      text-align: center;
+      font-size: 1.3rem;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+      border-radius: 0 0 10px 10px;
+      box-shadow: none;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 30px auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.09);
+      padding: 32px 24px 24px 24px;
+    }
+
+    .add-scenario-bar, .export-bar {
+      display: flex;
+      gap: 1.2rem;
+      justify-content: center;
+      margin: 2rem 0 1rem 0;
+    }
+
+    .btn, button, input[type="submit"] {
+      background: #e5e7eb;
+      color: #222;
+      border: none;
+      padding: 0.7em 1.5em;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      margin: 0.3em 0.2em;
+      transition: background 0.2s, box-shadow 0.2s;
+      font-weight: 500;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.07);
+      outline: none;
+    }
+    .btn:hover, button:hover, input[type="submit"]:hover {
+      background: #d1d5db;
+    }
+    .btn-danger {
+      background: #f3f4f6;
+      color: #b91c1c;
+    }
+    .btn-danger:hover {
+      background: #e5e7eb;
+      color: #991b1b;
+    }
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #222;
+    }
+    .btn-secondary:hover {
+      background: #e5e7eb;
+      color: #222;
+    }
+
+    section.escenario {
+      background: #f8fafc;
+      border-radius: 10px;
+      box-shadow: 0 1px 8px rgba(44,62,80,0.06);
+      margin-bottom: 2.5rem;
+      padding: 2rem 1.5rem 1.5rem 1.5rem;
+    }
+
+    .escenario-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.2rem;
+      background: #fff;
+      border-radius: 8px;
+      overflow: auto;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.04);
+    }
+    .escenario-table th, .escenario-table td {
+      padding: 0.7em 1em;
+      border: 1px solid #e0e0e0;
+      text-align: left;
+      vertical-align: top;
+      min-width: 120px;
+    }
+    .escenario-table th {
+      background: #e3eafc;
+      color: #1e293b;
+      font-weight: 600;
+    }
+    .escenario-table td[contenteditable="true"] {
+      background: #f1f5f9;
+      outline: 1.5px solid #cbd5e1;
+      border-radius: 3px;
+    }
+
+    .evidencias-bd-flex {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+    .evidencias {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.07);
+      padding: 1.2em 1em 1em 1em;
+      margin-bottom: 1.5rem;
+    }
+    .bd-conexion {
+      background: #f5f7fa;
+      border-radius: 8px;
+      padding: 1.2em 1em 1em 1em;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.07);
+    }
+    .evidencias-titulo {
+      color: #2563eb;
+      font-size: 1.1em;
+      margin: 0 0 10px 0;
+      border-bottom: 1px dashed #b0b0b0;
+      padding-bottom: 4px;
+      font-weight: 600;
+    }
+    .evidencias-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px 24px;
+      margin-bottom: 18px;
+      width: 100%;
+    }
+    .evidencia-block {
+      background: #f8fafc;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.07);
+      padding: 18px 12px 12px 12px;
+      margin-bottom: 0;
+      position:relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 220px;
+      width: 100%;
+      max-width: 100%;
+    }
+    .evidencia-block img {
+      width: 100%;
+      max-width: 420px;
+      max-height: 320px;
+      border-radius: 8px;
+      border: 1px solid #bbb;
+      margin-bottom: 10px;
+      object-fit: contain;
+      background: #fff;
+    }
+    .evidencia-label {
+      font-size: 1.08em;
+      color: #444;
+      margin-bottom: 8px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+    .excel-file {
+      font-size: 0.97em;
+      color: #2563eb;
+      margin-top: 4px;
+    }
+    .evidencia-sql-table-wrap {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.07);
+      padding: 18px 18px 12px 18px;
+      box-sizing: border-box;
+    }
+    .evidencia-sql-table-scroll {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      box-sizing: border-box;
+      padding-bottom: 2px;
+    }
+    .evidencia-sql-table {
+      min-width: 900px;
+      border-collapse: collapse;
+      font-size: 1em;
+      background: #fff;
+    }
+    .evidencia-sql-table th, .evidencia-sql-table td {
+      border: 1px solid #cbd5e1;
+      padding: 0.5em 0.9em;
+      text-align: left;
+    }
+    .evidencia-sql-table th {
+      background: #e3eafc;
+      font-weight: 600;
+    }
+    pre {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 0.5em;
+      font-size: 0.95em;
+      max-height: 120px;
+      overflow: auto;
+      width: 100%;
+    }
+    .form-bd {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7em;
+      margin-bottom: 1em;
+    }
+    .form-bd button {
+      align-self: flex-start;
+    }
+    #estado-bd-0, [id^="estado-bd-"] {
+      margin-bottom: 0.7em;
+      font-size: 0.98em;
+      color: #e53935;
+    }
+    [id^="seccion-consulta-"] {
+      margin-top: 1em;
+    }
+    textarea {
+      width: 100%;
+      min-height: 60px;
+      max-width: 100%;
+      font-size: 1em;
+      border-radius: 5px;
+      border: 1px solid #b0b0b0;
+      padding: 0.5em;
+      background: #f8fafc;
+      resize: vertical;
+      margin-bottom: 0.7em;
+    }
+    [id^="resultado-sql-"] {
+      max-height: 220px;
+      overflow: auto;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(44,62,80,0.04);
+      margin-bottom: 0.7em;
+      padding: 0.5em;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      margin-top: 20px;
+      color: #777;
+      font-size: 0.9em;
+    }
+    @media (max-width: 900px) {
+      .evidencias-grid {
+        grid-template-columns: 1fr;
+      }
+      .evidencia-block img {
+        max-width: 98vw;
+        max-height: 220px;
+      }
+    }
+    @media (max-width: 600px) {
+      .container {
+        padding: 2px 0 2px 0;
+      }
+      section.escenario {
+        padding: 1rem 0.3rem 1rem 0.3rem;
+      }
+      .escenario-table th, .escenario-table td {
+        min-width: 80px;
+        font-size: 0.95em;
+      }
+      .evidencia-block {
+        width: 98vw;
+        max-width: 98vw;
+      }
+    }
+
+    @media print {
+      .evidencia-block {
+        background: none !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+      }
+      .evidencias-grid {
+        background: none !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+      }
+      .evidencia-block img {
+        border: none !important;
+        box-shadow: none !important;
+        background: none !important;
+        max-width: 48vw !important;
+        max-height: 320px !important;
+        width: 100% !important;
+        height: auto !important;
+        display: block;
+        margin: 0 auto 10px auto;
+        box-sizing: border-box;
+      }
+      .evidencias-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px 10px !important;
+      }
+      .evidencia-sql-table-wrap {
+        overflow-x: visible !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+      }
+      .evidencia-sql-table {
+        width: 100% !important;
+        min-width: 100% !important;
+        font-size: 0.8em !important;
+        word-break: break-all !important;
+        table-layout: auto !important;
+      }
+      .evidencia-sql-table th, .evidencia-sql-table td {
+        white-space: normal !important;
+        word-break: break-all !important;
+        padding: 0.3em 0.5em !important;
+      }
+      [id^="resultado-sql-"], .evidencia-sql-table-wrap {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      .btn, button, input[type="submit"] {
+        display: none !important;
+      }
+      .escenario-table th:last-child,
+      .escenario-table td:last-child {
+        display: none !important;
+      }
+      header {
+        display: none !important;
+      }
+      .evidencia-label {
+        width: 100% !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: initial !important;
+        font-size: 1em !important;
+        color: #222 !important;
+        background: none !important;
+        margin-bottom: 4px !important;
+        display: block !important;
+      }
+      .evidencia-block input.evidencia-nombre {
+        width: 100% !important;
+        max-width: 100% !important;
+        font-size: 1em !important;
+        color: #222 !important;
+        background: none !important;
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        display: inline !important;
+      }
+    }
+
+    .sugerencia-impresion {
+      color: #174ea6;
+      background: #e3eafc;
+      padding: 0.7em 1em;
+      border-radius: 6px;
+      margin-bottom: 1em;
+      font-size: 1em;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    @media print {
+      .sugerencia-impresion { display: none !important; }
+      .evidencia-sql-table th, .evidencia-sql-table td {
+        padding: 0.1em 0.2em !important;
+        font-size: 0.7em !important;
+      }
+      [id^="resultado-sql-"], .evidencia-sql-table-wrap {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+      .evidencias-grid {
+        gap: 10px 10px !important;
+      }
+    }
+
+    .evidencia-sql-table-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      width: 100%;
+    }
+    .evidencia-sql-table-controls input[type="text"] {
+      font-size: 1em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #bbb;
+      max-width: 220px;
+    }
+    .evidencia-sql-table-controls .btn-evidencia-eliminar {
+      margin-left: 6px;
+      padding: 2px 7px;
+      font-size: 1em;
+      line-height: 1;
+      border-radius: 50%;
+      background: #e53935;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    .escenarios-tabs-bar {
+      display: flex;
+      gap: 0.2em;
+      margin-bottom: 1.2em;
+      border-bottom: 1px solid #e0e0e0;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+      scrollbar-color: #e0e0e0 #f4f4f4;
+    }
+    .escenario-tab-btn {
+      background: #f4f4f4;
+      color: #222;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px 6px 0 0;
+      padding: 0.3em 1em;
+      font-size: 0.97em;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: background 0.2s, color 0.2s;
+      font-weight: 500;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+    .escenario-tab-btn.active {
+      background: #e0e0e0;
+      color: #222;
+      font-weight: bold;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .escenario-tab-btn:hover {
+      background: #e0e0e0;
+      color: #222;
+    }
+
+    /* Ocultar scroll en Webkit para más limpieza */
+    .escenarios-tabs-bar::-webkit-scrollbar {
+      height: 6px;
+    }
+    .escenarios-tabs-bar::-webkit-scrollbar-thumb {
+      background: #e0e0e0;
+      border-radius: 4px;
+    }
+    .escenarios-tabs-bar::-webkit-scrollbar-track {
+      background: #f4f4f4;
+    }
+
+    .evidencia-nombre {
+      display: inline;
+      border: none;
+      background: transparent;
+      font-size: 1em;
+      color: #444;
+      font-weight: 500;
+      padding: 0;
+      margin: 0;
+      outline: none;
+      width: auto;
+      min-width: 0;
+      max-width: 100%;
+      box-shadow: none;
+      transition: border-bottom 0.2s;
+      border-bottom: 1px dashed transparent;
+      cursor: pointer;
+    }
+    .evidencia-nombre:focus, .evidencia-nombre:hover {
+      border-bottom: 1.5px dashed #2563eb;
+      background: transparent;
+    }
+
+    #prompt-area-0, [id^="prompt-area-"] {
+      font-family: 'Segoe UI', Arial, sans-serif !important;
+      font-size: 1em !important;
+      text-align: left !important;
+    }
+
+    .btn-evidencia-eliminar {
+      background: #f3f4f6;
+      color: #b91c1c;
+      border: none;
+      padding: 0.2em 0.5em;
+      border-radius: 50%;
+      font-size: 1.2em;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      font-weight: bold;
+      box-shadow: none;
+      margin-left: 8px;
+    }
+    .btn-evidencia-eliminar:hover {
+      background: #e5e7eb;
+      color: #991b1b;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="export-bar">
+    <header>
       <h1>Matriz de Casos de Prueba</h1>
-      <div>
-        <button class="btn btn-secondary" onclick="exportToHtml()">Descargar HTML</button>
-        <button class="btn btn-primary" onclick="downloadPDF()">Descargar PDF</button>
+    </header>
+    
+    <div class="export-bar">
+      <button class="btn" id="btn-cargar-csv">Cargar archivo CSV</button>
+      <button class="btn" id="btn-agregar-escenario">Agregar Escenario en Blanco</button>
+      <button class="btn" id="btn-descargar-pdf">Descargar PDF</button>
+    </div>
+    <div id="escenarios-container"></div>
+  </div>
+  <div id="modal-confirm" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; background:rgba(0,0,0,0.35); z-index:2000; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:10px; padding:24px; min-width:400px; max-width:90vw; box-shadow:0 2px 16px #0008; position:relative;">
+      <h3 style="margin-top:0;">¿Enviar este prompt a la consola?</h3>
+      <pre id="modal-confirm-text" style="background:#222; color:#fff; padding:12px; border-radius:6px; font-size:1em; max-height:300px; overflow:auto;"></pre>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+        <button class="btn btn-secondary" onclick="cerrarModalConfirm(false)">Cancelar</button>
+        <button class="btn btn-primary" onclick="cerrarModalConfirm(true)">Confirmar</button>
       </div>
     </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script>
+    // renderer/renderer.js
 
-    <div class="escenarios-tabs-bar">
-      <div *ngFor="let escenario of escenarios; let i = index" 
-           class="tab" 
-           [class.active]="i === escenarioActivo" 
-           (click)="seleccionarEscenario(i)">
-        Caso #{{i + 1}}
-      </div>
-      <div class="tab" (click)="agregarEscenario()">+ Agregar Escenario</div>
-    </div>
+    let escenarios = [];
+    
+    // --- Lógica de Evidencias ---
 
-    <div *ngIf="escenarios.length > 0 && escenarioActivo !== null">
-      <div class="escenario-content">
+    function renderEvidencias(idx) {
+      const grid = document.getElementById(`evid-grid-${idx}`);
+      if (!grid) return;
+      grid.innerHTML = '';
+      (escenarios[idx].evidencias || []).forEach((ev, i) => {
+        const div = document.createElement('div');
+        div.className = 'evidencia-block';
+        const nombreArchivo = ev.nombre || `evidencia_${i + 1}`;
+        div.innerHTML = `
+          <div class="evidencia-label">
+            <input type='text' value='${nombreArchivo}' class="evidencia-nombre" data-evidencia-idx="${i}" title='Nombre archivo' />
+            <button class='btn btn-evidencia-eliminar' data-accion="eliminar-evidencia" data-evidencia-idx="${i}" title='Eliminar'>&times;</button>
+          </div>
+          <img src="${ev.data}" alt="Evidencia" />
+        `;
+        grid.appendChild(div);
+      });
+    }
+
+    function subirEvidencias(idx, input) {
+      for (const file of input.files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          escenarios[idx].evidencias.push({ tipo: 'img', nombre: file.name, data: e.target.result });
+          renderEvidencias(idx);
+        };
+        reader.readAsDataURL(file);
+      }
+      input.value = ''; // Reset input
+    }
+
+    function pegarEvidencia(idx) {
+      navigator.clipboard.read().then(items => {
+        for (const item of items) {
+          if (item.types.includes('image/png')) {
+            item.getType('image/png').then(blob => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                escenarios[idx].evidencias.push({ tipo: 'img', nombre: 'Pegado.png', data: e.target.result });
+                renderEvidencias(idx);
+              };
+              reader.readAsDataURL(blob);
+            });
+          }
+        }
+      });
+    }
+
+    function limpiarEvidencias(idx) {
+      escenarios[idx].evidencias = [];
+      renderEvidencias(idx);
+    }
+
+    // --- Lógica de la Interfaz de Usuario ---
+
+    function crearEscenarioHTML(esc, idx) {
+      const section = document.createElement('section');
+      section.className = 'escenario';
+      section.id = `escenario-${idx}`;
+      section.innerHTML = `
         <table class="escenario-table">
+          <thead><tr><th>ID Caso</th><th>Escenario de Prueba</th><th>Precondiciones</th><th>Paso a Paso</th><th>Resultado Esperado</th><th>Acción</th></tr></thead>
           <tbody>
-            <tr><th>ID Caso</th><td contenteditable="true" (input)="actualizarCampo(escenarioActivo, 'id', $event)">{{ escenarios[escenarioActivo].id }}</td></tr>
-            <tr><th>Escenario de Prueba</th><td contenteditable="true" (input)="actualizarCampo(escenarioActivo, 'escenario', $event)">{{ escenarios[escenarioActivo].escenario }}</td></tr>
-            <tr><th>Precondiciones</th><td contenteditable="true" (input)="actualizarCampo(escenarioActivo, 'precondiciones', $event)">{{ escenarios[escenarioActivo].precondiciones }}</td></tr>
-            <tr><th>Paso a Paso</th><td contenteditable="true" (input)="actualizarCampo(escenarioActivo, 'pasos', $event)">{{ escenarios[escenarioActivo].pasos }}</td></tr>
-            <tr><th>Resultado Esperado</th><td contenteditable="true" (input)="actualizarCampo(escenarioActivo, 'resultadoEsperado', $event)">{{ escenarios[escenarioActivo].resultadoEsperado }}</td></tr>
+            <tr>
+              <td contenteditable="true" data-campo="ID Caso">${esc['ID Caso'] || ''}</td>
+              <td contenteditable="true" data-campo="Escenario de Prueba">${esc['Escenario de Prueba'] || ''}</td>
+              <td contenteditable="true" data-campo="Precondiciones">${esc['Precondiciones'] || ''}</td>
+              <td contenteditable="true" data-campo="Paso a Paso">${esc['Paso a Paso'] || ''}</td>
+              <td contenteditable="true" data-campo="Resultado Esperado">${esc['Resultado Esperado'] || ''}</td>
+              <td><button class="btn btn-danger" data-accion="eliminar">Eliminar</button></td>
+            </tr>
           </tbody>
         </table>
-
-        <div class="evidencias-section">
-          <h3>Evidencias para Caso #{{ escenarioActivo + 1 }}</h3>
-          <div class="evidencias-actions">
-            <button class="btn btn-secondary" (click)="triggerFileInput(escenarioActivo)">Subir Evidencias</button>
-            <input type="file" #fileInput style="display: none;" (change)="subirEvidencias($event, escenarioActivo)" multiple accept="image/*">
-            <button class="btn btn-secondary" (click)="pegarEvidencia(escenarioActivo)">Pegar Evidencia</button>
-            <button class="btn btn-danger" (click)="limpiarEvidencias(escenarioActivo)">Limpiar Evidencias</button>
-          </div>
-          <div class="evidencias-grid">
-            <div *ngFor="let evidencia of escenarios[escenarioActivo].evidencias; let j = index" class="evidencia-block">
-              <span class="delete-evidencia" (click)="eliminarEvidencia(escenarioActivo, j)">X</span>
-              <img [src]="evidencia.src" alt="{{ evidencia.nombre }}">
-              <input type="text" [(ngModel)]="evidencia.nombre" placeholder="Nombre de evidencia">
+        <div class="evidencias-bd-flex">
+          <div class="evidencias">
+            <div class="evidencias-titulo">Evidencias</div>
+            <div class="evidencias-grid" id="evid-grid-${idx}"></div>
+            <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:0.7em;">
+              <label class="btn btn-secondary">
+                Subir Evidencias
+                <input type="file" accept="image/*" multiple data-accion="subir-evidencia" style="display:none;">
+              </label>
+              <button class="btn btn-secondary" data-accion="pegar-evidencia">Pegar Evidencia</button>
+              <button class="btn btn-secondary" data-accion="limpiar-evidencias">Limpiar Evidencias</button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    <div *ngIf="escenarios.length === 0">
-      <p>No hay escenarios. Haz clic en "Agregar Escenario" para comenzar.</p>
-    </div>
-  </div>
+      `;
+      return section;
+    }
+
+    function renderEscenarios() {
+      const escenariosDiv = document.getElementById('escenarios-container');
+      escenariosDiv.innerHTML = '';
+
+      // Crear barra de pestañas
+      const tabsBar = document.createElement('div');
+      tabsBar.className = 'escenarios-tabs-bar';
+      escenarios.forEach((esc, idx) => {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'escenario-tab-btn';
+        tabBtn.textContent = esc['ID Caso'] || `Escenario ${idx + 1}`;
+        tabBtn.dataset.idx = idx;
+        if (idx === window.escenarioActivo) tabBtn.classList.add('active');
+        tabBtn.addEventListener('click', () => {
+          window.escenarioActivo = idx;
+          renderEscenarios();
+        });
+        tabsBar.appendChild(tabBtn);
+      });
+      escenariosDiv.appendChild(tabsBar);
+
+      // --- MODIFICACIÓN PARA IMPRESIÓN ---
+      // Si estamos imprimiendo, renderizar todos los escenarios
+      if (window.matchMedia && window.matchMedia('print').matches) {
+        escenarios.forEach((esc, idx) => {
+          const escenarioEl = crearEscenarioHTML(esc, idx);
+          escenariosDiv.appendChild(escenarioEl);
+          renderEvidencias(idx);
+        });
+        return;
+      }
+
+      // Renderizar solo el escenario activo normalmente
+      const idx = window.escenarioActivo || 0;
+      if (escenarios[idx]) {
+        const escenarioEl = crearEscenarioHTML(escenarios[idx], idx);
+        escenariosDiv.appendChild(escenarioEl);
+        renderEvidencias(idx);
+      }
+    }
+
+    // Inicializar variable global para el escenario activo
+    window.escenarioActivo = 0;
+
+    // --- Inicialización y Delegación de Eventos ---
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const container = document.querySelector('.container');
+      const escenariosContainer = document.getElementById('escenarios-container');
+
+      escenarios = [{
+        'ID Caso': 'CP1', 'Escenario de Prueba': 'Ejemplo de escenario',
+        'Precondiciones': 'Debe existir conexión a la BD',
+        'Paso a Paso': '1. Ejecutar consulta SQL\n2. Verificar resultado',
+        'Resultado Esperado': 'El resultado debe ser correcto', evidencias: []
+      }];
+      window.escenarioActivo = 0;
+      renderEscenarios();
+
+      // Delegación de eventos para acciones principales
+      container.addEventListener('click', (e) => {
+        const escenarioEl = e.target.closest('.escenario');
+        if (!escenarioEl) return;
+        const idx = parseInt(escenarioEl.id.split('-')[1], 10);
+        const accion = e.target.dataset.accion;
+
+        switch (accion) {
+          case 'eliminar':
+            escenarios.splice(idx, 1);
+            renderEscenarios();
+            break;
+          case 'pegar-evidencia': pegarEvidencia(idx); break;
+          case 'limpiar-evidencias': limpiarEvidencias(idx); break;
+          case 'eliminar-evidencia':
+            const evidenciaIdx = parseInt(e.target.dataset.evidenciaIdx, 10);
+            escenarios[idx].evidencias.splice(evidenciaIdx, 1);
+            renderEvidencias(idx);
+            break;
+        }
+      });
+
+      container.addEventListener('change', (e) => {
+        if (e.target.dataset.accion === 'subir-evidencia') {
+          const escenarioEl = e.target.closest('.escenario');
+          const idx = parseInt(escenarioEl.id.split('-')[1], 10);
+          subirEvidencias(idx, e.target);
+        }
+      });
+
+      container.addEventListener('input', (e) => {
+        const target = e.target;
+        const escenarioEl = target.closest('.escenario');
+        if (!escenarioEl) return;
+        const idx = parseInt(escenarioEl.id.split('-')[1], 10);
+
+        if (target.isContentEditable) {
+          const campo = target.dataset.campo;
+          if (campo) escenarios[idx][campo] = target.innerText;
+        } else if (target.classList.contains('evidencia-nombre')) {
+          const evidenciaIdx = parseInt(target.dataset.evidenciaIdx, 10);
+          escenarios[idx].evidencias[evidenciaIdx].nombre = target.value;
+        }
+      });
+
+      // Botones globales
+      document.getElementById('btn-cargar-csv').addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target.result;
+                Papa.parse(text, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        escenarios = results.data.map((row, i) => ({ ...row, idx: i, evidencias: [] }));
+                        window.escenarioActivo = 0; // Siempre mostrar el primero tras cargar CSV
+                        renderEscenarios();
+                    }
+                });
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+      });
+      
+      document.getElementById('btn-agregar-escenario').addEventListener('click', agregarEscenario);
+
+      // Interceptar pegado en celdas contenteditable para solo texto plano
+      document.addEventListener('paste', function(e) {
+        const target = e.target;
+        if (target && target.isContentEditable) {
+          e.preventDefault();
+          const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+          // Insertar solo texto plano en la posición del cursor
+          document.execCommand('insertText', false, text);
+        }
+      });
+
+      document.getElementById('btn-descargar-pdf').addEventListener('click', () => generarReportePDF());
+    });
+
+    function agregarEscenario() {
+      escenarios.push({ 'ID Caso': '', 'Escenario de Prueba': '', 'Precondiciones': '', 'Paso a Paso': '', 'Resultado Esperado': '', evidencias: [] });
+      window.escenarioActivo = escenarios.length - 1; // Selecciona el nuevo escenario
+      renderEscenarios();
+    }
+
+    // --- Generación de PDF profesional ---
+    async function generarReportePDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      let y = 40;
+
+      // === DATOS DE PORTADA (puedes personalizar estos valores) ===
+      const responsable = 'Juan Pérez';
+      const area = 'QA / Testing';
+      const version = '1.0';
+      const resumen = 'Este reporte contiene el detalle de los escenarios de prueba ejecutados, sus resultados y evidencias asociadas.';
+
+      // === PORTADA CENTRADA CON LOGO ===
+      let portadaY = 80;
+      
+      doc.setFontSize(28);
+      doc.setTextColor('#000000');
+      doc.text('Reporte de Matriz de Casos de Prueba', pageWidth / 2, portadaY, { align: 'center' });
+      portadaY += 40;
+      doc.setFontSize(16);
+      doc.text('Fecha de generación: ' + new Date().toLocaleString(), pageWidth / 2, portadaY, { align: 'center' });
+      portadaY += 30;
+      doc.setFontSize(13);
+      doc.text(`Área: ${area}`, pageWidth / 2, portadaY, { align: 'center' });
+      portadaY += 20;
+      doc.text(`Versión: ${version}`, pageWidth / 2, portadaY, { align: 'center' });
+      doc.addPage();
+
+      // === ÍNDICE AUTOMÁTICO ===
+      doc.setFontSize(20);
+      doc.text('Índice', 60, 60);
+      doc.setFontSize(13);
+      let indiceY = 90;
+      const indiceEscenarios = [];
+      escenarios.forEach((esc, idx) => {
+        const nombre = esc['ID Caso'] || `Escenario ${idx + 1}`;
+        doc.text(`${idx + 1}. ${nombre}`, 80, indiceY);
+        indiceEscenarios.push({ idx, nombre, page: doc.internal.getNumberOfPages() + 1 });
+        indiceY += 22;
+        if (indiceY > pageHeight - 60) {
+          doc.addPage();
+          indiceY = 60;
+        }
+      });
+      doc.addPage();
+
+      // === ESCENARIOS ===
+      const escenariosPaginas = [];
+      for (const [idx, esc] of escenarios.entries()) {
+        let startY = 60;
+        escenariosPaginas.push(doc.internal.getNumberOfPages());
+        // Tabla con formato solicitado (colores y estilos)
+        const tablaAncho = 80 + 150 + 120 + 220 + 120; // suma de cellWidth
+        const margenTabla = (pageWidth - tablaAncho) / 2;
+        doc.autoTable({
+          startY: startY,
+          head: [[
+            'ID Caso', 'Escenario de Prueba', 'Precondiciones', 'Paso a Paso', 'Resultado Esperado'
+          ]],
+          body: [[
+            esc['ID Caso'] || '',
+            esc['Escenario de Prueba'] || '',
+            esc['Precondiciones'] || '',
+            esc['Paso a Paso'] || '',
+            esc['Resultado Esperado'] || ''
+          ]],
+          styles: {
+            fontSize: 13,
+            cellPadding: 10,
+            halign: 'left',
+            font: 'helvetica',
+            textColor: '#222',
+            fillColor: '#f8fafc',
+            lineColor: '#cbd5e1',
+            lineWidth: 1
+          },
+          headStyles: {
+            fillColor: '#e3eafc',
+            textColor: '#1e293b',
+            fontStyle: 'bold',
+            font: 'helvetica',
+            fontSize: 15,
+            halign: 'left',
+            lineColor: '#cbd5e1',
+            lineWidth: 1.5
+          },
+          alternateRowStyles: { fillColor: '#f8fafc' },
+          margin: { left: margenTabla, right: margenTabla },
+          theme: 'grid',
+          columnStyles: {
+            0: { cellWidth: 80 },
+            1: { cellWidth: 150 },
+            2: { cellWidth: 120 },
+            3: { cellWidth: 220 },
+            4: { cellWidth: 120 },
+          },
+          tableWidth: 'auto',
+        });
+
+        // Evidencias (en bloques de dos por fila, estilo grid limpio)
+        if (esc.evidencias && esc.evidencias.length > 0) {
+          // Calcular altura mínima para título, línea y una fila de evidencias
+          const alturaTituloLinea = 24;
+          const alturaFilaMinima = 120 + 40; // contenedor bajo mínimo + margen
+          let yEvid = doc.lastAutoTable.finalY + 36;
+          if (yEvid + alturaTituloLinea + alturaFilaMinima > pageHeight - 60) {
+            doc.addPage();
+            yEvid = 60;
+          }
+          // Título 'Evidencias:' alineado a la izquierda, azul y negrita
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(15);
+          doc.setTextColor('#2563eb');
+          doc.text('Evidencias:', 60, yEvid, { align: 'left' });
+          // Línea divisoria gris claro
+          doc.setDrawColor('#cbd5e1');
+          doc.setLineWidth(1);
+          doc.line(60, yEvid + 6, pageWidth - 60, yEvid + 6);
+          yEvid += 24;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(13);
+          doc.setTextColor('#1e293b');
+          const maxWidth = 300;
+          const maxHeight = 180;
+          const cellWidth = maxWidth + 24;
+          const gapX = 24;
+          const gapY = 56;
+          const xImg1 = 60;
+          const xImg2 = xImg1 + cellWidth + gapX;
+          for (let i = 0; i < esc.evidencias.length; i += 2) {
+            // Primera imagen de la fila
+            const ev1 = esc.evidencias[i];
+            let width1 = maxWidth, height1 = maxHeight;
+            let label1 = ev1 && (ev1.nombre || `Evidencia ${i + 1}`) || '';
+            let labelLines1 = [];
+            let labelHeight1 = 0;
+            if (ev1 && ev1.data && ev1.data.startsWith('data:image')) {
+              const imgProps1 = doc.getImageProperties(ev1.data);
+              width1 = imgProps1.width;
+              height1 = imgProps1.height;
+              if (width1 > maxWidth) {
+                height1 = height1 * (maxWidth / width1);
+                width1 = maxWidth;
+              }
+              if (height1 > maxHeight) {
+                width1 = width1 * (maxHeight / height1);
+                height1 = maxHeight;
+              }
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(12);
+              labelLines1 = doc.splitTextToSize(label1, width1);
+              labelHeight1 = labelLines1.length * 15;
+            }
+            // Segunda imagen de la fila (si existe)
+            const ev2 = esc.evidencias[i + 1];
+            let width2 = maxWidth, height2 = maxHeight;
+            let label2 = ev2 && (ev2.nombre || `Evidencia ${i + 2}`) || '';
+            let labelLines2 = [];
+            let labelHeight2 = 0;
+            if (ev2 && ev2.data && ev2.data.startsWith('data:image')) {
+              const imgProps2 = doc.getImageProperties(ev2.data);
+              width2 = imgProps2.width;
+              height2 = imgProps2.height;
+              if (width2 > maxWidth) {
+                height2 = height2 * (maxWidth / width2);
+                width2 = maxWidth;
+              }
+              if (height2 > maxHeight) {
+                width2 = width2 * (maxHeight / height2);
+                height2 = maxHeight;
+              }
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(12);
+              labelLines2 = doc.splitTextToSize(label2, width2);
+              labelHeight2 = labelLines2.length * 15;
+            }
+            // Altura máxima de los labels de la fila
+            let labelMaxHeight = Math.max(labelHeight1, labelHeight2);
+            // Validar espacio en la hoja
+            let filaAlto = labelMaxHeight + Math.max(height1, height2) + 40; // más padding
+            if (yEvid + filaAlto > pageHeight - 60) {
+              doc.addPage();
+              yEvid = 60;
+            }
+            // Dibuja contenedor 1
+            if (ev1 && ev1.data && ev1.data.startsWith('data:image')) {
+              const xLabel1 = xImg1 + (cellWidth - width1) / 2;
+              // Fondo gris claro y borde gris claro
+              doc.setFillColor('#f4f4f4');
+              doc.setDrawColor('#f4f4f4');
+              doc.setLineWidth(1.2);
+              doc.roundedRect(xImg1, yEvid, cellWidth, labelMaxHeight + height1 + 24, 16, 16, 'FD');
+              // Label dentro del contenedor
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(12);
+              doc.setTextColor('#1e293b');
+              doc.text(labelLines1, xImg1 + 12, yEvid + 20, { align: 'left', maxWidth: cellWidth - 24 });
+              doc.setFont('helvetica', 'normal');
+              // Imagen centrada en el contenedor
+              doc.addImage(ev1.data, 'PNG', xLabel1, yEvid + labelMaxHeight + 16, width1, height1);
+            }
+            // Dibuja contenedor 2
+            if (ev2 && ev2.data && ev2.data.startsWith('data:image')) {
+              const xLabel2 = xImg2 + (cellWidth - width2) / 2;
+              doc.setFillColor('#f4f4f4');
+              doc.setDrawColor('#f4f4f4');
+              doc.setLineWidth(1.2);
+              doc.roundedRect(xImg2, yEvid, cellWidth, labelMaxHeight + height2 + 24, 16, 16, 'FD');
+              doc.setFont('helvetica', 'bold');
+              doc.setFontSize(12);
+              doc.setTextColor('#1e293b');
+              doc.text(labelLines2, xImg2 + 12, yEvid + 20, { align: 'left', maxWidth: cellWidth - 24 });
+              doc.setFont('helvetica', 'normal');
+              doc.addImage(ev2.data, 'PNG', xLabel2, yEvid + labelMaxHeight + 16, width2, height2);
+            }
+            // Línea divisoria vertical entre celdas
+            if (ev1 && ev2 && ev1.data && ev2.data && ev1.data.startsWith('data:image') && ev2.data.startsWith('data:image')) {
+              doc.setDrawColor('#4a4a4a');
+              doc.setLineWidth(0.7);
+              doc.line(xImg2 - gapX / 2, yEvid + 8, xImg2 - gapX / 2, yEvid + labelMaxHeight + Math.max(height1, height2) + 16);
+            }
+            // Línea divisoria horizontal entre filas (opcional, solo si hay más filas)
+            if (i + 2 < esc.evidencias.length) {
+              doc.setDrawColor('#4a4a4a');
+              doc.setLineWidth(0.7);
+              doc.line(xImg1, yEvid + labelMaxHeight + Math.max(height1, height2) + 32, xImg2 + cellWidth, yEvid + labelMaxHeight + Math.max(height1, height2) + 32);
+            }
+            yEvid += labelMaxHeight + Math.max(height1, height2) + gapY + 24;
+          }
+        }
+        // Nueva página para el siguiente escenario, excepto el último
+        if (idx < escenarios.length - 1) doc.addPage();
+      }
+
+      // === ESPACIO PARA FIRMAS ===
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text('Firmas y Validaciones', 60, 80);
+      doc.setFontSize(12);
+      doc.text('Responsable QA:', 80, 140);
+      doc.line(200, 142, 500, 142);
+      doc.text('Revisor:', 80, 200);
+      doc.line(150, 202, 500, 202);
+      doc.text('Aprobador:', 80, 260);
+      doc.line(170, 262, 500, 262);
+
+      // === ENCABEZADOS Y PIES DE PÁGINA PERSONALIZADOS ===
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        // Encabezado
+        doc.setFontSize(10);
+        doc.setTextColor('#4a4a4a');
+        // Pie de página
+        doc.setTextColor('#9b9b9b'); // gris medio
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 80, pageHeight - 20);
+      }
+
+      // === ÍNDICE CON NÚMEROS DE PÁGINA ===
+      // (Reescribir la página del índice con los números de página correctos)
+      doc.setPage(2); // La página 2 es el índice
+      doc.setFontSize(20);
+      doc.text('Índice', 60, 60);
+      doc.setFontSize(13);
+      indiceY = 90;
+      indiceEscenarios.forEach((item, i) => {
+        doc.text(`${i + 1}. ${item.nombre} ............................................. ${escenariosPaginas[i] + 1}`, 80, indiceY);
+        indiceY += 22;
+        if (indiceY > pageHeight - 60) {
+          doc.addPage();
+          indiceY = 60;
+          doc.setFontSize(13); // Restablecer tamaño de fuente
+          doc.setFont('helvetica', 'normal'); // Restablecer estilo de fuente
+        }
+      });
+
+      doc.save('reporte_casos_prueba.pdf');
+    }
+  </script>
 </body>
 </html>
