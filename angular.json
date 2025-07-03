@@ -119,7 +119,10 @@
             "styles": [
               "src/styles.css"
             ],
-            "scripts": []
+            "scripts": [ 
+              "node_modules/jspdf/dist/jspdf.umd.min.js",
+               "node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.js"
+            ]
 
           }
         }

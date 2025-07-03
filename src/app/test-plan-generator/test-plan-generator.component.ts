@@ -24,19 +24,10 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
   ],
 })
 export class TestPlanGeneratorComponent {
-  private escapeHtmlForExport(u: string | undefined | null): string {
-    return u
-      ? u
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;')
-      : '';
-  }
+  // Referencia al componente hijo que genera la matriz HTML
   @ViewChild('matrixExporter') matrixExporter!: HtmlMatrixExporterComponent;
 
-  // --- Tus propiedades existentes se mantienen igual ---
+  // --- Propiedades del Componente ---
   currentGenerationMode: GenerationMode | null = null;
   showTestCaseGenerator: boolean = false;
   showFlowAnalysisComponent: boolean = false;
@@ -83,7 +74,17 @@ export class TestPlanGeneratorComponent {
     private cdr: ChangeDetectorRef
   ) {}
 
-  // --- El resto de tus métodos hasta generarReportePDF() se mantienen igual ---
+  private escapeHtmlForExport(u: string | undefined | null): string {
+    return u
+      ? u
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')
+      : '';
+  }
+
   selectInitialMode(mode: GenerationMode): void {
     if (mode !== 'text' && mode !== 'image') {
       return;
@@ -93,6 +94,7 @@ export class TestPlanGeneratorComponent {
     this.showTestCaseGenerator = true;
     this.cdr.detectChanges();
   }
+
   private resetActiveGeneratorsAndGoToSelection(): void {
     this.currentGenerationMode = null;
     this.showTestCaseGenerator = false;
@@ -103,36 +105,44 @@ export class TestPlanGeneratorComponent {
     this.bugComparisonErrorGlobal = null;
     this.cdr.detectChanges();
   }
+
   onHuGeneratedFromChild(huData: HUData) {
     this.huList.push(huData);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   onGenerationCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   onAnalysisDataGenerated(huData: HUData) {
     this.huList.push(huData);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   onAnalysisCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   onComparisonDataGenerated(huData: HUData) {
     this.huList.push(huData);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   onComparisonCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   resetToInitialSelection(): void {
     this.resetActiveGeneratorsAndGoToSelection();
   }
+
   public toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
     if (section === 'scope') {
       if (hu.originalInput.generationMode === 'text') {
@@ -149,6 +159,7 @@ export class TestPlanGeneratorComponent {
     }
     this.cdr.detectChanges();
   }
+
   public toggleStaticEdit(baseName: StaticSectionBaseName): void {
     let editingProp: keyof TestPlanGeneratorComponent;
     let detailsOpenProp: keyof TestPlanGeneratorComponent;
@@ -167,6 +178,7 @@ export class TestPlanGeneratorComponent {
     if (wasEditing && !(this[editingProp] as boolean)) { this.updatePreview(); }
     this.cdr.detectChanges();
   }
+
   public regenerateScope(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
       alert('Alcance solo se regenera para HUs con descripción/criterios.'); return;
@@ -175,10 +187,15 @@ export class TestPlanGeneratorComponent {
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
         tap(scopeText => { hu.generatedScope = scopeText; hu.errorScope = null; }),
-        catchError(error => { hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.'; return of(''); }),
+        catchError((error: any) => {
+          // ✨ CORRECCIÓN APLICADA AQUÍ ✨
+          hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.';
+          return of('');
+        }),
         finalize(() => { hu.loadingScope = false; this.updatePreview(); this.cdr.detectChanges(); })
       ).subscribe();
   }
+
   public exportExecutionMatrix(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
       alert('No hay casos de prueba válidos para exportar o los casos generados indican un error.');
@@ -198,8 +215,27 @@ export class TestPlanGeneratorComponent {
     const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
     saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`);
   }
+
+  public exportExecutionMatrixToHtml(hu: HUData): void {
+    if (this.matrixExporter) {
+      const htmlContent = this.matrixExporter.generateMatrixHtml(hu);
+
+      if (htmlContent) {
+        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+        saveAs(blob, `MatrizEjecucion_${this.escapeFilename(hu.id)}.html`);
+      } else {
+        alert('No se pudo generar la matriz HTML. Verifique que haya casos de prueba válidos.');
+      }
+    } else {
+      console.error('El componente exportador de matriz no está disponible.');
+      alert('Error: El componente para exportar no se ha cargado correctamente.');
+    }
+  }
+
   public isAnyHuTextBased = (): boolean => this.huList.some(hu => hu.originalInput.generationMode === 'text');
+
   public trackHuById = (i: number, hu: HUData): string => hu.id;
+
   private escapeCsvField = (f: string | number | undefined | null): string => {
       if (f === null || f === undefined) return '';
       const stringValue = String(f);
@@ -208,9 +244,7 @@ export class TestPlanGeneratorComponent {
       }
       return stringValue;
   };
-  public exportExecutionMatrixToHtml(hu: HUData): void {
-    this.matrixExporter.exportToHtml(hu);
-  }
+
   public getHuSummaryForStaticAI(): string {
     if (this.huList.length === 0) return "No hay Historias de Usuario definidas aún.";
     let summary = this.huList.map(hu => {
@@ -224,6 +258,7 @@ export class TestPlanGeneratorComponent {
     }).join('\n');
     return summary.length > 1500 ? summary.substring(0, 1500) + "\n... (resumen truncado para no exceder límites de prompt)" : summary;
   }
+
   public regenerateStaticSectionWithAI(section: 'outOfScope' | 'strategy' | 'limitations' | 'assumptions'): void {
     let sectionNameDisplay = '', currentContent = '', loadingFlag: keyof TestPlanGeneratorComponent | null = null, errorFlag: keyof TestPlanGeneratorComponent | null = null;
     let detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
@@ -266,10 +301,12 @@ export class TestPlanGeneratorComponent {
         }
       });
   }
+
   public formatSimpleScenarioTitles(titles: string[]): string {
     if (!titles || titles.length === 0) return 'No se generaron escenarios.';
     return titles.map((title, index) => `${index + 1}. ${title}`).join('\n');
   }
+
   public updateTestPlanTitle(): void {
     if (this.huList.length > 0) {
       const relevantHuForTitle = [...this.huList].reverse().find(hu => hu.originalInput.generationMode !== undefined) || this.huList[this.huList.length - 1];
@@ -279,10 +316,12 @@ export class TestPlanGeneratorComponent {
     }
     this.cdr.detectChanges();
   }
+
   public updatePreview(): void {
     this.downloadPreviewHtmlContent = this.generatePlanContentHtmlString();
     this.cdr.detectChanges();
   }
+
   public generatePlanContentString(): string {
     if (this.huList.length === 0 && !this.testPlanTitle) return 'Plan de pruebas aún no generado. Añade entradas.';
     let fullPlanContent = '';
@@ -307,6 +346,7 @@ export class TestPlanGeneratorComponent {
     fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\nSUPUESTOS:\n\n${this.assumptionsContent}\n\nEquipo de Trabajo:\n\n${this.teamContent}\n\n`;
     return fullPlanContent;
   }
+
   public generatePlanContentHtmlString(): string {
     if (this.huList.length === 0 && !this.testPlanTitle) { return '<p style="text-align:center; color:#6c757d;">Plan de pruebas aún no generado. Añade entradas.</p>'; }
     let fullPlanHtmlContent = '';
@@ -338,9 +378,10 @@ export class TestPlanGeneratorComponent {
     fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span><br>\n${this.escapeHtmlForExport(this.teamContent)}</p>\n\n`;
     return fullPlanHtmlContent;
   }
+
   public copyPreviewToClipboard(): void {
     const planText = this.generatePlanContentString();
-    if (navigator.clipboard) {
+    if (isPlatformBrowser(this.platformId) && navigator.clipboard) {
       navigator.clipboard.writeText(planText)
         .then(() => alert('Plan de pruebas copiado al portapapeles!'))
         .catch(err => {
@@ -351,6 +392,7 @@ export class TestPlanGeneratorComponent {
       alert('La API del portapapeles no es compatible con este navegador.');
     }
   }
+
   public downloadWord(): void {
     const htmlContent = this.generatePlanContentHtmlString();
     if (htmlContent.includes('Plan de pruebas aún no generado')) {
@@ -362,7 +404,7 @@ export class TestPlanGeneratorComponent {
         const htmlToDocx = module.default;
         if (typeof htmlToDocx === 'function') {
           const headerHtml = `<p style="font-size:10pt;color:#888888;text-align:right;">Plan de Pruebas - ${this.testPlanTitle || 'General'}</p>`;
-          
+
           const fullHtmlForDocx = `
             <!DOCTYPE html>
             <html>
@@ -415,9 +457,11 @@ export class TestPlanGeneratorComponent {
       this.downloadHtmlFallback(htmlContent);
     }
   }
+
   private downloadHtmlFallback(htmlContent: string): void {
     const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8' });
     saveAs(blob, `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}_Fallback.html`);
   }
+
   private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
 }
