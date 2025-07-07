@@ -1,0 +1,58 @@
+/* Modal styles for image editor */
+.image-editor-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+}
+.image-editor-backdrop {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+}
+.image-editor-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 24px rgba(0,0,0,0.25);
+  padding: 0;
+  max-width: 96vw;
+  max-height: 96vh;
+  width: 96vw;
+  height: 96vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+.image-editor-content {
+  flex: 1 1 auto;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+#tui-image-editor-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 80vh;
+  min-width: 80vw;
+}
+.image-editor-actions {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1em;
+  padding: 1em;
+  background: #f9f9f9;
+  border-top: 1px solid #e0e0e0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}

@@ -296,6 +296,9 @@
                     [disabled]="loadingScenarios || loadingScope">
                 Confirmar y Añadir al Plan
             </button>
+            <button class="btn btn-primary" (click)="exportarMatriz()">Exportar Matriz</button>
+            <button class="btn btn-primary" (click)="exportarMatrizExcel()">Exportar a Excel</button>
+            <button class="btn btn-success" (click)="ejecutarMatrizDePrueba()">Ejecutar matriz de prueba</button>
         </div>
         <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
             <span class="spinner"></span> Enviando al plan de pruebas...

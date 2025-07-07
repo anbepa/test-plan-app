@@ -1,0 +1,13 @@
+<p>image-editor works!</p>
+<div *ngIf="visible" class="image-editor-modal">
+  <div class="image-editor-backdrop" (click)="onClose()"></div>
+  <div class="image-editor-dialog">
+    <div class="image-editor-content">
+      <div id="tui-image-editor-container"></div>
+    </div>
+    <div class="image-editor-actions">
+      <button (click)="onSave()">Guardar</button>
+      <button (click)="onClose()">Cerrar</button>
+    </div>
+  </div>
+</div>

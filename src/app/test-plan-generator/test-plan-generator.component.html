@@ -125,6 +125,14 @@
                                         hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable'">
                         Exportar Matriz (.html)
                     </button>
+                    <button (click)="ejecutarMatrizDePrueba(hu)" class="button-secondary"
+                            [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0 ||
+                                        hu.detailedTestCases[0].title.startsWith('Error') ||
+                                        hu.detailedTestCases[0].title === 'Información Insuficiente' ||
+                                        hu.detailedTestCases[0].title === 'Refinamiento no posible con el contexto actual' ||
+                                        hu.detailedTestCases[0].title === 'Imágenes no interpretables o técnica no aplicable'">
+                        Ejecutar matriz de prueba
+                    </button>
                     <a class="button-secondary" [href]="macTemplateUrl" target="_blank" rel="noopener noreferrer"
                        style="margin-left: 8px;">Plantilla ejecutar Mac</a>
                     <a class="button-secondary" [href]="windowsTemplateUrl" target="_blank" rel="noopener noreferrer"

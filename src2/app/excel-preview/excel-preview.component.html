@@ -1,0 +1,26 @@
+<div>
+  <div style="position: relative;">
+    <!-- Contenedor oculto para captura completa -->
+    <div #tableRef class="excel-table-preview excel-table-capture" style="position: absolute; left: -9999px; top: 0; background: white; z-index: -1;" *ngIf="showPreview">
+      <table *ngIf="tableData.length">
+        <tr *ngFor="let row of tableData">
+          <td *ngFor="let cell of row">{{ cell }}</td>
+        </tr>
+      </table>
+    </div>
+    <!-- Vista normal de la tabla para el usuario -->
+    <div class="excel-table-preview" style="overflow-x: auto; max-width: 100vw;" *ngIf="showPreview">
+      <table *ngIf="tableData.length">
+        <tr *ngFor="let row of tableData">
+          <td *ngFor="let cell of row">{{ cell }}</td>
+        </tr>
+      </table>
+    </div>
+    <button class="btn" (click)="captureTableAsImage()" *ngIf="showPreview">Capturar como imagen PNG</button>
+    <div *ngIf="imageDataUrl && !showPreview">
+      <h4>Imagen generada:</h4>
+      <img [src]="imageDataUrl" alt="Tabla Excel capturada" style="max-width:100%;border:1px solid #ccc;" />
+      <button class="btn" (click)="showPreview = true">Volver a previsualización</button>
+    </div>
+  </div>
+</div>

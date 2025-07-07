@@ -1,0 +1,91 @@
+<div class="container">
+  <header>
+    <h1>{{ title }}</h1>
+  </header>
+
+  <div class="export-bar">
+    <label class="btn">
+      Cargar archivo CSV
+      <input type="file" accept=".csv" (change)="cargarCSV($event)" style="display:none;">
+    </label>
+    <button class="btn" (click)="agregarEscenario()">Agregar Escenario en Blanco</button>
+    <button class="btn" (click)="generarReportePDF()">Descargar PDF</button>
+    <button (click)="limpiarProyecto()" class="btn btn-danger">
+      Limpiar Todo y Empezar de Nuevo
+    </button>
+  </div>
+
+  <div id="escenarios-container" *ngIf="escenarios.length > 0">
+    <div class="escenarios-tabs-bar">
+      <button *ngFor="let esc of escenarios; let i = index"
+              class="escenario-tab-btn"
+              [class.active]="i === escenarioActivo"
+              (click)="seleccionarEscenario(i)">
+        {{ esc['ID Caso'] || 'Escenario ' + (i + 1) }}
+      </button>
+    </div>
+
+    <ng-container *ngFor="let esc of escenarios; let i = index">
+      <section class="escenario" *ngIf="i === escenarioActivo">
+        <table class="escenario-table">
+          <thead>
+            <tr>
+              <th>ID Caso</th>
+              <th>Escenario de Prueba</th>
+              <th>Precondiciones</th>
+              <th>Paso a Paso</th>
+              <th>Resultado Esperado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="editable-cell"><input type="text" [(ngModel)]="esc['ID Caso']" (ngModelChange)="guardarEstado()" class="editable-input"></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Escenario de Prueba']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Precondiciones']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Paso a Paso']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Resultado Esperado']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td><button class="btn btn-danger" (click)="eliminarEscenario(i)">Eliminar</button></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="evidencias">
+          <div class="evidencias-titulo">Evidencias</div>
+          <div class="evidencias-grid" id="evid-grid-{{i}}">
+            <div class="evidencia-block" *ngFor="let ev of esc.evidencias; let j = index">
+              <div class="evidencia-label">
+                <input type='text' [(ngModel)]="ev.nombre" (ngModelChange)="guardarEstado()" class="evidencia-nombre" title='Nombre archivo' />
+                <button class='btn-evidencia-eliminar' (click)="eliminarEvidencia(i, j)" title='Eliminar'>&times;</button>
+              </div>
+              <img [src]="ev.data" alt="Evidencia" (click)="openImageEditor(i, j)" style="cursor:pointer;" />
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:0.7em;">
+            <label class="btn btn-secondary">
+              Subir Evidencias
+              <input type="file" accept="image/*" multiple (change)="subirEvidencias($event, i)" style="display:none;">
+            </label>
+            <button class="btn btn-secondary" (click)="pegarEvidencia(i)">Pegar Evidencia</button>
+            <button class="btn btn-secondary" (click)="limpiarEvidencias(i)">Limpiar Evidencias</button>
+            <label class="btn btn-secondary">
+              Subir Excel
+              <input type="file" accept=".xlsx,.xls" (change)="onExcelFileChange($event, i)" style="display:none;">
+            </label>
+          </div>
+          <div *ngIf="showExcelPreviewPorEscenario[i]">
+            <excel-preview [tableData]="excelTableDataPorEscenario[i]" (imageReady)="onExcelImageReadyPorEscenario($event, i)"></excel-preview>
+          </div>
+        </div>
+      </section>
+    </ng-container>
+  </div>
+
+  <app-image-editor 
+    *ngIf="imageEditorVisible" 
+    [imageData]="imageEditorData" 
+    [visible]="imageEditorVisible" 
+    (close)="closeImageEditor()" 
+    (save)="saveImageEditor($event)">
+  </app-image-editor>
+</div>

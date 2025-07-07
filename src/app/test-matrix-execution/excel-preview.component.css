@@ -1,0 +1,15 @@
+/* Estilos para la previsualización de Excel */
+.excel-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1em;
+}
+.excel-table td {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  min-width: 40px;
+  text-align: left;
+}
+button {
+  margin-top: 0.5em;
+} 

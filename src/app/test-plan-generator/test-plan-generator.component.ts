@@ -8,6 +8,8 @@ import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
+import { Router } from '@angular/router';
+import { MatrixDataService } from '../services/matrix-data.service';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -71,7 +73,9 @@ export class TestPlanGeneratorComponent {
   constructor(
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router,
+    private matrixDataService: MatrixDataService
   ) {}
 
   private escapeHtmlForExport(u: string | undefined | null): string {
@@ -464,4 +468,22 @@ export class TestPlanGeneratorComponent {
   }
 
   private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
+
+  public ejecutarMatrizDePrueba(hu: HUData): void {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
+      alert('No hay casos de prueba válidos para ejecutar la matriz.');
+      return;
+    }
+    // Adaptar los datos al formato Escenario
+    const escenarios = hu.detailedTestCases.map((tc, index) => ({
+      'ID Caso': hu.id + '_CP' + (index + 1),
+      'Escenario de Prueba': tc.title,
+      'Precondiciones': tc.preconditions,
+      'Paso a Paso': Array.isArray(tc.steps) ? tc.steps.map(step => `${step.numero_paso}. ${step.accion}`).join('\n') : 'Pasos no disponibles.',
+      'Resultado Esperado': tc.expectedResults,
+      evidencias: []
+    }));
+    this.matrixDataService.setEscenarios(escenarios);
+    this.router.navigate(['/ejecutar-matriz']);
+  }
 }

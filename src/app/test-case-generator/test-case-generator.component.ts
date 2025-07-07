@@ -7,6 +7,8 @@ import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
+import { Router } from '@angular/router';
+import { MatrixDataService } from '../services/matrix-data.service';
 
 interface DraggableImage {
   file: File;
@@ -79,7 +81,9 @@ export class TestCaseGeneratorComponent implements OnInit {
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
-    private elRef: ElementRef
+    private elRef: ElementRef,
+    private router: Router,
+    private matrixDataService: MatrixDataService
   ) {}
 
   ngOnInit(): void {
@@ -674,5 +678,32 @@ export class TestCaseGeneratorComponent implements OnInit {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  exportarMatriz(): void {
+    // Placeholder: aquí va la lógica real de exportación
+    alert('Funcionalidad de exportar matriz no implementada aún.');
+  }
+
+  exportarMatrizExcel(): void {
+    // Placeholder: aquí va la lógica real de exportar a Excel
+    alert('Funcionalidad de exportar a Excel no implementada aún.');
+  }
+
+  ejecutarMatrizDePrueba(): void {
+    if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
+      const escenarios = this.generatedHUData.detailedTestCases.map((tc, idx) => ({
+        'ID Caso': `CP${idx + 1}`,
+        'Escenario de Prueba': tc.title || '',
+        Precondiciones: tc.preconditions || '',
+        'Paso a Paso': (tc.steps && tc.steps.length > 0) ? tc.steps.map(s => s.accion).join('\n') : '',
+        'Resultado Esperado': tc.expectedResults || '',
+        evidencias: []
+      }));
+      this.matrixDataService.setEscenarios(escenarios);
+      this.router.navigate(['/test-matrix-execution']);
+    } else {
+      alert('No hay escenarios generados para ejecutar.');
+    }
   }
 }

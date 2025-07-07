@@ -1,0 +1,33 @@
+.excel-table-preview table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  background: #f9fafb;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 18px;
+}
+.excel-table-preview td {
+  border: 1px solid #bdbdbd;
+  padding: 10px 16px;
+  font-size: 18px;
+  background: #fff;
+  max-width: 260px;
+  word-break: break-word;
+  height: 38px;
+}
+.excel-table-preview th {
+  border: 1px solid #bdbdbd;
+  padding: 10px 16px;
+  font-size: 18px;
+  background: #f1f5f9;
+  font-weight: bold;
+}
+.excel-table-preview tr:nth-child(even) td {
+  background: #f6fafd;
+}
+.excel-table-capture {
+  width: auto !important;
+  max-width: none !important;
+  overflow: visible !important;
+  display: block;
+}

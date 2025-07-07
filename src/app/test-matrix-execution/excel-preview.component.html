@@ -1,0 +1,13 @@
+<div *ngIf="showPreview">
+  <div #tableRef>
+    <table class="excel-table">
+      <tr *ngFor="let row of tableData">
+        <td *ngFor="let cell of row">{{ cell }}</td>
+      </tr>
+    </table>
+  </div>
+  <button (click)="captureTableAsImage()">Convertir a Imagen</button>
+</div>
+<div *ngIf="!showPreview && imageDataUrl">
+  <img [src]="imageDataUrl" alt="Tabla como imagen" style="max-width:100%;" />
+</div> 
