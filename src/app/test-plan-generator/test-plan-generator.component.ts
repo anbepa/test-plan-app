@@ -67,8 +67,6 @@ export class TestPlanGeneratorComponent {
   isLimitationsDetailsOpen: boolean = false;
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
-  public macTemplateUrl = 'https://drive.google.com/uc?export=download&id=1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
-  public windowsTemplateUrl = 'https://drive.google.com/uc?export=download&id=1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
 
   constructor(
     private geminiService: GeminiService,
@@ -218,22 +216,6 @@ export class TestPlanGeneratorComponent {
     });
     const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
     saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`);
-  }
-
-  public exportExecutionMatrixToHtml(hu: HUData): void {
-    if (this.matrixExporter) {
-      const htmlContent = this.matrixExporter.generateMatrixHtml(hu);
-
-      if (htmlContent) {
-        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-        saveAs(blob, `MatrizEjecucion_${this.escapeFilename(hu.id)}.html`);
-      } else {
-        alert('No se pudo generar la matriz HTML. Verifique que haya casos de prueba válidos.');
-      }
-    } else {
-      console.error('El componente exportador de matriz no está disponible.');
-      alert('Error: El componente para exportar no se ha cargado correctamente.');
-    }
   }
 
   public isAnyHuTextBased = (): boolean => this.huList.some(hu => hu.originalInput.generationMode === 'text');

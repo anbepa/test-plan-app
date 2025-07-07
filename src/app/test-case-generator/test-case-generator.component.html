@@ -277,16 +277,6 @@
 
         <!-- Acciones Finales -->
         <div class="form-actions editor-form-actions final-actions-group" *ngIf="componentState !== 'submitting'">
-            <button type="button" (click)="exportExecutionMatrixLocal()" class="button-secondary" 
-                    [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title.startsWith('Error')">
-                Exportar Matriz (.csv)
-            </button>
-            <button type="button" class="button-secondary" (click)="downloadTemplate('mac')">
-                Plantilla ejecutar Mac
-            </button>
-            <button type="button" class="button-secondary" (click)="downloadTemplate('windows')">
-                Plantilla ejecutar Windows
-            </button>
             <button type="button" (click)="startRefinementMode()" class="button-edit" 
                     *ngIf="componentState === 'previewingGenerated'"
                     [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title.startsWith('Error')">
@@ -296,9 +286,6 @@
                     [disabled]="loadingScenarios || loadingScope">
                 Confirmar y Añadir al Plan
             </button>
-            <button class="btn btn-primary" (click)="exportarMatriz()">Exportar Matriz</button>
-            <button class="btn btn-primary" (click)="exportarMatrizExcel()">Exportar a Excel</button>
-            <button class="btn btn-success" (click)="ejecutarMatrizDePrueba()">Ejecutar matriz de prueba</button>
         </div>
         <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
             <span class="spinner"></span> Enviando al plan de pruebas...
