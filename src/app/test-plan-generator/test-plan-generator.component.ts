@@ -10,6 +10,7 @@ import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-gen
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
 import { Router } from '@angular/router';
 import { MatrixDataService } from '../services/matrix-data.service';
+import { StorageService } from '../services/storage.service';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -73,8 +74,18 @@ export class TestPlanGeneratorComponent {
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
     private router: Router,
-    private matrixDataService: MatrixDataService
+    private matrixDataService: MatrixDataService,
+    private storageService: StorageService
   ) {}
+
+  ngOnInit(): void {
+    const planGuardado = this.storageService.cargarPlanDePruebas();
+    if (planGuardado && Array.isArray(planGuardado)) {
+      this.huList = planGuardado;
+      this.updateTestPlanTitle();
+      this.updatePreview();
+    }
+  }
 
   private escapeHtmlForExport(u: string | undefined | null): string {
     return u
@@ -110,6 +121,7 @@ export class TestPlanGeneratorComponent {
 
   onHuGeneratedFromChild(huData: HUData) {
     this.huList.push(huData);
+    this.storageService.guardarPlanDePruebas(this.huList);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
@@ -121,6 +133,7 @@ export class TestPlanGeneratorComponent {
 
   onAnalysisDataGenerated(huData: HUData) {
     this.huList.push(huData);
+    this.storageService.guardarPlanDePruebas(this.huList);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
@@ -132,6 +145,7 @@ export class TestPlanGeneratorComponent {
 
   onComparisonDataGenerated(huData: HUData) {
     this.huList.push(huData);
+    this.storageService.guardarPlanDePruebas(this.huList);
     this.updateTestPlanTitle();
     this.updatePreview();
     this.resetActiveGeneratorsAndGoToSelection();
@@ -467,5 +481,29 @@ export class TestPlanGeneratorComponent {
     }));
     this.matrixDataService.setEscenarios(escenarios);
     this.router.navigate(['/ejecutar-matriz']);
+  }
+
+  // Ejemplo de método para eliminar una HU
+  eliminarHU(index: number): void {
+    this.huList.splice(index, 1);
+    this.storageService.guardarPlanDePruebas(this.huList);
+    this.updateTestPlanTitle();
+    this.updatePreview();
+  }
+
+  // Ejemplo de método para editar una HU (debe llamarse después de modificar la HU)
+  actualizarHU(index: number, nuevaHU: HUData): void {
+    this.huList[index] = nuevaHU;
+    this.storageService.guardarPlanDePruebas(this.huList);
+    this.updateTestPlanTitle();
+    this.updatePreview();
+  }
+
+  public limpiarPlanDePruebas(): void {
+    this.storageService.limpiarPlanDePruebas();
+    this.huList = [];
+    this.updateTestPlanTitle();
+    this.updatePreview();
+    this.cdr.detectChanges();
   }
 }

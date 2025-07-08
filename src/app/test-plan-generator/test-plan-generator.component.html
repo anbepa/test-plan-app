@@ -33,8 +33,11 @@
   
   <ng-container *ngIf="huList.length > 0 || (isModeSelected && !showTestCaseGenerator)">
     <section class="results-section" aria-labelledby="results-section-title">
-      <div class="section-header">
+      <div class="section-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1em;">
         <h2 id="results-section-title">Plan de Pruebas: {{ testPlanTitle || (isModeSelected ? 'Generando entrada...' : 'Aún no generado') }}</h2>
+        <button (click)="limpiarPlanDePruebas()" class="button-cancel" *ngIf="huList.length > 0">
+          Borrar todo el plan (localStorage)
+        </button>
       </div>
       
       <div *ngIf="isModeSelected && huList.length === 0 && !showTestCaseGenerator" class="no-content-message">

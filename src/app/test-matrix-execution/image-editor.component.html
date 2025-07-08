@@ -1,6 +1,9 @@
 <div *ngIf="visible" class="image-editor-modal">
-  <div class="image-editor-content">
-    <div id="tui-image-editor-container" style="width:1000px;height:700px;"></div>
+  <div class="image-editor-backdrop"></div>
+  <div class="image-editor-dialog">
+    <div class="image-editor-content">
+      <div id="tui-image-editor-container"></div>
+    </div>
     <div class="image-editor-actions">
       <button (click)="onSave()">Guardar</button>
       <button (click)="onClose()">Cerrar</button>

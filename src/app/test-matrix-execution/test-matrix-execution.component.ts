@@ -320,7 +320,23 @@ export class TestMatrixExecutionComponent implements OnInit {
   }
   onExcelFileChange(event: Event, escenarioIndex: number) { /* Implementar según lógica original */ }
   onExcelImageReadyPorEscenario(imageUrl: string, escenarioIndex: number) { /* Implementar según lógica original */ }
-  openImageEditor(escenarioIndex: number, evidenciaIndex: number) { /* Implementar según lógica original */ }
-  closeImageEditor() { /* Implementar según lógica original */ }
-  saveImageEditor(editedData: string) { /* Implementar según lógica original */ }
+  openImageEditor(escenarioIndex: number, evidenciaIndex: number): void {
+    this.imageEditorEscenarioIndex = escenarioIndex;
+    this.imageEditorEvidenciaIndex = evidenciaIndex;
+    this.imageEditorData = this.escenarios[escenarioIndex].evidencias[evidenciaIndex].data;
+    this.imageEditorVisible = true;
+  }
+  closeImageEditor(): void {
+    this.imageEditorVisible = false;
+    this.imageEditorData = null;
+    this.imageEditorEscenarioIndex = null;
+    this.imageEditorEvidenciaIndex = null;
+  }
+  saveImageEditor(editedData: string): void {
+    if (this.imageEditorEscenarioIndex !== null && this.imageEditorEvidenciaIndex !== null) {
+      this.escenarios[this.imageEditorEscenarioIndex].evidencias[this.imageEditorEvidenciaIndex].data = editedData;
+      this.guardarEstado();
+    }
+    this.closeImageEditor();
+  }
 } 

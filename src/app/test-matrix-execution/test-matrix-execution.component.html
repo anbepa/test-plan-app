@@ -35,15 +35,17 @@
               <th>Precondiciones</th>
               <th>Paso a Paso</th>
               <th>Resultado Esperado</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>{{ esc['ID Caso'] }}</td>
-              <td>{{ esc['Escenario de Prueba'] }}</td>
-              <td>{{ esc.Precondiciones }}</td>
-              <td>{{ esc['Paso a Paso'] }}</td>
-              <td>{{ esc['Resultado Esperado'] }}</td>
+              <td class="editable-cell"><input type="text" [(ngModel)]="esc['ID Caso']" (ngModelChange)="guardarEstado()" class="editable-input"></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Escenario de Prueba']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc.Precondiciones" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Paso a Paso']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td class="editable-cell"><textarea [(ngModel)]="esc['Resultado Esperado']" (ngModelChange)="guardarEstado()" class="editable-textarea" rows="4"></textarea></td>
+              <td><button class="btn btn-danger" (click)="eliminarEscenario(i)">Eliminar</button></td>
             </tr>
           </tbody>
         </table>
