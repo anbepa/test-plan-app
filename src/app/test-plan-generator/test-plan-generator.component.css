@@ -87,6 +87,13 @@ h2 { color: #4a6d7c; margin-bottom: 20px; font-size: 1.8em; padding-bottom: 5px;
     justify-content: center;
 }
 .button-small-icon svg { width: 1em; height: 1em; }
+.button-cancel.button-small, .button-secondary.button-small {
+  padding: 6px 12px;
+  font-size: 0.85em;
+  min-height: 32px;
+  margin-bottom: 0;
+  margin-right: 0;
+}
 
 
 /* --- Mensajes de Error --- */

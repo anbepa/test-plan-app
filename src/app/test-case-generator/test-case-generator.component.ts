@@ -199,8 +199,8 @@ export class TestCaseGeneratorComponent implements OnInit {
       let validationErrorFound = false;
       for (const file of filesArray) {
         if (validationErrorFound) continue;
-        if (file.size > 4 * 1024 * 1024) {
-          this.imageUploadError = `El archivo \"${file.name}\" excede el tamaño máximo de 4MB.`;
+        if (file.size > 10 * 1024 * 1024) {
+          this.imageUploadError = `El archivo \"${file.name}\" excede el tamaño máximo de 10MB.`;
           validationErrorFound = true;
         }
         if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) {
@@ -640,5 +640,44 @@ export class TestCaseGeneratorComponent implements OnInit {
       this.huGenerated.emit(dataToEmit);
       this.resetToInitialForm();
     }
+  }
+
+  // Permite pegar una imagen desde el portapapeles y añadirla al flujo de imágenes
+  public pegarEvidencia(): void {
+    if (this.currentGenerationMode !== 'image' || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    navigator.clipboard.read().then(items => {
+      for (const item of items) {
+        if (item.types.includes('image/png') || item.types.includes('image/jpeg')) {
+          const mimeType = item.types.includes('image/png') ? 'image/png' : 'image/jpeg';
+          item.getType(mimeType).then(blob => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              const id = 'IMG_PEGADA_' + Date.now() + Math.random().toString(16).slice(2);
+              this.draggableImages.push({
+                file: new File([blob], 'Pegado_' + Date.now() + (mimeType === 'image/png' ? '.png' : '.jpg'), { type: mimeType }),
+                preview: reader.result!,
+                base64,
+                mimeType,
+                id
+              });
+              this.updateArraysFromDraggable();
+              this.cdr.detectChanges();
+            };
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    });
+  }
+
+  // Permite renombrar la imagen en el array
+  public renombrarImagen(index: number, nuevoNombre: string): void {
+    if (this.currentGenerationMode !== 'image' || !this.draggableImages[index]) return;
+    const img = this.draggableImages[index];
+    // Creamos un nuevo File con el nuevo nombre pero el mismo contenido
+    const nuevoFile = new File([img.file], nuevoNombre, { type: img.mimeType });
+    img.file = nuevoFile;
+    this.cdr.detectChanges();
   }
 }

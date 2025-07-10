@@ -31,13 +31,18 @@
     </app-test-case-generator>
   </ng-container>
   
-  <ng-container *ngIf="huList.length > 0 || (isModeSelected && !showTestCaseGenerator)">
+  <ng-container *ngIf="isModeSelected && !showTestCaseGenerator">
     <section class="results-section" aria-labelledby="results-section-title">
       <div class="section-header" style="display: flex; align-items: center; justify-content: space-between; gap: 1em;">
-        <h2 id="results-section-title">Plan de Pruebas: {{ testPlanTitle || (isModeSelected ? 'Generando entrada...' : 'Aún no generado') }}</h2>
-        <button (click)="limpiarPlanDePruebas()" class="button-cancel" *ngIf="huList.length > 0">
-          Borrar todo el plan (localStorage)
-        </button>
+        <h2 id="results-section-title">{{ testPlanTitle || (isModeSelected ? 'Generando entrada...' : 'Aún no generado') }}</h2>
+        <div style="display: flex; gap: 0.5em;">
+          <button (click)="limpiarPlanDePruebas()" class="button-cancel button-small" *ngIf="huList.length > 0">
+            Borrar todo el plan (localStorage)
+          </button>
+          <button (click)="resetToInitialSelection()" class="button-secondary button-small">
+            Volver al menú principal / Añadir otra HU
+          </button>
+        </div>
       </div>
       
       <div *ngIf="isModeSelected && huList.length === 0 && !showTestCaseGenerator" class="no-content-message">

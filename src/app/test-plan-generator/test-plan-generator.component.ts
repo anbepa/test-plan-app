@@ -124,7 +124,8 @@ export class TestPlanGeneratorComponent {
     this.storageService.guardarPlanDePruebas(this.huList);
     this.updateTestPlanTitle();
     this.updatePreview();
-    this.resetActiveGeneratorsAndGoToSelection();
+    this.showTestCaseGenerator = false;
+    this.cdr.detectChanges();
   }
 
   onGenerationCancelledFromChild() {

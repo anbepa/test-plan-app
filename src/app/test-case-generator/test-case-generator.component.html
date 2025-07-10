@@ -64,12 +64,16 @@
           </div>
         </div>
         <div class="form-group full-width">
-          <label for="tcImageFiles">Cargar Imágenes (JPG, PNG - Máx. 4MB c/u, Máx. 5):<span class="required-indicator">*</span></label>
+          <label for="tcImageFiles">Cargar Imágenes (JPG, PNG - Máx. 10MB c/u, Máx. 5):<span class="required-indicator">*</span></label>
           <input type="file" id="tcImageFiles" name="imageFiles" (change)="onFileSelected($event)" accept="image/jpeg, image/png"
                  multiple #imageFilesInput>
           <div *ngIf="imageUploadError" class="validation-error" role="alert">{{ imageUploadError }}</div>
           <div *ngIf="huForm.submitted && draggableImages.length === 0 && currentGenerationMode === 'image'" class="validation-error" role="alert">
             Debes seleccionar al menos una imagen.
+          </div>
+
+          <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:0.7em;">
+            <button type="button" class="button-secondary" (click)="pegarEvidencia()">Pegar Evidencia</button>
           </div>
 
           <div *ngIf="draggableImages.length > 0" class="image-preview-container multiple-previews"
@@ -82,7 +86,7 @@
                  (dragover)="onImageDragOver($event, imgItem)">
               <span class="image-order-badge">{{i + 1}}</span>
               <img [src]="imgItem.preview" [alt]="'Previsualización ' + imgItem.file.name" class="image-preview">
-              <span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
+              <input type="text" [(ngModel)]="imgItem.file.name" (ngModelChange)="renombrarImagen(i, $event)" class="image-filename" title="Renombrar imagen" />
             </div>
           </div>
         </div>
