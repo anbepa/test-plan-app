@@ -580,7 +580,7 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
     const hu = this.generatedAnalysisData;
     const report = hu.flowAnalysisReport![0];
     const date = new Date().toISOString().split('T')[0];
-    const title = language === 'en' ? `Flow Analysis Report: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}` : `Informe de Análisis de Flujo: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
+    const title = language === 'en' ? `Scenario: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}` : `Escenario: ${this.escapeHtmlForExport(report.Nombre_del_Escenario)}`;
     let html = `<html><head><meta charset="UTF-8"><title>${title}</title><style>
     body{font-family:Segoe UI,Calibri,Arial,sans-serif;margin:20px;line-height:1.6;color:#333}
     .report-container{max-width:900px;margin:auto}
@@ -596,7 +596,8 @@ export class FlowAnalysisComponent implements OnInit, OnDestroy {
       border-top: none;
     }
     img.evidence-image {
-        max-width: 500px;
+        width: 100%;
+        max-width: 100%;
         height: auto;
         border: 1px solid #ccc;
         border-radius: 4px;
