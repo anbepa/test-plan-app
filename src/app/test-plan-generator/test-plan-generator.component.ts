@@ -4,10 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
+import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
+import { TestCaseEditorComponent, UIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -21,6 +23,7 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
     FormsModule,
     TestCaseGeneratorComponent,
     HtmlMatrixExporterComponent,
+    TestCaseEditorComponent,
   ],
 })
 export class TestPlanGeneratorComponent {
@@ -30,14 +33,14 @@ export class TestPlanGeneratorComponent {
   // --- Propiedades del Componente ---
   currentGenerationMode: GenerationMode | null = null;
   showTestCaseGenerator: boolean = false;
-  showFlowAnalysisComponent: boolean = false;
-  showFlowComparisonComponent: boolean = false;
   isModeSelected: boolean = false;
   formError: string | null = null;
-  currentFlowSprint: string = 'Sprint Actual';
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
-  bugComparisonErrorGlobal: string | null = null;
+  
+  // Sistema de pestañas para navegación
+  activeTab: 'generate' | 'scenarios' | 'config' = 'generate';
+  
   testPlanTitle: string = '';
   repositoryLink: string = 'https://dev.azure.com/YOUR_ORG/YOUR_PROJECT/_git/NU0139001_SAF_MR_Test - Repos (visualstudio.com)';
   outOfScopeContent: string = 'No se probarán funcionalidades o secciones diferentes a los definidos en el alcance.';
@@ -51,6 +54,8 @@ export class TestPlanGeneratorComponent {
   editingLimitations: boolean = false;
   editingAssumptions: boolean = false;
   editingTeam: boolean = false;
+  loadingRepositoryLinkAI: boolean = false;
+  errorRepositoryLinkAI: string | null = null;
   loadingOutOfScopeAI: boolean = false;
   errorOutOfScopeAI: string | null = null;
   loadingStrategyAI: boolean = false;
@@ -59,20 +64,159 @@ export class TestPlanGeneratorComponent {
   errorLimitationsAI: string | null = null;
   loadingAssumptionsAI: boolean = false;
   errorAssumptionsAI: string | null = null;
+  loadingTeamAI: boolean = false;
+  errorTeamAI: string | null = null;
   isRepositoryLinkDetailsOpen: boolean = false;
   isOutOfScopeDetailsOpen: boolean = false;
   isStrategyDetailsOpen: boolean = false;
   isLimitationsDetailsOpen: boolean = false;
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
-  public macTemplateUrl = 'https://drive.google.com/uc?export=download&id=1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
-  public windowsTemplateUrl = 'https://drive.google.com/uc?export=download&id=1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
+  
+  // Estado de carga desde localStorage
+  showLoadDataPrompt: boolean = false;
+  loadingFromStorage: boolean = false;
 
   constructor(
     private geminiService: GeminiService,
+    public localStorageService: LocalStorageService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef
   ) {}
+
+  ngOnInit(): void {
+    // Verificar si hay datos guardados al iniciar
+    this.checkForStoredData();
+  }
+
+  /**
+   * Verifica si hay datos guardados en localStorage y pregunta al usuario si desea cargarlos
+   */
+  private checkForStoredData(): void {
+    if (this.localStorageService.hasStoredState()) {
+      const info = this.localStorageService.getStoredStateInfo();
+      if (info) {
+        this.showLoadDataPrompt = true;
+        this.cdr.detectChanges();
+      }
+    }
+  }
+
+  /**
+   * Carga los datos guardados desde localStorage
+   */
+  public loadStoredData(): void {
+    this.loadingFromStorage = true;
+    const state = this.localStorageService.loadTestPlanState();
+    
+    if (state) {
+      this.testPlanTitle = state.testPlanTitle || this.testPlanTitle;
+      this.huList = state.huList || [];
+      this.repositoryLink = state.repositoryLink || this.repositoryLink;
+      this.outOfScopeContent = state.outOfScopeContent || this.outOfScopeContent;
+      this.strategyContent = state.strategyContent || this.strategyContent;
+      this.limitationsContent = state.limitationsContent || this.limitationsContent;
+      this.assumptionsContent = state.assumptionsContent || this.assumptionsContent;
+      this.teamContent = state.teamContent || this.teamContent;
+      
+      this.updatePreview();
+      alert(`✅ Datos cargados exitosamente!\n${state.huList.length} Historia(s) de Usuario recuperadas.`);
+    } else {
+      alert('❌ No se pudieron cargar los datos guardados.');
+    }
+    
+    this.showLoadDataPrompt = false;
+    this.loadingFromStorage = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Descarta los datos guardados y comienza desde cero
+   */
+  public dismissStoredData(): void {
+    this.showLoadDataPrompt = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Guarda el estado actual en localStorage
+   */
+  private saveCurrentState(): void {
+    const state: TestPlanState = {
+      testPlanTitle: this.testPlanTitle,
+      huList: this.huList,
+      repositoryLink: this.repositoryLink,
+      outOfScopeContent: this.outOfScopeContent,
+      strategyContent: this.strategyContent,
+      limitationsContent: this.limitationsContent,
+      assumptionsContent: this.assumptionsContent,
+      teamContent: this.teamContent,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    this.localStorageService.autoSaveTestPlanState(state);
+  }
+
+  /**
+   * Limpia todos los datos
+   */
+  public clearAllData(): void {
+    if (confirm('⚠️ ¿Estás seguro de que deseas eliminar todos los datos? Esta acción no se puede deshacer.')) {
+      this.huList = [];
+      this.testPlanTitle = '';
+      this.localStorageService.clearTestPlanState();
+      this.updatePreview();
+      alert('🗑️ Todos los datos han sido eliminados.');
+    }
+  }
+
+  /**
+   * Exporta el estado actual como archivo JSON
+   */
+  public exportBackup(): void {
+    const state: TestPlanState = {
+      testPlanTitle: this.testPlanTitle,
+      huList: this.huList,
+      repositoryLink: this.repositoryLink,
+      outOfScopeContent: this.outOfScopeContent,
+      strategyContent: this.strategyContent,
+      limitationsContent: this.limitationsContent,
+      assumptionsContent: this.assumptionsContent,
+      teamContent: this.teamContent,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    this.localStorageService.exportStateAsFile(state);
+  }
+
+  /**
+   * Importa un estado desde un archivo JSON
+   */
+  public async importBackup(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const file = input.files[0];
+    const state = await this.localStorageService.importStateFromFile(file);
+    
+    if (state) {
+      this.loadStoredData();
+    } else {
+      alert('❌ Error al importar el archivo. Verifica que sea un archivo de backup válido.');
+    }
+
+    // Limpiar el input
+    input.value = '';
+  }
+
+  /**
+   * Obtiene información sobre el almacenamiento
+   */
+  public getStorageInfo(): string {
+    return this.localStorageService.getStorageSizeFormatted();
+  }
 
   private escapeHtmlForExport(u: string | undefined | null): string {
     return u
@@ -98,11 +242,8 @@ export class TestPlanGeneratorComponent {
   private resetActiveGeneratorsAndGoToSelection(): void {
     this.currentGenerationMode = null;
     this.showTestCaseGenerator = false;
-    this.showFlowAnalysisComponent = false;
-    this.showFlowComparisonComponent = false;
     this.isModeSelected = false;
     this.formError = null;
-    this.bugComparisonErrorGlobal = null;
     this.cdr.detectChanges();
   }
 
@@ -110,32 +251,13 @@ export class TestPlanGeneratorComponent {
     this.huList.push(huData);
     this.updateTestPlanTitle();
     this.updatePreview();
+    this.saveCurrentState(); // Guardar en localStorage
     this.resetActiveGeneratorsAndGoToSelection();
+    // Cambiar automáticamente a la pestaña de escenarios
+    this.activeTab = 'scenarios';
   }
 
   onGenerationCancelledFromChild() {
-    this.resetActiveGeneratorsAndGoToSelection();
-  }
-
-  onAnalysisDataGenerated(huData: HUData) {
-    this.huList.push(huData);
-    this.updateTestPlanTitle();
-    this.updatePreview();
-    this.resetActiveGeneratorsAndGoToSelection();
-  }
-
-  onAnalysisCancelledFromChild() {
-    this.resetActiveGeneratorsAndGoToSelection();
-  }
-
-  onComparisonDataGenerated(huData: HUData) {
-    this.huList.push(huData);
-    this.updateTestPlanTitle();
-    this.updatePreview();
-    this.resetActiveGeneratorsAndGoToSelection();
-  }
-
-  onComparisonCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
@@ -143,7 +265,13 @@ export class TestPlanGeneratorComponent {
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
-  public toggleEdit(hu: HUData, section: 'scope' | 'scenarios'): void {
+  // Método para cambiar de pestaña
+  public switchTab(tab: 'generate' | 'scenarios' | 'config'): void {
+    this.activeTab = tab;
+    this.cdr.detectChanges();
+  }
+
+  public toggleEdit(hu: HUData, section: 'scope' | 'scenarios' | 'testCases'): void {
     if (section === 'scope') {
       if (hu.originalInput.generationMode === 'text') {
         hu.editingScope = !hu.editingScope;
@@ -151,12 +279,61 @@ export class TestPlanGeneratorComponent {
       } else {
         alert("El alcance no es aplicable/editable para este modo.");
       }
+    } else if (section === 'testCases') {
+      hu.editingTestCases = !hu.editingTestCases;
+      if (hu.editingTestCases) {
+        // Asegurarnos de que el detail esté abierto al entrar en modo edición
+        hu.isScopeDetailsOpen = true;
+      }
+      if (!hu.editingTestCases) {
+        this.updatePreview();
+        this.saveCurrentState(); // Guardar cambios
+      }
     } else if (section === 'scenarios') {
        alert("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan.");
     }
-    if (!hu.editingScope) {
+    if (!hu.editingScope && !hu.editingTestCases) {
         this.updatePreview();
+        this.saveCurrentState(); // Guardar cambios
     }
+    this.cdr.detectChanges();
+  }
+
+  // Handlers para el componente TestCaseEditor en la pestaña de configuración
+  handleConfigRefineWithAI(hu: HUData, event: { technique: string; context: string }): void {
+    hu.refinementTechnique = event.technique;
+    hu.refinementContext = event.context;
+    this.refineDetailedTestCases(hu);
+  }
+
+  handleConfigTestCasesChanged(hu: HUData, testCases: UIDetailedTestCase[]): void {
+    hu.detailedTestCases = testCases;
+    this.updatePreview();
+    this.saveCurrentState();
+    this.cdr.detectChanges();
+  }
+
+  // Handlers para el componente TestCaseEditor en la pestaña de escenarios
+  toggleScenarioEdit(hu: HUData): void {
+    hu.editingScenariosTestCases = !hu.editingScenariosTestCases;
+    if (hu.editingScenariosTestCases) {
+      hu.isScenariosDetailsOpen = true;
+    }
+    if (!hu.editingScenariosTestCases) {
+      this.saveCurrentState();
+    }
+    this.cdr.detectChanges();
+  }
+
+  handleScenariosRefineWithAI(hu: HUData, event: { technique: string; context: string }): void {
+    hu.refinementTechnique = event.technique;
+    hu.refinementContext = event.context;
+    this.refineDetailedTestCases(hu);
+  }
+
+  handleScenariosTestCasesChanged(hu: HUData, testCases: UIDetailedTestCase[]): void {
+    hu.detailedTestCases = testCases;
+    this.saveCurrentState();
     this.cdr.detectChanges();
   }
 
@@ -175,7 +352,10 @@ export class TestPlanGeneratorComponent {
     const wasEditing = this[editingProp] as boolean;
     (this[editingProp] as any) = !wasEditing;
     if (this[editingProp]) { (this[detailsOpenProp] as any) = true; }
-    if (wasEditing && !(this[editingProp] as boolean)) { this.updatePreview(); }
+    if (wasEditing && !(this[editingProp] as boolean)) { 
+      this.updatePreview(); 
+      this.saveCurrentState(); // Guardar cambios
+    }
     this.cdr.detectChanges();
   }
 
@@ -186,13 +366,57 @@ export class TestPlanGeneratorComponent {
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
-        tap(scopeText => { hu.generatedScope = scopeText; hu.errorScope = null; }),
+        tap((scopeText: string) => { 
+          hu.generatedScope = scopeText; 
+          hu.errorScope = null;
+          this.saveCurrentState(); // Guardar cambios
+        }),
         catchError((error: any) => {
-          // ✨ CORRECCIÓN APLICADA AQUÍ ✨
           hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error regenerando alcance.';
           return of('');
         }),
         finalize(() => { hu.loadingScope = false; this.updatePreview(); this.cdr.detectChanges(); })
+      ).subscribe();
+  }
+
+  public refineDetailedTestCases(hu: HUData): void {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+      alert('No hay casos de prueba para refinar.');
+      return;
+    }
+    
+    hu.loadingScope = true;
+    hu.errorScope = null;
+    
+    const technique = hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
+    const userContext = 'Por favor, refina y mejora los siguientes casos de prueba manteniendosu estructura y agregando más detalles donde sea necesario.';
+    
+    this.geminiService.refineDetailedTestCases(
+      hu.originalInput,
+      hu.detailedTestCases,
+      technique,
+      userContext
+    )
+      .pipe(
+        tap((refinedCases: DetailedTestCase[]) => {
+          if (refinedCases && refinedCases.length > 0) {
+            hu.detailedTestCases = refinedCases;
+            hu.errorScope = null;
+            this.saveCurrentState();
+            alert('✨ Casos de prueba refinados exitosamente');
+          } else {
+            hu.errorScope = 'No se pudieron refinar los casos de prueba';
+          }
+        }),
+        catchError((error: any) => {
+          hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error refinando casos de prueba';
+          return of([]);
+        }),
+        finalize(() => {
+          hu.loadingScope = false;
+          this.updatePreview();
+          this.cdr.detectChanges();
+        })
       ).subscribe();
   }
 
@@ -218,14 +442,8 @@ export class TestPlanGeneratorComponent {
 
   public exportExecutionMatrixToHtml(hu: HUData): void {
     if (this.matrixExporter) {
-      const htmlContent = this.matrixExporter.generateMatrixHtml(hu);
-
-      if (htmlContent) {
-        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-        saveAs(blob, `MatrizEjecucion_${this.escapeFilename(hu.id)}.html`);
-      } else {
-        alert('No se pudo generar la matriz HTML. Verifique que haya casos de prueba válidos.');
-      }
+      // Ahora genera y descarga directamente el archivo Excel
+      this.matrixExporter.generateMatrixExcel(hu);
     } else {
       console.error('El componente exportador de matriz no está disponible.');
       alert('Error: El componente para exportar no se ha cargado correctamente.');
@@ -259,14 +477,16 @@ export class TestPlanGeneratorComponent {
     return summary.length > 1500 ? summary.substring(0, 1500) + "\n... (resumen truncado para no exceder límites de prompt)" : summary;
   }
 
-  public regenerateStaticSectionWithAI(section: 'outOfScope' | 'strategy' | 'limitations' | 'assumptions'): void {
+  public regenerateStaticSectionWithAI(section: 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team'): void {
     let sectionNameDisplay = '', currentContent = '', loadingFlag: keyof TestPlanGeneratorComponent | null = null, errorFlag: keyof TestPlanGeneratorComponent | null = null;
     let detailsOpenFlag: keyof TestPlanGeneratorComponent | null = null;
     switch (section) {
+      case 'repositoryLink': sectionNameDisplay = 'Repositorio Pruebas VSTS'; currentContent = this.repositoryLink; loadingFlag = 'loadingRepositoryLinkAI'; errorFlag = 'errorRepositoryLinkAI'; detailsOpenFlag = 'isRepositoryLinkDetailsOpen'; break;
       case 'outOfScope': sectionNameDisplay = 'Fuera del Alcance'; currentContent = this.outOfScopeContent; loadingFlag = 'loadingOutOfScopeAI'; errorFlag = 'errorOutOfScopeAI'; detailsOpenFlag = 'isOutOfScopeDetailsOpen'; break;
       case 'strategy': sectionNameDisplay = 'Estrategia'; currentContent = this.strategyContent; loadingFlag = 'loadingStrategyAI'; errorFlag = 'errorStrategyAI'; detailsOpenFlag = 'isStrategyDetailsOpen'; break;
       case 'limitations': sectionNameDisplay = 'Limitaciones'; currentContent = this.limitationsContent; loadingFlag = 'loadingLimitationsAI'; errorFlag = 'errorLimitationsAI'; detailsOpenFlag = 'isLimitationsDetailsOpen'; break;
       case 'assumptions': sectionNameDisplay = 'Supuestos'; currentContent = this.assumptionsContent; loadingFlag = 'loadingAssumptionsAI'; errorFlag = 'errorAssumptionsAI'; detailsOpenFlag = 'isAssumptionsDetailsOpen'; break;
+      case 'team': sectionNameDisplay = 'Equipo de Trabajo'; currentContent = this.teamContent; loadingFlag = 'loadingTeamAI'; errorFlag = 'errorTeamAI'; detailsOpenFlag = 'isTeamDetailsOpen'; break;
       default: return;
     }
     if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
@@ -275,11 +495,12 @@ export class TestPlanGeneratorComponent {
           finalize(() => {
               if (loadingFlag) (this[loadingFlag] as any) = false;
               this.updatePreview();
+              this.saveCurrentState(); // Guardar cambios
               this.cdr.detectChanges();
             })
       )
       .subscribe({
-        next: (aiResponse) => {
+        next: (aiResponse: string) => {
           if (aiResponse?.trim()) {
             const isPlaceholder =
                 (section === 'outOfScope' && currentContent.trim().toLowerCase().startsWith('no se probarán')) ||
@@ -287,16 +508,18 @@ export class TestPlanGeneratorComponent {
                 currentContent.trim() === '';
             const newContent = isPlaceholder ? aiResponse.trim() : currentContent + '\n\n' + aiResponse.trim();
             switch (section) {
+              case 'repositoryLink': this.repositoryLink = newContent; break;
               case 'outOfScope': this.outOfScopeContent = newContent; break;
               case 'strategy': this.strategyContent = newContent; break;
               case 'limitations': this.limitationsContent = newContent; break;
               case 'assumptions': this.assumptionsContent = newContent; break;
+              case 'team': this.teamContent = newContent; break;
             }
           } else if (errorFlag) {
               (this[errorFlag] as any) = 'La IA no generó contenido adicional o la respuesta fue vacía.';
           }
         },
-        error: (err) => {
+        error: (err: any) => {
             if (errorFlag) (this[errorFlag] as any) = err.message || `Error regenerando sección "${sectionNameDisplay}".`;
         }
       });

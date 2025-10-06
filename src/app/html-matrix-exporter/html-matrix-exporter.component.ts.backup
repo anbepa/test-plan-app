@@ -1,0 +1,810 @@
+// src/app/html-matrix-exporter/html-matrix-exporter.component.ts
+
+import { Component, Inject, PLATFORM_ID } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { HUData } from '../models/hu-data.model'; // Asegúrate que la ruta al modelo es correcta
+
+@Component({
+  selector: 'app-html-matrix-exporter',
+  standalone: true,
+  imports: [CommonModule],
+  template: '', // No se necesita template ni css propio
+})
+export class HtmlMatrixExporterComponent {
+  private isBrowser: boolean;
+
+  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+    this.isBrowser = isPlatformBrowser(this.platformId);
+  }
+
+  private escapeHtml(text: string | undefined | null): string {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  public generateMatrixHtml(hu: HUData): string {
+    if (!this.isBrowser || !hu || !hu.detailedTestCases) {
+      console.warn('No hay datos válidos para generar la matriz HTML.');
+      return '';
+    }
+
+    const scenariosForJson = hu.detailedTestCases.map((tc, idx) => ({
+      'ID Caso': `${hu.id}_CP${idx + 1}`,
+      'Escenario de Prueba': tc.title,
+      'Precondiciones': tc.preconditions,
+      'Pasos': tc.steps ? tc.steps.map(s => ({ accion: s.accion, resultado: '', evidencia: null })) : [],
+      'Resultado Esperado': tc.expectedResults
+    }));
+
+    const scenariosJsonString = JSON.stringify(scenariosForJson, null, 2)
+                                     .replace(/</g, '\\u003c');
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Plantilla de Ejecución - ${this.escapeHtml(hu.id)}</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; padding: 20px; color: #1f2937; min-height: 100vh; }
+    header { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #14b8a6 100%); color: white; padding: 2rem; text-align: center; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-bottom: 2rem; }
+    header h1 { margin: 0 0 0.5rem 0; font-size: 2rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    header p { margin: 0; font-size: 1rem; opacity: 0.95; }
+    .container { max-width: 1400px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); padding: 2.5rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #f8fafc 0%, #e5e7eb 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .btn { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; border: none; padding: 0.875rem 1.75rem; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); display: inline-flex; align-items: center; gap: 0.5rem; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4); }
+    .btn:active { transform: translateY(0); }
+    .btn-secondary { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3); }
+    .btn-secondary:hover { box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4); }
+    .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+    .btn-success:hover { box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4); }
+    .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4); }
+    .btn svg { width: 1.2em; height: 1.2em; }
+    .storage-info { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 1rem 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; border-left: 4px solid #f59e0b; font-size: 0.95rem; color: #78350f; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+    .storage-info strong { color: #92400e; }
+    section.escenario { background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%); border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-bottom: 2rem; padding: 2rem; border: 2px solid #e5e7eb; transition: all 0.3s; }
+    section.escenario:hover { box-shadow: 0 12px 32px rgba(0,0,0,0.12); border-color: #0ea5e9; }
+    .escenario-header { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+    .escenario-header h3 { margin: 0 0 0.5rem 0; font-size: 1.5rem; font-weight: 700; }
+    .escenario-header input { background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.3); color: white; padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem; width: 100%; font-weight: 600; }
+    .escenario-header input:focus { outline: none; background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.6); }
+    .escenario-header input::placeholder { color: rgba(255,255,255,0.7); }
+    .info-section { background: white; border-radius: 10px; padding: 1.2rem; margin-bottom: 1.2rem; border: 1px solid #e5e7eb; }
+    .info-section label { font-weight: 600; color: #374151; display: block; margin-bottom: 0.5rem; font-size: 0.95rem; }
+    .info-section textarea { width: 100%; border: 2px solid #e5e7eb; border-radius: 8px; padding: 0.75rem; font-size: 0.95rem; resize: vertical; min-height: 60px; font-family: inherit; transition: all 0.2s; }
+    .info-section textarea:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1); }
+    .pasos-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 1.5rem; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .pasos-table th { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; padding: 1rem; text-align: left; font-weight: 600; font-size: 0.95rem; }
+    .pasos-table th:first-child { border-radius: 12px 0 0 0; }
+    .pasos-table th:last-child { border-radius: 0 12px 0 0; }
+    .pasos-table td { padding: 1rem; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    .pasos-table tr:last-child td { border-bottom: none; }
+    .pasos-table tr:hover { background: #f8fafc; }
+    .pasos-table td:first-child { font-weight: 700; color: #0ea5e9; text-align: center; width: 60px; }
+    .pasos-table textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.5rem; font-size: 0.9rem; min-height: 50px; resize: vertical; font-family: inherit; }
+    .pasos-table textarea:focus { outline: none; border-color: #0ea5e9; }
+    .evidencia-cell { display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+    .evidencia-preview { max-width: 200px; max-height: 150px; border-radius: 8px; border: 2px solid #e5e7eb; object-fit: contain; background: #f9fafb; box-shadow: 0 2px 8px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; }
+    .evidencia-preview:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-color: #0ea5e9; }
+    .btn-small { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+    .tabs-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 0.5rem; border-bottom: 2px solid #e5e7eb; }
+    .tab-btn { background: #f3f4f6; color: #6b7280; border: none; padding: 0.75rem 1.5rem; border-radius: 10px 10px 0 0; cursor: pointer; font-weight: 600; transition: all 0.2s; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .tab-btn:hover { background: #e5e7eb; color: #374151; }
+    .tab-btn.active { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); color: white; border-bottom-color: #0284c7; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+    @media print { body { background: white; padding: 0; } .btn, .toolbar, .tabs-bar, header { display: none !important; } .container { box-shadow: none; padding: 0; } section.escenario { page-break-after: always; box-shadow: none; border: none; } }
+    @media (max-width: 768px) { .toolbar { flex-direction: column; } .btn { width: 100%; justify-content: center; } .pasos-table { font-size: 0.85rem; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎯 Plantilla de Ejecución de Escenarios</h1>
+    <p>Documenta la ejecución de tus casos de prueba con evidencias</p>
+  </header>
+
+  <div class="container">
+    <div class="storage-info">
+      <strong>💾 Guardado Automático:</strong> Tus cambios se guardan automáticamente en el navegador. Última actualización: <span id="last-save">Nunca</span>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn" id="btn-guardar" title="Guardar cambios manualmente">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
+        Guardar
+      </button>
+      <button class="btn btn-secondary" id="btn-cargar" title="Cargar datos guardados">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3.5A1.5 1.5 0 014.5 2h6.879a1.5 1.5 0 011.06.44l4.122 4.12A1.5 1.5 0 0117 7.622V16.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 16.5v-13z"/></svg>
+        Cargar Guardado
+      </button>
+      <button class="btn btn-success" id="btn-agregar-escenario" title="Agregar un nuevo escenario en blanco">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clip-rule="evenodd"/></svg>
+        Agregar Escenario
+      </button>
+      <button class="btn btn-secondary" id="btn-exportar-pdf" title="Exportar a PDF sin ID caso ni precondiciones">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z" clip-rule="evenodd"/></svg>
+        Exportar PDF
+      </button>
+      <button class="btn btn-danger" id="btn-limpiar" title="Limpiar todos los datos guardados">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd"/></svg>
+        Limpiar Todo
+      </button>
+    </div>
+
+    <div id="escenarios-container"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+  <script>
+    const STORAGE_KEY = 'test_execution_matrix_data';
+    let escenarios = ${scenariosJsonString};
+    let escenarioActivo = 0;
+
+    // === SISTEMA DE LOCALSTORAGE ===
+    function guardarEnStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(escenarios));
+        document.getElementById('last-save').textContent = new Date().toLocaleString('es-CO');
+        console.log('✅ Datos guardados exitosamente');
+      } catch (e) {
+        console.error('❌ Error guardando en localStorage:', e);
+        alert('Error al guardar: ' + e.message);
+      }
+    }
+
+    function cargarDeStorage() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+          escenarios = JSON.parse(data);
+          escenarioActivo = 0;
+          render();
+          alert('✅ Datos cargados exitosamente');
+        } else {
+          alert('ℹ️ No hay datos guardados previamente');
+        }
+      } catch (e) {
+        console.error('❌ Error cargando de localStorage:', e);
+        alert('Error al cargar: ' + e.message);
+      }
+    }
+
+    function limpiarStorage() {
+      if (confirm('⚠️ ¿Estás seguro de que deseas eliminar todos los datos guardados?\\n\\nEsta acción no se puede deshacer.')) {
+        localStorage.removeItem(STORAGE_KEY);
+        location.reload();
+      }
+    }
+
+    // Guardado automático cada 30 segundos
+    setInterval(guardarEnStorage, 30000);
+
+    // === FUNCIONES DE RENDERIZADO ===
+    function crearEscenarioHTML(esc, idx) {
+      const section = document.createElement('section');
+      section.className = 'escenario';
+      section.innerHTML = \`
+        <div class="escenario-header">
+          <h3>Escenario de Prueba</h3>
+          <input type="text" placeholder="Título del escenario..." value="\${esc['Escenario de Prueba'] || ''}" onchange="escenarios[\${idx}]['Escenario de Prueba'] = this.value; guardarEnStorage()">
+        </div>
+
+        <div class="info-section">
+          <label>📋 Precondiciones:</label>
+          <textarea placeholder="Describe las condiciones previas necesarias..." onchange="escenarios[\${idx}]['Precondiciones'] = this.value; guardarEnStorage()">\${esc['Precondiciones'] || ''}</textarea>
+        </div>
+
+        <div class="info-section">
+          <label>✅ Resultado Esperado Final:</label>
+          <textarea placeholder="Describe el resultado esperado al finalizar..." onchange="escenarios[\${idx}]['Resultado Esperado'] = this.value; guardarEnStorage()">\${esc['Resultado Esperado'] || ''}</textarea>
+        </div>
+
+        <h4 style="color: #0ea5e9; margin: 2rem 0 1rem 0; font-size: 1.3rem;">📝 Pasos de Ejecución</h4>
+        <table class="pasos-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Acción</th>
+              <th>Resultado Esperado</th>
+              <th>Evidencia</th>
+            </tr>
+          </thead>
+          <tbody id="pasos-tbody-\${idx}"></tbody>
+        </table>
+        <button class="btn btn-success btn-small" onclick="agregarPaso(\${idx})">+ Agregar Paso</button>
+        <button class="btn btn-danger btn-small" onclick="eliminarEscenario(\${idx})" style="margin-left: 1rem;">🗑️ Eliminar Escenario</button>
+      \`;
+      return section;
+    }
+
+    function renderPasos(escIdx) {
+      const tbody = document.getElementById(\`pasos-tbody-\${escIdx}\`);
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      
+      const pasos = escenarios[escIdx]['Pasos'] || [];
+      pasos.forEach((paso, pasoIdx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td>\${pasoIdx + 1}</td>
+          <td>
+            <textarea placeholder="Describe la acción a realizar..." onchange="escenarios[\${escIdx}]['Pasos'][\${pasoIdx}].accion = this.value; guardarEnStorage()">\${paso.accion || ''}</textarea>
+          </td>
+          <td>
+            <textarea placeholder="Resultado esperado de este paso..." onchange="escenarios[\${escIdx}]['Pasos'][\${pasoIdx}].resultado = this.value; guardarEnStorage()">\${paso.resultado || ''}</textarea>
+          </td>
+          <td class="evidencia-cell">
+            \${paso.evidencia ? \`<img src="\${paso.evidencia}" class="evidencia-preview" onclick="verImagenGrande('\${paso.evidencia}')" title="Click para ampliar">\` : '<em style="color: #9ca3af;">Sin evidencia</em>'}
+            <label class="btn btn-small btn-secondary">
+              📷 Subir
+              <input type="file" accept="image/*" onchange="subirEvidencia(\${escIdx}, \${pasoIdx}, this)" style="display:none;">
+            </label>
+            <button class="btn btn-small btn-secondary" onclick="pegarEvidencia(\${escIdx}, \${pasoIdx})">📋 Pegar</button>
+            \${paso.evidencia ? \`<button class="btn btn-small btn-danger" onclick="quitarEvidencia(\${escIdx}, \${pasoIdx})">❌</button>\` : ''}
+          </td>
+        \`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function render() {
+      const container = document.getElementById('escenarios-container');
+      container.innerHTML = '';
+      
+      if (escenarios.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 3rem;">No hay escenarios. Haz clic en "Agregar Escenario" para comenzar.</p>';
+        return;
+      }
+
+      const tabsBar = document.createElement('div');
+      tabsBar.className = 'tabs-bar';
+      escenarios.forEach((esc, idx) => {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'tab-btn' + (idx === escenarioActivo ? ' active' : '');
+        tabBtn.textContent = esc['Escenario de Prueba'] || \`Escenario \${idx + 1}\`;
+        tabBtn.onclick = () => { escenarioActivo = idx; render(); };
+        tabsBar.appendChild(tabBtn);
+      });
+      container.appendChild(tabsBar);
+
+      if (escenarios[escenarioActivo]) {
+        const escenarioEl = crearEscenarioHTML(escenarios[escenarioActivo], escenarioActivo);
+        container.appendChild(escenarioEl);
+        renderPasos(escenarioActivo);
+      }
+    }
+
+    // === FUNCIONES DE GESTIÓN ===
+    function agregarEscenario() {
+      escenarios.push({
+        'ID Caso': \`CP\${escenarios.length + 1}\`,
+        'Escenario de Prueba': '',
+        'Precondiciones': '',
+        'Pasos': [],
+        'Resultado Esperado': ''
+      });
+      escenarioActivo = escenarios.length - 1;
+      render();
+      guardarEnStorage();
+    }
+
+    function eliminarEscenario(idx) {
+      if (confirm('¿Eliminar este escenario?')) {
+        escenarios.splice(idx, 1);
+        if (escenarioActivo >= escenarios.length) escenarioActivo = Math.max(0, escenarios.length - 1);
+        render();
+        guardarEnStorage();
+      }
+    }
+
+    function agregarPaso(escIdx) {
+      if (!escenarios[escIdx]['Pasos']) escenarios[escIdx]['Pasos'] = [];
+      escenarios[escIdx]['Pasos'].push({ accion: '', resultado: '', evidencia: null });
+      renderPasos(escIdx);
+      guardarEnStorage();
+    }
+
+    function subirEvidencia(escIdx, pasoIdx, input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        escenarios[escIdx]['Pasos'][pasoIdx].evidencia = e.target.result;
+        renderPasos(escIdx);
+        guardarEnStorage();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function pegarEvidencia(escIdx, pasoIdx) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (item.types.includes('image/png')) {
+            const blob = await item.getType('image/png');
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              escenarios[escIdx]['Pasos'][pasoIdx].evidencia = e.target.result;
+              renderPasos(escIdx);
+              guardarEnStorage();
+            };
+            reader.readAsDataURL(blob);
+            return;
+          }
+        }
+        alert('No se encontró ninguna imagen en el portapapeles');
+      } catch (err) {
+        console.error('Error al pegar:', err);
+        alert('Error al pegar la imagen. Asegúrate de tener permisos en el navegador.');
+      }
+    }
+
+    function quitarEvidencia(escIdx, pasoIdx) {
+      escenarios[escIdx]['Pasos'][pasoIdx].evidencia = null;
+      renderPasos(escIdx);
+      guardarEnStorage();
+    }
+
+    function verImagenGrande(src) {
+      const win = window.open('', '_blank');
+      win.document.write(\`<img src="\${src}" style="max-width:100%; max-height:100vh;">\`);
+    }
+
+    // === EXPORTACIÓN A PDF ===
+    async function exportarPDF() {
+      if (escenarios.length === 0) {
+        alert('No hay escenarios para exportar');
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 40;
+
+      // Portada
+      doc.setFontSize(32).setTextColor(14, 165, 233);
+      doc.text('Reporte de Ejecución', pageWidth / 2, 200, { align: 'center' });
+      doc.setFontSize(16).setTextColor(100);
+      doc.text('Casos de Prueba', pageWidth / 2, 240, { align: 'center' });
+      doc.text(\`Generado: \${new Date().toLocaleString('es-CO')}\`, pageWidth / 2, 280, { align: 'center' });
+
+      for (let i = 0; i < escenarios.length; i++) {
+        const esc = escenarios[i];
+        doc.addPage();
+
+        let y = margin;
+        
+        // Título del escenario
+        doc.setFontSize(18).setTextColor(14, 165, 233);
+        doc.text(esc['Escenario de Prueba'] || \`Escenario \${i + 1}\`, margin, y);
+        y += 40;
+
+        // Tabla de pasos con evidencias
+        const pasos = esc['Pasos'] || [];
+        const tableData = [];
+
+        for (let j = 0; j < pasos.length; j++) {
+          const paso = pasos[j];
+          tableData.push([
+            (j + 1).toString(),
+            paso.accion || '',
+            paso.resultado || ''
+          ]);
+        }
+
+        doc.autoTable({
+          startY: y,
+          head: [['#', 'Acción', 'Resultado Esperado']],
+          body: tableData,
+          theme: 'grid',
+          styles: { 
+            fontSize: 10, 
+            cellPadding: 8,
+            lineWidth: 0.5,
+            lineColor: [200, 200, 200]
+          },
+          headStyles: { 
+            fillColor: [14, 165, 233],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 11
+          },
+          columnStyles: {
+            0: { cellWidth: 40, halign: 'center' },
+            1: { cellWidth: 230 },
+            2: { cellWidth: 230 }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        y = doc.lastAutoTable.finalY + 30;
+
+        // Evidencias tabuladas por paso
+        if (pasos.some(p => p.evidencia)) {
+          if (y > pageHeight - 100) {
+            doc.addPage();
+            y = margin;
+          }
+
+          doc.setFontSize(14).setTextColor(14, 165, 233);
+          doc.text('Evidencias:', margin, y);
+          y += 30;
+
+          for (let j = 0; j < pasos.length; j++) {
+            const paso = pasos[j];
+            if (paso.evidencia) {
+              if (y > pageHeight - 250) {
+                doc.addPage();
+                y = margin;
+              }
+
+              try {
+                const img = await loadImage(paso.evidencia);
+                const maxWidth = pageWidth - margin * 2;
+                const maxHeight = 200;
+                const dim = calculateAspectRatioFit(img.width, img.height, maxWidth, maxHeight);
+
+                // Número de paso
+                doc.setFontSize(12).setTextColor(100);
+                doc.text(\`Paso \${j + 1}:\`, margin, y);
+                y += 20;
+
+                // Imagen
+                doc.addImage(paso.evidencia, 'PNG', margin, y, dim.width, dim.height);
+                y += dim.height + 30;
+              } catch (err) {
+                console.error(\`Error cargando evidencia del paso \${j + 1}:\`, err);
+              }
+            }
+          }
+        }
+      }
+
+      // Numeración de páginas
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(9).setTextColor(150);
+        doc.text(\`Página \${i} de \${pageCount}\`, pageWidth - margin, pageHeight - 20, { align: 'right' });
+      }
+
+      doc.save(\`reporte_ejecucion_\${new Date().getTime()}.pdf\`);
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = (err) => reject(err);
+        img.src = src;
+      });
+    }
+
+    function calculateAspectRatioFit(srcWidth, srcHeight, maxWidth, maxHeight) {
+      const ratio = Math.min(maxWidth / srcWidth, maxHeight / srcHeight);
+      return { width: srcWidth * ratio, height: srcHeight * ratio };
+    }
+
+    // === INICIALIZACIÓN ===
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btn-guardar').addEventListener('click', () => {
+        guardarEnStorage();
+        alert('✅ Datos guardados');
+      });
+      document.getElementById('btn-cargar').addEventListener('click', cargarDeStorage);
+      document.getElementById('btn-limpiar').addEventListener('click', limpiarStorage);
+      document.getElementById('btn-agregar-escenario').addEventListener('click', agregarEscenario);
+      document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
+
+      if (escenarios.length === 0) agregarEscenario();
+      else render();
+      
+      // Intentar cargar datos guardados al inicio
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          const savedData = JSON.parse(saved);
+          if (savedData.length > 0) {
+            if (confirm('📦 Se encontraron datos guardados. ¿Deseas cargarlos?')) {
+              escenarios = savedData;
+              render();
+            }
+          }
+        } catch (e) {
+          console.error('Error al cargar datos iniciales:', e);
+        }
+      }
+    });
+  </script>
+</body>
+</html>`;
+  }
+
+  <script>
+    let escenarios = ${scenariosJsonString};
+    let escenarioActivo = 0;
+
+    function renderEvidencias(idx) {
+      const grid = document.getElementById(\`evid-grid-\${idx}\`);
+      if (!grid) return;
+      grid.innerHTML = '';
+      (escenarios[idx].evidencias || []).forEach((ev, i) => {
+        const div = document.createElement('div');
+        div.className = 'evidencia-block';
+        const nombreArchivo = ev.nombre || \`evidencia_\${i + 1}.png\`;
+        div.innerHTML = \`<div class="evidencia-label"><input type='text' value='\${nombreArchivo}' class="evidencia-nombre" onchange="escenarios[\${idx}].evidencias[\${i}].nombre = this.value" title='Nombre archivo' /><button class='btn-evidencia-eliminar' onclick="eliminarEvidencia(\${idx}, \${i})" title='Eliminar'>&times;</button></div><img src="\${ev.data}" alt="Evidencia" />\`;
+        grid.appendChild(div);
+      });
+    }
+
+    function subirEvidencias(idx, input) {
+      for (const file of input.files) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          escenarios[idx].evidencias.push({ tipo: 'img', nombre: file.name, data: e.target.result });
+          renderEvidencias(idx);
+        };
+        reader.readAsDataURL(file);
+      }
+      input.value = '';
+    }
+
+    async function pegarEvidencia(idx) {
+        try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+                if (item.types.includes('image/png')) {
+                    const blob = await item.getType('image/png');
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        escenarios[idx].evidencias.push({ tipo: 'img', nombre: 'pegado.png', data: e.target.result });
+                        renderEvidencias(idx);
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        } catch (err) { console.error('Error al pegar:', err); alert('No se pudo pegar la imagen.'); }
+    }
+    
+    function eliminarEvidencia(escenarioIdx, evidenciaIdx) {
+        if (escenarios[escenarioIdx] && escenarios[escenarioIdx].evidencias) {
+            escenarios[escenarioIdx].evidencias.splice(evidenciaIdx, 1);
+            renderEvidencias(escenarioIdx);
+        }
+    }
+
+    function limpiarEvidencias(idx) { escenarios[idx].evidencias = []; renderEvidencias(idx); }
+    
+    function crearEscenarioHTML(esc, idx) {
+      const section = document.createElement('section');
+      section.className = 'escenario';
+      section.id = \`escenario-\${idx}\`;
+      section.innerHTML = \`
+        <table class="escenario-table">
+          <thead><tr><th>ID Caso</th><th>Escenario de Prueba</th><th>Precondiciones</th><th>Paso a Paso</th><th>Resultado Esperado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            <tr id="caso-row-\${idx}">
+              <td contenteditable="true" onblur="escenarios[\${idx}]['ID Caso'] = this.innerText">\${esc['ID Caso'] || ''}</td>
+              <td contenteditable="true" onblur="escenarios[\${idx}]['Escenario de Prueba'] = this.innerText">\${esc['Escenario de Prueba'] || ''}</td>
+              <td contenteditable="true" onblur="escenarios[\${idx}]['Precondiciones'] = this.innerText">\${esc['Precondiciones'] || ''}</td>
+              <td contenteditable="true" onblur="escenarios[\${idx}]['Paso a Paso'] = this.innerText" style="white-space: pre-wrap;">\${esc['Paso a Paso'] || ''}</td>
+              <td contenteditable="true" onblur="escenarios[\${idx}]['Resultado Esperado'] = this.innerText">\${esc['Resultado Esperado'] || ''}</td>
+              <td class="actions-cell">
+                <button class="btn btn-primary" onclick="ejecutarConTerminal(\${idx})">Ejecutar con Terminal</button>
+                <button class="btn btn-danger" onclick="eliminarEscenario(\${idx})">Eliminar</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="evidencias"><div class="evidencias-titulo">Evidencias</div><div style="margin-bottom:10px; display:flex; flex-wrap:wrap; gap:0.7em;"><label class="btn">Subir Evidencias <input type="file" accept="image/*" multiple onchange="subirEvidencias(\${idx}, this)" style="display:none;"></label><button class="btn" onclick="pegarEvidencia(\${idx})">Pegar Evidencia</button><button class="btn" onclick="limpiarEvidencias(\${idx})">Limpiar Evidencias</button></div><div class="evidencias-grid" id="evid-grid-\${idx}"></div></div>\`;
+      return section;
+    }
+    
+    function eliminarEscenario(idx) {
+        if (escenarios.length > 1) {
+            escenarios.splice(idx, 1);
+            if (escenarioActivo >= escenarios.length) { escenarioActivo = escenarios.length - 1; }
+            render();
+        } else { alert('No se puede eliminar el último escenario.'); }
+    }
+
+    function render() {
+      const container = document.getElementById('escenarios-container');
+      container.innerHTML = '';
+      const tabsBar = document.createElement('div');
+      tabsBar.className = 'escenarios-tabs-bar';
+      escenarios.forEach((esc, idx) => {
+        const tabBtn = document.createElement('button');
+        tabBtn.className = 'escenario-tab-btn' + (idx === escenarioActivo ? ' active' : '');
+        tabBtn.textContent = esc['ID Caso'] || \`Escenario \${idx + 1}\`;
+        tabBtn.onclick = () => { escenarioActivo = idx; render(); };
+        tabsBar.appendChild(tabBtn);
+      });
+      container.appendChild(tabsBar);
+      if (escenarios[escenarioActivo]) {
+        const escenarioEl = crearEscenarioHTML(escenarios[escenarioActivo], escenarioActivo);
+        container.appendChild(escenarioEl);
+        renderEvidencias(escenarioActivo);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('btn-agregar-escenario').addEventListener('click', agregarEscenario);
+      
+      // === CAMBIO CLAVE PARA SOLUCIONAR EL ERROR ===
+      document.getElementById('btn-descargar-pdf').addEventListener('click', () => generarReportePDF(escenarios));
+      
+      document.getElementById('btn-cargar-csv').addEventListener('click', () => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.csv';
+          input.onchange = (e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              Papa.parse(file, { header: true, skipEmptyLines: true, complete: (results) => {
+                  escenarios = results.data.map(row => ({ ...row, evidencias: [] }));
+                  escenarioActivo = 0;
+                  render();
+              }});
+          };
+          input.click();
+      });
+      if(escenarios.length === 0) agregarEscenario(); else render();
+    });
+
+    function agregarEscenario() {
+      escenarios.push({ 'ID Caso': \`CP\${escenarios.length + 1}\`, 'Escenario de Prueba': '', 'Precondiciones': '', 'Paso a Paso': '', 'Resultado Esperado': '', evidencias: [] });
+      escenarioActivo = escenarios.length - 1;
+      render();
+    }
+    
+    function ejecutarConTerminal(idx) {
+      const casoRow = document.getElementById(\`caso-row-\${idx}\`);
+      if (!casoRow) {
+        alert(\`Error: No se encontró la fila del caso con índice \${idx}\`);
+        return;
+      }
+      const idCaso = casoRow.cells[0].innerText.trim();
+      const pasoAPaso = casoRow.cells[3].innerText.trim();
+      if (!pasoAPaso) { alert('La columna "Paso a Paso" está vacía.'); return; }
+      const comando = \`Ejecutando Caso: \${idCaso}\\n\\nPasos:\\n\${pasoAPaso}\`;
+      const encodedCommand = encodeURIComponent(comando);
+      window.location.href = \`miappterminal://\${encodedCommand}\`;
+    }
+
+    // === CAMBIO CLAVE PARA SOLUCIONAR EL ERROR ===
+    async function generarReportePDF(escenariosAGenerar) {
+        if (!escenariosAGenerar || escenariosAGenerar.length === 0) {
+            alert("No hay escenarios para generar el PDF.");
+            return;
+        }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 40;
+
+        doc.setFontSize(28).text('Reporte de Matriz de Casos de Prueba', pageWidth / 2, 180, { align: 'center' });
+        doc.setFontSize(16).text('Fecha de generación: ' + new Date().toLocaleString('es-CO'), pageWidth / 2, 220, { align: 'center' });
+        doc.setFontSize(12).text('Área: QA / Testing', pageWidth / 2, 260, { align: 'center' });
+        doc.setFontSize(12).text('Versión: 1.0', pageWidth / 2, 280, { align: 'center' });
+
+        const scenariosWithPageNumbers = [];
+        
+        for (const esc of escenariosAGenerar) {
+            doc.addPage();
+            const pageNum = doc.internal.getNumberOfPages();
+            scenariosWithPageNumbers.push({ name: esc['ID Caso'] || 'Escenario sin ID', page: pageNum });
+
+            doc.autoTable({
+                startY: margin,
+                head: [['ID Caso', 'Escenario de Prueba', 'Precondiciones', 'Paso a Paso', 'Resultado Esperado']],
+                body: [[ esc['ID Caso'], esc['Escenario de Prueba'], esc['Precondiciones'], esc['Paso a Paso'], esc['Resultado Esperado'] ]],
+                theme: 'grid',
+                styles: { halign: 'left', font: 'helvetica', cellPadding: 8, fontSize: 9, lineWidth: 0.5, lineColor: [200, 200, 200] },
+                headStyles: { fillColor: [63, 81, 181], textColor: 255, fontStyle: 'bold' },
+                columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 120 }, 2: { cellWidth: 120 }, 3: { cellWidth: 'auto' }, 4: { cellWidth: 120 } },
+                margin: { left: margin, right: margin }
+            });
+
+            if (esc.evidencias && esc.evidencias.length > 0) {
+                let y = doc.lastAutoTable.finalY + 30;
+                if (y > pageHeight - 120) { doc.addPage(); y = margin; }
+                doc.setFontSize(14).setTextColor(40).text('Evidencias:', margin, y);
+                y += 25;
+
+                const containerWidth = (pageWidth - margin * 2.5) / 2;
+                const containerHeight = 200;
+                const gap = 20;
+
+                for (let i = 0; i < esc.evidencias.length; i += 2) {
+                    const ev1 = esc.evidencias[i];
+                    const ev2 = i + 1 < esc.evidencias.length ? esc.evidencias[i+1] : null;
+                    const img1 = ev1 ? await loadImage(ev1.data) : null;
+                    const img2 = ev2 ? await loadImage(ev2.data) : null;
+                    
+                    if (y + containerHeight > pageHeight - margin) { doc.addPage(); y = margin; }
+                    
+                    if(img1) {
+                      const x1 = margin;
+                      doc.setFillColor(240, 240, 240);
+                      doc.roundedRect(x1, y, containerWidth, containerHeight, 5, 5, 'F');
+                      const dim1 = calculateAspectRatioFit(img1.width, img1.height, containerWidth - 20, containerHeight - 40);
+                      doc.setFontSize(8).setTextColor(80).text(ev1.nombre, x1 + 10, y + 20);
+                      doc.addImage(img1, 'PNG', x1 + (containerWidth - dim1.width) / 2, y + 35, dim1.width, dim1.height);
+                    }
+                    
+                    if(img2) {
+                      const x2 = margin + containerWidth + gap;
+                      doc.setFillColor(240, 240, 240);
+                      doc.roundedRect(x2, y, containerWidth, containerHeight, 5, 5, 'F');
+                      const dim2 = calculateAspectRatioFit(img2.width, img2.height, containerWidth - 20, containerHeight - 40);
+                      doc.setFontSize(8).setTextColor(80).text(ev2.nombre, x2 + 10, y + 20);
+                      doc.addImage(img2, 'PNG', x2 + (containerWidth - dim2.width) / 2, y + 35, dim2.width, dim2.height);
+                    }
+                    y += containerHeight + gap;
+                }
+            }
+        }
+        
+        doc.insertPage(2);
+        doc.setPage(2);
+        doc.setFontSize(22).text('Índice', margin, 80);
+        let yIndex = 120;
+        doc.setFontSize(12);
+        scenariosWithPageNumbers.forEach((item, i) => {
+            if (yIndex > pageHeight - margin) { doc.addPage(); yIndex = margin; }
+            const dots = '.'.repeat(Math.max(0, 110 - item.name.length));
+            doc.text(\`\${i + 1}. \${item.name} \${dots} \${item.page}\`, margin, yIndex);
+            yIndex += 20;
+        });
+
+        doc.addPage();
+        doc.setFontSize(18).text('Firmas y Validaciones', margin, 80);
+        doc.setFontSize(12);
+        doc.text('Responsable QA:', margin, 180);
+        doc.setDrawColor(150).line(margin + 100, 180, pageWidth - margin, 180);
+        doc.text('Revisor:', margin, 260);
+        doc.line(margin + 100, 260, pageWidth - margin, 260);
+        doc.text('Aprobador:', margin, 340);
+        doc.line(margin + 100, 340, pageWidth - margin, 340);
+
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(9).setTextColor(150).text(\`Página \${i} de \${pageCount}\`, pageWidth - margin, pageHeight - 20, { align: 'right' });
+        }
+
+        doc.save(\`reporte_casos_prueba.pdf\`);
+    }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = (err) => reject(err);
+            img.src = src;
+        });
+    }
+
+    function calculateAspectRatioFit(srcWidth, srcHeight, maxWidth, maxHeight) {
+        const ratio = Math.min(maxWidth / srcWidth, maxHeight / srcHeight);
+        return { width: srcWidth * ratio, height: srcHeight * ratio };
+    }
+  </script>
+</body>
+</html>`;
+  }
+}

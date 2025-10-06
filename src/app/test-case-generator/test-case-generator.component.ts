@@ -7,6 +7,7 @@ import { GeminiService } from '../services/gemini.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
+import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 
 interface DraggableImage {
   file: File;
@@ -29,7 +30,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -499,6 +500,20 @@ export class TestCaseGeneratorComponent implements OnInit {
   cancelRefinementEditing(): void {
     this.componentState = 'previewingGenerated';
     this.cdr.detectChanges();
+  }
+
+  // Handlers para el nuevo componente TestCaseEditor
+  handleRefineWithAI(event: { technique: string; context: string }): void {
+    this.refinementTechnique = event.technique;
+    this.userRefinementContext = event.context;
+    this.refineHuCasesWithAI();
+  }
+
+  handleTestCasesChanged(testCases: EditorUIDetailedTestCase[]): void {
+    if (this.generatedHUData) {
+      this.generatedHUData.detailedTestCases = testCases;
+      this.cdr.detectChanges();
+    }
   }
 
   formatSimpleScenarioTitles(titles: string[]): string {

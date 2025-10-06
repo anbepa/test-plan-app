@@ -38,7 +38,7 @@
             "allowedCommonJsDependencies": [
               "file-saver",
               "html-to-docx",
-              "node-fetch" // AÑADIDO: para el proxy
+              "node-fetch"
             ],
             "externalDependencies": [
               "url",
@@ -62,8 +62,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "20.5kb",
-                  "maximumError": "25kb"
+                  "maximumWarning": "26kb",
+                  "maximumError": "30kb"
                 }
               ],
               "outputHashing": "all",

@@ -130,11 +130,12 @@
     </div>
 
     <div class="generated-test-cases-editor">
-        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState !== 'submitting'">Alcance y Casos de Prueba</h3>
+        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba</h3>
         <h3 *ngIf="generatedHUData.originalInput.generationMode === 'image' && componentState !== 'submitting'">Casos de Prueba</h3>
+        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState === 'editingForRefinement'">Casos de Prueba</h3>
         <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
         
-        <div *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState !== 'submitting'" class="scope-display-section">
+        <div *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState === 'previewingGenerated'" class="scope-display-section">
           <strong>Alcance Generado:</strong> <span *ngIf="loadingScope" class="spinner-inline"></span>
           <pre [class.loading-text]="loadingScope">{{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o no aplica.') }}</pre>
         </div>
@@ -165,114 +166,19 @@
              </div>
         </ng-container>
 
-        <!-- MODO EDICIÓN PARA REFINAMIENTO (ACCORDION) -->
+        <!-- MODO EDICIÓN PARA REFINAMIENTO (NUEVO COMPONENTE) -->
         <ng-container *ngIf="componentState === 'editingForRefinement'">
-            <div class="refinement-controls">
-                <h4>Refinamiento de Casos de Prueba <span *ngIf="loadingScenarios" class="spinner-inline"></span></h4>
-                <div class="form-group">
-                    <label for="refinementTechnique">Técnica ISTQB para Re-Análisis/Refinamiento:<span class="required-indicator">*</span></label>
-                    <select id="refinementTechnique" name="refinementTechnique" [(ngModel)]="refinementTechnique" required class="form-control" [disabled]="loadingScenarios">
-                      <option value="" disabled>Selecciona una técnica</option>
-                      <option value="Equivalent Partitioning">Partición Equivalente</option>
-                      <option value="Boundary Value Analysis">Análisis de Valor Límite</option>
-                      <option value="Decision Table Testing">Tabla de Decisión</option>
-                      <option value="State Transition Testing">Pruebas de Transición de Estados</option>
-                    </select>
-                     <div *ngIf="!refinementTechnique" class="validation-error small-error-text">Selecciona una técnica.</div>
-                </div>
-                <div class="form-group">
-                    <label for="userRefinementContext">Contexto adicional para Re-Análisis/Refinamiento (opcional):</label>
-                    <textarea id="userRefinementContext" name="userRefinementContext" class="form-control" rows="3" 
-                              [(ngModel)]="userRefinementContext" 
-                              placeholder="Ej: Considerar que el campo X solo acepta números. Enfocarse en escenarios de error para el login."
-                              [disabled]="loadingScenarios" (input)="autoGrowTextarea($event.target)"></textarea>
-                </div>
-                 <div class="actions refinement-actions">
-                    <button type="button" (click)="refineHuCasesWithAI()" class="button-generate" [disabled]="loadingScenarios || !refinementTechnique">
-                        <span *ngIf="loadingScenarios" class="spinner-inline"></span>
-                        {{ loadingScenarios ? 'Procesando...' : 'Procesar Refinamiento con IA' }}
-                    </button>
-                     <button type="button" (click)="cancelRefinementEditing()" class="button-secondary" [disabled]="loadingScenarios">
-                        Volver a Previsualización
-                    </button>
-                </div>
-            </div>
-
-            <div *ngFor="let tc of generatedHUData.detailedTestCases; let tcIndex = index" 
-                 class="test-case-edit-card"
-                 [attr.id]="'test-case-card-' + (generatedHUData.id || 'temp') + '-' + tcIndex">
-                 <h4 (click)="toggleTestCaseExpansion(tc, tcIndex)" class="accordion-header">
-                    <span class="accordion-indicator">
-                        <svg *ngIf="tc.isExpanded" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
-                        <svg *ngIf="!tc.isExpanded" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="1em" height="1em" aria-hidden="true"><path fill-rule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
-                    </span>
-                    <span class="test-case-number-prefix">Caso de Prueba #{{ tcIndex + 1 }}:</span>
-                    <input type="text" class="form-control inline-edit" [(ngModel)]="tc.title" placeholder="Título del Caso de Prueba" [disabled]="loadingScenarios" (click)="$event.stopPropagation()">
-                </h4>
-
-                <div *ngIf="tc.isExpanded" class="accordion-content">
-                    <div class="form-group">
-                        <label [attr.for]="'tcPreconditions-gen-'+(generatedHUData.id || 'temp')+'-'+tcIndex">Precondiciones:</label>
-                        <textarea [attr.id]="'tcPreconditions-gen-'+(generatedHUData.id || 'temp')+'-'+tcIndex" class="form-control" [(ngModel)]="tc.preconditions" rows="2" [disabled]="loadingScenarios" (input)="autoGrowTextarea($event.target)"></textarea>
-                    </div>
-
-                    <h5>Pasos del Caso de Prueba:</h5>
-                    <div class="detailed-test-cases-table-container"
-                         (dragover)="onTestCaseStepDragOver($event, tc.steps && tc.steps.length > 0 ? tc.steps[0] : undefined, tc)" 
-                         (dragleave)="onTestCaseStepDragLeave($event)">
-                        <table class="detailed-test-cases-table test-case-steps-table">
-                        <thead>
-                            <tr>
-                            <th style="width: 10%;">Paso N°</th>
-                            <th style="width: 75%;">Acción</th>
-                            <th style="width: 15%; text-align: center;">Eliminar</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr *ngFor="let step of tc.steps; let stepIndex = index"
-                                [attr.draggable]="!loadingScenarios"
-                                (dragstart)="!loadingScenarios && onTestCaseStepDragStart($event, step, tc)"
-                                (drop)="!loadingScenarios && onTestCaseStepDrop($event, step, tc)"
-                                (dragend)="!loadingScenarios && onTestCaseStepDragEnd($event)"
-                                (dragover)="!loadingScenarios && onTestCaseStepDragOver($event, step, tc)"
-                                (dragleave)="!loadingScenarios && onTestCaseStepDragLeave($event)"
-                                [class.drag-over-element]="dragOverTestCaseStepId === getTestCaseStepDragId(tc, step)">
-                            <td>{{ step.numero_paso }}</td>
-                            <td>
-                                <textarea class="form-control table-input" [(ngModel)]="step.accion" rows="1" placeholder="Descripción del paso"
-                                          (input)="autoGrowTextarea($event.target)" [disabled]="loadingScenarios"></textarea>
-                            </td>
-                            <td class="action-cell">
-                                <button (click)="!loadingScenarios && deleteTestCaseStep(tc, stepIndex)" class="button-cancel button-small-icon delete-step-button" title="Eliminar Paso" [disabled]="loadingScenarios">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75H4.5a.75.75 0 000 1.5h11a.75.75 0 000-1.5H14A2.75 2.75 0 0011.25 1H8.75zM10 4.75a.75.75 0 01.75.75V15.5a.75.75 0 01-1.5 0V5.5A.75.75 0 0110 4.75zM7.515 7.31l-.53 7.422a.75.75 0 101.49.107l.53-7.422a.75.75 0 00-1.49-.107zM12.485 7.31a.75.75 0 00-1.49.107l.53 7.422a.75.75 0 101.49-.107l-.53-7.422z" clip-rule="evenodd" /></svg>
-                                </button>
-                            </td>
-                            </tr>
-                            <tr *ngIf="(!tc.steps || tc.steps.length === 0) && !loadingScenarios">
-                                <td colspan="3" style="text-align: center; font-style: italic;">No hay pasos definidos. Haz clic en el botón '+' para añadir uno.</td>
-                            </tr>
-                             <tr *ngIf="loadingScenarios && (!tc.steps || tc.steps.length === 0)">
-                                <td colspan="3" style="text-align: center; font-style: italic;"><span class="spinner-inline"></span>Cargando pasos...</td>
-                            </tr>
-                        </tbody>
-                        </table>
-                    </div>
-                    <div class="add-step-action-container">
-                        <button type="button" (click)="!loadingScenarios && addTestCaseStep(tc)" class="button-secondary button-small-icon add-step-button" title="Añadir Paso" [disabled]="loadingScenarios">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
-                            Añadir Paso
-                        </button>
-                    </div>
-
-                    <div class="form-group">
-                        <label [attr.for]="'tcExpectedResults-gen-'+(generatedHUData.id || 'temp')+'-'+tcIndex">Resultados Esperados:</label>
-                        <textarea [attr.id]="'tcExpectedResults-gen-'+(generatedHUData.id || 'temp')+'-'+tcIndex" class="form-control" [(ngModel)]="tc.expectedResults" rows="3" [disabled]="loadingScenarios" (input)="autoGrowTextarea($event.target)"></textarea>
-                    </div>
-                </div> <!-- END OF accordion-content -->
-            </div>
-            <div *ngIf="loadingScenarios && (!generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0)" class="loading-message-full-editor">
-                <span class="spinner"></span> Generando/Refinando Casos de Prueba...
-            </div>
+            <app-test-case-editor
+                [testCases]="generatedHUData.detailedTestCases"
+                [huId]="generatedHUData.id || 'temp'"
+                [isLoading]="loadingScenarios"
+                [(refinementTechnique)]="refinementTechnique"
+                [(userRefinementContext)]="userRefinementContext"
+                [showRefinementControls]="true"
+                (refineWithAI)="handleRefineWithAI($event)"
+                (testCasesChanged)="handleTestCasesChanged($event)"
+                (cancel)="cancelRefinementEditing()">
+            </app-test-case-editor>
         </ng-container>
 
         <!-- Acciones Finales -->
@@ -280,12 +186,6 @@
             <button type="button" (click)="exportExecutionMatrixLocal()" class="button-secondary" 
                     [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title.startsWith('Error')">
                 Exportar Matriz (.csv)
-            </button>
-            <button type="button" class="button-secondary" (click)="downloadTemplate('mac')">
-                Plantilla ejecutar Mac
-            </button>
-            <button type="button" class="button-secondary" (click)="downloadTemplate('windows')">
-                Plantilla ejecutar Windows
             </button>
             <button type="button" (click)="startRefinementMode()" class="button-edit" 
                     *ngIf="componentState === 'previewingGenerated'"
