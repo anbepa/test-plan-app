@@ -1,14 +1,12 @@
 {
   "version": 2,
   "name": "test-plan-app",
-  "installCommand": "echo 'Skip install in dev'",
-  "devCommand": "echo 'API functions only'",
   "builds": [
     {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist/test-plan-app/browser"
+        "distDir": "dist/test-plan-app"
       }
     }
   ],
@@ -21,8 +19,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "env": {
-    "NODE_VERSION": "18.x"
-  }
+  ]
 }
