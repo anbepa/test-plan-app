@@ -30,26 +30,8 @@
               "src/styles.css"
             ],
             "scripts": [],
-            "server": "src/main.server.ts",
-            "prerender": true,
-            "ssr": {
-              "entry": "src/server.ts"
-            },
             "allowedCommonJsDependencies": [
-              "file-saver",
-              "html-to-docx",
-              "node-fetch"
-            ],
-            "externalDependencies": [
-              "url",
-              "crypto",
-              "fs",
-              "path",
-              "util",
-              "stream",
-              "http",
-              "https",
-              "zlib"
+              "file-saver"
             ]
           },
           "configurations": {
@@ -62,8 +44,8 @@
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "26kb",
-                  "maximumError": "30kb"
+                  "maximumWarning": "45kb",
+                  "maximumError": "50kb"
                 }
               ],
               "outputHashing": "all",
@@ -87,6 +69,9 @@
         },
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          },
           "configurations": {
             "production": {
               "buildTarget": "test-plan-app:build:production"

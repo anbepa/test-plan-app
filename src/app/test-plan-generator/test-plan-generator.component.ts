@@ -1,15 +1,14 @@
-// src/app/test-plan-generator/test-plan-generator.component.ts
 import { Component, Inject, PLATFORM_ID, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
 import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
+import { DatabaseService, DbUserStoryWithRelations } from '../services/database.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
-import { TestCaseEditorComponent, UIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -23,22 +22,28 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
     FormsModule,
     TestCaseGeneratorComponent,
     HtmlMatrixExporterComponent,
-    TestCaseEditorComponent,
   ],
 })
 export class TestPlanGeneratorComponent {
-  // Referencia al componente hijo que genera la matriz HTML
   @ViewChild('matrixExporter') matrixExporter!: HtmlMatrixExporterComponent;
 
-  // --- Propiedades del Componente ---
   currentGenerationMode: GenerationMode | null = null;
   showTestCaseGenerator: boolean = false;
   isModeSelected: boolean = false;
   formError: string | null = null;
+  
+  savedUserStoryIds: string[] = [];
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
   
-  // Sistema de pestañas para navegación
+  notifications: Array<{id: number, message: string, type: 'success' | 'error' | 'warning' | 'info'}> = [];
+  private notificationIdCounter = 0;
+  
+  showConfirmModal: boolean = false;
+  confirmModalTitle: string = '';
+  confirmModalMessage: string = '';
+  private confirmModalCallback: (() => void) | null = null;
+  
   activeTab: 'generate' | 'scenarios' | 'config' = 'generate';
   
   testPlanTitle: string = '';
@@ -73,25 +78,66 @@ export class TestPlanGeneratorComponent {
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
   
-  // Estado de carga desde localStorage
   showLoadDataPrompt: boolean = false;
   loadingFromStorage: boolean = false;
+  
+  showSuccessModal: boolean = false;
 
   constructor(
     private geminiService: GeminiService,
     public localStorageService: LocalStorageService,
+    private databaseService: DatabaseService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    // Verificar si hay datos guardados al iniciar
     this.checkForStoredData();
+    // Ir directamente al formulario
+    this.selectInitialMode('text');
   }
 
-  /**
-   * Verifica si hay datos guardados en localStorage y pregunta al usuario si desea cargarlos
-   */
+  showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration: number = 4000): void {
+    const notification = {
+      id: this.notificationIdCounter++,
+      message,
+      type
+    };
+    
+    this.notifications.push(notification);
+    
+    if (duration > 0) {
+      setTimeout(() => {
+        this.removeNotification(notification.id);
+      }, duration);
+    }
+  }
+
+  removeNotification(id: number): void {
+    this.notifications = this.notifications.filter(n => n.id !== id);
+  }
+
+  showConfirm(title: string, message: string, callback: () => void): void {
+    this.confirmModalTitle = title;
+    this.confirmModalMessage = message;
+    this.confirmModalCallback = callback;
+    this.showConfirmModal = true;
+  }
+
+  confirmAction(): void {
+    if (this.confirmModalCallback) {
+      this.confirmModalCallback();
+    }
+    this.closeConfirmModal();
+  }
+
+  closeConfirmModal(): void {
+    this.showConfirmModal = false;
+    this.confirmModalTitle = '';
+    this.confirmModalMessage = '';
+    this.confirmModalCallback = null;
+  }
+
   private checkForStoredData(): void {
     if (this.localStorageService.hasStoredState()) {
       const info = this.localStorageService.getStoredStateInfo();
@@ -102,9 +148,6 @@ export class TestPlanGeneratorComponent {
     }
   }
 
-  /**
-   * Carga los datos guardados desde localStorage
-   */
   public loadStoredData(): void {
     this.loadingFromStorage = true;
     const state = this.localStorageService.loadTestPlanState();
@@ -120,9 +163,9 @@ export class TestPlanGeneratorComponent {
       this.teamContent = state.teamContent || this.teamContent;
       
       this.updatePreview();
-      alert(`✅ Datos cargados exitosamente!\n${state.huList.length} Historia(s) de Usuario recuperadas.`);
+      this.showNotification(`Datos cargados exitosamente! ${state.huList.length} Historia(s) de Usuario recuperadas.`, 'success', 3000);
     } else {
-      alert('❌ No se pudieron cargar los datos guardados.');
+      this.showNotification('No se pudieron cargar los datos guardados', 'error', 4000);
     }
     
     this.showLoadDataPrompt = false;
@@ -130,17 +173,11 @@ export class TestPlanGeneratorComponent {
     this.cdr.detectChanges();
   }
 
-  /**
-   * Descarta los datos guardados y comienza desde cero
-   */
   public dismissStoredData(): void {
     this.showLoadDataPrompt = false;
     this.cdr.detectChanges();
   }
 
-  /**
-   * Guarda el estado actual en localStorage
-   */
   private saveCurrentState(): void {
     const state: TestPlanState = {
       testPlanTitle: this.testPlanTitle,
@@ -157,22 +194,20 @@ export class TestPlanGeneratorComponent {
     this.localStorageService.autoSaveTestPlanState(state);
   }
 
-  /**
-   * Limpia todos los datos
-   */
   public clearAllData(): void {
-    if (confirm('⚠️ ¿Estás seguro de que deseas eliminar todos los datos? Esta acción no se puede deshacer.')) {
-      this.huList = [];
-      this.testPlanTitle = '';
-      this.localStorageService.clearTestPlanState();
-      this.updatePreview();
-      alert('🗑️ Todos los datos han sido eliminados.');
-    }
+    this.showConfirm(
+      'Confirmar eliminación',
+      '¿Estás seguro de que deseas eliminar todos los datos? Esta acción no se puede deshacer.',
+      () => {
+        this.huList = [];
+        this.testPlanTitle = '';
+        this.localStorageService.clearTestPlanState();
+        this.updatePreview();
+        this.showNotification('🗑️ Todos los datos han sido eliminados', 'success', 3000);
+      }
+    );
   }
 
-  /**
-   * Exporta el estado actual como archivo JSON
-   */
   public exportBackup(): void {
     const state: TestPlanState = {
       testPlanTitle: this.testPlanTitle,
@@ -204,18 +239,91 @@ export class TestPlanGeneratorComponent {
     if (state) {
       this.loadStoredData();
     } else {
-      alert('❌ Error al importar el archivo. Verifica que sea un archivo de backup válido.');
+      this.showNotification('Error al importar el archivo. Verifica que sea un archivo de backup válido', 'error', 4000);
     }
 
-    // Limpiar el input
     input.value = '';
   }
 
-  /**
-   * Obtiene información sobre el almacenamiento
-   */
   public getStorageInfo(): string {
     return this.localStorageService.getStorageSizeFormatted();
+  }
+
+  private async saveTestPlanToDatabase(): Promise<string | null> {
+    try {
+      const testPlanData = {
+        id: crypto.randomUUID(),
+        title: this.testPlanTitle || 'Plan de Pruebas',
+        repository_link: this.repositoryLink || '',
+        out_of_scope: this.outOfScopeContent || '',
+        strategy: this.strategyContent || '',
+        limitations: this.limitationsContent || '',
+        assumptions: this.assumptionsContent || '',
+        team: this.teamContent || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Convertir HUData[] a DbUserStoryWithRelations[]
+      const dbUserStories: DbUserStoryWithRelations[] = this.huList.map((hu, index) => ({
+        id: crypto.randomUUID(),
+        custom_id: hu.id, // AÑADIDO: Guardar el ID personalizado de la HU
+        title: hu.title || `Historia ${index + 1}`,
+        sprint: hu.sprint || '',
+        description: hu.originalInput.description || '',
+        acceptance_criteria: hu.originalInput.acceptanceCriteria || '',
+        generation_mode: hu.originalInput.generationMode,
+        generated_scope: hu.generatedScope || '',
+        generated_test_case_titles: hu.generatedTestCaseTitles || '',
+        refinement_technique: hu.refinementTechnique || undefined,
+        refinement_context: hu.refinementContext || undefined,
+        test_plan_id: testPlanData.id, // Asignar el ID del plan
+        position: index + 1, // AÑADIDO: Asignar position basada en índice
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        
+        // Convertir casos de prueba
+        test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
+          id: crypto.randomUUID(),
+          user_story_id: '', // Se asignará en el servicio
+          title: tc.title || `Caso ${tcIndex + 1}`,
+          preconditions: tc.preconditions || '',
+          expected_results: tc.expectedResults || '',
+          position: tcIndex + 1,  // CORREGIDO: Asignar position basada en índice
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          
+          // Convertir pasos
+          test_case_steps: (tc.steps || []).map((step, stepIndex) => ({
+            id: crypto.randomUUID(),
+            test_case_id: '', // Se asignará en el servicio
+            step_number: step.numero_paso || stepIndex + 1,
+            action: step.accion || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }))
+        })),
+        
+        images: [] // Por ahora sin imágenes
+      }));
+
+      console.log('💾 Datos del plan a guardar:', {
+        titulo: testPlanData.title,
+        planId: testPlanData.id,
+        cantidadHUs: dbUserStories.length,
+        totalCasos: dbUserStories.reduce((sum, us) => sum + (us.test_cases?.length || 0), 0)
+      });
+
+      // Guardar en la base de datos usando saveCompleteTestPlan
+      const planId = await this.databaseService.saveCompleteTestPlan(testPlanData, dbUserStories);
+      
+      console.log('[DB] Plan guardado con ID:', planId);
+      return planId;
+      
+    } catch (error) {
+      console.error('[DB] Error en saveTestPlanToDatabase:', error);
+      throw error;
+    }
   }
 
   private escapeHtmlForExport(u: string | undefined | null): string {
@@ -230,7 +338,7 @@ export class TestPlanGeneratorComponent {
   }
 
   selectInitialMode(mode: GenerationMode): void {
-    if (mode !== 'text' && mode !== 'image') {
+    if (mode !== 'text') {
       return;
     }
     this.currentGenerationMode = mode;
@@ -247,12 +355,91 @@ export class TestPlanGeneratorComponent {
     this.cdr.detectChanges();
   }
 
-  onHuGeneratedFromChild(huData: HUData) {
+  async onHuGeneratedFromChild(huData: HUData) {
+    console.log('[PARENT] Recibiendo HU para añadir al plan:', huData.title);
+    console.log('[PARENT] HUs en lista antes de agregar:', this.huList.length);
+    
     this.huList.push(huData);
+    
+    console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
+    console.log('[PARENT] Iniciando guardado en base de datos...');
+    
+    this.updatePreview();
+    this.saveCurrentState();
+    
+    if (this.databaseService.isReady()) {
+      try {
+        console.log('💾 Guardando plan completo en BD con', this.huList.length, 'HU(s)');
+        
+        const testPlanId = await this.saveTestPlanToDatabase();
+        
+        if (testPlanId) {
+          console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
+        } else {
+          throw new Error('No se recibió ID del plan guardado');
+        }
+      } catch (error) {
+      console.error('[DB] Error guardando en BD:', error);
+      
+      let errorMessage = 'Error desconocido';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const supabaseError = error as any;
+        errorMessage = supabaseError.message || supabaseError.error_description || supabaseError.hint || JSON.stringify(error);
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }        this.showNotification(
+          `Plan creado localmente pero no se pudo guardar en BD: ${errorMessage}`,
+          'warning',
+          6000
+        );
+      }
+    } else {
+      console.warn('[DB] Base de datos no configurada, solo guardado local');
+      this.showNotification(
+        `Plan de pruebas creado localmente con ${this.huList.length} Historia${this.huList.length > 1 ? 's' : ''} de Usuario`,
+        'success',
+        3000
+      );
+    }
+    
+    this.resetActiveGeneratorsAndGoToSelection();
+    // Cambiar automáticamente a la pestaña de escenarios
+    this.activeTab = 'scenarios';
+  }
+
+  /**
+   * Maneja el evento cuando una HU es guardada individualmente desde el hijo
+   * Recibe el HUData completo y lo agrega a la lista local
+   * TODO: Implementar guardado en base de datos cuando esté lista la migración
+   */
+  onHuSavedFromChild(huData: HUData) {
+    // Agregar la HU a la lista local
+    this.huList.push(huData);
+    
+    // Incrementar contador de HUs guardadas individualmente
+    this.savedUserStoryIds.push(huData.id);
+    
+    // Actualizar título y preview
     this.updateTestPlanTitle();
     this.updatePreview();
     this.saveCurrentState(); // Guardar en localStorage
-    this.resetActiveGeneratorsAndGoToSelection();
+    
+    // Mostrar notificación de éxito
+    this.showNotification(
+      `Historia de Usuario guardada (${this.savedUserStoryIds.length} HU${this.savedUserStoryIds.length > 1 ? 's' : ''} guardada${this.savedUserStoryIds.length > 1 ? 's' : ''})`,
+      'success',
+      3000
+    );
+    
+    // Mostrar modal de éxito brevemente
+    this.showSuccessModal = true;
+    setTimeout(() => {
+      this.showSuccessModal = false;
+      this.cdr.detectChanges();
+    }, 2000);
+    
     // Cambiar automáticamente a la pestaña de escenarios
     this.activeTab = 'scenarios';
   }
@@ -277,7 +464,7 @@ export class TestPlanGeneratorComponent {
         hu.editingScope = !hu.editingScope;
         if (hu.editingScope) hu.isScopeDetailsOpen = true;
       } else {
-        alert("El alcance no es aplicable/editable para este modo.");
+        this.showNotification("El alcance no es aplicable/editable para este modo", 'warning', 3000);
       }
     } else if (section === 'testCases') {
       hu.editingTestCases = !hu.editingTestCases;
@@ -290,7 +477,7 @@ export class TestPlanGeneratorComponent {
         this.saveCurrentState(); // Guardar cambios
       }
     } else if (section === 'scenarios') {
-       alert("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan.");
+       this.showNotification("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan", 'info', 4000);
     }
     if (!hu.editingScope && !hu.editingTestCases) {
         this.updatePreview();
@@ -306,7 +493,7 @@ export class TestPlanGeneratorComponent {
     this.refineDetailedTestCases(hu);
   }
 
-  handleConfigTestCasesChanged(hu: HUData, testCases: UIDetailedTestCase[]): void {
+  handleConfigTestCasesChanged(hu: HUData, testCases: DetailedTestCase[]): void {
     hu.detailedTestCases = testCases;
     this.updatePreview();
     this.saveCurrentState();
@@ -331,7 +518,7 @@ export class TestPlanGeneratorComponent {
     this.refineDetailedTestCases(hu);
   }
 
-  handleScenariosTestCasesChanged(hu: HUData, testCases: UIDetailedTestCase[]): void {
+  handleScenariosTestCasesChanged(hu: HUData, testCases: DetailedTestCase[]): void {
     hu.detailedTestCases = testCases;
     this.saveCurrentState();
     this.cdr.detectChanges();
@@ -361,7 +548,8 @@ export class TestPlanGeneratorComponent {
 
   public regenerateScope(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
-      alert('Alcance solo se regenera para HUs con descripción/criterios.'); return;
+      this.showNotification('Alcance solo se regenera para HUs con descripción/criterios', 'warning', 3000);
+      return;
     }
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
@@ -381,7 +569,7 @@ export class TestPlanGeneratorComponent {
 
   public refineDetailedTestCases(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
-      alert('No hay casos de prueba para refinar.');
+      this.showNotification('No hay casos de prueba para refinar', 'warning', 3000);
       return;
     }
     
@@ -403,7 +591,7 @@ export class TestPlanGeneratorComponent {
             hu.detailedTestCases = refinedCases;
             hu.errorScope = null;
             this.saveCurrentState();
-            alert('✨ Casos de prueba refinados exitosamente');
+            this.showNotification('✨ Casos de prueba refinados exitosamente', 'success', 3000);
           } else {
             hu.errorScope = 'No se pudieron refinar los casos de prueba';
           }
@@ -422,7 +610,7 @@ export class TestPlanGeneratorComponent {
 
   public exportExecutionMatrix(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
-      alert('No hay casos de prueba válidos para exportar o los casos generados indican un error.');
+      this.showNotification('No hay casos de prueba válidos para exportar o los casos generados indican un error', 'warning', 4000);
       return;
     }
     const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
@@ -446,7 +634,7 @@ export class TestPlanGeneratorComponent {
       this.matrixExporter.generateMatrixExcel(hu);
     } else {
       console.error('El componente exportador de matriz no está disponible.');
-      alert('Error: El componente para exportar no se ha cargado correctamente.');
+      this.showNotification('Error: El componente para exportar no se ha cargado correctamente', 'error', 4000);
     }
   }
 
@@ -469,8 +657,6 @@ export class TestPlanGeneratorComponent {
       let huDesc = `ID ${hu.id} (${hu.title}): Modo "${hu.originalInput.generationMode}".`;
       if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
         huDesc += ` Descripción: ${hu.originalInput.description.substring(0, 70)}...`;
-      } else if (hu.originalInput.generationMode === 'image') {
-        huDesc += ` (Desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es), título: ${hu.title}, técnica: ${hu.originalInput.selectedTechnique})`;
       }
       return `- ${huDesc}`;
     }).join('\n');
@@ -559,11 +745,11 @@ export class TestPlanGeneratorComponent {
         });
     }
     fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\nESTRATEGIA:\n\n${this.strategyContent}\n\n`;
-    const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image');
+    const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text');
     if(scenarioHUs.length > 0){
         fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
         scenarioHUs.forEach(hu => {
-            fullPlanContent += `ID ${hu.id}: ${hu.title} ${hu.originalInput.generationMode === 'image' ? `(Desde ${hu.originalInput.imagesBase64?.length || 0} imgs - Técnica: ${hu.originalInput.selectedTechnique})` : `(Técnica: ${hu.originalInput.selectedTechnique})`}\n${hu.generatedTestCaseTitles || 'Casos no generados o error.'}\n\n`;
+            fullPlanContent += `ID ${hu.id}: ${hu.title} (Técnica: ${hu.originalInput.selectedTechnique})\n${hu.generatedTestCaseTitles || 'Casos no generados o error.'}\n\n`;
         });
     }
     fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\nSUPUESTOS:\n\n${this.assumptionsContent}\n\nEquipo de Trabajo:\n\n${this.teamContent}\n\n`;
@@ -588,11 +774,11 @@ export class TestPlanGeneratorComponent {
     }
     fullPlanHtmlContent += `<p><span class="preview-section-title">FUERA DEL ALCANCE:</span><br>\n${this.escapeHtmlForExport(this.outOfScopeContent)}</p>\n\n`;
     fullPlanHtmlContent += `<p><span class="preview-section-title">ESTRATEGIA:</span><br>\n${this.escapeHtmlForExport(this.strategyContent)}</p>\n\n`;
-    const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text' || hu.originalInput.generationMode === 'image');
+    const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text');
     if(scenarioHUs.length > 0){
         fullPlanHtmlContent += `<p><span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span></p>\n`;
         scenarioHUs.forEach((hu) => {
-          fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)} ${hu.originalInput.generationMode === 'image' ? `(Generada desde ${hu.originalInput.imagesBase64?.length || 0} imagen(es) - Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})` : `(Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})`}</span><br>\n`;
+          fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)} (Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})</span><br>\n`;
           fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
         });
     }
@@ -606,79 +792,26 @@ export class TestPlanGeneratorComponent {
     const planText = this.generatePlanContentString();
     if (isPlatformBrowser(this.platformId) && navigator.clipboard) {
       navigator.clipboard.writeText(planText)
-        .then(() => alert('Plan de pruebas copiado al portapapeles!'))
+        .then(() => this.showNotification('Plan de pruebas copiado al portapapeles!', 'success', 3000))
         .catch(err => {
             console.error('Error al copiar al portapapeles:', err);
-            alert('Error al copiar: ' + err);
+            this.showNotification('Error al copiar: ' + err, 'error', 4000);
         });
     } else {
-      alert('La API del portapapeles no es compatible con este navegador.');
+      this.showNotification('La API del portapapeles no es compatible con este navegador', 'error', 4000);
     }
   }
 
   public downloadWord(): void {
     const htmlContent = this.generatePlanContentHtmlString();
     if (htmlContent.includes('Plan de pruebas aún no generado')) {
-      alert('No hay contenido del plan para descargar.');
+      this.showNotification('No hay contenido del plan para descargar', 'warning', 3000);
       return;
     }
-    try {
-      import('html-to-docx').then(module => {
-        const htmlToDocx = module.default;
-        if (typeof htmlToDocx === 'function') {
-          const headerHtml = `<p style="font-size:10pt;color:#888888;text-align:right;">Plan de Pruebas - ${this.testPlanTitle || 'General'}</p>`;
-
-          const fullHtmlForDocx = `
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <meta charset="UTF-8">
-                <style>
-                  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
-                  p { margin-bottom: 10px; line-height: 1.5; }
-                  h1, .preview-section-title { font-size: 16pt; color: #2F5496; margin-bottom: 5px; font-weight: bold; }
-                  h2, .preview-hu-title { font-size: 14pt; color: #365F91; margin-bottom: 5px; font-weight: bold; }
-                  h3 { font-size: 12pt; color: #4F81BD; margin-bottom: 5px; font-weight: bold; }
-                  ul, ol { margin-top: 0; margin-bottom: 10px; padding-left: 30px; }
-                  li { margin-bottom: 5px; }
-                  table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
-                  th, td { border: 1px solid #BFBFBF; padding: 5px; text-align: left; font-size:10pt; }
-                  th { background-color: #F2F2F2; font-weight: bold; }
-                  .bug-report-image { max-width: 90%; height: auto; display: block; margin: 5px 0; border: 1px solid #ccc; }
-                  pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: inherit; }
-                </style>
-              </head>
-              <body>
-                ${htmlContent}
-              </body>
-            </html>`;
-
-          htmlToDocx(fullHtmlForDocx, headerHtml, {
-            table: { row: { cantSplit: true } },
-            footer: true,
-            pageNumber: true,
-          }).then((fileBuffer: BlobPart) => {
-            saveAs(new Blob([fileBuffer]), `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}.docx`);
-          }).catch((error: any) => {
-            console.error('Error al generar DOCX con html-to-docx:', error);
-            alert('Error al generar el archivo DOCX. Ver consola para detalles. Se descargará como HTML.');
-            this.downloadHtmlFallback(htmlContent);
-          });
-        } else {
-          console.error('htmlToDocx no es una función. La importación pudo haber fallado o el módulo no es compatible.');
-          alert('No se pudo generar el archivo DOCX. La librería no cargó correctamente. Se descargará como HTML.');
-           this.downloadHtmlFallback(htmlContent);
-        }
-      }).catch(error => {
-        console.error('Error al importar html-to-docx:', error);
-        alert('No se pudo cargar la librería para generar DOCX. Se descargará como HTML.');
-        this.downloadHtmlFallback(htmlContent);
-      });
-    } catch (e) {
-      console.error('Excepción general al intentar generar DOCX:', e);
-      alert('Error al intentar generar DOCX. Se descargará como HTML.');
-      this.downloadHtmlFallback(htmlContent);
-    }
+    // Funcionalidad DOCX deshabilitada temporalmente debido a incompatibilidades con el navegador
+    // La librería html-to-docx requiere módulos de Node.js que no están disponibles en el navegador
+    this.showNotification('La descarga en formato DOCX no está disponible. Se descargará como HTML', 'info', 4000);
+    this.downloadHtmlFallback(htmlContent);
   }
 
   private downloadHtmlFallback(htmlContent: string): void {

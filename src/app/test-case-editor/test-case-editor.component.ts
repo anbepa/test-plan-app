@@ -1,5 +1,4 @@
-// src/app/test-case-editor/test-case-editor.component.ts
-import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
@@ -15,7 +14,7 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   standalone: true,
   imports: [CommonModule, FormsModule]
 })
-export class TestCaseEditorComponent implements OnInit {
+export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() testCases: UIDetailedTestCase[] = [];
   @Input() huId: string = '';
   @Input() isLoading: boolean = false;
@@ -29,26 +28,36 @@ export class TestCaseEditorComponent implements OnInit {
   @Output() refinementTechniqueChange = new EventEmitter<string>();
   @Output() userRefinementContextChange = new EventEmitter<string>();
 
-  // Drag and drop state
   draggedStep: TestCaseStep | null = null;
   draggedStepTestCase: UIDetailedTestCase | null = null;
   dragOverStepId: string = '';
 
+  private debounceTimer: any = null;
+  private readonly DEBOUNCE_TIME = 1000;
+
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit() {
-    // Inicializar el primer caso como expandido si no hay ninguno expandido
     if (this.testCases && this.testCases.length > 0 && !this.testCases.some(tc => tc.isExpanded)) {
       this.testCases[0].isExpanded = true;
     }
   }
 
   toggleTestCaseExpansion(tc: UIDetailedTestCase, tcIndex: number): void {
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    
     tc.isExpanded = !tc.isExpanded;
-    this.cdr.detectChanges();
-    if (tc.isExpanded) {
-      setTimeout(() => this.autoGrowTextareasInCard(tcIndex), 0);
-    }
+    
+    this.cdr.markForCheck();
+    
+    setTimeout(() => {
+      window.scrollTo(scrollX, scrollY);
+      
+      if (tc.isExpanded) {
+        this.autoGrowTextareasInCard(tcIndex);
+      }
+    }, 0);
   }
 
   onRefineWithAI(): void {
@@ -56,17 +65,6 @@ export class TestCaseEditorComponent implements OnInit {
       alert('Por favor, selecciona una técnica para el refinamiento.');
       return;
     }
-    
-    // Validar pasos antes de refinar
-    this.testCases.forEach(tc => {
-      if (tc.steps) {
-        tc.steps.forEach(step => {
-          if (!step.accion || step.accion.trim() === '') {
-            step.accion = "Acción no definida por el usuario.";
-          }
-        });
-      }
-    });
     
     this.refineWithAI.emit({
       technique: this.refinementTechnique,
@@ -80,23 +78,83 @@ export class TestCaseEditorComponent implements OnInit {
 
   addTestCaseStep(testCase: UIDetailedTestCase): void {
     if (!testCase.steps) testCase.steps = [];
+    const newStepIndex = testCase.steps.length;
+    
     testCase.steps.push({ 
-      numero_paso: testCase.steps.length + 1, 
+      numero_paso: newStepIndex + 1, 
       accion: '' 
     });
+    
+    testCase.isExpanded = true;
+    
+    const tcIndex = this.testCases.indexOf(testCase);
+    
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    const activeElement = document.activeElement as HTMLElement;
+    
     this.emitChanges();
-    this.cdr.detectChanges();
+    
+    this.cdr.markForCheck();
+    
+    setTimeout(() => {
+      window.scrollTo(scrollX, scrollY);
+      
+      const stepInput = document.querySelector(`textarea[name="stepAction-tc${tcIndex}-step${newStepIndex}"]`) as HTMLTextAreaElement;
+      if (stepInput) {
+        stepInput.focus();
+      }
+    }, 0);
   }
 
   deleteTestCaseStep(testCase: UIDetailedTestCase, stepIndex: number): void {
     if (!testCase.steps) return;
     testCase.steps.splice(stepIndex, 1);
-    // Renumerar pasos
     testCase.steps.forEach((step, idx) => {
       step.numero_paso = idx + 1;
     });
+    
+    testCase.isExpanded = true;
+    
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    
+    this.emitChanges();
+    
+    this.cdr.markForCheck();
+    
+    setTimeout(() => {
+      window.scrollTo(scrollX, scrollY);
+    }, 0);
+  }
+
+  addStep(testCase: UIDetailedTestCase): void {
+    this.addTestCaseStep(testCase);
+  }
+
+  deleteStep(testCase: UIDetailedTestCase, stepIndex: number): void {
+    this.deleteTestCaseStep(testCase, stepIndex);
+  }
+
+  addTestCase(): void {
+    const newTestCase: UIDetailedTestCase = {
+      title: 'Nuevo Caso de Prueba',
+      preconditions: '',
+      steps: [],
+      expectedResults: '',
+      isExpanded: true
+    };
+    this.testCases.push(newTestCase);
     this.emitChanges();
     this.cdr.detectChanges();
+  }
+
+  deleteTestCase(testCaseIndex: number): void {
+    if (confirm('¿Estás seguro de eliminar este caso de prueba? Esta acción no se puede deshacer.')) {
+      this.testCases.splice(testCaseIndex, 1);
+      this.emitChanges();
+      this.cdr.detectChanges();
+    }
   }
 
   // Drag and drop functionality
@@ -124,7 +182,6 @@ export class TestCaseEditorComponent implements OnInit {
       return;
     }
 
-    // Solo permitir reordenar dentro del mismo caso de prueba
     if (this.draggedStepTestCase !== targetTestCase) {
       this.dragOverStepId = '';
       return;
@@ -134,11 +191,9 @@ export class TestCaseEditorComponent implements OnInit {
     const targetIndex = targetTestCase.steps.indexOf(targetStep);
 
     if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
-      // Reordenar
       targetTestCase.steps.splice(draggedIndex, 1);
       targetTestCase.steps.splice(targetIndex, 0, this.draggedStep);
       
-      // Renumerar
       targetTestCase.steps.forEach((step, idx) => {
         step.numero_paso = idx + 1;
       });
@@ -191,8 +246,25 @@ export class TestCaseEditorComponent implements OnInit {
     this.testCasesChanged.emit(this.testCases);
   }
 
+  emitChangesWithDebounce(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(() => {
+      this.emitChanges();
+    }, this.DEBOUNCE_TIME);
+  }
+
   onTestCaseChange(): void {
-    this.emitChanges();
+    this.emitChangesWithDebounce();
+  }
+
+  ngOnDestroy(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.emitChanges();
+    }
   }
 
   onRefinementTechniqueChange(): void {

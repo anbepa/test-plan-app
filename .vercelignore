@@ -1,0 +1,6 @@
+# Vercel Dev: No detectar package.json como app a ejecutar
+# Solo servir funciones serverless en /api
+.vercel
+node_modules
+dist
+.angular

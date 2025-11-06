@@ -42,10 +42,14 @@ testem.log
 Thumbs.db
 .vercel
 
+# Playwright MCP screenshots
+.playwright-mcp/
 
 # Local environment variables
 # Should not be committed to Git
 .env
+.env.local
+.env*.local
 .env.*
 !.env.example
 !.env.sample

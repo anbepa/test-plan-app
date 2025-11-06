@@ -1,59 +1,104 @@
-# TestPlanApp
+# Test Plan Manager
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 19.2.11.
+Aplicación Angular para generación de planes de prueba usando IA (Google Gemini).
 
-## Development server
+## Características
 
-To start a local development server, run:
+- Generación automática de casos de prueba
+- Técnicas de diseño de pruebas (Clases de Equivalencia, Valores Límite, etc.)
+- Exportación a PDF y HTML
+- Editor de casos de prueba
+- Matriz de trazabilidad
 
-```bash
-ng serve
-```
+## Tecnologías
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+- Angular 19
+- Google Gemini AI (gemini-2.0-flash)
+- Supabase (base de datos)
+- Vercel (despliegue)
 
-## Code scaffolding
+## Desarrollo Local
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+### Requisitos
+- Node.js 18.x o superior
+- npm
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+### Instalación
 
 ```bash
-ng build
+npm install
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+### Configuración
 
-## Running unit tests
+Crea un archivo `.env.local` con:
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+```
+GEMINI_API_KEY=tu_api_key_aqui
+SUPABASE_URL=tu_supabase_url
+SUPABASE_KEY=tu_supabase_anon_key
+SUPABASE_SERVICE_KEY=tu_supabase_service_key
+ENCRYPTION_KEY=tu_encryption_key
+```
+
+### Ejecutar en desarrollo
 
 ```bash
-ng test
+npm start
 ```
 
-## Running end-to-end tests
+Esto inicia:
+- Servidor API local en `http://localhost:3000`
+- Angular en `http://localhost:4200`
 
-For end-to-end (e2e) testing, run:
+### Build de producción
 
 ```bash
-ng e2e
+npm run build
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+## Despliegue en Vercel
 
-## Additional Resources
+### Variables de entorno requeridas
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Configura en Vercel Dashboard:
+
+- `GEMINI_API_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `ENCRYPTION_KEY`
+
+### Despliegue automático
+
+Push a la rama `main` despliega automáticamente en Vercel.
+
+### Despliegue manual
+
+```bash
+vercel --prod
+```
+
+## Estructura del Proyecto
+
+```
+src/
+├── app/
+│   ├── test-plan-generator/     # Generador principal
+│   ├── test-case-generator/     # Generador de casos
+│   ├── test-case-editor/        # Editor de casos
+│   ├── test-plan-viewer/        # Visor de planes
+│   ├── html-matrix-exporter/    # Exportador de matrices
+│   ├── services/                # Servicios (Gemini, DB, etc.)
+│   └── models/                  # Modelos de datos
+├── environments/                # Configuración por entorno
+└── types/                       # Definiciones TypeScript
+
+api/
+└── gemini-proxy.ts              # Proxy serverless para Vercel
+
+local-api-server.js              # Proxy local para desarrollo
+```
+
+## Licencia
+
+MIT

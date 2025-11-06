@@ -14,7 +14,7 @@ export interface DetailedTestCase {
 }
 
 // --- Tipo para el Modo de Generación ---
-export type GenerationMode = 'text' | 'image';
+export type GenerationMode = 'text';
 
 // --- Interfaz Principal HUData ---
 export interface HUData {
@@ -23,9 +23,8 @@ export interface HUData {
   sprint: string;
   originalInput: {
     generationMode: GenerationMode;
-    description?: string;
-    acceptanceCriteria?: string;
-    imagesBase64?: string[];
+    description: string;
+    acceptanceCriteria: string;
     selectedTechnique?: string;
   };
   generatedScope?: string;

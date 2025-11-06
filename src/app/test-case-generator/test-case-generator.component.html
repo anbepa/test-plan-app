@@ -1,16 +1,17 @@
 <!-- src/app/test-case-generator/test-case-generator.component.html -->
 <div class="form-section" aria-labelledby="test-case-form-section-title">
   <div class="form-header-actions">
-    <h2 id="test-case-form-section-title">
-      <span *ngIf="componentState === 'initialForm'">Datos de Entrada para: </span>
-      <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos para: </span>
-      <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos para: </span>
-      <span *ngIf="componentState === 'submitting'">Enviando: </span>
-      <span *ngIf="currentGenerationMode === 'text'">HU por Descripción</span>
-      <span *ngIf="currentGenerationMode === 'image'">Casos por Imágenes</span>
-      <span *ngIf="componentState !== 'initialForm' && generatedHUData"> ({{ generatedHUData.title }})</span>
-    </h2>
-    <button type="button" (click)="handleCancelGeneration()" class="button-secondary button-small" [disabled]="componentState === 'submitting'">
+    <div class="header-titles">
+      <h2 id="test-case-form-section-title" class="main-title">
+        <span *ngIf="componentState === 'initialForm'">Datos de Entrada</span>
+        <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
+        <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
+        <span *ngIf="componentState === 'submitting'">Enviando</span>
+        <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-title-inline"> ({{ generatedHUData.title }})</span>
+      </h2>
+      <p class="subtitle">HU por Descripción</p>
+    </div>
+    <button type="button" (click)="handleCancelGeneration()" class="button-cancel-action" [disabled]="componentState === 'submitting'">
       {{ componentState === 'initialForm' ? 'Cancelar y Cambiar Método' : 'Cancelar Generación Actual' }}
     </button>
   </div>
@@ -50,43 +51,7 @@
         </div>
       </ng-container>
 
-      <!-- Campos para modo 'image' -->
-      <ng-container *ngIf="currentGenerationMode === 'image'">
-        <div class="form-group">
-          <label for="tcCurrentHuIdImage">ID (Generado desde Título):</label>
-          <input id="tcCurrentHuIdImage" type="text" name="currentHuIdGenerated" [value]="generateIdFromTitle(currentHuTitle, currentGenerationMode)" readonly placeholder="Se genera desde el título" class="form-control">
-        </div>
-        <div class="form-group">
-          <label for="tcCurrentHuTitleImage">Título del Conjunto de Imágenes:<span class="required-indicator">*</span></label>
-          <input id="tcCurrentHuTitleImage" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required placeholder="Título descriptivo del set de imágenes" class="form-control">
-          <div *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)" class="validation-error" role="alert">
-            Título es requerido.
-          </div>
-        </div>
-        <div class="form-group full-width">
-          <label for="tcImageFiles">Cargar Imágenes (JPG, PNG - Máx. 4MB c/u, Máx. 5):<span class="required-indicator">*</span></label>
-          <input type="file" id="tcImageFiles" name="imageFiles" (change)="onFileSelected($event)" accept="image/jpeg, image/png"
-                 multiple #imageFilesInput>
-          <div *ngIf="imageUploadError" class="validation-error" role="alert">{{ imageUploadError }}</div>
-          <div *ngIf="huForm.submitted && draggableImages.length === 0 && currentGenerationMode === 'image'" class="validation-error" role="alert">
-            Debes seleccionar al menos una imagen.
-          </div>
 
-          <div *ngIf="draggableImages.length > 0" class="image-preview-container multiple-previews"
-               (dragover)="onImageDragOver($event)" (dragleave)="onImageDragLeave($event)">
-            <p>Previsualización ({{ draggableImages.length }}). Arrastra para reordenar:</p>
-            <div *ngFor="let imgItem of draggableImages; let i = index"
-                 class="image-preview-item" [class.drag-over-element]="dragOverImageId === imgItem.id"
-                 draggable="true" (dragstart)="onImageDragStart($event, imgItem)"
-                 (drop)="onImageDrop($event, imgItem)" (dragend)="onImageDragEnd($event)"
-                 (dragover)="onImageDragOver($event, imgItem)">
-              <span class="image-order-badge">{{i + 1}}</span>
-              <img [src]="imgItem.preview" [alt]="'Previsualización ' + imgItem.file.name" class="image-preview">
-              <span class="image-filename" title="{{ imgItem.file.name }}">{{ imgItem.file.name }}</span>
-            </div>
-          </div>
-        </div>
-      </ng-container>
 
       <div class="form-group">
         <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
@@ -124,18 +89,17 @@
 
   <!-- SECCIÓN DE PREVISUALIZACIÓN Y/O EDICIÓN/REFINAMIENTO -->
   <div *ngIf="generatedHUData && (componentState === 'previewingGenerated' || componentState === 'editingForRefinement' || componentState === 'submitting')">
-    <div *ngIf="errorScope && generatedHUData.originalInput.generationMode === 'text' || errorScenarios" class="error-message generated-data-error" role="alert">
-        <p *ngIf="errorScope && generatedHUData.originalInput.generationMode === 'text'">Error en Alcance: {{ errorScope }}</p>
+    <div *ngIf="errorScope || errorScenarios" class="error-message generated-data-error" role="alert">
+        <p *ngIf="errorScope">Error en Alcance: {{ errorScope }}</p>
         <p *ngIf="errorScenarios">Error en Escenarios: {{ errorScenarios }}</p>
     </div>
 
     <div class="generated-test-cases-editor">
-        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba</h3>
-        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'image' && componentState !== 'submitting'">Casos de Prueba</h3>
-        <h3 *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState === 'editingForRefinement'">Casos de Prueba</h3>
+        <h3 *ngIf="componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba</h3>
+        <h3 *ngIf="componentState === 'editingForRefinement'">Casos de Prueba</h3>
         <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
         
-        <div *ngIf="generatedHUData.originalInput.generationMode === 'text' && componentState === 'previewingGenerated'" class="scope-display-section">
+        <div *ngIf="componentState === 'previewingGenerated'" class="scope-display-section">
           <strong>Alcance Generado:</strong> <span *ngIf="loadingScope" class="spinner-inline"></span>
           <pre [class.loading-text]="loadingScope">{{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o no aplica.') }}</pre>
         </div>
@@ -145,17 +109,25 @@
             <div *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios" class="preview-table-container">
                 <h4>Casos de Prueba Generados (Previsualización)</h4>
                 <table class="detailed-test-cases-table preview-only-table">
-                     <thead> <tr> <th>ID Caso</th> <th>Escenario de Prueba (Título)</th> <th>Precondiciones</th> <th>Paso a Paso</th> <th>Resultado Esperado</th> </tr> </thead>
+                     <thead> 
+                       <tr> 
+                         <th>ID Caso</th> 
+                         <th>Escenario de Prueba (Título)</th> 
+                         <th>Precondiciones</th> 
+                         <th>Paso a Paso</th> 
+                         <th>Resultado Esperado</th> 
+                       </tr> 
+                     </thead>
                      <tbody>
                         <tr *ngFor="let tc of generatedHUData.detailedTestCases; let i = index">
-                            <td>{{ generatedHUData.id }}_CP{{ i + 1 }}</td>
-                            <td>{{ tc.title }}</td>
-                            <td><pre class="table-pre">{{ tc.preconditions }}</pre></td>
-                            <td>
+                            <td data-label="ID Caso">{{ generatedHUData.id }}_CP{{ i + 1 }}</td>
+                            <td data-label="Escenario de Prueba">{{ tc.title }}</td>
+                            <td data-label="Precondiciones"><pre class="table-pre">{{ tc.preconditions }}</pre></td>
+                            <td data-label="Paso a Paso">
                                 <ul *ngIf="tc.steps && tc.steps.length > 0"><li *ngFor="let step of tc.steps">{{ step.accion }}</li></ul>
                                 <span *ngIf="!tc.steps || tc.steps.length === 0">N/A</span>
                             </td>
-                            <td><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
+                            <td data-label="Resultado Esperado"><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
                         </tr>
                      </tbody>
                 </table>
@@ -182,24 +154,72 @@
         </ng-container>
 
         <!-- Acciones Finales -->
+        <!-- Advertencia de guardado temporal - Ahora se muestra en tooltips de los botones -->
+        <!-- <div class="storage-warning-banner" *ngIf="!loadingScenarios && !loadingScope && componentState === 'previewingGenerated'">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+            </svg>
+            <div class="warning-content">
+                <strong>Información importante:</strong>
+                <p><strong>"Guardar HU"</strong> = Guardado temporal (solo en navegador). <strong>"Confirmar y Añadir al Plan"</strong> = Guardado permanente en base de datos.</p>
+            </div>
+        </div> -->
+
         <div class="form-actions editor-form-actions final-actions-group" *ngIf="componentState !== 'submitting'">
-            <button type="button" (click)="exportExecutionMatrixLocal()" class="button-secondary" 
-                    [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title.startsWith('Error')">
-                Exportar Matriz (.csv)
+            <!-- Badge de HUs guardadas -->
+            <div class="hu-counter-badge" *ngIf="accumulatedHUsCount > 0" 
+                 title="HUs guardadas temporalmente. Usa 'Confirmar y Añadir al Plan' para guardar en base de datos.">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="badge-icon">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }} (temporal)</span>
+            </div>
+            
+            <!-- Botón Guardar HU Individual -->
+            <button type="button" (click)="saveCurrentHU()" class="button-save-individual has-tooltip" 
+                    [disabled]="loadingScenarios || loadingScope"
+                    data-tooltip="Guardado temporal (solo en navegador). No se guarda en base de datos aún.">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
+                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                </svg>
+                Guardar HU (Temporal)
             </button>
-            <button type="button" (click)="startRefinementMode()" class="button-edit" 
-                    *ngIf="componentState === 'previewingGenerated'"
-                    [disabled]="loadingScenarios || loadingScope || !generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || generatedHUData.detailedTestCases[0].title.startsWith('Error')">
-                Refinar con IA / Editar Casos
-            </button>
-            <button type="button" (click)="confirmAndEmitHUDataToPlan()" class="button-primary" 
-                    [disabled]="loadingScenarios || loadingScope">
-                Confirmar y Añadir al Plan
+            
+            <!-- Botón Confirmar y Añadir al Plan -->
+            <button type="button" (click)="confirmAndEmitHUDataToPlan()" class="button-primary has-tooltip" 
+                    [disabled]="loadingScenarios || loadingScope"
+                    data-tooltip="Guardado permanente en base de datos. Guarda la HU actual y todas las HUs temporales.">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                </svg>
+                Confirmar y Añadir al Plan (BD)
             </button>
         </div>
         <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
             <span class="spinner"></span> Enviando al plan de pruebas...
         </div>
+    </div>
+  </div>
+
+  <!-- Modal de Guardado -->
+  <div class="saving-modal-overlay" *ngIf="showSavingModal" (click)="closeSavingModal()">
+    <div class="saving-modal" (click)="$event.stopPropagation()">
+      <div class="saving-modal-content">
+        <!-- Icono de spinner o check según el estado -->
+        <div class="saving-modal-icon" *ngIf="!isSavingComplete">
+          <svg class="spinner-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" stroke-width="3" stroke-dasharray="31.4 31.4" />
+          </svg>
+        </div>
+        <div class="saving-modal-icon success-icon" *ngIf="isSavingComplete">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        
+        <!-- Mensaje -->
+        <p class="saving-modal-message">{{ savingModalMessage }}</p>
+      </div>
     </div>
   </div>
 </div>

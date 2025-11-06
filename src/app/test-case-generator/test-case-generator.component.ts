@@ -1,4 +1,3 @@
-// src/app/test-case-generator/test-case-generator.component.ts
 import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
@@ -8,14 +7,6 @@ import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
-
-interface DraggableImage {
-  file: File;
-  preview: string | ArrayBuffer;
-  base64: string;
-  mimeType: string;
-  id: string;
-}
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -37,15 +28,13 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 export class TestCaseGeneratorComponent implements OnInit {
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
+  @Input() accumulatedHUsCount: number = 0;
   @Output() huGenerated = new EventEmitter<OriginalHUData>();
+  @Output() huSaved = new EventEmitter<OriginalHUData>();
   @Output() generationCancelled = new EventEmitter<void>();
 
   componentState: ComponentState = 'initialForm';
   currentGenerationMode: GenerationMode = 'text';
-
-  draggableImages: DraggableImage[] = [];
-  imagesBase64: string[] = [];
-  imageUploadError: string | null = null;
 
   currentHuId: string = '';
   currentHuTitle: string = '';
@@ -64,14 +53,15 @@ export class TestCaseGeneratorComponent implements OnInit {
   errorScope: string | null = null;
   errorScenarios: string | null = null;
 
-  draggedImage: DraggableImage | null = null;
-  dragOverImageId: string | null = null;
+  showSavingModal: boolean = false;
+  savingModalMessage: string = '';
+  isSavingComplete: boolean = false;
+  savedHUsCount: number = 0;
 
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
   @ViewChild('huForm') huFormDirective!: NgForm;
-  @ViewChild('imageFilesInput') imageFilesInputRef: ElementRef<HTMLInputElement> | undefined;
 
   private readonly macTemplateId = '1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
   private readonly windowsTemplateId = '1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
@@ -92,9 +82,6 @@ export class TestCaseGeneratorComponent implements OnInit {
   resetToInitialForm(): void {
     this.componentState = 'initialForm';
     this.formError = null;
-    this.imageUploadError = null;
-    this.draggableImages = [];
-    this.imagesBase64 = [];
     const keptSprint = this.currentSprint || this.initialSprint;
     const keptTechnique = this.currentSelectedTechnique;
     const keptMode = this.currentGenerationMode || this.initialGenerationMode;
@@ -109,9 +96,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.loadingScenarios = false;
     this.errorScope = null;
     this.errorScenarios = null;
-    if (isPlatformBrowser(this.platformId) && this.imageFilesInputRef?.nativeElement) {
-      this.imageFilesInputRef.nativeElement.value = '';
-    }
+
     this.huFormDirective?.resetForm();
     this.currentGenerationMode = keptMode;
     this.currentSprint = keptSprint;
@@ -163,12 +148,7 @@ export class TestCaseGeneratorComponent implements OnInit {
   isFormInvalidForGeneration(): boolean {
     if (!this.huFormDirective?.form || !this.currentGenerationMode) return true;
     const commonRequired = !this.currentSprint || !this.currentHuTitle || !this.currentSelectedTechnique;
-    if (this.currentGenerationMode === 'text') {
-      return !this.currentHuId || !this.currentDescription || !this.currentAcceptanceCriteria || commonRequired;
-    } else if (this.currentGenerationMode === 'image') {
-      return commonRequired || this.draggableImages.length === 0;
-    }
-    return true;
+    return !this.currentHuId || !this.currentDescription || !this.currentAcceptanceCriteria || commonRequired;
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
@@ -180,129 +160,29 @@ export class TestCaseGeneratorComponent implements OnInit {
     };
   }
 
-  onFileSelected(event: Event): void {
-    this.imageUploadError = null; this.formError = null; this.draggableImages = [];
-    const element = event.currentTarget as HTMLInputElement;
-    const fileList: FileList | null = element.files;
-    const maxImages = 5;
-    if (fileList?.length) {
-      if (fileList.length > maxImages) { this.imageUploadError = `Puedes seleccionar un máximo de ${maxImages} imágenes.`; element.value = ""; return; }
-      let filesArray = Array.from(fileList).sort((a, b) => {
-        const pA = this.parseFileNameForSorting(a.name);
-        const pB = this.parseFileNameForSorting(b.name);
-        return pA.main !== pB.main ? pA.main - pB.main : pA.sub - pB.sub;
-      });
-      const fileProcessingObservables: Observable<DraggableImage>[] = [];
-      let validationErrorFound = false;
-      for (const file of filesArray) {
-        if (validationErrorFound) continue;
-        if (file.size > 4 * 1024 * 1024) {
-          this.imageUploadError = `El archivo \"${file.name}\" excede el tamaño máximo de 4MB.`;
-          validationErrorFound = true;
-        }
-        if (!['image/jpeg', 'image/png'].includes(file.type) && !validationErrorFound) {
-          this.imageUploadError = `Formato de archivo inválido: \"${file.name}\". Solo se permiten JPG y PNG.`;
-          validationErrorFound = true;
-        }
-        if (validationErrorFound) {
-          element.value = "";
-          this.draggableImages = [];
-          this.updateArraysFromDraggable();
-          return;
-        }
-        const readerObservable = new Observable<DraggableImage>(subscriber => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            subscriber.next({
-              file: file,
-              preview: reader.result!,
-              base64: (reader.result as string).split(',')[1],
-              mimeType: file.type,
-              id: 'IMG_' + file.name + '_' + Date.now() + Math.random().toString(16).slice(2)
-            });
-            subscriber.complete();
-          };
-          reader.onerror = error => {
-            this.imageUploadError = `Error al leer el archivo \"${file.name}\".`;
-            subscriber.error(error);
-          };
-          reader.readAsDataURL(file);
-        });
-        fileProcessingObservables.push(readerObservable);
-      }
-      if (validationErrorFound) {
-        this.draggableImages = []; this.updateArraysFromDraggable(); return;
-      }
-      if (fileProcessingObservables.length > 0) {
-        forkJoin(fileProcessingObservables).subscribe({
-          next: (processedImages) => {
-            this.draggableImages.push(...processedImages);
-            this.updateArraysFromDraggable();
-          },
-          error: () => {
-            element.value = ""; this.draggableImages = []; this.updateArraysFromDraggable();
-          },
-          complete: () => {
-            this.huFormDirective?.form.updateValueAndValidity();
-          }
-        });
-      }
-    } else {
-      this.draggableImages = [];
-      this.updateArraysFromDraggable();
-      this.huFormDirective?.form.updateValueAndValidity();
-    }
-  }
 
-  private updateArraysFromDraggable(): void {
-    this.imagesBase64 = this.draggableImages.map(di => di.base64);
-    this.cdr.detectChanges();
-  }
-
-  public onImageDragStart(event: DragEvent, image: DraggableImage): void { this.draggedImage = image; if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', image.id); (event.target as HTMLElement).style.opacity = '0.4'; } }
-  public onImageDragOver(event: DragEvent, targetImage?: DraggableImage): void { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; this.dragOverImageId = targetImage ? targetImage.id : null; }
-  public onImageDragLeave(event: DragEvent): void { this.dragOverImageId = null; }
-  public onImageDrop(event: DragEvent, targetImage: DraggableImage): void { event.preventDefault(); this.dragOverImageId = null; const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; if (!this.draggedImage || this.draggedImage.id === targetImage.id) { this.draggedImage = null; return; } const fromI = this.draggableImages.findIndex(i => i.id === this.draggedImage!.id), toI = this.draggableImages.findIndex(i => i.id === targetImage.id); if (fromI!==-1 && toI!==-1) { const item = this.draggableImages.splice(fromI,1)[0]; this.draggableImages.splice(toI,0,item); this.updateArraysFromDraggable(); } this.draggedImage = null; }
-  public onImageDragEnd(event?: DragEvent): void { if (event?.target instanceof HTMLElement) (event.target as HTMLElement).style.opacity = '1'; else { const dEl = document.querySelector<HTMLElement>('.image-preview-item[style*="opacity: 0.4"]'); if (dEl) dEl.style.opacity = '1'; } this.draggedImage = null; this.dragOverImageId = null; }
 
   generateIdFromTitle(title: string, mode: GenerationMode): string {
     if (!title || !mode) return '';
-    if (mode === 'text') {
-      const prefix = "HU_";
-      const sanitizedTitle = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
-      return `${prefix}${sanitizedTitle.substring(0, 20)}_${Date.now().toString().slice(-4)}`;
-    } else if (mode === 'image') {
-      const sanitizedTitle = title.trim().replace(/\s+/g, '').replace(/[^\wÀ-ÿ]+/g, '');
-      if (sanitizedTitle.length < 2) {
-        return `#_XX_${Date.now().toString().slice(-4)}`;
-      }
-      const prefixLetters = sanitizedTitle.substring(0, 2).toUpperCase();
-      return `#_${prefixLetters}_${Date.now().toString().slice(-4)}`;
-    }
-    return '';
+    const prefix = "HU_";
+    const sanitizedTitle = title.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w-]+/g, '');
+    return `${prefix}${sanitizedTitle.substring(0, 20)}_${Date.now().toString().slice(-4)}`;
   }
 
   generateInitialHuAndCases(): void {
     this.formError = null; this.errorScope = null; this.errorScenarios = null;
     if (this.isFormInvalidForGeneration()) {
       this.formError = "Por favor, completa todos los campos requeridos.";
-      if (this.currentGenerationMode === 'image' && !this.draggableImages.length) this.formError = "Por favor, selecciona al menos una imagen.";
       this.huFormDirective?.form.markAllAsTouched(); return;
-    }
-    let finalId = this.currentHuId;
-    if (this.currentGenerationMode === 'image') {
-      finalId = this.generateIdFromTitle(this.currentHuTitle, this.currentGenerationMode);
-      if (!finalId) { this.formError = "El título es necesario para generar el ID."; return; }
     }
     const huData: UIHUData = {
       originalInput: {
         generationMode: this.currentGenerationMode,
-        description: this.currentGenerationMode === 'text' ? this.currentDescription : undefined,
-        acceptanceCriteria: this.currentGenerationMode === 'text' ? this.currentAcceptanceCriteria : undefined,
+        description: this.currentDescription,
+        acceptanceCriteria: this.currentAcceptanceCriteria,
         selectedTechnique: this.currentSelectedTechnique,
-        imagesBase64: this.currentGenerationMode === 'image' ? [...this.imagesBase64] : undefined,
       },
-      id: finalId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
+      id: this.currentHuId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
       generatedScope: '',
       detailedTestCases: [],
       generatedTestCaseTitles: '',
@@ -313,39 +193,84 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.generatedHUData = huData;
     this.refinementTechnique = this.currentSelectedTechnique;
     this.cdr.detectChanges();
-    const operations: Observable<any>[] = [];
+
+    // NUEVO ENFOQUE: Una sola petición para alcance + casos de prueba
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScope = true;
-      operations.push(
-        this.geminiService.generateTestPlanSections(huData.originalInput.description!, huData.originalInput.acceptanceCriteria!)
-          .pipe(
-            tap(s => { if (this.generatedHUData) this.generatedHUData.generatedScope = s; }),
-            catchError(e => { if (this.generatedHUData) this.generatedHUData.errorScope = (typeof e === 'string' ? e : e.message) || 'Error al generar alcance.'; this.errorScope = this.generatedHUData!.errorScope || null; return of(''); }),
-            finalize(() => { this.loadingScope = false; this.cdr.detectChanges(); })
-          )
-      );
+      this.loadingScenarios = true;
+      
+      console.log('[GENERATION] Iniciando generación combinada de alcance + casos de prueba');
+      
+      this.geminiService.generateScopeAndTestCasesCombined(
+        huData.originalInput.description!,
+        huData.originalInput.acceptanceCriteria!,
+        this.currentSelectedTechnique
+      ).pipe(
+        tap(result => {
+          console.log('[GENERATION] Resultado combinado recibido');
+          console.log('[GENERATION] Alcance:', result.scope);
+          console.log('[GENERATION] Casos de prueba:', result.testCases.length);
+          
+          if (this.generatedHUData) {
+            // Asignar alcance
+            this.generatedHUData.generatedScope = result.scope;
+            
+            // Asignar casos de prueba
+            this.generatedHUData.detailedTestCases = result.testCases.map((tc, index) => {
+              const detailedTc: UIDetailedTestCase = {
+                ...tc,
+                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
+                  numero_paso: s.numero_paso || (i + 1),
+                  accion: s.accion || "Paso no descrito"
+                })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                isExpanded: index === 0
+              };
+              return detailedTc;
+            });
+            
+            this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
+              result.testCases.map(tc => tc.title)
+            );
+            
+            console.log('[GENERATION] Datos asignados correctamente a generatedHUData');
+          }
+        }),
+        catchError(e => {
+          const errorMsg = (typeof e === 'string' ? e : e.message) || 'Error al generar alcance y casos de prueba.';
+          console.error('[GENERATION] Error:', errorMsg);
+          
+          this.errorScope = errorMsg;
+          this.errorScenarios = errorMsg;
+          
+          if (this.generatedHUData) {
+            this.generatedHUData.errorScope = errorMsg;
+            this.generatedHUData.generatedScope = 'Error al generar el alcance.';
+            
+            const errorTc: UIDetailedTestCase = {
+              title: 'Error Crítico en Generación',
+              preconditions: errorMsg,
+              steps: [{numero_paso: 1, accion: 'La generación falló. Por favor, intenta nuevamente.'}],
+              expectedResults: 'N/A',
+              isExpanded: true
+            };
+            this.generatedHUData.detailedTestCases = [errorTc];
+          }
+          
+          return of(null);
+        }),
+        finalize(() => {
+          this.loadingScope = false;
+          this.loadingScenarios = false;
+          this.componentState = 'previewingGenerated';
+          this.cdr.detectChanges();
+          
+          setTimeout(() => {
+            const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
+            textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+          }, 0);
+        })
+      ).subscribe();
     }
-    this.loadingScenarios = true;
-    operations.push(
-      this._generateOrRefineDetailedTestCases$(huData, this.currentSelectedTechnique, undefined, 'initial')
-    );
-    forkJoin(operations).pipe(
-      finalize(() => {
-        this.loadingScope = false;
-        this.loadingScenarios = false;
-        this.componentState = 'previewingGenerated';
-        this.cdr.detectChanges();
-        setTimeout(() => {
-          const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-          textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
-        }, 0);
-      })
-    ).subscribe({
-      error: e => {
-        console.error("Error en la generación inicial combinada:", e);
-        this.componentState = 'initialForm';
-      }
-    });
   }
 
   private _generateOrRefineDetailedTestCases$(
@@ -369,9 +294,7 @@ export class TestCaseGeneratorComponent implements OnInit {
         userContext || ''
       );
     } else {
-      if (huData.originalInput.generationMode === 'image' && huData.originalInput.imagesBase64?.length) {
-        genObs$ = this.geminiService.generateDetailedTestCasesImageBased(huData.originalInput.imagesBase64, technique, userContext);
-      } else if (huData.originalInput.generationMode === 'text' && huData.originalInput.description && huData.originalInput.acceptanceCriteria) {
+      if (huData.originalInput.description && huData.originalInput.acceptanceCriteria) {
         genObs$ = this.geminiService.generateDetailedTestCasesTextBased(huData.originalInput.description, huData.originalInput.acceptanceCriteria, technique, userContext);
       } else {
         this.loadingScenarios = false;
@@ -511,8 +434,19 @@ export class TestCaseGeneratorComponent implements OnInit {
 
   handleTestCasesChanged(testCases: EditorUIDetailedTestCase[]): void {
     if (this.generatedHUData) {
+      // Guardar la posición actual del scroll antes de actualizar
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+      
       this.generatedHUData.detailedTestCases = testCases;
-      this.cdr.detectChanges();
+      
+      // Usar markForCheck en lugar de detectChanges para evitar scroll jumps
+      this.cdr.markForCheck();
+      
+      // Restaurar la posición del scroll
+      setTimeout(() => {
+        window.scrollTo(scrollX, scrollY);
+      }, 0);
     }
   }
 
@@ -522,8 +456,36 @@ export class TestCaseGeneratorComponent implements OnInit {
   }
 
   handleCancelGeneration() {
-    this.resetToInitialForm();
-    this.generationCancelled.emit();
+    // Si hay datos generados, preguntar si quiere guardarlos
+    if (this.generatedHUData && 
+        this.generatedHUData.detailedTestCases && 
+        this.generatedHUData.detailedTestCases.length > 0 &&
+        !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
+      
+      const confirmMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar?\n\n` +
+                           `⚠️ IMPORTANTE: Si cancelas sin guardar, se perderán todos los casos de prueba generados.\n\n` +
+                           `💾 "Guardar HU" = Guardado temporal (solo navegador)\n` +
+                           `🗄️ "Confirmar y Añadir al Plan" = Guardado permanente (base de datos)\n\n` +
+                           `• Clic en OK = Guardar HU temporalmente y cancelar\n` +
+                           `• Clic en Cancelar = Descartar HU completamente`;
+      
+      if (confirm(confirmMessage)) {
+        // Guardar la HU antes de cancelar
+        console.log('💾 Usuario eligió GUARDAR la HU antes de cancelar');
+        this.saveCurrentHU();
+        // No llamamos a resetToInitialForm aquí porque saveCurrentHU ya lo hace
+        this.generationCancelled.emit();
+      } else {
+        // Descartar la HU
+        console.log('🗑️ Usuario eligió DESCARTAR la HU');
+        this.resetToInitialForm();
+        this.generationCancelled.emit();
+      }
+    } else {
+      // No hay datos que guardar, cancelar directamente
+      this.resetToInitialForm();
+      this.generationCancelled.emit();
+    }
   }
 
   addTestCaseStep(testCase: UIDetailedTestCase): void {
@@ -619,38 +581,157 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.draggedTestCaseStep = null; this.dragOverTestCaseStepId = null;
   }
 
+    /**
+   * Guarda la HU actual individualmente (sin salir del formulario)
+   * Este método permite acumular múltiples HUs antes de confirmar el plan completo
+   */
+  saveCurrentHU() {
+    if (this.generatedHUData && 
+        this.generatedHUData.detailedTestCases && 
+        this.generatedHUData.detailedTestCases.length > 0 &&
+        !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
+      
+      // Preparar datos usando el mismo método que confirmAndEmitHUDataToPlan
+      const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
+      
+      console.log('💾 GUARDANDO HU INDIVIDUAL (sin crear plan):', dataToEmit.title);
+      console.log('📊 HUs acumuladas antes:', this.accumulatedHUsCount);
+      
+      // Emitir al padre para que acumule en memoria
+      this.huSaved.emit(dataToEmit);
+      
+      console.log('📊 HUs acumuladas después:', this.accumulatedHUsCount + 1);
+      
+      // Mostrar confirmación al usuario - Mensaje breve y conciso
+      alert(`HU "${dataToEmit.title}" guardada temporalmente.\n\nRECUERDA: Esta HU solo está guardada en tu navegador (localStorage).\n\nPara guardar permanentemente en la base de datos, usa el botón "Confirmar y Añadir al Plan (BD)".`);
+      
+      // Resetear formulario para permitir agregar otra HU
+      setTimeout(() => {
+        this.resetToInitialForm();
+        this.componentState = 'initialForm';
+      }, 100);
+    } else {
+      alert('⚠️ No hay datos válidos para guardar. Por favor genera casos de prueba primero.');
+    }
+  }
+
+  /**
+   * Confirma y envía señal al padre para crear el plan de pruebas
+   * Siempre guarda la HU actual (si existe) antes de crear el plan
+   */
   confirmAndEmitHUDataToPlan() {
+    // Calcular el número total de HUs que se guardarán
+    const totalHUs = this.generatedHUData ? this.accumulatedHUsCount + 1 : this.accumulatedHUsCount;
+    
+    if (totalHUs === 0) {
+      console.warn('⚠️ No hay HUs para guardar');
+      return;
+    }
+
+    // Mostrar modal de guardado
+    this.showSavingModal = true;
+    this.isSavingComplete = false;
+    this.savedHUsCount = totalHUs;
+    this.savingModalMessage = 'Guardando plan de pruebas en la base de datos...';
+    
     if (this.generatedHUData) {
       this.componentState = 'submitting';
-      const dataToEmit: OriginalHUData = {
-        ...this.generatedHUData,
-        detailedTestCases: (this.generatedHUData.detailedTestCases || []).map(uiTc => {
-          uiTc.title = (uiTc.title || "").trim() || "Caso de prueba sin título";
-          uiTc.preconditions = (uiTc.preconditions || "").trim() || "N/A";
-          uiTc.expectedResults = (uiTc.expectedResults || "").trim() || "N/A";
-          if (uiTc.steps) {
-            uiTc.steps.forEach(step => {
-              step.accion = (step.accion || "").trim() || "Acción no definida.";
-            });
-          } else {
-            uiTc.steps = [{ numero_paso: 1, accion: "Pasos no definidos." }];
-          }
-          if (uiTc.steps.length === 0) {
-            uiTc.steps.push({ numero_paso: 1, accion: "Pasos no definidos." });
-          }
-          const { isExpanded, ...originalTc } = uiTc;
-          return originalTc as OriginalDetailedTestCase;
-        })
-      };
-      dataToEmit.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
-        (dataToEmit.detailedTestCases || []).map(tc => tc.title)
-      );
-      if (this.refinementTechnique && dataToEmit.originalInput.selectedTechnique !== this.refinementTechnique) {
-        dataToEmit.originalInput.selectedTechnique = this.refinementTechnique;
+      
+      // Preparar datos de la HU actual
+      const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
+      
+      console.log('📤 CONFIRMANDO Y AÑADIENDO AL PLAN - HU actual:', dataToEmit.title);
+      console.log('📊 Contador de HUs acumuladas antes:', this.accumulatedHUsCount);
+      
+      // Simular un pequeño delay para mostrar el mensaje de guardado
+      setTimeout(() => {
+        // Emitir al padre - esto guardará la HU y creará el plan
+        this.huGenerated.emit(dataToEmit);
+        
+        // Mostrar mensaje de éxito
+        this.completeSaving();
+      }, 500);
+      
+    } else {
+      // Si no hay HU actual, mostrar mensaje
+      console.warn('[WARNING] No hay HU generada para añadir al plan');
+      console.log('[INFO] HUs acumuladas disponibles:', this.accumulatedHUsCount);
+      
+      // Si hay HUs guardadas previamente, el plan se puede crear igual
+      if (this.accumulatedHUsCount > 0) {
+        console.log('[PLAN] Creando plan con HUs guardadas previamente');
+        
+        setTimeout(() => {
+          // Emitir evento vacío para indicar que se debe crear el plan con las HUs existentes
+          this.huGenerated.emit({} as any);
+          
+          // Mostrar mensaje de éxito
+          this.completeSaving();
+        }, 500);
       }
-      this.huGenerated.emit(dataToEmit);
+    }
+  }
+
+  /**
+   * Completa el proceso de guardado y muestra mensaje de éxito
+   */
+  private completeSaving() {
+    this.isSavingComplete = true;
+    const huText = this.savedHUsCount === 1 ? 'Historia de Usuario' : 'Historias de Usuario';
+    this.savingModalMessage = `Plan de pruebas guardado en base de datos con ${this.savedHUsCount} ${huText}`;
+    
+    // Cerrar el modal después de 2 segundos y resetear
+    setTimeout(() => {
+      this.showSavingModal = false;
+      this.resetToInitialForm();
+    }, 2000);
+  }
+
+  /**
+   * Cierra el modal de guardado manualmente (para el caso de éxito)
+   */
+  closeSavingModal() {
+    if (this.isSavingComplete) {
+      this.showSavingModal = false;
       this.resetToInitialForm();
     }
+  }
+
+  /**
+   * Prepara los datos de la HU para emitir al padre
+   * Centraliza la lógica de limpieza y formato
+   */
+  private prepareHUDataForEmit(): OriginalHUData {
+    const dataToEmit: OriginalHUData = {
+      ...this.generatedHUData!,
+      detailedTestCases: (this.generatedHUData!.detailedTestCases || []).map(uiTc => {
+        uiTc.title = (uiTc.title || "").trim() || "Caso de prueba sin título";
+        uiTc.preconditions = (uiTc.preconditions || "").trim() || "N/A";
+        uiTc.expectedResults = (uiTc.expectedResults || "").trim() || "N/A";
+        if (uiTc.steps) {
+          uiTc.steps.forEach(step => {
+            step.accion = (step.accion || "").trim() || "Acción no definida.";
+          });
+        } else {
+          uiTc.steps = [{ numero_paso: 1, accion: "Pasos no definidos." }];
+        }
+        if (uiTc.steps.length === 0) {
+          uiTc.steps.push({ numero_paso: 1, accion: "Pasos no definidos." });
+        }
+        const { isExpanded, ...originalTc } = uiTc;
+        return originalTc as OriginalDetailedTestCase;
+      })
+    };
+    
+    dataToEmit.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
+      (dataToEmit.detailedTestCases || []).map(tc => tc.title)
+    );
+    
+    if (this.refinementTechnique && dataToEmit.originalInput.selectedTechnique !== this.refinementTechnique) {
+      dataToEmit.originalInput.selectedTechnique = this.refinementTechnique;
+    }
+    
+    return dataToEmit;
   }
 
   exportExecutionMatrixLocal(): void {
