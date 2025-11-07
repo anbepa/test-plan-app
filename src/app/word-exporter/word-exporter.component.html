@@ -1,0 +1,10 @@
+<div class="word-exporter">
+  <button 
+    class="download-word-btn"
+    (click)="exportToWord()"
+    [disabled]="isExporting"
+    title="Descargar Plan de Pruebas en formato Word con normas APA">
+    <i class="fas fa-file-word" [class.spinning]="isExporting"></i>
+    <span>{{ isExporting ? 'Generando...' : 'Descargar DOCX' }}</span>
+  </button>
+</div>

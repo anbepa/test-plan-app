@@ -7,6 +7,7 @@ import { GeminiService } from '../services/gemini.service';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
 import { TestCaseEditorComponent, UIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
+import { WordExporterComponent } from '../word-exporter/word-exporter.component';
 import { ToastService } from '../services/toast.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
@@ -16,7 +17,7 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
 @Component({
   selector: 'app-test-plan-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TestCaseEditorComponent, HtmlMatrixExporterComponent],
+  imports: [CommonModule, FormsModule, RouterLink, TestCaseEditorComponent, HtmlMatrixExporterComponent, WordExporterComponent],
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })
@@ -979,23 +980,53 @@ ${this.downloadPreviewHtmlContent}
   }
 
   copyPreviewToClipboard(): void {
-    // Convertir HTML a texto manteniendo el formato
+    // Convertir HTML a texto con formato APA
     let textContent = this.downloadPreviewHtmlContent
-      // Convertir encabezados h1 a texto con doble salto de línea
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '\n$1\n\n')
-      // Convertir encabezados h2 a texto con doble salto de línea
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '\n\n$1\n')
-      // Convertir encabezados h3 a texto con salto de línea
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '\n\n$1\n')
-      // Convertir listas <ul><li> a viñetas
+      // Convertir encabezados h1 a formato APA Nivel 1 (centrado, negrilla, mayúscula inicial)
+      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, (match, title) => {
+        // Capitalizar solo primera letra de cada palabra (título propio)
+        const formattedTitle = title.replace(/\b\w/g, (l: string) => l.toUpperCase());
+        // Centrar el título con espacios
+        const spaces = ' '.repeat(Math.max(0, Math.floor((80 - formattedTitle.length) / 2)));
+        return `\n\n${spaces}${formattedTitle}\n\n`;
+      })
+      // Convertir encabezados h2 a formato APA Nivel 2 (izquierda, negrilla)
+      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (match, title) => {
+        // Capitalizar solo primera letra de cada palabra
+        const formattedTitle = title.replace(/\b\w/g, (l: string) => l.toUpperCase());
+        return `\n\n${formattedTitle}\n\n`;
+      })
+      // Convertir encabezados h3 a formato APA Nivel 3 (izquierda, negrilla + cursiva)
+      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, (match, title) => {
+        // Capitalizar solo primera letra de cada palabra
+        const formattedTitle = title.replace(/\b\w/g, (l: string) => l.toUpperCase());
+        return `\n\n${formattedTitle}\n\n`;
+      })
+      // Convertir listas <ul><li> a viñetas organizadas (para elementos no secuenciales)
       .replace(/<ul[^>]*>/gi, '\n')
       .replace(/<\/ul>/gi, '\n')
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '  • $1\n')
-      // Convertir párrafos a saltos de línea
-      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
-      // Convertir <br> a saltos de línea
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Convertir <strong> y <b> a texto sin formato
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, '     • $1\n')
+      // Convertir listas numeradas <ol><li> (para pasos o secuencia lógica)
+      .replace(/<ol[^>]*>/gi, '\n')
+      .replace(/<\/ol>/gi, '\n')
+      .replace(/<li[^>]*>(.*?)<\/li>/gi, (match, content, offset, string) => {
+        // Contar elementos li anteriores para numeración secuencial
+        const beforeText = string.substring(0, offset);
+        const liCount = (beforeText.match(/<li[^>]*>/g) || []).length + 1;
+        return `     ${liCount}. ${content}\n`;
+      })
+      // Convertir párrafos con sangría en primera línea e interlineado doble (estilo formal APA)
+      .replace(/<p[^>]*>(.*?)<\/p>/gi, (match, content) => {
+        const cleanContent = content.trim();
+        if (cleanContent) {
+          // Sangría de 5 espacios en primera línea, redacción clara y tono formal
+          return `     ${cleanContent}\n\n`;
+        }
+        return '\n';
+      })
+      // Convertir <br> a saltos de línea dobles
+      .replace(/<br\s*\/?>/gi, '\n\n')
+      // Eliminar formato de negrilla para compatibilidad con editores de texto plano
       .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '$1')
       .replace(/<b[^>]*>(.*?)<\/b>/gi, '$1')
       // Eliminar cualquier otra etiqueta HTML restante
@@ -1007,15 +1038,18 @@ ${this.downloadPreviewHtmlContent}
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
-      // Limpiar múltiples saltos de línea (máximo 2 consecutivos)
+      // Aplicar estructura de formato APA con interlineado doble
       .replace(/\n{3,}/g, '\n\n')
-      // Eliminar espacios en blanco al inicio/final de cada línea
-      .split('\n').map(line => line.trim()).join('\n')
+      // Limpiar espacios en blanco al inicio/final de cada línea manteniendo sangría
+      .split('\n').map(line => {
+        // Mantener sangría intencional, solo limpiar espacios finales
+        return line.trimEnd();
+      }).join('\n')
       // Limpiar espacios al inicio y final del documento
       .trim();
 
     navigator.clipboard.writeText(textContent).then(() => {
-      this.toastService.success('Texto del plan copiado al portapapeles con formato');
+      this.toastService.success('Texto del plan copiado al portapapeles con formato APA');
     }).catch(err => {
       console.error('Error al copiar:', err);
       this.toastService.error('Error al copiar al portapapeles');

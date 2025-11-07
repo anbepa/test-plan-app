@@ -1,0 +1,64 @@
+.word-exporter {
+  display: inline-block;
+}
+
+.download-word-btn {
+  background: linear-gradient(135deg, #2b5ce6 0%, #1e40af 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(43, 92, 230, 0.3);
+  margin-left: 8px;
+}
+
+.download-word-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(43, 92, 230, 0.4);
+}
+
+.download-word-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(43, 92, 230, 0.3);
+}
+
+.download-word-btn:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.download-word-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.download-word-btn i {
+  font-size: 16px;
+}
+
+.download-word-btn:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.download-word-btn:disabled:hover {
+  background: #6b7280;
+  transform: none;
+  box-shadow: none;
+}

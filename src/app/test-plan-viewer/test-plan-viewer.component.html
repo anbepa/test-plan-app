@@ -581,6 +581,18 @@
         </svg>
         Copiar Texto del Plan
       </button>
+      
+      <app-word-exporter
+        [testPlanTitle]="testPlanTitle"
+        [repositoryLink]="repositoryLink"
+        [outOfScopeContent]="outOfScopeContent"
+        [strategyContent]="strategyContent"
+        [limitationsContent]="limitationsContent"
+        [assumptionsContent]="assumptionsContent"
+        [teamContent]="teamContent"
+        [huList]="huList">
+      </app-word-exporter>
+      
       <button (click)="downloadWord()" class="button-primary">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z" clip-rule="evenodd" />
