@@ -7,9 +7,9 @@ export const environment = {
   geminiApiEndpoint: '',
   
   // Variables de entorno para producción - se reemplazarán en build time por Vercel
-  // Si no se reemplazan, se mostrarán los placeholders y la app mostrará error
+  // Usamos SUPABASE_KEY (anon key) para aplicaciones frontend
   supabaseUrl: '${SUPABASE_URL}',
-  supabaseKey: '${SUPABASE_SERVICE_KEY}',
+  supabaseKey: '${SUPABASE_KEY}',
   
   apiTimeout: 30000,
   maxRetries: 3,

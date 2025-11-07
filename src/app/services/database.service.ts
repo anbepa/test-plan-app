@@ -38,8 +38,8 @@ export class DatabaseService {
       throw new Error('Variables de entorno de Supabase no configuradas. Verifica la configuración en Vercel.');
     }
 
-    if (!environment.supabaseKey || environment.supabaseKey === '${SUPABASE_SERVICE_KEY}') {
-      console.error('❌ SUPABASE_SERVICE_KEY no está configurada correctamente');
+    if (!environment.supabaseKey || environment.supabaseKey === '${SUPABASE_KEY}') {
+      console.error('❌ SUPABASE_KEY no está configurada correctamente');
       throw new Error('Variables de entorno de Supabase no configuradas. Verifica la configuración en Vercel.');
     }
 
