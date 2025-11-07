@@ -4,7 +4,7 @@
   justify-content: center;
   min-height: calc(100vh - 80px);
   padding: 2rem;
-  background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
+  background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 50%, #ececf1 100%);
   position: relative;
   overflow: hidden;
 }
@@ -16,7 +16,7 @@
   right: -20%;
   width: 800px;
   height: 800px;
-  background: radial-gradient(circle, rgba(0, 113, 227, 0.08) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(0, 113, 227, 0.05) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -28,7 +28,7 @@
   left: -10%;
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(102, 126, 234, 0.06) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.04) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -36,28 +36,31 @@
 .welcome-content {
   max-width: 680px;
   text-align: center;
-  padding: 4rem 3.5rem;
+  padding: 2rem 3rem;
   position: relative;
   z-index: 1;
 }
 
 .welcome-icon {
-  margin: 0 auto 2.5rem;
+  margin: 0 auto 2rem;
   width: 120px;
   height: 120px;
-  background: linear-gradient(135deg, #0071e3 0%, #667eea 100%);
+  background: linear-gradient(135deg, #0071e3 0%, #5e9eff 100%);
   border-radius: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 
-    0 8px 16px rgba(0, 113, 227, 0.15),
-    0 16px 32px rgba(0, 113, 227, 0.1);
-  transition: transform 0.3s ease;
+    0 4px 12px rgba(0, 113, 227, 0.12),
+    0 12px 24px rgba(0, 113, 227, 0.08),
+    0 0 0 1px rgba(0, 113, 227, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .welcome-icon:hover {
-  transform: scale(1.05) rotate(2deg);
+  transform: scale(1.03) translateY(-2px);
 }
 
 .welcome-icon svg {
@@ -71,22 +74,75 @@
   font-size: 3rem;
   font-weight: 600;
   color: #1d1d1f;
-  margin: 0 0 1.25rem 0;
+  margin: 0 0 1rem 0;
   letter-spacing: -0.03em;
   line-height: 1.1;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
 }
 
 .welcome-description {
   font-size: 1.25rem;
   color: #6e6e73;
-  line-height: 1.6;
-  margin: 0;
+  line-height: 1.5;
+  margin: 0 auto 2.5rem;
   font-weight: 400;
   letter-spacing: -0.01em;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
   max-width: 560px;
-  margin: 0 auto;
+}
+
+/* Botón principal - Llamado a la acción */
+.welcome-actions {
+  margin-top: 2.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem;
+  background: #0071e3;
+  color: white;
+  border: none;
+  border-radius: 980px;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    0 2px 8px rgba(0, 113, 227, 0.15),
+    0 4px 16px rgba(0, 113, 227, 0.1);
+  text-decoration: none;
+}
+
+.btn-primary:hover {
+  background: #0077ed;
+  transform: translateY(-1px);
+  box-shadow: 
+    0 4px 12px rgba(0, 113, 227, 0.2),
+    0 8px 20px rgba(0, 113, 227, 0.15);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 
+    0 1px 4px rgba(0, 113, 227, 0.2),
+    0 2px 8px rgba(0, 113, 227, 0.1);
+}
+
+.btn-primary svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-primary:hover svg {
+  transform: translateX(3px);
 }
 
 @media (max-width: 768px) {
@@ -95,13 +151,14 @@
   }
 
   .welcome-content {
-    padding: 3rem 2rem;
+    padding: 2rem 1.5rem;
   }
 
   .welcome-icon {
     width: 100px;
     height: 100px;
     border-radius: 22px;
+    margin-bottom: 1.5rem;
   }
 
   .welcome-icon svg {
@@ -112,25 +169,24 @@
   .welcome-title {
     font-size: 2.25rem;
     letter-spacing: -0.02em;
+    margin-bottom: 0.875rem;
   }
 
   .welcome-description {
     font-size: 1.0625rem;
-    line-height: 1.55;
+    line-height: 1.5;
+    margin-bottom: 2rem;
   }
 
-  .feature {
-    padding: 0.75rem;
-  }
-
-  .feature span {
-    font-size: 0.875rem;
+  .btn-primary {
+    padding: 0.75rem 1.75rem;
+    font-size: 1rem;
   }
 }
 
 @media (max-width: 480px) {
   .welcome-content {
-    padding: 2.5rem 1.5rem;
+    padding: 1.5rem 1rem;
   }
 
   .welcome-icon {
@@ -151,13 +207,18 @@
   .welcome-description {
     font-size: 1rem;
   }
+
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
-/* Animación de entrada suave */
+/* Animaciones de entrada suave - Fade-in profesional */
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -166,23 +227,29 @@
 }
 
 .welcome-content {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .welcome-icon {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
   opacity: 0;
   animation-fill-mode: forwards;
 }
 
 .welcome-title {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
   opacity: 0;
   animation-fill-mode: forwards;
 }
 
 .welcome-description {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  opacity: 0;
+  animation-fill-mode: forwards;
+}
+
+.welcome-actions {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
   opacity: 0;
   animation-fill-mode: forwards;
 }

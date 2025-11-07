@@ -962,6 +962,10 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
+  color: #1d1d1f;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 .detailed-test-cases-table-container {
@@ -979,6 +983,7 @@
   border-collapse: collapse;
   font-size: 0.9em;
   table-layout: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
 }
 
 .detailed-test-cases-table th,
@@ -987,12 +992,15 @@
   padding: 10px 12px;
   text-align: left;
   vertical-align: top;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
+  color: #1d1d1f;
+  letter-spacing: -0.01em;
 }
 
 .detailed-test-cases-table th {
   background-color: #f8f9fa;
   font-weight: 600;
-  color: #343a40;
+  color: #1d1d1f;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -1010,7 +1018,7 @@
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
-  font-family: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
   font-size: inherit;
   background-color: transparent;
   border: none;
@@ -1020,6 +1028,8 @@
   display: block;
   max-width: 250px;
   overflow-wrap: break-word;
+  color: #1d1d1f;
+  letter-spacing: -0.01em;
 }
 
 .summary-indicators {

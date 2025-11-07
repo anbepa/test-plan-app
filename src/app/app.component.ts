@@ -41,7 +41,8 @@ interface MenuItem {
         <nav class="sidebar-nav">
           <!-- Logo/Brand section -->
           <div class="logo-section">
-            <a [routerLink]="['/']" class="app-logo" (click)="onMenuItemClick()">
+            <!-- Logo completo solo cuando está expandido -->
+            <a [routerLink]="['/']" class="app-logo" *ngIf="sidebarExpanded || temporaryExpanded" (click)="onMenuItemClick()">
               <span class="logo-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L2.56 10l3.72 3.72a.75.75 0 01-1.06 1.06L.97 10.53a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L17.44 10l-3.72-3.72a.75.75 0 010-1.06zM11.377 2.011a.75.75 0 01.612.867l-2.5 14.5a.75.75 0 01-1.478-.255l2.5-14.5a.75.75 0 01.866-.612z" clip-rule="evenodd" />
@@ -50,14 +51,15 @@ interface MenuItem {
               <span class="logo-title">Test Plan Manager</span>
             </a>
             
-            <!-- Ícono compacto para modo contraído -->
-            <div class="logo-compact" *ngIf="!sidebarExpanded && !temporaryExpanded">
+            <!-- Ícono compacto para modo contraído - Gestor de casos de prueba -->
+            <a [routerLink]="['/']" class="logo-compact" *ngIf="!sidebarExpanded && !temporaryExpanded" (click)="onMenuItemClick()">
               <span class="logo-compact-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L2.56 10l3.72 3.72a.75.75 0 01-1.06 1.06L.97 10.53a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L17.44 10l-3.72-3.72a.75.75 0 010-1.06zM11.377 2.011a.75.75 0 01.612.867l-2.5 14.5a.75.75 0 01-1.478-.255l2.5-14.5a.75.75 0 01.866-.612z" clip-rule="evenodd" />
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
+                  <path d="M8 8h8M8 12h8M8 16h5" stroke-width="2" stroke-linecap="round"/>
                 </svg>
               </span>
-            </div>
+            </a>
           </div>
 
           <!-- Menu toggle button -->
@@ -91,11 +93,11 @@ interface MenuItem {
                 [title]="item.label">
                 
                 <span class="menu-icon">
-                  <!-- Ícono para Generar Test Plans -->
+                  <!-- Ícono lápiz sobre cuadro para Generar Test Plans -->
                   <svg *ngIf="i === 0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
-                  <!-- Ícono para Ver Test Plans -->
+                  <!-- Ícono hoja con líneas para Ver Test Plans -->
                   <svg *ngIf="i === 1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
