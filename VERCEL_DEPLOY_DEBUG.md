@@ -14,10 +14,19 @@ Error `NG0200` en el navegador al acceder a la app desplegada en Vercel, indican
 
 ```
 SUPABASE_URL = https://tuproyecto.supabase.co
-SUPABASE_KEY = tu_anon_key_aqui
+SUPABASE_SERVICE_KEY = tu_service_role_key_aqui
 ```
 
-**IMPORTANTE**: Estas variables deben estar configuradas para **Production**, **Preview** y **Development**
+**🔑 IMPORTANTE**: 
+- Debes usar `SUPABASE_SERVICE_KEY` (NO `SUPABASE_KEY`)
+- Esta debe ser la **service_role** key de Supabase, **NO la anon key**
+- La service_role key permite operaciones de lectura/escritura completas
+- Estas variables deben estar configuradas para **Production**, **Preview** y **Development**
+
+**📍 Dónde encontrar la service_role key:**
+1. Ve a tu proyecto en [Supabase Dashboard](https://supabase.com/dashboard)
+2. Settings → API
+3. Copia la clave **service_role** (no la anon/public)
 
 ### 2. Verificar Configuración de Build
 
@@ -37,13 +46,13 @@ En **Settings** → **General** → **Build & Output Settings**:
 🔧 Configurando variables de entorno para producción...
 ✅ Variables encontradas:
 SUPABASE_URL: https://abc123...
-SUPABASE_KEY: eyJhbGci...
+SUPABASE_SERVICE_KEY: eyJhbGci...
 ```
 
 ❌ **Incorrecto**:
 ```
 ❌ ERROR: SUPABASE_URL no está definida
-❌ ERROR: SUPABASE_KEY no está definida
+❌ ERROR: SUPABASE_SERVICE_KEY no está definida
 ```
 
 ### 4. Comandos de Emergencia
