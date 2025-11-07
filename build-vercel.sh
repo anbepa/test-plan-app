@@ -2,13 +2,33 @@
 
 echo "🔧 Configurando variables de entorno para producción..."
 
-# Reemplazar las variables en environment.prod.ts antes del build
-sed -i "s/\${SUPABASE_URL}/$SUPABASE_URL/g" src/environments/environment.prod.ts
-sed -i "s/\${SUPABASE_KEY}/$SUPABASE_KEY/g" src/environments/environment.prod.ts
+# Verificar que las variables de entorno están definidas
+if [ -z "$SUPABASE_URL" ]; then
+  echo "❌ ERROR: SUPABASE_URL no está definida"
+  exit 1
+fi
 
-echo "✅ Variables configuradas:"
+if [ -z "$SUPABASE_KEY" ]; then
+  echo "❌ ERROR: SUPABASE_KEY no está definida"
+  exit 1
+fi
+
+echo "✅ Variables encontradas:"
 echo "SUPABASE_URL: ${SUPABASE_URL:0:30}..."
-echo "SUPABASE_KEY: ${SUPABASE_KEY:0:30}..."
+echo "SUPABASE_KEY: ${SUPABASE_KEY:0:10}..."
+
+# Crear una copia del archivo para modificar
+cp src/environments/environment.prod.ts src/environments/environment.prod.ts.tmp
+
+# Reemplazar las variables usando una sintaxis más segura
+sed "s|\${SUPABASE_URL}|$SUPABASE_URL|g" src/environments/environment.prod.ts.tmp > src/environments/environment.prod.ts.build
+sed "s|\${SUPABASE_KEY}|$SUPABASE_KEY|g" src/environments/environment.prod.ts.build > src/environments/environment.prod.ts
+
+# Limpiar archivos temporales
+rm src/environments/environment.prod.ts.tmp src/environments/environment.prod.ts.build
+
+echo "🔍 Verificando reemplazo:"
+grep -n "supabase" src/environments/environment.prod.ts
 
 echo "🏗️ Iniciando build de Angular..."
 npm run build
