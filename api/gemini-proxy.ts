@@ -2,7 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 3000;
+const MIN_REQUEST_INTERVAL = 5000; // 5 segundos entre peticiones
 
 async function waitForRateLimit(): Promise<void> {
   const now = Date.now();

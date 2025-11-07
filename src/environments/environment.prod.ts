@@ -6,8 +6,9 @@ export const environment = {
   geminiApiKey: '',
   geminiApiEndpoint: '',
   
-  supabaseUrl: 'https://pcygnqzxryaqiyhqfosi.supabase.co',
-  supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjeWducXp4cnlhcWl5aHFmb3NpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTkwOTIsImV4cCI6MjA3NTMzNTA5Mn0.BVtAZee3SdcNDNV8fCHaaJ-dIDPlhSmsTjFvDSkgAjM',
+  // Variables de entorno para producción - se reemplazarán en build time por Vercel
+  supabaseUrl: '${SUPABASE_URL}',
+  supabaseKey: '${SUPABASE_KEY}',
   
   apiTimeout: 30000,
   maxRetries: 3,

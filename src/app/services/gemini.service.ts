@@ -59,7 +59,7 @@ export class GeminiService {
   // Sistema de cola para controlar el rate limiting en el cliente
   private requestQueue: Array<() => Promise<any>> = [];
   private isProcessingQueue = false;
-  private readonly MIN_REQUEST_INTERVAL = 3000; // 3 segundos entre peticiones (aumentado)
+  private readonly MIN_REQUEST_INTERVAL = 5000; // 5 segundos entre peticiones (aumentado para evitar 429)
   private lastRequestTime = 0;
 
   // --- Definiciones de Prompts ---

@@ -7,6 +7,7 @@ import { GeminiService } from '../services/gemini.service';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
 import { TestCaseEditorComponent, UIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
+import { ToastService } from '../services/toast.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
 
@@ -89,7 +90,8 @@ export class TestPlanViewerComponent implements OnInit {
     private geminiService: GeminiService,
     private router: Router,
     private route: ActivatedRoute,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private toastService: ToastService
   ) {}
 
   async ngOnInit() {
@@ -433,7 +435,7 @@ export class TestPlanViewerComponent implements OnInit {
 
   public refineDetailedTestCases(hu: HUData): void {
     if (!hu.refinementTechnique || !hu.refinementContext) {
-      alert('⚠️ Debes seleccionar una técnica y proporcionar contexto para refinar.');
+      this.toastService.warning('Debes seleccionar una técnica y proporcionar contexto para refinar');
       return;
     }
 
@@ -501,7 +503,7 @@ export class TestPlanViewerComponent implements OnInit {
 
   regenerateStaticSectionWithAI(section: StaticSectionBaseName): void {
     if (!this.selectedTestPlan || this.huList.length === 0) {
-      alert('⚠️ No hay un test plan seleccionado o no hay HUs para proporcionar contexto.');
+      this.toastService.warning('No hay un test plan seleccionado o no hay HUs para proporcionar contexto');
       return;
     }
 
@@ -562,7 +564,7 @@ export class TestPlanViewerComponent implements OnInit {
       .pipe(
         tap(enhancedContent => {
           if (!enhancedContent || enhancedContent.trim() === '') {
-            alert(`ℹ️ La sección "${sectionName}" ya está completa. No se sugirieron mejoras adicionales.`);
+            this.toastService.info(`La sección "${sectionName}" ya está completa. No se sugirieron mejoras adicionales`);
             return;
           }
 
@@ -602,12 +604,12 @@ export class TestPlanViewerComponent implements OnInit {
           this.autoSaveToDatabase();
           this.updatePreview();
           this.cdr.detectChanges();
-          alert(`✅ Sección "${sectionName}" mejorada con IA exitosamente.`);
+          this.toastService.success(`Sección "${sectionName}" mejorada con IA exitosamente`);
         }),
         catchError(err => {
           const errorMsg = err?.message || 'Error desconocido al mejorar con IA';
           (this as any)[errorMap[section]] = errorMsg;
-          alert(`❌ Error al mejorar "${sectionName}": ${errorMsg}`);
+          this.toastService.error(`Error al mejorar "${sectionName}": ${errorMsg}`);
           return of(null);
         }),
         finalize(() => {
@@ -622,7 +624,7 @@ export class TestPlanViewerComponent implements OnInit {
 
   exportExecutionMatrix(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
-      alert('No hay casos de prueba para exportar');
+      this.toastService.warning('No hay casos de prueba para exportar');
       return;
     }
 
@@ -644,22 +646,22 @@ export class TestPlanViewerComponent implements OnInit {
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, `matriz_ejecucion_${hu.id}.csv`);
-    alert('✅ Matriz exportada en formato CSV');
+    this.toastService.success('Matriz exportada en formato CSV');
   }
 
   exportExecutionMatrixToHtml(hu: HUData): void {
     if (!this.matrixExporter) {
-      alert('❌ Componente de exportación no disponible');
+      this.toastService.error('Componente de exportación no disponible');
       return;
     }
 
     // Llamar al método generateMatrixExcel que está implementado
     try {
       this.matrixExporter.generateMatrixExcel(hu);
-      // El alert de éxito se muestra dentro de generateMatrixExcel
+      // El toast de éxito se muestra dentro de generateMatrixExcel
     } catch (error) {
       console.error('Error al exportar matriz Excel:', error);
-      alert('❌ Error al generar el archivo Excel');
+      this.toastService.error('Error al generar el archivo Excel');
     }
   }
 
@@ -740,7 +742,7 @@ export class TestPlanViewerComponent implements OnInit {
     
     if (!this.downloadPreviewHtmlContent) {
       console.error('❌ No hay contenido HTML para descargar');
-      alert('No hay contenido para descargar. Intenta seleccionar un test plan primero.');
+      this.toastService.warning('No hay contenido para descargar. Intenta seleccionar un test plan primero');
       return;
     }
 
@@ -969,10 +971,10 @@ ${this.downloadPreviewHtmlContent}
       console.log('✅ HTML generado, descargando...');
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
       saveAs(blob, `plan_pruebas_${this.testPlanTitle || 'documento'}.html`);
-      alert('✅ Documento HTML descargado exitosamente.\n\nPuedes abrirlo con cualquier navegador y luego guardar como PDF o imprimirlo.');
+      this.toastService.success('Documento HTML descargado exitosamente. Puedes abrirlo con cualquier navegador y guardarlo como PDF');
     } catch (error) {
       console.error('❌ Error al generar el documento:', error);
-      alert('❌ Error al generar el documento. Revisa la consola para más detalles.');
+      this.toastService.error('Error al generar el documento. Revisa la consola para más detalles');
     }
   }
 
@@ -1013,10 +1015,10 @@ ${this.downloadPreviewHtmlContent}
       .trim();
 
     navigator.clipboard.writeText(textContent).then(() => {
-      alert('✅ Texto del plan copiado al portapapeles con formato');
+      this.toastService.success('Texto del plan copiado al portapapeles con formato');
     }).catch(err => {
       console.error('Error al copiar:', err);
-      alert('❌ Error al copiar al portapapeles');
+      this.toastService.error('Error al copiar al portapapeles');
     });
   }
 
@@ -1076,18 +1078,34 @@ ${this.downloadPreviewHtmlContent}
 
   async saveToDatabase(): Promise<void> {
     if (!this.selectedTestPlan?.id) {
-      alert('⚠️ No hay test plan seleccionado');
+      this.toastService.warning('No hay test plan seleccionado');
       return;
     }
 
+    // Mostrar toast de carga
+    const loadingToastId = this.toastService.loading('Guardando cambios en la base de datos...');
     this.savingToDatabase = true;
+    this.cdr.detectChanges();
 
     try {
       await this.autoSaveToDatabase();
-      alert('✅ Test Plan actualizado exitosamente en la base de datos!');
+      
+      // Actualizar el toast de loading a success con el título del plan
+      const planTitle = this.testPlanTitle || 'Test Plan';
+      this.toastService.update(loadingToastId, {
+        type: 'success',
+        message: `✅ "${planTitle}" guardado exitosamente`,
+        duration: 4500
+      });
     } catch (error) {
       console.error('❌ Error al guardar:', error);
-      alert('❌ Error al guardar en la base de datos. Verifica la consola para más detalles.');
+      
+      // Actualizar el toast de loading a error
+      this.toastService.update(loadingToastId, {
+        type: 'error',
+        message: 'Error al guardar en la base de datos. Verifica la consola para más detalles',
+        duration: 5000
+      });
     } finally {
       this.savingToDatabase = false;
       this.cdr.detectChanges();
@@ -1102,21 +1120,27 @@ ${this.downloadPreviewHtmlContent}
     const confirmed = confirm(`¿Estás seguro de eliminar "${testPlan.title}"?\n\nEsta acción no se puede deshacer.`);
     if (!confirmed) return;
 
+    const loadingToastId = this.toastService.loading('Eliminando test plan...');
     this.isLoading = true;
+    
     try {
       const success = await this.databaseService.deleteTestPlan(testPlan.id!);
+      
+      this.toastService.dismiss(loadingToastId);
+      
       if (success) {
-        alert('✅ Test plan eliminado exitosamente');
+        this.toastService.success('Test plan eliminado exitosamente');
         await this.loadTestPlans();
         if (this.selectedTestPlan?.id === testPlan.id) {
           this.selectedTestPlan = null;
         }
       } else {
-        alert('❌ Error al eliminar el test plan');
+        this.toastService.error('Error al eliminar el test plan');
       }
     } catch (error) {
       console.error('❌ Error:', error);
-      alert('❌ Error al eliminar el test plan');
+      this.toastService.dismiss(loadingToastId);
+      this.toastService.error('Error al eliminar el test plan');
     } finally {
       this.isLoading = false;
     }

@@ -210,35 +210,46 @@
 
   <!-- VISTA DETALLADA / EDICIÓN -->
   <div *ngIf="selectedTestPlan" class="detail-view">
-    <!-- Cabecera estilo Apple/Linear/Notion -->
+    <!-- Cabecera mejorada estilo Apple/Linear/Notion -->
     <div class="detail-header">
       <div class="header-container">
-        <!-- Izquierda: Botón Volver -->
-        <button class="button-back" (click)="backToList()">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd" />
-          </svg>
-          Volver a la Lista
-        </button>
+        <!-- Breadcrumb Navigation -->
+        <div class="breadcrumb-nav">
+          <button class="breadcrumb-button" (click)="backToList()">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd" />
+            </svg>
+            <span>Lista de Planes</span>
+          </button>
+          <span class="breadcrumb-separator">/</span>
+          <span class="breadcrumb-current">Detalle del Plan</span>
+        </div>
         
-        <!-- Centro: Título del Test Plan -->
-        <h2 class="header-title">{{ testPlanTitle }}</h2>
+        <!-- Título principal con descripción -->
+        <div class="header-title-section">
+          <h1 class="header-title">{{ testPlanTitle }}</h1>
+          <p class="header-subtitle">
+            {{ huList.length }} {{ huList.length === 1 ? 'Historia de Usuario' : 'Historias de Usuario' }} · 
+            {{ getTestCaseCount(selectedTestPlan) }} Casos de Prueba · 
+            {{ getTotalStepsCount(selectedTestPlan) }} Pasos
+          </p>
+        </div>
         
-        <!-- Derecha: Botones de Acción -->
+        <!-- Botones de acción agrupados -->
         <div class="header-actions">
-          <button class="button-primary" (click)="saveToDatabase()" [disabled]="savingToDatabase">
+          <button class="button-secondary-action" (click)="openPreviewModal()" [disabled]="huList.length === 0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+              <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+            </svg>
+            Previsualizar
+          </button>
+          <button class="button-primary-action" (click)="saveToDatabase()" [disabled]="savingToDatabase">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
             </svg>
             <span *ngIf="!savingToDatabase">Guardar Cambios</span>
             <span *ngIf="savingToDatabase">Guardando...</span>
-          </button>
-          <button class="button-secondary-outline" (click)="openPreviewModal()" [disabled]="huList.length === 0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-              <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
-            </svg>
-            Ver Previsualización
           </button>
         </div>
       </div>

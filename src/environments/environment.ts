@@ -6,6 +6,7 @@ export const environment = {
   geminiApiKey: '',
   geminiApiEndpoint: '',
   
+  // Variables de entorno para desarrollo local - valores hardcoded para desarrollo
   supabaseUrl: 'https://pcygnqzxryaqiyhqfosi.supabase.co',
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjeWducXp4cnlhcWl5aHFmb3NpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk3NTkwOTIsImV4cCI6MjA3NTMzNTA5Mn0.BVtAZee3SdcNDNV8fCHaaJ-dIDPlhSmsTjFvDSkgAjM',
   

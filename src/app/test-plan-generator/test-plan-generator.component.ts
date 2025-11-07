@@ -6,6 +6,7 @@ import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.mode
 import { GeminiService } from '../services/gemini.service';
 import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
 import { DatabaseService, DbUserStoryWithRelations } from '../services/database.service';
+import { ToastService } from '../services/toast.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
@@ -36,9 +37,6 @@ export class TestPlanGeneratorComponent {
   savedUserStoryIds: string[] = [];
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
-  
-  notifications: Array<{id: number, message: string, type: 'success' | 'error' | 'warning' | 'info'}> = [];
-  private notificationIdCounter = 0;
   
   showConfirmModal: boolean = false;
   confirmModalTitle: string = '';
@@ -90,32 +88,13 @@ export class TestPlanGeneratorComponent {
     private databaseService: DatabaseService,
     private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private toastService: ToastService
   ) {}
 
   ngOnInit(): void {
     this.checkForStoredData();
     this.selectInitialMode('text');
-  }
-
-  showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration: number = 4000): void {
-    const notification = {
-      id: this.notificationIdCounter++,
-      message,
-      type
-    };
-    
-    this.notifications.push(notification);
-    
-    if (duration > 0) {
-      setTimeout(() => {
-        this.removeNotification(notification.id);
-      }, duration);
-    }
-  }
-
-  removeNotification(id: number): void {
-    this.notifications = this.notifications.filter(n => n.id !== id);
   }
 
   showConfirm(title: string, message: string, callback: () => void): void {
@@ -164,9 +143,9 @@ export class TestPlanGeneratorComponent {
       this.teamContent = state.teamContent || this.teamContent;
       
       this.updatePreview();
-      this.showNotification(`Datos cargados exitosamente! ${state.huList.length} Historia(s) de Usuario recuperadas.`, 'success', 3000);
+      this.toastService.success(`Datos cargados exitosamente! ${state.huList.length} Historia(s) de Usuario recuperadas`);
     } else {
-      this.showNotification('No se pudieron cargar los datos guardados', 'error', 4000);
+      this.toastService.error('No se pudieron cargar los datos guardados');
     }
     
     this.showLoadDataPrompt = false;
@@ -204,7 +183,7 @@ export class TestPlanGeneratorComponent {
         this.testPlanTitle = '';
         this.localStorageService.clearTestPlanState();
         this.updatePreview();
-        this.showNotification('🗑️ Todos los datos han sido eliminados', 'success', 3000);
+        this.toastService.success('Todos los datos han sido eliminados');
       }
     );
   }
@@ -240,7 +219,7 @@ export class TestPlanGeneratorComponent {
     if (state) {
       this.loadStoredData();
     } else {
-      this.showNotification('Error al importar el archivo. Verifica que sea un archivo de backup válido', 'error', 4000);
+      this.toastService.error('Error al importar el archivo. Verifica que sea un archivo de backup válido');
     }
 
     input.value = '';
@@ -372,6 +351,9 @@ export class TestPlanGeneratorComponent {
     this.saveCurrentState();
     
     if (this.databaseService.isReady()) {
+      // Mostrar toast de carga
+      const loadingToastId = this.toastService.loading('Guardando plan de pruebas en la base de datos...');
+      
       try {
         console.log('💾 Guardando plan completo en BD con', this.huList.length, 'HU(s)');
         
@@ -380,12 +362,13 @@ export class TestPlanGeneratorComponent {
         if (testPlanId) {
           console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
           
-          // Mostrar notificación de éxito
-          this.showNotification(
-            `Plan de pruebas guardado exitosamente: ${this.testPlanTitle}`,
-            'success',
-            2000
-          );
+          // Actualizar toast de loading a éxito
+          const planTitle = this.testPlanTitle || 'Plan de Pruebas';
+          this.toastService.update(loadingToastId, {
+            type: 'success',
+            message: `✅ "${planTitle}" guardado con ${this.huList.length} HU(s)`,
+            duration: 4500
+          });
           
           // Redirigir al home después de 2 segundos
           setTimeout(() => {
@@ -395,29 +378,28 @@ export class TestPlanGeneratorComponent {
           throw new Error('No se recibió ID del plan guardado');
         }
       } catch (error) {
-      console.error('[DB] Error guardando en BD:', error);
-      
-      let errorMessage = 'Error desconocido';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        const supabaseError = error as any;
-        errorMessage = supabaseError.message || supabaseError.error_description || supabaseError.hint || JSON.stringify(error);
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }        this.showNotification(
-          `Plan creado localmente pero no se pudo guardar en BD: ${errorMessage}`,
-          'warning',
-          6000
-        );
+        console.error('[DB] Error guardando en BD:', error);
+        
+        let errorMessage = 'Error desconocido';
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === 'object' && error !== null) {
+          const supabaseError = error as any;
+          errorMessage = supabaseError.message || supabaseError.error_description || supabaseError.hint || JSON.stringify(error);
+        } else if (typeof error === 'string') {
+          errorMessage = error;
+        }
+        
+        // Actualizar toast de loading a error
+        this.toastService.update(loadingToastId, {
+          type: 'error',
+          message: `No se pudo guardar en BD: ${errorMessage}`,
+          duration: 6000
+        });
       }
     } else {
       console.warn('[DB] Base de datos no configurada, solo guardado local');
-      this.showNotification(
-        `Plan de pruebas creado localmente con ${this.huList.length} Historia${this.huList.length > 1 ? 's' : ''} de Usuario`,
-        'success',
-        3000
-      );
+      this.toastService.success(`Plan de pruebas creado localmente con ${this.huList.length} Historia${this.huList.length > 1 ? 's' : ''} de Usuario`);
     }
     
     this.resetActiveGeneratorsAndGoToSelection();
@@ -442,19 +424,11 @@ export class TestPlanGeneratorComponent {
     this.updatePreview();
     this.saveCurrentState(); // Guardar en localStorage
     
-    // Mostrar notificación de éxito
-    this.showNotification(
-      `Historia de Usuario guardada (${this.savedUserStoryIds.length} HU${this.savedUserStoryIds.length > 1 ? 's' : ''} guardada${this.savedUserStoryIds.length > 1 ? 's' : ''})`,
-      'success',
-      3000
+    // Mostrar toast de éxito
+    this.toastService.success(
+      `HU "${huData.title}" guardada (${this.savedUserStoryIds.length} HUs)`,
+      4000
     );
-    
-    // Mostrar modal de éxito brevemente
-    this.showSuccessModal = true;
-    setTimeout(() => {
-      this.showSuccessModal = false;
-      this.cdr.detectChanges();
-    }, 2000);
     
     // Cambiar automáticamente a la pestaña de escenarios
     this.activeTab = 'scenarios';
@@ -480,7 +454,7 @@ export class TestPlanGeneratorComponent {
         hu.editingScope = !hu.editingScope;
         if (hu.editingScope) hu.isScopeDetailsOpen = true;
       } else {
-        this.showNotification("El alcance no es aplicable/editable para este modo", 'warning', 3000);
+        this.toastService.warning("El alcance no es aplicable/editable para este modo");
       }
     } else if (section === 'testCases') {
       hu.editingTestCases = !hu.editingTestCases;
@@ -493,7 +467,7 @@ export class TestPlanGeneratorComponent {
         this.saveCurrentState(); // Guardar cambios
       }
     } else if (section === 'scenarios') {
-       this.showNotification("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan", 'info', 4000);
+       this.toastService.info("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan");
     }
     if (!hu.editingScope && !hu.editingTestCases) {
         this.updatePreview();
@@ -564,7 +538,7 @@ export class TestPlanGeneratorComponent {
 
   public regenerateScope(hu: HUData): void {
     if (hu.originalInput.generationMode !== 'text' || !hu.originalInput.description || !hu.originalInput.acceptanceCriteria) {
-      this.showNotification('Alcance solo se regenera para HUs con descripción/criterios', 'warning', 3000);
+      this.toastService.warning('Alcance solo se regenera para HUs con descripción/criterios');
       return;
     }
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
@@ -585,7 +559,7 @@ export class TestPlanGeneratorComponent {
 
   public refineDetailedTestCases(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
-      this.showNotification('No hay casos de prueba para refinar', 'warning', 3000);
+      this.toastService.warning('No hay casos de prueba para refinar');
       return;
     }
     
@@ -607,7 +581,7 @@ export class TestPlanGeneratorComponent {
             hu.detailedTestCases = refinedCases;
             hu.errorScope = null;
             this.saveCurrentState();
-            this.showNotification('✨ Casos de prueba refinados exitosamente', 'success', 3000);
+            this.toastService.success('Casos de prueba refinados exitosamente');
           } else {
             hu.errorScope = 'No se pudieron refinar los casos de prueba';
           }
@@ -626,7 +600,7 @@ export class TestPlanGeneratorComponent {
 
   public exportExecutionMatrix(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
-      this.showNotification('No hay casos de prueba válidos para exportar o los casos generados indican un error', 'warning', 4000);
+      this.toastService.warning('No hay casos de prueba válidos para exportar o los casos generados indican un error');
       return;
     }
     const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
@@ -650,7 +624,7 @@ export class TestPlanGeneratorComponent {
       this.matrixExporter.generateMatrixExcel(hu);
     } else {
       console.error('El componente exportador de matriz no está disponible.');
-      this.showNotification('Error: El componente para exportar no se ha cargado correctamente', 'error', 4000);
+      this.toastService.error('El componente para exportar no se ha cargado correctamente');
     }
   }
 
@@ -808,25 +782,25 @@ export class TestPlanGeneratorComponent {
     const planText = this.generatePlanContentString();
     if (isPlatformBrowser(this.platformId) && navigator.clipboard) {
       navigator.clipboard.writeText(planText)
-        .then(() => this.showNotification('Plan de pruebas copiado al portapapeles!', 'success', 3000))
+        .then(() => this.toastService.success('Plan de pruebas copiado al portapapeles'))
         .catch(err => {
             console.error('Error al copiar al portapapeles:', err);
-            this.showNotification('Error al copiar: ' + err, 'error', 4000);
+            this.toastService.error('Error al copiar: ' + err);
         });
     } else {
-      this.showNotification('La API del portapapeles no es compatible con este navegador', 'error', 4000);
+      this.toastService.error('La API del portapapeles no es compatible con este navegador');
     }
   }
 
   public downloadWord(): void {
     const htmlContent = this.generatePlanContentHtmlString();
     if (htmlContent.includes('Plan de pruebas aún no generado')) {
-      this.showNotification('No hay contenido del plan para descargar', 'warning', 3000);
+      this.toastService.warning('No hay contenido del plan para descargar');
       return;
     }
     // Funcionalidad DOCX deshabilitada temporalmente debido a incompatibilidades con el navegador
     // La librería html-to-docx requiere módulos de Node.js que no están disponibles en el navegador
-    this.showNotification('La descarga en formato DOCX no está disponible. Se descargará como HTML', 'info', 4000);
+    this.toastService.info('La descarga en formato DOCX no está disponible. Se descargará como HTML');
     this.downloadHtmlFallback(htmlContent);
   }
 

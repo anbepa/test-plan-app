@@ -3,6 +3,7 @@ import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
+import { ToastService } from '../services/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
@@ -53,11 +54,6 @@ export class TestCaseGeneratorComponent implements OnInit {
   errorScope: string | null = null;
   errorScenarios: string | null = null;
 
-  showSavingModal: boolean = false;
-  savingModalMessage: string = '';
-  isSavingComplete: boolean = false;
-  savedHUsCount: number = 0;
-
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
@@ -70,7 +66,8 @@ export class TestCaseGeneratorComponent implements OnInit {
     private geminiService: GeminiService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
-    private elRef: ElementRef
+    private elRef: ElementRef,
+    private toastService: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -602,8 +599,8 @@ export class TestCaseGeneratorComponent implements OnInit {
       
       console.log('📊 HUs acumuladas después:', this.accumulatedHUsCount + 1);
       
-      // Mostrar confirmación al usuario - Mensaje breve y conciso
-      alert(`HU "${dataToEmit.title}" guardada temporalmente.\n\nRECUERDA: Esta HU solo está guardada en tu navegador (localStorage).\n\nPara guardar permanentemente en la base de datos, usa el botón "Confirmar y Añadir al Plan (BD)".`);
+      // Mostrar confirmación al usuario
+      this.toastService.info(`HU "${dataToEmit.title}" guardada temporalmente (${this.accumulatedHUsCount + 1} HUs guardadas)`, 4000);
       
       // Resetear formulario para permitir agregar otra HU
       setTimeout(() => {
@@ -611,7 +608,7 @@ export class TestCaseGeneratorComponent implements OnInit {
         this.componentState = 'initialForm';
       }, 100);
     } else {
-      alert('⚠️ No hay datos válidos para guardar. Por favor genera casos de prueba primero.');
+      this.toastService.warning('No hay datos válidos para guardar. Por favor genera casos de prueba primero');
     }
   }
 
@@ -624,15 +621,9 @@ export class TestCaseGeneratorComponent implements OnInit {
     const totalHUs = this.generatedHUData ? this.accumulatedHUsCount + 1 : this.accumulatedHUsCount;
     
     if (totalHUs === 0) {
-      console.warn('⚠️ No hay HUs para guardar');
+      this.toastService.warning('No hay HUs para guardar');
       return;
     }
-
-    // Mostrar modal de guardado
-    this.showSavingModal = true;
-    this.isSavingComplete = false;
-    this.savedHUsCount = totalHUs;
-    this.savingModalMessage = 'Guardando plan de pruebas en la base de datos...';
     
     if (this.generatedHUData) {
       this.componentState = 'submitting';
@@ -643,13 +634,12 @@ export class TestCaseGeneratorComponent implements OnInit {
       console.log('📤 CONFIRMANDO Y AÑADIENDO AL PLAN - HU actual:', dataToEmit.title);
       console.log('📊 Contador de HUs acumuladas antes:', this.accumulatedHUsCount);
       
-      // Simular un pequeño delay para mostrar el mensaje de guardado
+      // Emitir al padre - esto guardará la HU y creará el plan con toasts
+      this.huGenerated.emit(dataToEmit);
+      
+      // Resetear el formulario después de emitir
       setTimeout(() => {
-        // Emitir al padre - esto guardará la HU y creará el plan
-        this.huGenerated.emit(dataToEmit);
-        
-        // Mostrar mensaje de éxito
-        this.completeSaving();
+        this.resetToInitialForm();
       }, 500);
       
     } else {
@@ -661,39 +651,16 @@ export class TestCaseGeneratorComponent implements OnInit {
       if (this.accumulatedHUsCount > 0) {
         console.log('[PLAN] Creando plan con HUs guardadas previamente');
         
+        // Emitir evento vacío para indicar que se debe crear el plan con las HUs existentes
+        this.huGenerated.emit({} as any);
+        
+        // Resetear el formulario
         setTimeout(() => {
-          // Emitir evento vacío para indicar que se debe crear el plan con las HUs existentes
-          this.huGenerated.emit({} as any);
-          
-          // Mostrar mensaje de éxito
-          this.completeSaving();
+          this.resetToInitialForm();
         }, 500);
+      } else {
+        this.toastService.warning('No hay HUs guardadas para crear un plan');
       }
-    }
-  }
-
-  /**
-   * Completa el proceso de guardado y muestra mensaje de éxito
-   */
-  private completeSaving() {
-    this.isSavingComplete = true;
-    const huText = this.savedHUsCount === 1 ? 'Historia de Usuario' : 'Historias de Usuario';
-    this.savingModalMessage = `Plan de pruebas guardado en base de datos con ${this.savedHUsCount} ${huText}`;
-    
-    // Cerrar el modal después de 2 segundos y resetear
-    setTimeout(() => {
-      this.showSavingModal = false;
-      this.resetToInitialForm();
-    }, 2000);
-  }
-
-  /**
-   * Cierra el modal de guardado manualmente (para el caso de éxito)
-   */
-  closeSavingModal() {
-    if (this.isSavingComplete) {
-      this.showSavingModal = false;
-      this.resetToInitialForm();
     }
   }
 
@@ -736,7 +703,7 @@ export class TestCaseGeneratorComponent implements OnInit {
 
   exportExecutionMatrixLocal(): void {
     if (!this.generatedHUData || !this.generatedHUData.detailedTestCases || this.generatedHUData.detailedTestCases.length === 0 || this.generatedHUData.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || tc.title === "Refinamiento no posible con el contexto actual")) {
-      alert('No hay casos de prueba válidos para exportar o los casos generados indican un error.');
+      this.toastService.warning('No hay casos de prueba válidos para exportar o los casos generados indican un error');
       return;
     }
     const hu = this.generatedHUData;

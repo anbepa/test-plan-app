@@ -3,6 +3,7 @@
 import { Component, Inject, PLATFORM_ID } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { HUData } from '../models/hu-data.model';
+import { ToastService } from '../services/toast.service';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -14,7 +15,10 @@ import * as XLSX from 'xlsx';
 export class HtmlMatrixExporterComponent {
   private isBrowser: boolean;
 
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+  constructor(
+    @Inject(PLATFORM_ID) private platformId: Object,
+    private toastService: ToastService
+  ) {
     this.isBrowser = isPlatformBrowser(this.platformId);
   }
 
@@ -25,7 +29,7 @@ export class HtmlMatrixExporterComponent {
   public generateMatrixExcel(hu: HUData): void {
     if (!this.isBrowser || !hu || !hu.detailedTestCases) {
       console.warn('No hay datos válidos para generar la matriz Excel.');
-      alert('No hay casos de prueba para exportar');
+      this.toastService.warning('No hay casos de prueba para exportar');
       return;
     }
 
@@ -390,9 +394,11 @@ export class HtmlMatrixExporterComponent {
       console.log(`   📝 Numeración: Pasos numerados automáticamente (1, 2, 3...)`);
       console.log(`   📸 Evidencias: Celdas expandibles con altura automática`);
       console.log(`   📋 Estructura: 6 columnas (ID, Escenario, Precondiciones, Pasos, Evidencias, Resultado)`);
+      
+      this.toastService.success('Archivo Excel generado exitosamente');
     } catch (error) {
       console.error('❌ Error generando archivo Excel:', error);
-      alert('Error al generar el archivo Excel: ' + (error as Error).message);
+      this.toastService.error('Error al generar el archivo Excel: ' + (error as Error).message);
     }
   }
 

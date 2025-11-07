@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDe
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
+import { ToastService } from '../services/toast.service';
 
 export interface UIDetailedTestCase extends DetailedTestCase {
   isExpanded?: boolean;
@@ -35,7 +36,10 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   private debounceTimer: any = null;
   private readonly DEBOUNCE_TIME = 1000;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private toastService: ToastService
+  ) {}
 
   ngOnInit() {
     if (this.testCases && this.testCases.length > 0 && !this.testCases.some(tc => tc.isExpanded)) {
@@ -62,7 +66,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
 
   onRefineWithAI(): void {
     if (!this.refinementTechnique) {
-      alert('Por favor, selecciona una técnica para el refinamiento.');
+      this.toastService.warning('Por favor, selecciona una técnica para el refinamiento');
       return;
     }
     

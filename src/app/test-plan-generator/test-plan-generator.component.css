@@ -134,12 +134,9 @@ body {
 
 /* Contenedor general con max-width ampliado estilo Apple/Notion */
 .container { 
-    max-width: 1320px;
-    margin: 0 auto;
-    padding-left: 40px;
-    padding-right: 40px;
-    padding-top: 30px;
-    padding-bottom: 30px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
 
 /* ========================================
@@ -1760,138 +1757,6 @@ textarea.scrollable-content { min-height: 120px; font-family: inherit; font-size
     to {
         transform: rotate(360deg);
     }
-}
-
-/* ========================================
-   SISTEMA DE NOTIFICACIONES TOAST
-   ======================================== */
-
-.toast-container {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 10000;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 400px;
-}
-
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  background: white;
-  border-left: 4px solid;
-  animation: slideInRight 0.3s ease-out;
-  transition: all 0.2s ease;
-}
-
-.toast:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-}
-
-.toast-success {
-  border-left-color: #28a745;
-}
-
-.toast-error {
-  border-left-color: #dc3545;
-}
-
-.toast-warning {
-  border-left-color: #ff9500;
-}
-
-.toast-info {
-  border-left-color: #007bff;
-}
-
-.toast-icon {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-}
-
-.toast-success .toast-icon {
-  color: #28a745;
-}
-
-.toast-error .toast-icon {
-  color: #dc3545;
-}
-
-.toast-warning .toast-icon {
-  color: #ff9500;
-}
-
-.toast-info .toast-icon {
-  color: #007bff;
-}
-
-.toast-content {
-  flex-grow: 1;
-  min-width: 0;
-}
-
-.toast-message {
-  font-size: 0.9375rem;
-  color: #1d1d1f;
-  line-height: 1.5;
-  word-wrap: break-word;
-}
-
-.toast-close {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #6e6e73;
-  transition: color 0.2s ease;
-}
-
-.toast-close:hover {
-  color: #1d1d1f;
-}
-
-.toast-close svg {
-  width: 100%;
-  height: 100%;
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-/* Responsive para móviles */
-@media (max-width: 480px) {
-  .toast-container {
-    left: 16px;
-    right: 16px;
-    top: 16px;
-    max-width: none;
-  }
-
-  .toast {
-    padding: 12px;
-  }
-
-  .toast-message {
-    font-size: 0.875rem;
-  }
 }
 
 /* ========================================
