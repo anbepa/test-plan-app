@@ -1,36 +1,14 @@
 <div class="container">
-  <!-- GENERACIÓN DE CASOS -->
-  <section *ngIf="!isModeSelected" class="initial-selection-section" aria-labelledby="welcome-title-main">
-    <h3 id="initial-selection-prompt-title" class="selection-prompt-title">
-      {{ huList.length > 0 ? 'Selecciona un método para la siguiente HU' : 'Selecciona un Método de Generación' }}
-    </h3>
-    
-    <div class="initial-selection-cards-container">
-      <!-- Modo: Por Descripción -->
-      <div class="mode-card" (click)="selectInitialMode('text')" tabindex="0" role="button" aria-labelledby="mode-card-title-text">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-card-icon">
-          <path d="M3.75 3A1.75 1.75 0 002 4.75v10.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25V4.75A1.75 1.75 0 0016.25 3H3.75zM9 6a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75V6.75A.75.75 0 014.5 6H9zm5.5 0A.75.75 0 0115.25 6.75v.008a.75.75 0 01-.75.75H11a.75.75 0 01-.75-.75V6.75A.75.75 0 0111 6h3.5zM4.5 9.25a.75.75 0 00-.75.75v.008c0 .414.336.75.75.75H11a.75.75 0 00.75-.75V10a.75.75 0 00-.75-.75H4.5zm8.25.75a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v3.5a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75v-3.5zM9 12.5a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H4.5a.75.75 0 01-.75-.75V13.25a.75.75 0 01.75-.75H9z" />
-        </svg>
-        <p id="mode-card-title-text" class="mode-card-title">Por Descripción de HU y Criterios</p>
-        <p class="mode-card-description">Genera alcance y casos de prueba basados en texto y técnicas ISTQB.</p>
-      </div>
-
-
-    </div>
-  </section>
-
   <!-- Componente de Generación -->
-  <ng-container *ngIf="isModeSelected">
-    <app-test-case-generator 
-      *ngIf="showTestCaseGenerator"
-      [initialGenerationMode]="currentGenerationMode!"
-      [initialSprint]="'Sprint Actual'"
-      [accumulatedHUsCount]="huList.length"
-      (huSaved)="onHuSavedFromChild($event)"
-      (huGenerated)="onHuGeneratedFromChild($event)"
-      (generationCancelled)="onGenerationCancelledFromChild()">
-    </app-test-case-generator>
-  </ng-container>
+  <app-test-case-generator 
+    *ngIf="showTestCaseGenerator"
+    [initialGenerationMode]="currentGenerationMode!"
+    [initialSprint]="'Sprint Actual'"
+    [accumulatedHUsCount]="huList.length"
+    (huSaved)="onHuSavedFromChild($event)"
+    (huGenerated)="onHuGeneratedFromChild($event)"
+    (generationCancelled)="onGenerationCancelledFromChild()">
+  </app-test-case-generator>
 
   <!-- Modal de Éxito -->
   <div class="success-modal-overlay" *ngIf="showSuccessModal">

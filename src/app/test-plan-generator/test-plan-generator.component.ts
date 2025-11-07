@@ -93,6 +93,7 @@ export class TestPlanGeneratorComponent {
 
   ngOnInit(): void {
     this.checkForStoredData();
+    this.selectInitialMode('text');
   }
 
   showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration: number = 4000): void {
