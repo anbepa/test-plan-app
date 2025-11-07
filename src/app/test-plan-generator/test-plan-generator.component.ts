@@ -93,8 +93,6 @@ export class TestPlanGeneratorComponent {
 
   ngOnInit(): void {
     this.checkForStoredData();
-    // Ir directamente al formulario
-    this.selectInitialMode('text');
   }
 
   showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration: number = 4000): void {
