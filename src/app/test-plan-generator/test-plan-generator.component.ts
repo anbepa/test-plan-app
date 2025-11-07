@@ -1,6 +1,7 @@
 import { Component, Inject, PLATFORM_ID, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { Router } from '@angular/router';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
 import { GeminiService } from '../services/gemini.service';
 import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
@@ -87,6 +88,7 @@ export class TestPlanGeneratorComponent {
     private geminiService: GeminiService,
     public localStorageService: LocalStorageService,
     private databaseService: DatabaseService,
+    private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef
   ) {}
@@ -363,6 +365,9 @@ export class TestPlanGeneratorComponent {
     console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
     console.log('[PARENT] Iniciando guardado en base de datos...');
     
+    // IMPORTANTE: Actualizar el título del plan antes de guardar
+    this.updateTestPlanTitle();
+    
     this.updatePreview();
     this.saveCurrentState();
     
@@ -374,6 +379,18 @@ export class TestPlanGeneratorComponent {
         
         if (testPlanId) {
           console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
+          
+          // Mostrar notificación de éxito
+          this.showNotification(
+            `Plan de pruebas guardado exitosamente: ${this.testPlanTitle}`,
+            'success',
+            2000
+          );
+          
+          // Redirigir al home después de 2 segundos
+          setTimeout(() => {
+            this.router.navigate(['/']);
+          }, 2000);
         } else {
           throw new Error('No se recibió ID del plan guardado');
         }
