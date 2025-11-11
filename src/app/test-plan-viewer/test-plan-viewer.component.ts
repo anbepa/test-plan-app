@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
@@ -21,7 +21,7 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })
-export class TestPlanViewerComponent implements OnInit {
+export class TestPlanViewerComponent implements OnInit, OnDestroy {
   @ViewChild('matrixExporter') matrixExporter!: HtmlMatrixExporterComponent;
 
   Math = Math;
@@ -86,6 +86,10 @@ export class TestPlanViewerComponent implements OnInit {
 
   isPreviewModalOpen: boolean = false;
 
+  private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoSavePromise: Promise<void> | null = null;
+  private autoSaveQueued = false;
+
   constructor(
     private databaseService: DatabaseService,
     private geminiService: GeminiService,
@@ -107,6 +111,13 @@ export class TestPlanViewerComponent implements OnInit {
         }
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
   }
 
   async loadTestPlans() {
@@ -1058,56 +1069,98 @@ ${this.downloadPreviewHtmlContent}
 
   // === GUARDAR EN BD ===
 
-  async autoSaveToDatabase(): Promise<void> {
-    if (!this.selectedTestPlan?.id) return;
-
-    try {
-      const testPlanData: DbTestPlan = {
-        title: this.testPlanTitle,
-        repository_link: this.repositoryLink,
-        out_of_scope: this.outOfScopeContent,
-        strategy: this.strategyContent,
-        limitations: this.limitationsContent,
-        assumptions: this.assumptionsContent,
-        team: this.teamContent
-      };
-
-      const userStories: DbUserStoryWithRelations[] = this.huList.map((hu, index) => ({
-        test_plan_id: this.selectedTestPlan!.id!,
-        custom_id: hu.id, // ✅ Siempre guardar el ID personalizado de la HU (ya sea original o el generado)
-        title: hu.title,
-        description: hu.originalInput.description || '',
-        acceptance_criteria: hu.originalInput.acceptanceCriteria || '',
-        generated_scope: hu.generatedScope || '',
-        generated_test_case_titles: hu.generatedTestCaseTitles || '',
-        generation_mode: hu.originalInput.generationMode || 'text',
-        sprint: hu.sprint || '',
-        refinement_technique: hu.refinementTechnique,
-        refinement_context: hu.refinementContext,
-        position: index,
-        test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
-          user_story_id: '',
-          title: tc.title,
-          preconditions: tc.preconditions || '',
-          expected_results: tc.expectedResults || '',
-          position: tcIndex + 1,  // ✅ CORREGIDO: position empieza en 1, no en 0
-          test_case_steps: tc.steps
-            // ✅ Filtrar pasos vacíos antes de guardar para evitar error de constraint
-            .filter(step => step.accion && step.accion.trim() !== '')
-            .map((step, stepIndex) => ({
-              test_case_id: '',
-              step_number: stepIndex + 1,
-              action: step.accion
-            }))
-        })),
-        images: []
-      }));
-
-      await this.databaseService.updateCompleteTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
-      console.log('✅ Auto-guardado exitoso en BD con custom_ids:', userStories.map(us => us.custom_id));
-    } catch (error) {
-      console.error('⚠️ Error en auto-guardado:', error);
+  private async performDatabaseSave(): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
     }
+
+    const testPlanData: DbTestPlan = {
+      title: this.testPlanTitle,
+      repository_link: this.repositoryLink,
+      out_of_scope: this.outOfScopeContent,
+      strategy: this.strategyContent,
+      limitations: this.limitationsContent,
+      assumptions: this.assumptionsContent,
+      team: this.teamContent
+    };
+
+    const userStories: DbUserStoryWithRelations[] = this.huList.map((hu, index) => ({
+      test_plan_id: this.selectedTestPlan!.id!,
+      custom_id: hu.id,
+      title: hu.title,
+      description: hu.originalInput.description || '',
+      acceptance_criteria: hu.originalInput.acceptanceCriteria || '',
+      generated_scope: hu.generatedScope || '',
+      generated_test_case_titles: hu.generatedTestCaseTitles || '',
+      generation_mode: hu.originalInput.generationMode || 'text',
+      sprint: hu.sprint || '',
+      refinement_technique: hu.refinementTechnique,
+      refinement_context: hu.refinementContext,
+      position: index,
+      test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
+        user_story_id: '',
+        title: tc.title,
+        preconditions: tc.preconditions || '',
+        expected_results: tc.expectedResults || '',
+        position: tcIndex + 1,
+        test_case_steps: tc.steps
+          .filter(step => step.accion && step.accion.trim() !== '')
+          .map((step, stepIndex) => ({
+            test_case_id: '',
+            step_number: stepIndex + 1,
+            action: step.accion
+          }))
+      })),
+      images: []
+    }));
+
+    await this.databaseService.updateCompleteTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
+    console.log('✅ Auto-guardado exitoso en BD con custom_ids:', userStories.map(us => us.custom_id));
+  }
+
+  private scheduleAutoSaveProcessing(): Promise<void> {
+    this.autoSaveQueued = true;
+
+    if (this.autoSavePromise) {
+      return this.autoSavePromise;
+    }
+
+    this.autoSavePromise = (async () => {
+      try {
+        do {
+          this.autoSaveQueued = false;
+          await this.performDatabaseSave();
+        } while (this.autoSaveQueued);
+      } finally {
+        this.autoSavePromise = null;
+        this.autoSaveQueued = false;
+      }
+    })();
+
+    return this.autoSavePromise;
+  }
+
+  async autoSaveToDatabase(force: boolean = false): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
+    }
+
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+
+    if (force) {
+      await this.scheduleAutoSaveProcessing();
+      return;
+    }
+
+    this.autoSaveTimer = setTimeout(() => {
+      this.autoSaveTimer = null;
+      this.scheduleAutoSaveProcessing().catch(error => {
+        console.error('⚠️ Error en auto-guardado diferido:', error);
+      });
+    }, 800);
   }
 
   async saveToDatabase(): Promise<void> {
@@ -1122,7 +1175,7 @@ ${this.downloadPreviewHtmlContent}
     this.cdr.detectChanges();
 
     try {
-      await this.autoSaveToDatabase();
+      await this.autoSaveToDatabase(true);
       
       // Actualizar el toast de loading a success con el título del plan
       const planTitle = this.testPlanTitle || 'Test Plan';
