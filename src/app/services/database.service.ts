@@ -30,6 +30,7 @@ export type {
 })
 export class DatabaseService {
   private supabase: SupabaseClient;
+  private static readonly INSERT_CHUNK_SIZE = 200;
 
   constructor() {
     // Validar que las variables de entorno están configuradas
@@ -95,87 +96,7 @@ export class DatabaseService {
       console.log('✅ Test plan guardado:', planData.id);
       const testPlanId = planData.id;
 
-      // 2. Guardar user stories
-      for (const us of userStories) {
-        const userStoryData: any = {
-          test_plan_id: testPlanId,
-          custom_id: us.custom_id, // Guardar el ID personalizado
-          title: us.title,
-          description: us.description,
-          acceptance_criteria: us.acceptance_criteria,
-          generated_scope: us.generated_scope,
-          generated_test_case_titles: us.generated_test_case_titles,
-          generation_mode: us.generation_mode,
-          sprint: us.sprint,
-          refinement_technique: us.refinement_technique,
-          refinement_context: us.refinement_context,
-          position: us.position
-        };
-
-        const { data: usData, error: usError } = await this.supabase
-          .from('user_stories')
-          .insert([userStoryData])
-          .select()
-          .single();
-
-        if (usError) {
-          console.error('❌ Error al guardar user story:', usError);
-          console.error('❌ Datos de user story que falló:', userStoryData);
-          throw new Error(`Error en user_stories: ${usError.message || usError.hint || JSON.stringify(usError)}`);
-        }
-
-        console.log(`✅ User story guardada: ${usData.id}`);
-        const userStoryId = usData.id;
-
-        // 3. Guardar test cases
-        if (us.test_cases && us.test_cases.length > 0) {
-          for (const tc of us.test_cases) {
-            const testCaseData: DbTestCase = {
-              user_story_id: userStoryId,
-              title: tc.title,
-              preconditions: tc.preconditions,
-              expected_results: tc.expected_results,
-              position: tc.position  // ✅ CORREGIDO: Guardar position
-            };
-
-            const { data: tcData, error: tcError } = await this.supabase
-              .from('test_cases')
-              .insert([testCaseData])
-              .select()
-              .single();
-
-            if (tcError) {
-              console.error('❌ Error al guardar test case:', tcError);
-              console.error('❌ Datos de test case que falló:', testCaseData);
-              throw new Error(`Error en test_cases: ${tcError.message || tcError.hint || JSON.stringify(tcError)}`);
-            }
-
-            console.log(`  ✅ Test case guardado: ${tcData.id}`);
-            const testCaseId = tcData.id;
-
-            // 4. Guardar steps
-            if (tc.test_case_steps && tc.test_case_steps.length > 0) {
-              const stepsData = tc.test_case_steps.map(step => ({
-                test_case_id: testCaseId,
-                step_number: step.step_number,
-                action: step.action
-              }));
-
-              const { error: stepsError } = await this.supabase
-                .from('test_case_steps')
-                .insert(stepsData);
-
-              if (stepsError) {
-                console.error('❌ Error al guardar steps:', stepsError);
-                console.error('❌ Datos de steps que fallaron:', stepsData);
-                throw new Error(`Error en test_case_steps: ${stepsError.message || stepsError.hint || JSON.stringify(stepsError)}`);
-              }
-
-              console.log(`    ✅ ${stepsData.length} steps guardados`);
-            }
-          }
-        }
-      }
+      await this.persistUserStoriesGraph(testPlanId, userStories);
 
       console.log('🎉 Test plan completo guardado exitosamente!');
       return testPlanId;
@@ -507,84 +428,7 @@ export class DatabaseService {
 
       console.log('✅ User stories anteriores eliminadas');
 
-      // 3. Insertar nuevas user stories
-      for (const us of userStories) {
-        const userStoryData: DbUserStory = {
-          test_plan_id: testPlanId,
-          custom_id: us.custom_id, // ✅ Preservar el custom_id del usuario
-          title: us.title,
-          description: us.description,
-          acceptance_criteria: us.acceptance_criteria,
-          generated_scope: us.generated_scope,
-          generated_test_case_titles: us.generated_test_case_titles,
-          generation_mode: us.generation_mode,
-          sprint: us.sprint,
-          refinement_technique: us.refinement_technique,
-          refinement_context: us.refinement_context,
-          position: us.position
-        };
-
-        const { data: usData, error: usError } = await this.supabase
-          .from('user_stories')
-          .insert([userStoryData])
-          .select()
-          .single();
-
-        if (usError) {
-          console.error('❌ Error al guardar user story:', usError);
-          throw usError;
-        }
-
-        console.log(`✅ User story guardada: ${usData.id}`);
-        const userStoryId = usData.id;
-
-        // 4. Guardar test cases
-        if (us.test_cases && us.test_cases.length > 0) {
-          for (const tc of us.test_cases) {
-            const testCaseData: DbTestCase = {
-              user_story_id: userStoryId,
-              title: tc.title,
-              preconditions: tc.preconditions,
-              expected_results: tc.expected_results,
-              position: tc.position
-            };
-
-            const { data: tcData, error: tcError } = await this.supabase
-              .from('test_cases')
-              .insert([testCaseData])
-              .select()
-              .single();
-
-            if (tcError) {
-              console.error('❌ Error al guardar test case:', tcError);
-              throw tcError;
-            }
-
-            console.log(`  ✅ Test case guardado: ${tcData.id}`);
-            const testCaseId = tcData.id;
-
-            // 5. Guardar steps
-            if (tc.test_case_steps && tc.test_case_steps.length > 0) {
-              const stepsData = tc.test_case_steps.map(step => ({
-                test_case_id: testCaseId,
-                step_number: step.step_number,
-                action: step.action
-              }));
-
-              const { error: stepsError } = await this.supabase
-                .from('test_case_steps')
-                .insert(stepsData);
-
-              if (stepsError) {
-                console.error('❌ Error al guardar steps:', stepsError);
-                throw stepsError;
-              }
-
-              console.log(`    ✅ ${stepsData.length} steps guardados`);
-            }
-          }
-        }
-      }
+      await this.persistUserStoriesGraph(testPlanId, userStories);
 
       console.log('🎉 Test plan actualizado completamente!');
 
@@ -646,5 +490,192 @@ export class DatabaseService {
       console.error('❌ Error al obtener estadísticas:', error);
       return { testPlans: 0, userStories: 0, testCases: 0 };
     }
+  }
+
+  private makeUserStoryKey(position: number | null | undefined, customId?: string | null): string {
+    return `${position ?? -1}::${customId ?? ''}`;
+  }
+
+  private makeTestCaseKey(userStoryId: string, position: number | null | undefined): string {
+    return `${userStoryId}::${position ?? -1}`;
+  }
+
+  private async persistUserStoriesGraph(
+    testPlanId: string,
+    userStories: DbUserStoryWithRelations[]
+  ): Promise<void> {
+    if (!userStories.length) {
+      return;
+    }
+
+    const userStoryKeys: string[] = [];
+    const userStoriesPayload: DbUserStory[] = userStories.map((us, index) => {
+      const resolvedPosition = us.position ?? index;
+      userStoryKeys.push(this.makeUserStoryKey(resolvedPosition, us.custom_id));
+
+      return {
+        test_plan_id: testPlanId,
+        custom_id: us.custom_id,
+        title: us.title,
+        description: us.description,
+        acceptance_criteria: us.acceptance_criteria,
+        generated_scope: us.generated_scope,
+        generated_test_case_titles: us.generated_test_case_titles,
+        generation_mode: us.generation_mode,
+        sprint: us.sprint,
+        refinement_technique: us.refinement_technique,
+        refinement_context: us.refinement_context,
+        position: resolvedPosition
+      };
+    });
+
+    const insertedUserStories = await this.chunkedInsert(
+      'user_stories',
+      userStoriesPayload,
+      'id, position, custom_id'
+    );
+
+    console.log(`✅ ${insertedUserStories.length} user stories guardadas`);
+
+    if (!insertedUserStories.length) {
+      return;
+    }
+
+    const insertedUserStoryMap = new Map<string, { id: string; position: number | null; custom_id: string | null }>();
+    insertedUserStories.forEach(us => {
+      const key = this.makeUserStoryKey(us.position, us.custom_id);
+      if (us.id) {
+        insertedUserStoryMap.set(key, us);
+      }
+    });
+
+    const testCasesPayload: DbTestCase[] = [];
+    const testCaseStepsMeta = new Map<string, { steps: { step_number: number | null | undefined; action: string }[] }>();
+
+    userStories.forEach((us, index) => {
+      const insertedUs = insertedUserStoryMap.get(userStoryKeys[index]);
+
+      if (!insertedUs?.id) {
+        console.warn('⚠️ No se pudo encontrar la user story recién guardada para el índice', index);
+        return;
+      }
+
+      if (!us.test_cases?.length) {
+        return;
+      }
+
+      us.test_cases.forEach((tc, tcIndex) => {
+        const resolvedPosition = tc.position ?? tcIndex + 1;
+        const testCaseKey = this.makeTestCaseKey(insertedUs.id!, resolvedPosition);
+
+        testCasesPayload.push({
+          user_story_id: insertedUs.id!,
+          title: tc.title,
+          preconditions: tc.preconditions,
+          expected_results: tc.expected_results,
+          position: resolvedPosition
+        });
+
+        const steps = tc.test_case_steps
+          ?.filter(step => step.action?.trim())
+          .map((step, stepIndex) => ({
+            step_number: step.step_number ?? stepIndex + 1,
+            action: step.action
+          })) || [];
+
+        if (steps.length > 0) {
+          testCaseStepsMeta.set(testCaseKey, { steps });
+        }
+      });
+    });
+
+    if (!testCasesPayload.length) {
+      return;
+    }
+
+    const insertedTestCases = await this.chunkedInsert(
+      'test_cases',
+      testCasesPayload,
+      'id, user_story_id, position'
+    );
+
+    console.log(`  ✅ ${insertedTestCases.length} test cases guardados`);
+
+    if (!insertedTestCases.length) {
+      return;
+    }
+
+    const insertedTestCaseMap = new Map<string, { id: string; user_story_id: string; position: number | null }>();
+    insertedTestCases.forEach(tc => {
+      if (tc.id && tc.user_story_id) {
+        insertedTestCaseMap.set(this.makeTestCaseKey(tc.user_story_id, tc.position), tc);
+      }
+    });
+
+    const stepsPayload: DbTestCaseStep[] = [];
+
+    testCaseStepsMeta.forEach((meta, key) => {
+      const insertedTestCase = insertedTestCaseMap.get(key);
+
+      if (!insertedTestCase?.id) {
+        console.warn('⚠️ No se pudo encontrar el test case recién guardado para la clave', key);
+        return;
+      }
+
+      meta.steps.forEach((step, index) => {
+        stepsPayload.push({
+          test_case_id: insertedTestCase.id!,
+          step_number: step.step_number ?? index + 1,
+          action: step.action
+        });
+      });
+    });
+
+    if (!stepsPayload.length) {
+      return;
+    }
+
+    await this.chunkedInsert('test_case_steps', stepsPayload);
+    console.log(`    ✅ ${stepsPayload.length} steps guardados`);
+  }
+
+  private async chunkedInsert<T extends Record<string, any>>(
+    table: 'user_stories' | 'test_cases' | 'test_case_steps',
+    rows: T[],
+    selectColumns?: string
+  ): Promise<any[]> {
+    if (!rows.length) {
+      return [];
+    }
+
+    const chunkSize = DatabaseService.INSERT_CHUNK_SIZE;
+    const accumulated: any[] = [];
+
+    for (let start = 0; start < rows.length; start += chunkSize) {
+      const chunk = rows.slice(start, start + chunkSize);
+      let query = this.supabase
+        .from(table)
+        .insert(chunk);
+
+      if (selectColumns) {
+        const { data, error } = await query.select(selectColumns);
+
+        if (error) {
+          console.error(`❌ Error al insertar lote en ${table}:`, error);
+          throw new Error(`Error en ${table}: ${error.message || error.hint || JSON.stringify(error)}`);
+        }
+
+        accumulated.push(...(data || []));
+      } else {
+        const { error } = await query;
+
+        if (error) {
+          console.error(`❌ Error al insertar lote en ${table}:`, error);
+          throw new Error(`Error en ${table}: ${error.message || error.hint || JSON.stringify(error)}`);
+        }
+      }
+    }
+
+    return accumulated;
   }
 }
