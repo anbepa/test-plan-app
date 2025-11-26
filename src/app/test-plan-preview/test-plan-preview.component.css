@@ -1,0 +1,190 @@
+:host {
+    --primary: #2563EB;
+    --primary-hover: #1D4ED8;
+    --bg: #f7f7f8;
+    --surface: #FFFFFF;
+    --border: #E5E7EB;
+    --text: #111827;
+    --text-secondary: #6B7280;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --radius-lg: 0.75rem;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: block;
+    min-height: 100vh;
+    background: var(--bg);
+}
+
+.preview-page-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.preview-header {
+    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+    border-radius: 16px;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 1.5rem 0 1.5rem;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.05),
+        0 0 0 1px rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(229, 231, 235, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 10;
+}
+
+.header-content h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 0.5rem 0;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+}
+
+.header-content p {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0;
+    font-weight: 500;
+}
+
+.header-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.button-secondary,
+.button-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.button-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.button-secondary:hover {
+    background: var(--bg);
+    border-color: var(--primary);
+}
+
+.button-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+}
+
+.button-primary:hover {
+    background: var(--primary-hover);
+}
+
+.button-secondary svg,
+.button-primary svg {
+    width: 1rem;
+    height: 1rem;
+}
+
+.preview-content-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    background: #f0f0f2;
+    /* Un poco más oscuro que bg para resaltar el papel */
+}
+
+.paper-sheet {
+    background: white;
+    width: 100%;
+    max-width: 850px;
+    /* Ancho A4 aprox */
+    min-height: 1000px;
+    padding: 3rem;
+    /* Márgenes de impresión */
+    box-shadow: var(--shadow-md);
+    border-radius: 2px;
+}
+
+/* Estilos internos del documento (copiados del viewer) */
+::ng-deep .paper-sheet h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1rem;
+}
+
+::ng-deep .paper-sheet h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    color: #333;
+    border-bottom: 1px solid #f5f5f5;
+    padding-bottom: 0.5rem;
+}
+
+::ng-deep .paper-sheet h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: #444;
+}
+
+::ng-deep .paper-sheet p,
+::ng-deep .paper-sheet li {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #333;
+    margin-bottom: 0.75rem;
+}
+
+::ng-deep .paper-sheet ul,
+::ng-deep .paper-sheet ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.loading-state,
+.error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1rem;
+}
+
+.spinner {
+    border: 3px solid var(--bg);
+    border-top: 3px solid var(--primary);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}

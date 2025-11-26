@@ -18,6 +18,16 @@ export const routes: Routes = [
     title: 'Gestor de Test Plans'
   },
   {
+    path: 'refiner',
+    loadComponent: () => import('./test-case-refiner/test-case-refiner.component').then(m => m.TestCaseRefinerComponent),
+    title: 'Editar / Refinar Casos de Prueba'
+  },
+  {
+    path: 'preview/:id',
+    loadComponent: () => import('./test-plan-preview/test-plan-preview.component').then(m => m.TestPlanPreviewComponent),
+    title: 'Previsualizar Test Plan'
+  },
+  {
     path: '**',
     loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent)
   }

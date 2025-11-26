@@ -191,6 +191,8 @@ export class TestCaseGeneratorComponent implements OnInit {
       generatedScope: '',
       detailedTestCases: [],
       generatedTestCaseTitles: '',
+      refinementTechnique: this.currentSelectedTechnique, // Asignar la técnica seleccionada
+      refinementContext: '',
       editingScope: false,
       loadingScope: false, errorScope: null,
       isScopeDetailsOpen: this.currentGenerationMode === 'text'
@@ -607,8 +609,8 @@ export class TestCaseGeneratorComponent implements OnInit {
 
       console.log('📊 HUs acumuladas después:', this.accumulatedHUsCount + 1);
 
-      // Mostrar confirmación al usuario
-      this.toastService.info(`HU "${dataToEmit.title}" guardada temporalmente (${this.accumulatedHUsCount + 1} HUs guardadas)`, 4000);
+      // Nota: El toast de confirmación se muestra en el componente padre (test-plan-generator)
+      // para evitar duplicados
 
       // Resetear formulario para permitir agregar otra HU
       setTimeout(() => {

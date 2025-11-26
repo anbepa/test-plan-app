@@ -1,0 +1,52 @@
+<div class="refiner-container" *ngIf="hu">
+    <!-- Header -->
+    <div class="refiner-header">
+        <div class="header-content">
+            <div class="header-info">
+                <h1 class="page-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="title-icon">
+                        <path
+                            d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                    </svg>
+                    Editar / Refinar con IA
+                </h1>
+                <p class="page-subtitle">{{ hu.id }}: {{ hu.title }}</p>
+            </div>
+
+            <div class="header-actions">
+                <button class="btn-cancel" (click)="goBack()">
+                    Cancelar
+                </button>
+                <button class="btn-save-only" (click)="save()" [disabled]="isLoading">
+                    Guardar
+                </button>
+                <button class="btn-save" (click)="saveAndReturn()" [disabled]="isLoading">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                            d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                        <path
+                            d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                    </svg>
+                    Guardar y Volver
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="refiner-content">
+        <app-test-case-editor [testCases]="hu.detailedTestCases || []" [huId]="hu.id" [isLoading]="isLoading"
+            [refinementTechnique]="hu.refinementTechnique || ''" [userRefinementContext]="hu.refinementContext || ''"
+            [showRefinementControls]="true" (refineWithAI)="handleRefineWithAI($event)"
+            (testCasesChanged)="handleTestCasesChanged($event)" (cancel)="goBack()"
+            (refinementTechniqueChange)="onRefinementTechniqueChange($event)"
+            (userRefinementContextChange)="onUserRefinementContextChange($event)">
+        </app-test-case-editor>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div class="loading-container" *ngIf="!hu">
+    <div class="spinner-large"></div>
+    <p>Cargando...</p>
+</div>

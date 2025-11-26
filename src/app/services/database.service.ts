@@ -29,7 +29,7 @@ export type {
   providedIn: 'root'
 })
 export class DatabaseService {
-  private supabase: SupabaseClient;
+  public supabase: SupabaseClient;
   private static readonly INSERT_CHUNK_SIZE = 200;
 
   constructor() {
@@ -316,7 +316,10 @@ export class DatabaseService {
           user_stories(
             id,
             sprint,
-            test_cases(id)
+            test_cases(
+              id,
+              test_case_steps(id)
+            )
           )
         `)
         .order('created_at', { ascending: false });

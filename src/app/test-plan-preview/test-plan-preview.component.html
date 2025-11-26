@@ -1,0 +1,48 @@
+<div class="preview-page-container">
+    <div class="preview-header">
+        <div class="header-content">
+            <h1>Previsualización del Plan</h1>
+            <p *ngIf="testPlan">{{ testPlan.title }}</p>
+        </div>
+        <div class="header-actions">
+            <button (click)="goBack()" class="button-secondary">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                        clip-rule="evenodd" />
+                </svg>
+                Volver
+            </button>
+            <button (click)="copyToClipboard()" class="button-secondary">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                    <path
+                        d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                </svg>
+                Copiar Texto
+            </button>
+            <app-word-exporter [testPlanTitle]="testPlan?.title || ''"
+                [repositoryLink]="testPlan?.repository_link || ''" [outOfScopeContent]="testPlan?.out_of_scope || ''"
+                [strategyContent]="testPlan?.strategy || ''" [limitationsContent]="testPlan?.limitations || ''"
+                [assumptionsContent]="testPlan?.assumptions || ''" [teamContent]="testPlan?.team || ''"
+                [huList]="huList">
+            </app-word-exporter>
+        </div>
+    </div>
+
+    <div class="preview-content-wrapper">
+        <div *ngIf="isLoading" class="loading-state">
+            <div class="spinner"></div>
+            <p>Cargando previsualización...</p>
+        </div>
+
+        <div *ngIf="errorMessage" class="error-state">
+            <p>{{ errorMessage }}</p>
+            <button (click)="goBack()" class="button-secondary">Volver al listado</button>
+        </div>
+
+        <div *ngIf="!isLoading && !errorMessage" class="document-preview">
+            <div class="paper-sheet" [innerHTML]="previewHtmlContent"></div>
+        </div>
+    </div>
+</div>
