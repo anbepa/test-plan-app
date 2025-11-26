@@ -108,6 +108,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         .select('id')
         .eq('test_plan_id', this.testPlanId)
         .eq('custom_id', this.hu.id)
+        .limit(1)
         .single();
 
       if (fetchError) {
