@@ -1,0 +1,165 @@
+<div class="static-plan-sections-container">
+    <div class="section-header">
+        <h2>Secciones Generales del Plan</h2>
+    </div>
+
+    <!-- Repositorio -->
+    <details class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
+        <summary class="plan-section-summary">
+            Repositorio Pruebas VSTS
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingRepositoryLink">
+                <pre
+                    class="static-text"><a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a></pre>
+            </div>
+            <div *ngIf="editingRepositoryLink">
+                <textarea [(ngModel)]="tempRepositoryLink" rows="2" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary">
+                    {{ editingRepositoryLink ? 'Guardar' : 'Editar' }}
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Fuera del Alcance -->
+    <details class="plan-section-details static-block" [open]="editingOutOfScope || isOutOfScopeDetailsOpen">
+        <summary class="plan-section-summary">
+            Fuera del Alcance
+            <span class="summary-indicators">
+                <span *ngIf="loadingOutOfScopeAI" class="spinner-small"></span>
+                <span *ngIf="errorOutOfScopeAI" class="error-status-icon" [title]="errorOutOfScopeAI">⚠️</span>
+            </span>
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingOutOfScope">
+                <pre class="static-text">{{ outOfScopeContent }}</pre>
+            </div>
+            <div *ngIf="editingOutOfScope">
+                <textarea [(ngModel)]="tempOutOfScopeContent" rows="4" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary"
+                    [disabled]="loadingOutOfScopeAI">
+                    {{ editingOutOfScope ? 'Guardar' : 'Editar' }}
+                </button>
+                <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate"
+                    [disabled]="loadingOutOfScopeAI || editingOutOfScope">
+                    <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span>
+                    Mejorar con IA
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Estrategia -->
+    <details class="plan-section-details static-block" [open]="editingStrategy || isStrategyDetailsOpen">
+        <summary class="plan-section-summary">
+            Estrategia
+            <span class="summary-indicators">
+                <span *ngIf="loadingStrategyAI" class="spinner-small"></span>
+                <span *ngIf="errorStrategyAI" class="error-status-icon" [title]="errorStrategyAI">⚠️</span>
+            </span>
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingStrategy">
+                <pre class="static-text">{{ strategyContent }}</pre>
+            </div>
+            <div *ngIf="editingStrategy">
+                <textarea [(ngModel)]="tempStrategyContent" rows="8" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="loadingStrategyAI">
+                    {{ editingStrategy ? 'Guardar' : 'Editar' }}
+                </button>
+                <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate"
+                    [disabled]="loadingStrategyAI || editingStrategy">
+                    <span *ngIf="loadingStrategyAI" class="spinner-inline"></span>
+                    Mejorar con IA
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Limitaciones -->
+    <details class="plan-section-details static-block" [open]="editingLimitations || isLimitationsDetailsOpen">
+        <summary class="plan-section-summary">
+            Limitaciones
+            <span class="summary-indicators">
+                <span *ngIf="loadingLimitationsAI" class="spinner-small"></span>
+                <span *ngIf="errorLimitationsAI" class="error-status-icon" [title]="errorLimitationsAI">⚠️</span>
+            </span>
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingLimitations">
+                <pre class="static-text">{{ limitationsContent }}</pre>
+            </div>
+            <div *ngIf="editingLimitations">
+                <textarea [(ngModel)]="tempLimitationsContent" rows="4" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('limitations')" class="button-secondary"
+                    [disabled]="loadingLimitationsAI">
+                    {{ editingLimitations ? 'Guardar' : 'Editar' }}
+                </button>
+                <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate"
+                    [disabled]="loadingLimitationsAI || editingLimitations">
+                    <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span>
+                    Mejorar con IA
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Supuestos -->
+    <details class="plan-section-details static-block" [open]="editingAssumptions || isAssumptionsDetailsOpen">
+        <summary class="plan-section-summary">
+            Supuestos
+            <span class="summary-indicators">
+                <span *ngIf="loadingAssumptionsAI" class="spinner-small"></span>
+                <span *ngIf="errorAssumptionsAI" class="error-status-icon" [title]="errorAssumptionsAI">⚠️</span>
+            </span>
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingAssumptions">
+                <pre class="static-text">{{ assumptionsContent }}</pre>
+            </div>
+            <div *ngIf="editingAssumptions">
+                <textarea [(ngModel)]="tempAssumptionsContent" rows="8" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('assumptions')" class="button-secondary"
+                    [disabled]="loadingAssumptionsAI">
+                    {{ editingAssumptions ? 'Guardar' : 'Editar' }}
+                </button>
+                <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate"
+                    [disabled]="loadingAssumptionsAI || editingAssumptions">
+                    <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span>
+                    Mejorar con IA
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Equipo -->
+    <details class="plan-section-details static-block" [open]="editingTeam || isTeamDetailsOpen">
+        <summary class="plan-section-summary">
+            Equipo de Trabajo
+        </summary>
+        <div class="plan-section-content">
+            <div *ngIf="!editingTeam">
+                <pre class="static-text">{{ teamContent }}</pre>
+            </div>
+            <div *ngIf="editingTeam">
+                <textarea [(ngModel)]="tempTeamContent" rows="8" class="scrollable-content"></textarea>
+            </div>
+            <div class="actions">
+                <button (click)="toggleStaticEdit('team')" class="button-secondary">
+                    {{ editingTeam ? 'Guardar' : 'Editar' }}
+                </button>
+            </div>
+        </div>
+    </details>
+</div>

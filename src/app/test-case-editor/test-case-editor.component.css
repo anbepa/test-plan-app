@@ -1,156 +1,406 @@
-/* TEST CASE EDITOR - Apple Style */
+/* TEST CASE EDITOR - Refined Premium UX */
 
 .test-case-editor-container {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+  /* Reducido de 1.5rem */
   padding: 0;
   background: transparent;
 }
 
-/* REFINEMENT CONTROLS - Apple Style */
-.refinement-controls {
-  background: white;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.refinement-header {
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.refinement-title {
-  font-size: 1.375rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
+/* ========================================
+   1. STEPPER PROGRESS
+   ======================================== */
+.stepper-container {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  color: #1d1d1f;
-  letter-spacing: -0.01em;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  /* Reducido de 2rem */
+  padding: 0 1rem;
 }
 
-.refinement-title .title-icon {
-  width: 24px;
-  height: 24px;
+.stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  /* Reducido de 0.5rem */
+  position: relative;
+  z-index: 1;
+}
+
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f5f5f7;
+  color: #86868b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: 2px solid #e5e5ea;
+  transition: all 0.3s ease;
+}
+
+.stepper-item.active .step-circle {
+  background: #0071e3;
+  color: white;
+  border-color: #0071e3;
+  box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15);
+}
+
+.stepper-item.completed .step-circle {
+  background: #34c759;
+  color: white;
+  border-color: #34c759;
+}
+
+.step-label {
+  font-size: 0.6875rem;
+  /* Reducido */
+  font-weight: 500;
+  color: #86868b;
+  transition: color 0.3s ease;
+}
+
+.stepper-item.active .step-label {
   color: #0071e3;
+  font-weight: 600;
 }
 
-.refinement-description {
-  font-size: 0.9375rem;
-  color: #6e6e73;
+.stepper-item.completed .step-label {
+  color: #34c759;
+}
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: #e5e5ea;
+  margin: 0 0.75rem;
+  /* Reducido de 1rem */
+  margin-bottom: 1.25rem;
+  transition: background 0.3s ease;
+}
+
+.step-line.completed {
+  background: #34c759;
+}
+
+/* ========================================
+   2. HEADER (NO STICKY)
+   ======================================== */
+.sticky-header {
+  position: relative;
+  z-index: 10;
+  background: transparent;
+  padding: 0.5rem 0;
+  margin: 0 0 1rem 0;
+}
+
+/* ========================================
+   3. GROUPED REFINEMENT CARD (MUY COMPACTO)
+   ======================================== */
+.refinement-card {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  box-shadow: none;
+  border: 1px solid #e5e5ea;
+  margin-bottom: 0;
+}
+
+.refinement-card-header {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.refinement-card-title {
+  font-size: 0.75rem;
+  font-weight: 600;
   margin: 0;
-  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #86868b;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.refinement-card-title .title-icon {
+  width: 14px;
+  height: 14px;
+  color: #86868b;
+  transition: color 0.2s ease;
+}
+
+.refinement-card-title:hover .title-icon {
+  color: #1d1d1f;
+}
+
+.refinement-card-description {
+  font-size: 0.75rem;
+  color: #86868b;
+  margin: 0;
+  line-height: 1.4;
+  display: none;
 }
 
 .refinement-controls-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.refinement-controls .form-group {
+.form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
-.refinement-controls label {
+.form-group label {
   font-weight: 500;
-  font-size: 0.9375rem;
+  font-size: 0.75rem;
   color: #1d1d1f;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
-.refinement-controls label .label-icon {
-  width: 18px;
-  height: 18px;
-  color: #0071e3;
+.label-icon {
+  width: 16px;
+  height: 16px;
+  color: #6e6e73;
+  /* 5. Iconos simplificados */
+  transition: color 0.2s ease;
 }
 
-.refinement-controls select,
-.refinement-controls textarea {
+.form-group:hover .label-icon {
+  color: #1d1d1f;
+}
+
+.ai-icon {
+  font-size: 1rem;
+}
+
+/* ✔ 1. ISTQB Field Prominence */
+.form-group select {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  font-size: 0.9375rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  /* Aumentado */
+  font-weight: 500;
+  /* font-medium */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #1d1d1f;
+  background: white;
+  transition: all 0.2s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+  appearance: none;
+}
+
+.form-group textarea,
+.form-group input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  font-size: 0.8125rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #1d1d1f;
   background: white;
   transition: all 0.2s ease;
 }
 
-.refinement-controls select:focus,
-.refinement-controls textarea:focus {
+.form-group select:focus,
+.form-group textarea:focus,
+.form-group input:focus {
   outline: none;
   border-color: #0071e3;
   box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
 }
 
-.refinement-controls select:hover,
-.refinement-controls textarea:hover {
+.form-group select:hover,
+.form-group textarea:hover,
+.form-group input:hover {
   border-color: rgba(0, 0, 0, 0.2);
 }
 
-.refinement-controls textarea {
-  min-height: 100px;
-  resize: vertical;
+/* ✔ 2. Enhanced Context Textarea */
+.context-textarea-wrapper {
+  position: relative;
 }
 
+.enhanced-context-textarea {
+  background: #F9FAFB !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  min-height: 60px !important;
+  resize: vertical;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.enhanced-context-textarea::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* ========================================
+   4. ALIGNED ACTIONS & 5. ENHANCED AI BUTTON
+   ======================================== */
 .refinement-actions {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
 }
 
+.aligned-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.25rem;
+  /* Reducido */
+  padding-top: 1.25rem;
+  /* Reducido */
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* Center AI button when alone */
+.aligned-actions-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
 .btn-refine-ai,
 .btn-cancel {
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1.25rem;
   border: none;
   border-radius: 8px;
   font-weight: 500;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ✔ 3. Botón "Refinar con IA" estilo GitHub Copilot */
 .btn-refine-ai {
-  background: #0071e3;
+  background: linear-gradient(135deg, #0071e3 0%, #005bb5 100%);
   color: white;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-refine-ai:hover:not(:disabled) {
-  background: #0077ed;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 113, 227, 0.4);
+  /* Sombra más fuerte */
+  background: linear-gradient(135deg, #0077ed 0%, #0062c2 100%);
+}
+
+.btn-refine-ai:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .btn-refine-ai:disabled {
   background: #d1d1d6;
   cursor: not-allowed;
   color: #86868b;
+  box-shadow: none;
+}
+
+/* AI Icon Animation */
+.ai-icon-animated {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Animated AI Spinner */
+.spinner-ai {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.spinner-dot {
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.spinner-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.spinner-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+
+  40% {
+    transform: scale(1);
+  }
 }
 
 .btn-cancel {
-  background: #f5f5f7;
+  background: white;
   color: #1d1d1f;
+  border: 1px solid #d1d1d6;
 }
 
 .btn-cancel:hover {
-  background: #e8e8ed;
+  background: #f5f5f7;
+  border-color: #86868b;
+}
+
+.aligned-actions .btn-cancel {
+  order: 1;
+}
+
+.aligned-actions .btn-refine-ai {
+  order: 2;
 }
 
 .btn-icon {
@@ -158,39 +408,45 @@
   height: 18px;
 }
 
-.spinner {
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid white;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  animation: spin 0.8s linear infinite;
+.btn-refine-ai .btn-icon {
+  width: 20px;
+  height: 20px;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* ========================================
+   8. SEPARATED TEST CASES SECTION
+   ======================================== */
+.test-cases-section-wrapper {
+  margin-top: 0.5rem;
 }
 
-.test-cases-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.section-divider {
+  display: none;
 }
 
 .test-cases-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid #e5e5ea;
 }
 
 .test-cases-title {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 600;
   color: #1d1d1f;
   margin: 0;
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.folder-icon {
+  font-size: 1.375rem;
+  /* Reducido */
 }
 
 .btn-add-test-case {
@@ -198,20 +454,24 @@
   color: white;
   border: none;
   padding: 0.625rem 1.25rem;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 500;
   font-size: 0.875rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-add-test-case:hover {
   background: #0077ed;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 113, 227, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+}
+
+.btn-add-test-case:active {
+  transform: scale(0.96);
 }
 
 .btn-add-test-case .btn-icon {
@@ -219,94 +479,261 @@
   height: 16px;
 }
 
-.empty-test-cases {
+/* ========================================
+   10. SMART EMPTY STATES
+   ======================================== */
+.smart-empty-state {
   text-align: center;
   padding: 3rem 2rem;
-  background: white;
-  border-radius: 12px;
-  border: 2px dashed rgba(0, 0, 0, 0.12);
+  /* Reducido */
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  border-radius: 16px;
+  border: 2px dashed rgba(0, 0, 0, 0.08);
 }
 
-.empty-test-cases p {
+.empty-icon {
+  font-size: 2.5rem;
+  /* Reducido */
+  margin-bottom: 0.75rem;
+  /* Reducido */
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 1.1rem;
+  /* 3. Tipografía */
+  font-weight: 600;
+  color: #1d1d1f;
+  margin: 0 0 0.375rem 0;
+}
+
+.empty-description {
+  font-size: 0.875rem;
+  /* 3. text-sm */
   color: #6e6e73;
-  font-size: 0.9375rem;
-  margin: 0;
+  /* 3. text-gray-500 */
+  margin: 0 0 1.25rem 0;
 }
 
-.test-case-card {
+.btn-empty-action {
+  background: #0071e3;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-empty-action:hover {
+  background: #0077ed;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+}
+
+.btn-empty-action svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Small empty state for steps */
+.smart-empty-state-small {
+  text-align: center;
+  padding: 1.5rem 1.25rem;
+  /* Reducido */
+  background: #fafafa;
+  border-radius: 10px;
+  border: 2px dashed rgba(0, 0, 0, 0.06);
+}
+
+.empty-icon-small {
+  font-size: 1.25rem;
+  /* Reducido */
+  display: block;
+  margin-bottom: 0.375rem;
+  opacity: 0.5;
+}
+
+.smart-empty-state-small p {
+  color: #6e6e73;
+  font-size: 0.8125rem;
+  /* Reducido */
+  margin: 0 0 0.75rem 0;
+}
+
+.btn-empty-action-small {
+  background: #f5f5f7;
+  color: #0071e3;
+  border: 1px solid #e5e5ea;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-empty-action-small:hover {
+  background: #e8e8ed;
+  border-color: #0071e3;
+}
+
+/* ========================================
+   9. SCROLLABLE TEST CASES CONTAINER
+   ======================================== */
+.test-cases-scroll-container {
+  max-height: none;
+  /* Removido límite de altura */
+  overflow-y: visible;
+  /* Permitir scroll natural */
+  overflow-x: hidden;
+  padding-right: 0.5rem;
+  padding-bottom: 2rem;
+  /* Espacio al final */
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  /* Reducido */
+}
+
+.test-cases-scroll-container::-webkit-scrollbar {
+  width: 6px;
+  /* Más delgado */
+}
+
+.test-cases-scroll-container::-webkit-scrollbar-track {
+  background: #f5f5f7;
+  border-radius: 10px;
+}
+
+.test-cases-scroll-container::-webkit-scrollbar-thumb {
+  background: #d1d1d6;
+  border-radius: 10px;
+}
+
+.test-cases-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #86868b;
+}
+
+/* ========================================
+   ✔ 1. MINI CARDS - Notion Style
+   ======================================== */
+.test-case-mini-card {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* Sombra más suave */
+  border: 1px solid #eef0f3;
+  /* Border sutil */
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* ✔ 1. Micro-animación */
 }
 
-.test-case-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+.test-case-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  /* ✔ 1. Hover suave */
+  border-color: rgba(0, 113, 227, 0.15);
+  background: rgba(249, 250, 252, 0.5);
+  /* ✔ 1. Background suave */
 }
 
-.test-case-card.expanded {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  border-color: rgba(0, 113, 227, 0.3);
+.test-case-mini-card.expanded {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 113, 227, 0.25);
 }
 
-.test-case-header {
+.mini-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
+  /* Reducido */
   cursor: pointer;
-  background: #fafafa;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  transition: background 0.2s ease;
+  background: #F9FAFC;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
 }
 
-.test-case-header:hover {
-  background: #f5f5f7;
+.mini-card-header:hover {
+  background: #f3f4f6;
 }
 
-.test-case-header-left {
+.test-case-mini-card.expanded .mini-card-header {
+  background: #eff6ff;
+  border-bottom-color: #dbeafe;
+}
+
+.mini-card-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   flex: 1;
   min-width: 0;
 }
 
-.test-case-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 32px;
-  background: #0071e3;
-  color: white;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.875rem;
+.case-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  background: transparent !important;
+  color: #1d1d1f !important;
+  border-radius: 50% !important;
+  font-weight: 700 !important;
+  font-size: 0.875rem !important;
   flex-shrink: 0;
+  border: 2px solid #1d1d1f !important;
+  line-height: 1 !important;
+  text-align: center !important;
 }
 
-.test-case-title-preview {
+.case-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ✔ 2. Títulos en dos líneas */
+.case-title {
   font-weight: 500;
+  /* font-medium */
   font-size: 0.9375rem;
   color: #1d1d1f;
-  white-space: nowrap;
+  max-width: 80%;
+  /* ✔ 2. max-w-[80%] */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  /* ✔ 2. line-clamp-2 */
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
+  line-height: 1.4;
 }
 
-.test-case-header-actions {
+.case-subtitle {
+  font-size: 0.75rem;
+  color: #86868b;
+  font-weight: 500;
+}
+
+.mini-card-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
 }
 
-.btn-delete-test-case {
-  padding: 0.5rem;
+.btn-delete-mini {
+  padding: 0.375rem;
   background: transparent;
   border: none;
   color: #ff3b30;
@@ -318,72 +745,90 @@
   justify-content: center;
 }
 
-.btn-delete-test-case:hover {
+.btn-delete-mini:hover {
   background: rgba(255, 59, 48, 0.1);
   transform: scale(1.1);
 }
 
-.btn-delete-test-case .btn-icon {
+.btn-delete-mini svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ✔ 1. Flecha rotando */
+.expand-chevron {
   width: 18px;
+  /* Reducido */
   height: 18px;
-}
-
-.expand-icon {
-  width: 20px;
-  height: 20px;
   color: #6e6e73;
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.test-case-card.expanded .expand-icon {
+.expand-chevron.rotated {
   transform: rotate(180deg);
+  color: #0071e3;
 }
 
-.test-case-content {
-  display: none;
-  padding: 1.5rem;
-  animation: slideDown 0.2s ease;
+.expand-chevron svg {
+  width: 16px;
+  height: 16px;
 }
 
-.test-case-card.expanded .test-case-content {
-  display: block;
+.mini-card-content {
+  padding: 1rem;
+  /* Reducido */
+  background: white;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.card-divider {
+  height: 1px;
+  background: #e5e5ea;
+  margin-bottom: 1rem;
+  /* Reducido */
 }
 
 .test-case-form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
+  /* Reducido */
 }
 
+/* ✔ 1. Bloques visuales tipo Notion */
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  background: white;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
+  padding: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.form-group:hover {
+  border-color: rgba(0, 113, 227, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
 .form-group label {
-  font-weight: 500;
-  font-size: 0.875rem;
+  font-weight: 600;
+  /* Más bold */
+  font-size: 0.8125rem;
+  /* Reducido */
   color: #1d1d1f;
+  display: block;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .form-group input,
 .form-group textarea {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0.625rem 0.875rem;
+  /* Reducido */
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   font-size: 0.9375rem;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -396,76 +841,106 @@
 .form-group textarea:focus {
   outline: none;
   border-color: #0071e3;
-  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.08);
 }
 
 .form-group textarea {
-  min-height: 80px;
+  min-height: 50px;
+  /* Reducido */
   resize: vertical;
 }
 
+/* ========================================
+   ✔ 2. STEPS - Trello Style (COMPACTO)
+   ======================================== */
 .steps-section {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
+  /* Reducido */
+  background: white;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
+  padding: 0.875rem;
 }
 
 .steps-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
+  /* Reducido */
+  position: sticky;
+  /* ✔ 4. Sticky */
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #eef0f3;
 }
 
 .steps-header h5 {
-  font-size: 1rem;
+  font-size: 0.8125rem;
+  /* Reducido */
   font-weight: 600;
   color: #1d1d1f;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .btn-add-step {
   background: #f5f5f7;
   color: #0071e3;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.375rem 0.75rem;
+  /* Más compacto */
   border-radius: 6px;
   font-weight: 500;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  /* Reducido */
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   transition: all 0.2s ease;
 }
 
 .btn-add-step:hover {
   background: #e8e8ed;
+  transform: translateY(-1px);
 }
 
 .btn-add-step .btn-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  /* Reducido */
+  height: 14px;
 }
 
 .steps-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  /* Reducido */
 }
 
+/* ✔ 2. Pasos compactos tipo Trello */
 .step-item {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  /* Reducido */
   align-items: start;
-  padding: 1rem;
-  background: #fafafa;
+  padding: 0.625rem 0.75rem;
+  /* Reducido - menos altura */
+  background: white;
+  /* ✔ 3. Fondo blanco para pasos */
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid #eef0f3;
   transition: all 0.2s ease;
 }
 
 .step-item:hover {
-  background: #f5f5f7;
-  border-color: rgba(0, 113, 227, 0.2);
+  background: #fafafa;
+  border-color: rgba(0, 113, 227, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 
 .step-item.dragging {
@@ -479,18 +954,20 @@
   background: rgba(0, 113, 227, 0.05);
 }
 
+/* ✔ 2. Dragger más pequeño */
 .step-drag-handle {
   cursor: grab;
-  color: #86868b;
-  padding: 0.25rem;
+  color: #d1d1d6;
+  /* Más suave */
+  padding: 0.125rem;
   border-radius: 4px;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .step-drag-handle:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #6e6e73;
+  background: rgba(0, 0, 0, 0.04);
+  color: #86868b;
 }
 
 .step-drag-handle:active {
@@ -498,23 +975,28 @@
 }
 
 .step-drag-handle .btn-icon {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  /* Reducido */
+  height: 14px;
 }
 
+/* ✔ 2. Numeración más clara */
 .step-number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  background: #0071e3;
-  color: white;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.75rem;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  background: transparent !important;
+  color: #1d1d1f !important;
+  border-radius: 50% !important;
+  font-weight: 700 !important;
+  font-size: 0.8125rem !important;
   flex-shrink: 0;
-  margin-top: 0.375rem;
+  margin-top: 0.125rem;
+  border: 2px solid #1d1d1f !important;
+  line-height: 1 !important;
+  text-align: center !important;
 }
 
 .step-content {
@@ -522,16 +1004,20 @@
   min-width: 0;
 }
 
+/* ✔ 2. Input más compacto */
 .step-content textarea {
   width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0.5rem 0.75rem;
+  /* Reducido */
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 6px;
   font-size: 0.875rem;
+  /* Reducido */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #1d1d1f;
   background: white;
-  min-height: 60px;
+  min-height: 40px;
+  /* Reducido */
   resize: vertical;
   transition: all 0.2s ease;
 }
@@ -539,18 +1025,19 @@
 .step-content textarea:focus {
   outline: none;
   border-color: #0071e3;
-  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.08);
 }
 
 .step-actions {
   display: flex;
   gap: 0.25rem;
   flex-shrink: 0;
-  margin-top: 0.375rem;
+  margin-top: 0.125rem;
 }
 
 .btn-delete-step {
-  padding: 0.375rem;
+  padding: 0.25rem;
+  /* Más compacto */
   background: transparent;
   border: none;
   color: #ff3b30;
@@ -564,47 +1051,71 @@
 
 .btn-delete-step:hover {
   background: rgba(255, 59, 48, 0.1);
+  transform: scale(1.1);
 }
 
 .btn-delete-step .btn-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  /* Reducido */
+  height: 14px;
 }
 
-.no-steps {
-  text-align: center;
-  padding: 2rem;
-  color: #6e6e73;
-  font-size: 0.875rem;
+/* ✔ 3. Resultado esperado con fondo diferente */
+.form-group:has(label:contains("Resultados esperados")) {
   background: #fafafa;
-  border-radius: 8px;
-  border: 2px dashed rgba(0, 0, 0, 0.08);
+  /* ✔ 3. light-gray suave */
 }
 
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
 @media (max-width: 768px) {
   .refinement-controls-grid {
     grid-template-columns: 1fr;
   }
-  .test-case-header {
-    padding: 1rem;
-  }
-  .test-case-content {
-    padding: 1rem;
-  }
-  .step-item {
-    padding: 0.75rem;
-  }
-  .refinement-actions {
+
+  .aligned-actions {
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
-  .btn-refine-ai,
-  .btn-cancel {
+
+  .aligned-actions .btn-cancel,
+  .aligned-actions .btn-refine-ai {
     width: 100%;
     justify-content: center;
   }
+
+  .test-cases-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .btn-add-test-case {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .test-cases-scroll-container {
+    max-height: none;
+  }
+
+  .mini-card-header {
+    padding: 0.625rem;
+  }
+
+  .case-title {
+    font-size: 0.875rem;
+  }
+
+  .step-item {
+    padding: 0.5rem;
+  }
 }
 
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -615,4 +1126,13 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* Focus visible for keyboard navigation */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #0071e3;
+  outline-offset: 2px;
 }

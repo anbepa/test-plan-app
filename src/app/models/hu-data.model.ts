@@ -11,6 +11,7 @@ export interface DetailedTestCase {
   preconditions: string;
   steps: TestCaseStep[];
   expectedResults: string;
+  isExpanded?: boolean;
 }
 
 // --- Tipo para el Modo de Generación ---
@@ -35,6 +36,7 @@ export interface HUData {
   editingScenariosTestCases?: boolean;
   isScopeDetailsOpen?: boolean;
   isScenariosDetailsOpen?: boolean;
+  isExpanded?: boolean;
   loadingScope?: boolean;
   errorScope?: string | null;
   refinementTechnique?: string;

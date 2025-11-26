@@ -1,0 +1,24 @@
+<div class="modal-overlay" *ngIf="isOpen" (click)="onCancel()">
+    <div class="modal-container" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title" [class.text-danger]="type === 'danger'">{{ title }}</h3>
+            <button class="close-button" (click)="onCancel()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <p>{{ message }}</p>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn-cancel" (click)="onCancel()">{{ cancelText }}</button>
+            <button class="btn-confirm" [class.btn-danger]="type === 'danger'" [class.btn-primary]="type !== 'danger'"
+                (click)="onConfirm()">
+                {{ confirmText }}
+            </button>
+        </div>
+    </div>
+</div>

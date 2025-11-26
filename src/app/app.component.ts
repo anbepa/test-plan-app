@@ -63,24 +63,7 @@ interface MenuItem {
           </div>
 
           <!-- Menu toggle button -->
-          <div class="menu-header">
-            <button class="menu-toggle-btn" 
-                    (click)="toggleSidebarExpansion()" 
-                    *ngIf="!isMobile"
-                    [title]="sidebarExpanded ? 'Contraer menú' : 'Expandir menú'">
-              <span class="menu-toggle-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </span>
-              <span class="menu-toggle-label">Menú</span>
-              <span class="menu-toggle-arrow">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </span>
-            </button>
-          </div>
+          <!-- Menu toggle removed for auto-expand behavior -->
 
           <ul class="menu-list">
             <li *ngFor="let item of menuItems; let i = index" class="menu-item">
@@ -162,12 +145,12 @@ interface MenuItem {
 })
 export class AppComponent {
   title = 'test-plan-app';
-  sidebarExpanded = true; // En desktop, sidebar expandido por defecto
+  sidebarExpanded = false; // En desktop, sidebar colapsado por defecto
   sidebarOpen = false; // En móvil, sidebar cerrado por defecto
   isMobile = false;
   hoveredMenuItem: string | null = null; // Para controlar el hover en menú contraído
   temporaryExpanded = false; // Para expansión temporal en hover
-  
+
   menuItems: MenuItem[] = [
     {
       icon: '',
@@ -222,9 +205,7 @@ export class AppComponent {
     }
   }
 
-  toggleSidebarExpansion(): void {
-    this.sidebarExpanded = !this.sidebarExpanded;
-  }
+
 
   toggleSidebarMobile(): void {
     if (this.isMobile) {

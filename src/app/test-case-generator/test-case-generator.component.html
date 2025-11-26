@@ -3,15 +3,19 @@
   <div class="form-header-compact">
     <div class="header-content">
       <div class="header-main">
-        <h2 id="test-case-form-section-title" class="section-title">
-          <span *ngIf="componentState === 'initialForm'">Datos de Entrada</span>
-          <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
-          <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
-          <span *ngIf="componentState === 'submitting'">Enviando</span>
-          <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-badge">{{ generatedHUData.title
-            }}</span>
-        </h2>
-        <span class="subtitle-inline">HU por Descripción</span>
+        <div class="header-text-column">
+          <h2 id="test-case-form-section-title" class="section-title">
+            <span *ngIf="componentState === 'initialForm'">Datos de Entrada</span>
+            <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
+            <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
+            <span *ngIf="componentState === 'submitting'">Enviando</span>
+          </h2>
+          <div class="header-subtitle-row">
+            <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-subtitle">{{
+              generatedHUData.title }}</span>
+            <span *ngIf="componentState === 'initialForm'" class="subtitle-inline">HU por Descripción</span>
+          </div>
+        </div>
       </div>
       <button *ngIf="componentState !== 'initialForm'" type="button" (click)="handleCancelGeneration()"
         class="btn-cancel-compact" [disabled]="componentState === 'submitting'">

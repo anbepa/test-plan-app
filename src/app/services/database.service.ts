@@ -316,7 +316,10 @@ export class DatabaseService {
           user_stories(
             id,
             sprint,
-            test_cases(id)
+            test_cases(
+              id,
+              test_case_steps(id)
+            )
           )
         `)
         .order('created_at', { ascending: false });

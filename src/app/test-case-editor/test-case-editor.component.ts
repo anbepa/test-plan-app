@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { trigger, state, style, transition, animate } from '@angular/animations';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
 import { ToastService } from '../services/toast.service';
 
@@ -13,7 +14,39 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   templateUrl: './test-case-editor.component.html',
   styleUrls: ['./test-case-editor.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule]
+  imports: [CommonModule, FormsModule],
+  animations: [
+    // Accordion animation for card expansion
+    trigger('accordionAnimation', [
+      transition(':enter', [
+        style({ opacity: 0, height: 0, overflow: 'hidden' }),
+        animate('300ms ease-out', style({ opacity: 1, height: '*' }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-in', style({ opacity: 0, height: 0 }))
+      ])
+    ]),
+    // Card animation
+    trigger('cardAnimation', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translateY(10px)' }),
+        animate('250ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
+      ])
+    ]),
+    // Fade out for delete actions
+    trigger('fadeOut', [
+      transition(':leave', [
+        animate('200ms ease-in', style({ opacity: 0, transform: 'scale(0.95)' }))
+      ])
+    ]),
+    // Highlight for new items
+    trigger('highlightNew', [
+      transition(':enter', [
+        style({ backgroundColor: '#fef3c7' }),
+        animate('600ms ease-out', style({ backgroundColor: 'transparent' }))
+      ])
+    ])
+  ]
 })
 export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() testCases: UIDetailedTestCase[] = [];
@@ -22,7 +55,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() refinementTechnique: string = '';
   @Input() userRefinementContext: string = '';
   @Input() showRefinementControls: boolean = true;
-  
+
   @Output() refineWithAI = new EventEmitter<{ technique: string; context: string }>();
   @Output() testCasesChanged = new EventEmitter<UIDetailedTestCase[]>();
   @Output() cancel = new EventEmitter<void>();
@@ -39,7 +72,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   constructor(
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
-  ) {}
+  ) { }
 
   ngOnInit() {
     if (this.testCases && this.testCases.length > 0 && !this.testCases.some(tc => tc.isExpanded)) {
@@ -50,14 +83,14 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   toggleTestCaseExpansion(tc: UIDetailedTestCase, tcIndex: number): void {
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
-    
+
     tc.isExpanded = !tc.isExpanded;
-    
+
     this.cdr.markForCheck();
-    
+
     setTimeout(() => {
       window.scrollTo(scrollX, scrollY);
-      
+
       if (tc.isExpanded) {
         this.autoGrowTextareasInCard(tcIndex);
       }
@@ -69,7 +102,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
       this.toastService.warning('Por favor, selecciona una técnica para el refinamiento');
       return;
     }
-    
+
     this.refineWithAI.emit({
       technique: this.refinementTechnique,
       context: this.userRefinementContext
@@ -83,27 +116,27 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   addTestCaseStep(testCase: UIDetailedTestCase): void {
     if (!testCase.steps) testCase.steps = [];
     const newStepIndex = testCase.steps.length;
-    
-    testCase.steps.push({ 
-      numero_paso: newStepIndex + 1, 
-      accion: '' 
+
+    testCase.steps.push({
+      numero_paso: newStepIndex + 1,
+      accion: ''
     });
-    
+
     testCase.isExpanded = true;
-    
+
     const tcIndex = this.testCases.indexOf(testCase);
-    
+
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
     const activeElement = document.activeElement as HTMLElement;
-    
+
     this.emitChanges();
-    
+
     this.cdr.markForCheck();
-    
+
     setTimeout(() => {
       window.scrollTo(scrollX, scrollY);
-      
+
       const stepInput = document.querySelector(`textarea[name="stepAction-tc${tcIndex}-step${newStepIndex}"]`) as HTMLTextAreaElement;
       if (stepInput) {
         stepInput.focus();
@@ -117,16 +150,16 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
     testCase.steps.forEach((step, idx) => {
       step.numero_paso = idx + 1;
     });
-    
+
     testCase.isExpanded = true;
-    
+
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
-    
+
     this.emitChanges();
-    
+
     this.cdr.markForCheck();
-    
+
     setTimeout(() => {
       window.scrollTo(scrollX, scrollY);
     }, 0);
@@ -181,7 +214,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   onStepDrop(event: DragEvent, targetStep: TestCaseStep, targetTestCase: UIDetailedTestCase): void {
     event.preventDefault();
     event.stopPropagation();
-    
+
     if (!this.draggedStep || !this.draggedStepTestCase || !targetTestCase.steps) {
       return;
     }
@@ -197,14 +230,14 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
     if (draggedIndex !== -1 && targetIndex !== -1 && draggedIndex !== targetIndex) {
       targetTestCase.steps.splice(draggedIndex, 1);
       targetTestCase.steps.splice(targetIndex, 0, this.draggedStep);
-      
+
       targetTestCase.steps.forEach((step, idx) => {
         step.numero_paso = idx + 1;
       });
-      
+
       this.emitChanges();
     }
-    
+
     this.dragOverStepId = '';
   }
 
