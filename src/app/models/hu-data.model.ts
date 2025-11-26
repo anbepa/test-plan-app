@@ -4,6 +4,7 @@
 export interface TestCaseStep {
   numero_paso: number;
   accion: string;
+  dbId?: string;
 }
 
 export interface DetailedTestCase {
@@ -12,6 +13,8 @@ export interface DetailedTestCase {
   steps: TestCaseStep[];
   expectedResults: string;
   isExpanded?: boolean;
+  dbId?: string;
+  position?: number;
 }
 
 // --- Tipo para el Modo de Generación ---
