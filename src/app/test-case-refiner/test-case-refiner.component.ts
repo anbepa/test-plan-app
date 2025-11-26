@@ -272,7 +272,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         const existingTc = existingTestCaseMap.get(tc.dbId)!;
         remainingTestCaseIds.delete(tc.dbId);
 
-        const updates = this.getTestCaseUpdates(tc, existingTc);
+        const updates = this.getTestCaseUpdates(tc, existingTc, userStoryId);
         if (Object.keys(updates).length > 1) { // includes id
           testCasesToUpdate.push(updates);
         }
@@ -406,8 +406,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     });
   }
 
-  private getTestCaseUpdates(tc: DetailedTestCase, existingTc: DbTestCaseWithRelations): any {
-    const updates: any = { id: existingTc.id };
+  private getTestCaseUpdates(tc: DetailedTestCase, existingTc: DbTestCaseWithRelations, userStoryId: string): any {
+    const updates: any = { id: existingTc.id, user_story_id: existingTc.user_story_id || userStoryId };
 
     if (tc.title !== existingTc.title) updates.title = tc.title;
     if (tc.preconditions !== (existingTc.preconditions || '')) updates.preconditions = tc.preconditions;
