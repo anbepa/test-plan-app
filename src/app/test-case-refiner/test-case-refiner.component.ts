@@ -418,7 +418,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
   private calculateStepChanges(
     tc: DetailedTestCase,
-    existingTc: DbTestCaseWithRelations,
+    existingTc: Partial<DbTestCaseWithRelations>,
     overrideTestCaseId?: string
   ): {
     stepsToInsert: { payload: { test_case_id: string; step_number: number; action: string }; tc: DetailedTestCase; stepIndex: number }[];
