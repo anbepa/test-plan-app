@@ -12,30 +12,32 @@ app.use(express.json());
 app.post('/api/gemini-proxy', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       console.error('[ERROR] GEMINI_API_KEY no configurada en .env.local');
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'GEMINI_API_KEY not configured',
         message: 'Configure GEMINI_API_KEY en .env.local'
       });
     }
 
-    const { payload } = req.body;
+    const { payload, action } = req.body;
     const { contents, generationConfig } = payload || req.body;
-    
-    console.log(`[API] Gemini API call received (action: ${req.body.action || 'direct'})`);
-    
+
+    console.log(`[API] Gemini API call received (action: ${action || 'direct'})`);
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    
+
     const result = await model.generateContent({
       contents,
       generationConfig
     });
 
+    const responseData = result.response;
+
     console.log(`[SUCCESS] Gemini response successful`);
-    res.status(200).json(result.response);
+    res.status(200).json(responseData);
 
   } catch (error) {
     console.error('[ERROR] Gemini API error:', error.message);

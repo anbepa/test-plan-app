@@ -8,11 +8,13 @@
           <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
           <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
           <span *ngIf="componentState === 'submitting'">Enviando</span>
-          <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-badge">{{ generatedHUData.title }}</span>
+          <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-badge">{{ generatedHUData.title
+            }}</span>
         </h2>
         <span class="subtitle-inline">HU por Descripción</span>
       </div>
-      <button *ngIf="componentState !== 'initialForm'" type="button" (click)="handleCancelGeneration()" class="btn-cancel-compact" [disabled]="componentState === 'submitting'">
+      <button *ngIf="componentState !== 'initialForm'" type="button" (click)="handleCancelGeneration()"
+        class="btn-cancel-compact" [disabled]="componentState === 'submitting'">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -28,139 +30,183 @@
       <ng-container *ngIf="currentGenerationMode === 'text'">
         <div class="form-group">
           <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
-          <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required placeholder="Ej: HU_1234" class="form-control">
-          <div *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)" class="validation-error" role="alert">
+          <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
+            placeholder="Ej: HU_1234" class="form-control">
+          <div
+            *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
+            class="validation-error" role="alert">
             ID de la HU es requerido.
           </div>
         </div>
         <div class="form-group">
           <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
-          <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required placeholder="Ej: Como usuario, quiero..." class="form-control">
-          <div *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)" class="validation-error" role="alert">
+          <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
+            placeholder="Ej: Como usuario, quiero..." class="form-control">
+          <div
+            *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
+            class="validation-error" role="alert">
             Título de la HU es requerido.
           </div>
         </div>
         <div class="form-group full-width">
           <label for="tcCurrentDescription">Descripción de la HU:<span class="required-indicator">*</span></label>
-          <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4" required placeholder="Ej: La HU describe la funcionalidad..." class="form-control"></textarea>
-          <div *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)" class="validation-error" role="alert">
+          <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4"
+            required placeholder="Ej: La HU describe la funcionalidad..." class="form-control"></textarea>
+          <div
+            *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)"
+            class="validation-error" role="alert">
             Descripción de la HU es requerida.
           </div>
         </div>
         <div class="form-group full-width">
-          <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación:<span class="required-indicator">*</span></label>
-          <textarea id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria" [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: - Dado que..." class="form-control"></textarea>
-          <div *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)" class="validation-error" role="alert">
+          <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación:<span
+              class="required-indicator">*</span></label>
+          <textarea id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
+            [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: - Dado que..."
+            class="form-control"></textarea>
+          <div
+            *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
+            class="validation-error" role="alert">
             Criterios de Aceptación son requeridos.
           </div>
         </div>
       </ng-container>
 
-
+      <!-- Campo Nombre Célula -->
+      <div class="form-group">
+        <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
+        <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
+          required class="form-control">
+          <option value="" disabled selected>Seleccione una célula</option>
+          <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
+        </select>
+        <div
+          *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
+          class="validation-error" role="alert">
+          Nombre de Célula es requerido.
+        </div>
+      </div>
 
       <div class="form-group">
         <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
-        <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required placeholder="Ej: Sprint 1" class="form-control">
-        <div *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)" class="validation-error" role="alert">
+        <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
+          placeholder="Ej: Sprint 1" class="form-control">
+        <div
+          *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
+          class="validation-error" role="alert">
           Sprint es requerido.
         </div>
       </div>
 
       <div class="form-group">
-        <label for="tcCurrentSelectedTechnique">Técnica ISTQB para escenarios (Inicial):<span class="required-indicator">*</span></label>
-        <select id="tcCurrentSelectedTechnique" name="currentSelectedTechnique" [(ngModel)]="currentSelectedTechnique" required class="form-control">
+        <label for="tcCurrentSelectedTechnique">Técnica ISTQB para escenarios (Inicial):<span
+            class="required-indicator">*</span></label>
+        <select id="tcCurrentSelectedTechnique" name="currentSelectedTechnique" [(ngModel)]="currentSelectedTechnique"
+          required class="form-control">
           <option value="" disabled>Selecciona una técnica</option>
           <option value="Equivalent Partitioning">Partición Equivalente</option>
           <option value="Boundary Value Analysis">Análisis de Valor Límite</option>
           <option value="Decision Table Testing">Tabla de Decisión</option>
           <option value="State Transition Testing">Pruebas de Transición de Estados</option>
         </select>
-        <div *ngIf="huForm.controls['currentSelectedTechnique']?.invalid && (huForm.controls['currentSelectedTechnique']?.dirty || huForm.controls['currentSelectedTechnique']?.touched || huForm.submitted)" class="validation-error" role="alert">
+        <div
+          *ngIf="huForm.controls['currentSelectedTechnique']?.invalid && (huForm.controls['currentSelectedTechnique']?.dirty || huForm.controls['currentSelectedTechnique']?.touched || huForm.submitted)"
+          class="validation-error" role="alert">
           Debes seleccionar una técnica ISTQB.
         </div>
       </div>
     </div>
 
     <div class="form-actions main-form-actions">
-      <button type="submit" class="button-primary full-width-action" [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios">
+      <button type="submit" class="button-primary full-width-action"
+        [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios">
         <span *ngIf="loadingScope || loadingScenarios" class="spinner"></span>
         {{ (loadingScope || loadingScenarios) ? 'Generando...' : 'Generar Casos de Prueba' }}
       </button>
     </div>
-     <div *ngIf="formError" class="error-message initial-form-error" role="alert">
+    <div *ngIf="formError" class="error-message initial-form-error" role="alert">
       <p>{{formError}}</p>
     </div>
   </form>
 
   <!-- SECCIÓN DE PREVISUALIZACIÓN Y/O EDICIÓN/REFINAMIENTO -->
-  <div *ngIf="generatedHUData && (componentState === 'previewingGenerated' || componentState === 'editingForRefinement' || componentState === 'submitting')">
+  <div
+    *ngIf="generatedHUData && (componentState === 'previewingGenerated' || componentState === 'editingForRefinement' || componentState === 'submitting')">
     <div *ngIf="errorScope || errorScenarios" class="error-message generated-data-error" role="alert">
-        <p *ngIf="errorScope">Error en Alcance: {{ errorScope }}</p>
-        <p *ngIf="errorScenarios">Error en Escenarios: {{ errorScenarios }}</p>
+      <p *ngIf="errorScope">Error en Alcance: {{ errorScope }}</p>
+      <p *ngIf="errorScenarios">Error en Escenarios: {{ errorScenarios }}</p>
     </div>
 
     <div class="generated-test-cases-editor">
-        <h3 *ngIf="componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba</h3>
-        <h3 *ngIf="componentState === 'editingForRefinement'">Casos de Prueba</h3>
-        <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
-        
-        <div *ngIf="componentState === 'previewingGenerated'" class="scope-display-section">
-          <strong>Alcance Generado:</strong> <span *ngIf="loadingScope" class="spinner-inline"></span>
-          <pre [class.loading-text]="loadingScope">{{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o no aplica.') }}</pre>
+      <h3 *ngIf="componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba
+      </h3>
+      <h3 *ngIf="componentState === 'editingForRefinement'">Casos de Prueba</h3>
+      <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
+
+      <div *ngIf="componentState === 'previewingGenerated'" class="scope-display-section">
+        <strong>Alcance Generado:</strong> <span *ngIf="loadingScope" class="spinner-inline"></span>
+        <pre
+          [class.loading-text]="loadingScope">{{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o no aplica.') }}</pre>
+      </div>
+
+      <!-- MODO PREVISUALIZACIÓN -->
+      <ng-container *ngIf="componentState === 'previewingGenerated'">
+        <div
+          *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios"
+          class="preview-table-container">
+          <h4>Casos de Prueba Generados (Previsualización)</h4>
+          <table class="detailed-test-cases-table preview-only-table">
+            <thead>
+              <tr>
+                <th>ID Caso</th>
+                <th>Escenario de Prueba (Título)</th>
+                <th>Precondiciones</th>
+                <th>Paso a Paso</th>
+                <th>Resultado Esperado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let tc of generatedHUData.detailedTestCases; let i = index">
+                <td data-label="ID Caso">{{ generatedHUData.id }}_CP{{ i + 1 }}</td>
+                <td data-label="Escenario de Prueba">{{ tc.title }}</td>
+                <td data-label="Precondiciones">
+                  <pre class="table-pre">{{ tc.preconditions }}</pre>
+                </td>
+                <td data-label="Paso a Paso">
+                  <ul *ngIf="tc.steps && tc.steps.length > 0">
+                    <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                  </ul>
+                  <span *ngIf="!tc.steps || tc.steps.length === 0">N/A</span>
+                </td>
+                <td data-label="Resultado Esperado">
+                  <pre class="table-pre">{{ tc.expectedResults }}</pre>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+        <div *ngIf="loadingScenarios" class="loading-message-full-editor"><span class="spinner"></span> Cargando
+          Casos...</div>
+        <div
+          *ngIf="!loadingScenarios && (!generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || errorScenarios)"
+          class="no-content-message">
+          <p>{{ errorScenarios || 'No se generaron casos de prueba o la respuesta fue vacía.'}}</p>
+        </div>
+      </ng-container>
 
-        <!-- MODO PREVISUALIZACIÓN -->
-        <ng-container *ngIf="componentState === 'previewingGenerated'">
-            <div *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios" class="preview-table-container">
-                <h4>Casos de Prueba Generados (Previsualización)</h4>
-                <table class="detailed-test-cases-table preview-only-table">
-                     <thead> 
-                       <tr> 
-                         <th>ID Caso</th> 
-                         <th>Escenario de Prueba (Título)</th> 
-                         <th>Precondiciones</th> 
-                         <th>Paso a Paso</th> 
-                         <th>Resultado Esperado</th> 
-                       </tr> 
-                     </thead>
-                     <tbody>
-                        <tr *ngFor="let tc of generatedHUData.detailedTestCases; let i = index">
-                            <td data-label="ID Caso">{{ generatedHUData.id }}_CP{{ i + 1 }}</td>
-                            <td data-label="Escenario de Prueba">{{ tc.title }}</td>
-                            <td data-label="Precondiciones"><pre class="table-pre">{{ tc.preconditions }}</pre></td>
-                            <td data-label="Paso a Paso">
-                                <ul *ngIf="tc.steps && tc.steps.length > 0"><li *ngFor="let step of tc.steps">{{ step.accion }}</li></ul>
-                                <span *ngIf="!tc.steps || tc.steps.length === 0">N/A</span>
-                            </td>
-                            <td data-label="Resultado Esperado"><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
-                        </tr>
-                     </tbody>
-                </table>
-            </div>
-             <div *ngIf="loadingScenarios" class="loading-message-full-editor"><span class="spinner"></span> Cargando Casos...</div>
-             <div *ngIf="!loadingScenarios && (!generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || errorScenarios)" class="no-content-message">
-                <p>{{ errorScenarios || 'No se generaron casos de prueba o la respuesta fue vacía.'}}</p>
-             </div>
-        </ng-container>
+      <!-- MODO EDICIÓN PARA REFINAMIENTO (NUEVO COMPONENTE) -->
+      <ng-container *ngIf="componentState === 'editingForRefinement'">
+        <app-test-case-editor [testCases]="generatedHUData.detailedTestCases" [huId]="generatedHUData.id || 'temp'"
+          [isLoading]="loadingScenarios" [(refinementTechnique)]="refinementTechnique"
+          [(userRefinementContext)]="userRefinementContext" [showRefinementControls]="true"
+          (refineWithAI)="handleRefineWithAI($event)" (testCasesChanged)="handleTestCasesChanged($event)"
+          (cancel)="cancelRefinementEditing()">
+        </app-test-case-editor>
+      </ng-container>
 
-        <!-- MODO EDICIÓN PARA REFINAMIENTO (NUEVO COMPONENTE) -->
-        <ng-container *ngIf="componentState === 'editingForRefinement'">
-            <app-test-case-editor
-                [testCases]="generatedHUData.detailedTestCases"
-                [huId]="generatedHUData.id || 'temp'"
-                [isLoading]="loadingScenarios"
-                [(refinementTechnique)]="refinementTechnique"
-                [(userRefinementContext)]="userRefinementContext"
-                [showRefinementControls]="true"
-                (refineWithAI)="handleRefineWithAI($event)"
-                (testCasesChanged)="handleTestCasesChanged($event)"
-                (cancel)="cancelRefinementEditing()">
-            </app-test-case-editor>
-        </ng-container>
-
-        <!-- Acciones Finales -->
-        <!-- Advertencia de guardado temporal - Ahora se muestra en tooltips de los botones -->
-        <!-- <div class="storage-warning-banner" *ngIf="!loadingScenarios && !loadingScope && componentState === 'previewingGenerated'">
+      <!-- Acciones Finales -->
+      <!-- Advertencia de guardado temporal - Ahora se muestra en tooltips de los botones -->
+      <!-- <div class="storage-warning-banner" *ngIf="!loadingScenarios && !loadingScope && componentState === 'previewingGenerated'">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="warning-icon">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
             </svg>
@@ -170,39 +216,45 @@
             </div>
         </div> -->
 
-        <div class="form-actions editor-form-actions final-actions-group" *ngIf="componentState !== 'submitting'">
-            <!-- Badge de HUs guardadas -->
-            <div class="hu-counter-badge" *ngIf="accumulatedHUsCount > 0" 
-                 title="HUs guardadas temporalmente. Usa 'Confirmar y Añadir al Plan' para guardar en base de datos.">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="badge-icon">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
-                </svg>
-                <span>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }} (temporal)</span>
-            </div>
-            
-            <!-- Botón Guardar HU Individual -->
-            <button type="button" (click)="saveCurrentHU()" class="button-save-individual has-tooltip" 
-                    [disabled]="loadingScenarios || loadingScope"
-                    data-tooltip="Guardado temporal (solo en navegador). No se guarda en base de datos aún.">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
-                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                </svg>
-                Guardar HU (Temporal)
-            </button>
-            
-            <!-- Botón Confirmar y Añadir al Plan -->
-            <button type="button" (click)="confirmAndEmitHUDataToPlan()" class="button-primary has-tooltip" 
-                    [disabled]="loadingScenarios || loadingScope"
-                    data-tooltip="Guardado permanente en base de datos. Guarda la HU actual y todas las HUs temporales.">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
-                </svg>
-                Confirmar y Añadir al Plan (BD)
-            </button>
+      <div class="form-actions editor-form-actions final-actions-group" *ngIf="componentState !== 'submitting'">
+        <!-- Badge de HUs guardadas -->
+        <div class="hu-counter-badge" *ngIf="accumulatedHUsCount > 0"
+          title="HUs guardadas temporalmente. Usa 'Confirmar y Añadir al Plan' para guardar en base de datos.">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="badge-icon">
+            <path fill-rule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+              clip-rule="evenodd" />
+          </svg>
+          <span>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1
+            ? 's' : '' }} (temporal)</span>
         </div>
-        <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
-            <span class="spinner"></span> Enviando al plan de pruebas...
-        </div>
+
+        <!-- Botón Guardar HU Individual -->
+        <button type="button" (click)="saveCurrentHU()" class="button-save-individual has-tooltip"
+          [disabled]="loadingScenarios || loadingScope"
+          data-tooltip="Guardado temporal (solo en navegador). No se guarda en base de datos aún.">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
+            <path
+              d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+          </svg>
+          Guardar HU (Temporal)
+        </button>
+
+        <!-- Botón Confirmar y Añadir al Plan -->
+        <button type="button" (click)="confirmAndEmitHUDataToPlan()" class="button-primary has-tooltip"
+          [disabled]="loadingScenarios || loadingScope"
+          data-tooltip="Guardado permanente en base de datos. Guarda la HU actual y todas las HUs temporales.">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="button-icon">
+            <path fill-rule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+              clip-rule="evenodd" />
+          </svg>
+          Confirmar y Añadir al Plan (BD)
+        </button>
+      </div>
+      <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
+        <span class="spinner"></span> Enviando al plan de pruebas...
+      </div>
     </div>
   </div>
 

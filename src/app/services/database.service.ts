@@ -2,11 +2,11 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
-import type { 
-  DbTestPlan, 
-  DbUserStory, 
-  DbTestCase, 
-  DbTestCaseStep, 
+import type {
+  DbTestPlan,
+  DbUserStory,
+  DbTestCase,
+  DbTestCaseStep,
   DbImage,
   DbTestPlanWithRelations,
   DbUserStoryWithRelations,
@@ -14,11 +14,11 @@ import type {
 } from '../models/database.model';
 
 // Re-export para compatibilidad con otros componentes
-export type { 
-  DbTestPlan, 
-  DbUserStory, 
-  DbTestCase, 
-  DbTestCaseStep, 
+export type {
+  DbTestPlan,
+  DbUserStory,
+  DbTestCase,
+  DbTestCaseStep,
   DbImage,
   DbTestPlanWithRelations,
   DbUserStoryWithRelations,
@@ -49,7 +49,7 @@ export class DatabaseService {
       environment.supabaseUrl,
       environment.supabaseKey
     );
-    
+
     console.log('✅ DatabaseService inicializado con environment.ts');
   }
 
@@ -67,43 +67,25 @@ export class DatabaseService {
     testPlan: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
   ): Promise<string> {
-    console.log('💾 Iniciando guardado en Supabase...');
-    console.log('📦 Datos del test plan:', {
-      id: testPlan.id,
-      title: testPlan.title,
-      cantidadUserStories: userStories.length
-    });
-    
-    try {
-      // 1. Guardar test plan
-      const { data: planData, error: planError } = await this.supabase
-        .from('test_plans')
-        .insert([testPlan])
-        .select()
-        .single();
+    console.log('💾 Iniciando guardado transaccional (RPC) en Supabase...');
 
-      if (planError) {
-        console.error('❌ Error al guardar test plan:', planError);
-        console.error('❌ Detalles del error:', {
-          message: planError.message,
-          details: planError.details,
-          hint: planError.hint,
-          code: planError.code
-        });
-        throw new Error(`Error en test_plans: ${planError.message || planError.hint || JSON.stringify(planError)}`);
+    try {
+      const { data, error } = await this.supabase.rpc('save_complete_test_plan', {
+        p_test_plan: testPlan,
+        p_user_stories: userStories
+      });
+
+      if (error) {
+        console.error('❌ Error RPC save_complete_test_plan:', error);
+        throw error;
       }
 
-      console.log('✅ Test plan guardado:', planData.id);
-      const testPlanId = planData.id;
+      console.log('✅ Test plan guardado exitosamente (RPC):', data.id);
+      return data.id;
 
-      await this.persistUserStoriesGraph(testPlanId, userStories);
-
-      console.log('🎉 Test plan completo guardado exitosamente!');
-      return testPlanId;
-
-    } catch (error) {
-      console.error('❌ Error general en saveCompleteTestPlan:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('❌ Error en saveCompleteTestPlan (RPC):', error);
+      throw new Error(`Error guardando test plan: ${error.message}`);
     }
   }
 
@@ -113,7 +95,7 @@ export class DatabaseService {
    */
   async saveIndividualUserStory(userStory: DbUserStoryWithRelations): Promise<string> {
     console.log('💾 Guardando HU individual en Supabase...');
-    
+
     try {
       // 1. Guardar user story sin test_plan_id (será null)
       const userStoryData: any = {
@@ -130,7 +112,7 @@ export class DatabaseService {
         position: userStory.position
       };
 
-      
+
       const { data: usData, error: usError } = await this.supabase
         .from('user_stories')
         .insert([userStoryData])
@@ -210,9 +192,9 @@ export class DatabaseService {
     userStoryIds: string[]
   ): Promise<void> {
     console.log(`📎 Asociando ${userStoryIds.length} HUs al test plan ${testPlanId}...`);
-    
+
     try {
-      
+
       const { error } = await this.supabase
         .from('user_stories')
         .update({ test_plan_id: testPlanId })
@@ -235,9 +217,9 @@ export class DatabaseService {
    */
   async getOrphanUserStories(): Promise<DbUserStoryWithRelations[]> {
     console.log('📥 Obteniendo HUs sin test plan...');
-    
+
     try {
-      
+
       const { data, error } = await this.supabase
         .from('user_stories')
         .select(`
@@ -266,12 +248,14 @@ export class DatabaseService {
   /**
    * Obtener todos los test plans con sus relaciones
    */
-  async getAllTestPlansWithRelations(): Promise<DbTestPlanWithRelations[]> {
+  async getAllTestPlansWithRelations(page: number = 1, pageSize: number = 10): Promise<{ data: DbTestPlanWithRelations[], count: number }> {
     try {
-      console.log('📥 Obteniendo test plans desde Supabase...');
-      
-      
-      const { data, error } = await this.supabase
+      console.log(`🔍 Obteniendo test plans desde Supabase (Página ${page}, Tamaño ${pageSize})...`);
+
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await this.supabase
         .from('test_plans')
         .select(`
           *,
@@ -295,19 +279,54 @@ export class DatabaseService {
               )
             )
           )
-        `)
-        .order('created_at', { ascending: false });
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) {
         console.error('❌ Error en query:', error);
         throw error;
       }
 
-      console.log(`✅ ${data?.length || 0} Test Plans recuperados de Supabase`);
-      return data || [];
+      console.log(`✅ ${data?.length || 0} Test Plans recuperados de Supabase (Total: ${count})`);
+      return { data: data || [], count: count || 0 };
 
     } catch (error) {
       console.error('❌ Error al obtener test plans:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtener solo los encabezados de los test plans para el listado (Optimizado)
+   */
+  async getTestPlanHeaders(): Promise<DbTestPlan[]> {
+    try {
+      console.log('🔍 Obteniendo headers de test plans...');
+      const { data, error } = await this.supabase
+        .from('test_plans')
+        .select(`
+          id, 
+          title, 
+          created_at, 
+          updated_at, 
+          cell_name, 
+          team, 
+          repository_link, 
+          user_stories(
+            id,
+            sprint,
+            test_cases(id)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      console.log(`✅ ${data?.length || 0} Headers recuperados`);
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error al obtener headers:', error);
       throw error;
     }
   }
@@ -319,7 +338,7 @@ export class DatabaseService {
     console.log(`📥 Obteniendo test plan ${id}...`);
 
     try {
-      
+
       const { data, error } = await this.supabase
         .from('test_plans')
         .select(`
@@ -369,7 +388,7 @@ export class DatabaseService {
     console.log(`📝 Actualizando test plan ${id}...`);
 
     try {
-      
+
       const { error } = await this.supabase
         .from('test_plans')
         .update(updates)
@@ -399,9 +418,9 @@ export class DatabaseService {
     userStories: DbUserStoryWithRelations[]
   ): Promise<void> {
     console.log('📝 Actualizando test plan completo en Supabase...');
-    
+
     try {
-      
+
       // 1. Actualizar test plan
       const { error: planError } = await this.supabase
         .from('test_plans')
@@ -445,7 +464,7 @@ export class DatabaseService {
     console.log(`🗑️ Eliminando test plan ${id}...`);
 
     try {
-      
+
       const { error } = await this.supabase
         .from('test_plans')
         .delete()
@@ -474,7 +493,7 @@ export class DatabaseService {
     testCases: number;
   }> {
     try {
-      
+
       const [plansResult, storiesResult, casesResult] = await Promise.all([
         this.supabase.from('test_plans').select('id', { count: 'exact', head: true }),
         this.supabase.from('user_stories').select('id', { count: 'exact', head: true }),

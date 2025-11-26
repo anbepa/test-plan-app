@@ -33,6 +33,7 @@ export class TestCaseGeneratorComponent implements OnInit {
   @Output() huGenerated = new EventEmitter<OriginalHUData>();
   @Output() huSaved = new EventEmitter<OriginalHUData>();
   @Output() generationCancelled = new EventEmitter<void>();
+  @Output() cellNameChanged = new EventEmitter<string>();
 
   componentState: ComponentState = 'initialForm';
   currentGenerationMode: GenerationMode = 'text';
@@ -45,6 +46,9 @@ export class TestCaseGeneratorComponent implements OnInit {
   currentSelectedTechnique: string = '';
   refinementTechnique: string = '';
   userRefinementContext: string = '';
+
+  cellName: string = '';
+  cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
 
   generatedHUData: UIHUData | null = null;
 
@@ -68,7 +72,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     private cdr: ChangeDetectorRef,
     private elRef: ElementRef,
     private toastService: ToastService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.currentGenerationMode = this.initialGenerationMode;
@@ -112,6 +116,10 @@ export class TestCaseGeneratorComponent implements OnInit {
       }
       this.cdr.detectChanges();
     }, 0);
+  }
+
+  onCellNameChange(cellName: string): void {
+    this.cellNameChanged.emit(cellName);
   }
 
   public autoGrowTextarea(element: any): void {
@@ -195,9 +203,9 @@ export class TestCaseGeneratorComponent implements OnInit {
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScope = true;
       this.loadingScenarios = true;
-      
+
       console.log('[GENERATION] Iniciando generación combinada de alcance + casos de prueba');
-      
+
       this.geminiService.generateScopeAndTestCasesCombined(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
@@ -207,11 +215,11 @@ export class TestCaseGeneratorComponent implements OnInit {
           console.log('[GENERATION] Resultado combinado recibido');
           console.log('[GENERATION] Alcance:', result.scope);
           console.log('[GENERATION] Casos de prueba:', result.testCases.length);
-          
+
           if (this.generatedHUData) {
             // Asignar alcance
             this.generatedHUData.generatedScope = result.scope;
-            
+
             // Asignar casos de prueba
             this.generatedHUData.detailedTestCases = result.testCases.map((tc, index) => {
               const detailedTc: UIDetailedTestCase = {
@@ -224,35 +232,35 @@ export class TestCaseGeneratorComponent implements OnInit {
               };
               return detailedTc;
             });
-            
+
             this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
               result.testCases.map(tc => tc.title)
             );
-            
+
             console.log('[GENERATION] Datos asignados correctamente a generatedHUData');
           }
         }),
         catchError(e => {
           const errorMsg = (typeof e === 'string' ? e : e.message) || 'Error al generar alcance y casos de prueba.';
           console.error('[GENERATION] Error:', errorMsg);
-          
+
           this.errorScope = errorMsg;
           this.errorScenarios = errorMsg;
-          
+
           if (this.generatedHUData) {
             this.generatedHUData.errorScope = errorMsg;
             this.generatedHUData.generatedScope = 'Error al generar el alcance.';
-            
+
             const errorTc: UIDetailedTestCase = {
               title: 'Error Crítico en Generación',
               preconditions: errorMsg,
-              steps: [{numero_paso: 1, accion: 'La generación falló. Por favor, intenta nuevamente.'}],
+              steps: [{ numero_paso: 1, accion: 'La generación falló. Por favor, intenta nuevamente.' }],
               expectedResults: 'N/A',
               isExpanded: true
             };
             this.generatedHUData.detailedTestCases = [errorTc];
           }
-          
+
           return of(null);
         }),
         finalize(() => {
@@ -260,7 +268,7 @@ export class TestCaseGeneratorComponent implements OnInit {
           this.loadingScenarios = false;
           this.componentState = 'previewingGenerated';
           this.cdr.detectChanges();
-          
+
           setTimeout(() => {
             const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
             textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
@@ -434,12 +442,12 @@ export class TestCaseGeneratorComponent implements OnInit {
       // Guardar la posición actual del scroll antes de actualizar
       const scrollY = window.scrollY;
       const scrollX = window.scrollX;
-      
+
       this.generatedHUData.detailedTestCases = testCases;
-      
+
       // Usar markForCheck en lugar de detectChanges para evitar scroll jumps
       this.cdr.markForCheck();
-      
+
       // Restaurar la posición del scroll
       setTimeout(() => {
         window.scrollTo(scrollX, scrollY);
@@ -454,18 +462,18 @@ export class TestCaseGeneratorComponent implements OnInit {
 
   handleCancelGeneration() {
     // Si hay datos generados, preguntar si quiere guardarlos
-    if (this.generatedHUData && 
-        this.generatedHUData.detailedTestCases && 
-        this.generatedHUData.detailedTestCases.length > 0 &&
-        !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
-      
+    if (this.generatedHUData &&
+      this.generatedHUData.detailedTestCases &&
+      this.generatedHUData.detailedTestCases.length > 0 &&
+      !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
+
       const confirmMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar?\n\n` +
-                           `⚠️ IMPORTANTE: Si cancelas sin guardar, se perderán todos los casos de prueba generados.\n\n` +
-                           `💾 "Guardar HU" = Guardado temporal (solo navegador)\n` +
-                           `🗄️ "Confirmar y Añadir al Plan" = Guardado permanente (base de datos)\n\n` +
-                           `• Clic en OK = Guardar HU temporalmente y cancelar\n` +
-                           `• Clic en Cancelar = Descartar HU completamente`;
-      
+        `⚠️ IMPORTANTE: Si cancelas sin guardar, se perderán todos los casos de prueba generados.\n\n` +
+        `💾 "Guardar HU" = Guardado temporal (solo navegador)\n` +
+        `🗄️ "Confirmar y Añadir al Plan" = Guardado permanente (base de datos)\n\n` +
+        `• Clic en OK = Guardar HU temporalmente y cancelar\n` +
+        `• Clic en Cancelar = Descartar HU completamente`;
+
       if (confirm(confirmMessage)) {
         // Guardar la HU antes de cancelar
         console.log('💾 Usuario eligió GUARDAR la HU antes de cancelar');
@@ -578,30 +586,30 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.draggedTestCaseStep = null; this.dragOverTestCaseStepId = null;
   }
 
-    /**
-   * Guarda la HU actual individualmente (sin salir del formulario)
-   * Este método permite acumular múltiples HUs antes de confirmar el plan completo
-   */
+  /**
+ * Guarda la HU actual individualmente (sin salir del formulario)
+ * Este método permite acumular múltiples HUs antes de confirmar el plan completo
+ */
   saveCurrentHU() {
-    if (this.generatedHUData && 
-        this.generatedHUData.detailedTestCases && 
-        this.generatedHUData.detailedTestCases.length > 0 &&
-        !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
-      
+    if (this.generatedHUData &&
+      this.generatedHUData.detailedTestCases &&
+      this.generatedHUData.detailedTestCases.length > 0 &&
+      !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
+
       // Preparar datos usando el mismo método que confirmAndEmitHUDataToPlan
       const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
-      
+
       console.log('💾 GUARDANDO HU INDIVIDUAL (sin crear plan):', dataToEmit.title);
       console.log('📊 HUs acumuladas antes:', this.accumulatedHUsCount);
-      
+
       // Emitir al padre para que acumule en memoria
       this.huSaved.emit(dataToEmit);
-      
+
       console.log('📊 HUs acumuladas después:', this.accumulatedHUsCount + 1);
-      
+
       // Mostrar confirmación al usuario
       this.toastService.info(`HU "${dataToEmit.title}" guardada temporalmente (${this.accumulatedHUsCount + 1} HUs guardadas)`, 4000);
-      
+
       // Resetear formulario para permitir agregar otra HU
       setTimeout(() => {
         this.resetToInitialForm();
@@ -619,41 +627,41 @@ export class TestCaseGeneratorComponent implements OnInit {
   confirmAndEmitHUDataToPlan() {
     // Calcular el número total de HUs que se guardarán
     const totalHUs = this.generatedHUData ? this.accumulatedHUsCount + 1 : this.accumulatedHUsCount;
-    
+
     if (totalHUs === 0) {
       this.toastService.warning('No hay HUs para guardar');
       return;
     }
-    
+
     if (this.generatedHUData) {
       this.componentState = 'submitting';
-      
+
       // Preparar datos de la HU actual
       const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
-      
+
       console.log('📤 CONFIRMANDO Y AÑADIENDO AL PLAN - HU actual:', dataToEmit.title);
       console.log('📊 Contador de HUs acumuladas antes:', this.accumulatedHUsCount);
-      
+
       // Emitir al padre - esto guardará la HU y creará el plan con toasts
       this.huGenerated.emit(dataToEmit);
-      
+
       // Resetear el formulario después de emitir
       setTimeout(() => {
         this.resetToInitialForm();
       }, 500);
-      
+
     } else {
       // Si no hay HU actual, mostrar mensaje
       console.warn('[WARNING] No hay HU generada para añadir al plan');
       console.log('[INFO] HUs acumuladas disponibles:', this.accumulatedHUsCount);
-      
+
       // Si hay HUs guardadas previamente, el plan se puede crear igual
       if (this.accumulatedHUsCount > 0) {
         console.log('[PLAN] Creando plan con HUs guardadas previamente');
-        
+
         // Emitir evento vacío para indicar que se debe crear el plan con las HUs existentes
         this.huGenerated.emit({} as any);
-        
+
         // Resetear el formulario
         setTimeout(() => {
           this.resetToInitialForm();
@@ -689,15 +697,15 @@ export class TestCaseGeneratorComponent implements OnInit {
         return originalTc as OriginalDetailedTestCase;
       })
     };
-    
+
     dataToEmit.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
       (dataToEmit.detailedTestCases || []).map(tc => tc.title)
     );
-    
+
     if (this.refinementTechnique && dataToEmit.originalInput.selectedTechnique !== this.refinementTechnique) {
       dataToEmit.originalInput.selectedTechnique = this.refinementTechnique;
     }
-    
+
     return dataToEmit;
   }
 
