@@ -26,20 +26,21 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   Math = Math;
 
-  testPlans: DbTestPlanWithRelations[] = [];
-  filteredTestPlans: DbTestPlanWithRelations[] = [];
+  testPlans: Partial<DbTestPlanWithRelations>[] = [];
+  filteredTestPlans: Partial<DbTestPlanWithRelations>[] = [];
   selectedTestPlan: DbTestPlanWithRelations | null = null;
   isLoading: boolean = true;
   errorMessage: string = '';
-  
+
   searchQuery: string = '';
   selectedSprintFilter: string = 'all';
+  selectedCellFilter: string = 'all';
   savingToDatabase: boolean = false;
 
   currentPage: number = 1;
   itemsPerPage: number = 6;
   totalPages: number = 1;
-  paginatedTestPlans: DbTestPlanWithRelations[] = [];
+  paginatedTestPlans: Partial<DbTestPlanWithRelations>[] = [];
 
   testPlanTitle: string = '';
   repositoryLink: string = '';
@@ -97,11 +98,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
-  ) {}
+  ) { }
 
   async ngOnInit() {
     await this.loadTestPlans();
-    
+
     this.route.queryParams.subscribe(async params => {
       const id = params['id'];
       if (id && this.testPlans.length > 0) {
@@ -126,13 +127,13 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     try {
       console.log('🔍 Cargando test plans desde Supabase...');
-      this.testPlans = await this.databaseService.getAllTestPlansWithRelations();
+      this.testPlans = await this.databaseService.getTestPlanHeaders();
       console.log('✅ Test plans cargados:', this.testPlans.length);
 
       if (this.testPlans.length === 0) {
         this.errorMessage = 'No hay test plans guardados en la base de datos.';
       }
-      
+
       this.applyFilters();
     } catch (error) {
       console.error('❌ Error cargando test plans:', error);
@@ -147,9 +148,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     if (this.searchQuery.trim()) {
       const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(tp => 
+      filtered = filtered.filter(tp =>
         tp.title?.toLowerCase().includes(query) ||
-        tp.user_stories?.some((us: any) => 
+        tp.user_stories?.some((us: any) =>
           us.title?.toLowerCase().includes(query) ||
           us.sprint?.toLowerCase().includes(query)
         )
@@ -158,28 +159,34 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     if (this.selectedSprintFilter && this.selectedSprintFilter !== 'all') {
       filtered = filtered.filter(tp =>
-        tp.user_stories?.some((us: any) => 
+        tp.user_stories?.some((us: any) =>
           us.sprint === this.selectedSprintFilter
         )
       );
     }
 
+    if (this.selectedCellFilter && this.selectedCellFilter !== 'all') {
+      filtered = filtered.filter(tp =>
+        tp.cell_name === this.selectedCellFilter
+      );
+    }
+
     this.filteredTestPlans = filtered;
-    
+
     this.currentPage = 1;
     this.updatePagination();
   }
 
   updatePagination(): void {
     this.totalPages = Math.ceil(this.filteredTestPlans.length / this.itemsPerPage);
-    
+
     if (this.currentPage > this.totalPages && this.totalPages > 0) {
       this.currentPage = this.totalPages;
     }
-    
+
     const startIndex = (this.currentPage - 1) * this.itemsPerPage;
     const endIndex = startIndex + this.itemsPerPage;
-    
+
     this.paginatedTestPlans = this.filteredTestPlans.slice(startIndex, endIndex);
   }
 
@@ -202,7 +209,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   getPageNumbers(): number[] {
     const pages: number[] = [];
     const maxPagesToShow = 5;
-    
+
     if (this.totalPages <= maxPagesToShow) {
       for (let i = 1; i <= this.totalPages; i++) {
         pages.push(i);
@@ -217,7 +224,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         pages.push(1, -1, this.currentPage - 1, this.currentPage, this.currentPage + 1, -1, this.totalPages);
       }
     }
-    
+
     return pages;
   }
 
@@ -241,10 +248,24 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     return Array.from(sprints).sort();
   }
 
+  getAvailableCells(): string[] {
+    const cells = new Set<string>();
+    this.testPlans.forEach(tp => {
+      if (tp.cell_name) {
+        cells.add(tp.cell_name);
+      }
+    });
+    return Array.from(cells).sort();
+  }
+
+  onCellFilterChange(): void {
+    this.applyFilters();
+  }
+
   // Agrupar test plans por sprint
-  getGroupedTestPlans(): { sprint: string; plans: DbTestPlanWithRelations[] }[] {
-    const grouped = new Map<string, DbTestPlanWithRelations[]>();
-    
+  getGroupedTestPlans(): { sprint: string; plans: Partial<DbTestPlanWithRelations>[] }[] {
+    const grouped = new Map<string, Partial<DbTestPlanWithRelations>[]>();
+
     // Usar paginatedTestPlans en lugar de filteredTestPlans
     this.paginatedTestPlans.forEach(tp => {
       // Obtener el sprint más común en las HUs del test plan
@@ -253,11 +274,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         acc[sprint] = (acc[sprint] || 0) + 1;
         return acc;
       }, {});
-      
+
       const mainSprint = Object.keys(sprintCounts).length > 0
         ? Object.keys(sprintCounts).reduce((a, b) => sprintCounts[a] > sprintCounts[b] ? a : b)
         : 'Sin Sprint';
-      
+
       if (!grouped.has(mainSprint)) {
         grouped.set(mainSprint, []);
       }
@@ -274,24 +295,51 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       });
   }
 
-  selectTestPlan(testPlan: DbTestPlanWithRelations) {
-    this.selectedTestPlan = testPlan;
-    console.log('📋 Test plan seleccionado:', testPlan);
+  async selectTestPlan(testPlan: Partial<DbTestPlanWithRelations>) {
+    this.isLoading = true;
+    try {
+      console.log('📋 Test plan seleccionado (header):', testPlan);
 
-    // Cargar datos editables
-    this.testPlanTitle = testPlan.title || '';
-    this.repositoryLink = testPlan.repository_link || '';
-    this.outOfScopeContent = testPlan.out_of_scope || '';
-    this.strategyContent = testPlan.strategy || '';
-    this.limitationsContent = testPlan.limitations || '';
-    this.assumptionsContent = testPlan.assumptions || '';
-    this.teamContent = testPlan.team || '';
+      // Siempre obtener la versión completa desde la base de datos para garantizar que
+      // las secciones de detalle (alcance, estrategia, supuestos, etc.) estén presentes.
+      // Los headers traen información parcial y pueden dejar la vista vacía.
+      let fullTestPlan: DbTestPlanWithRelations | null = null;
+      try {
+        console.log('📥 Cargando detalles completos del test plan...');
+        fullTestPlan = await this.databaseService.getTestPlanById(testPlan.id!);
+      } catch (error) {
+        console.error('❌ No se pudo obtener el detalle desde la BD, usando header parcial:', error);
+        fullTestPlan = testPlan as DbTestPlanWithRelations;
+      }
 
-    // Convertir user stories a HUData
-    this.convertDbTestPlanToHUList(testPlan);
+      if (!fullTestPlan) {
+        this.toastService.error('No se pudo cargar el detalle del plan de pruebas.');
+        return;
+      }
 
-    // Generar previsualización
-    this.updatePreview();
+      this.selectedTestPlan = fullTestPlan;
+      console.log('📋 Test plan completo cargado:', this.selectedTestPlan);
+
+      // Load editable data
+      this.testPlanTitle = fullTestPlan.title || '';
+      this.repositoryLink = fullTestPlan.repository_link || '';
+      this.outOfScopeContent = fullTestPlan.out_of_scope || '';
+      this.strategyContent = fullTestPlan.strategy || '';
+      this.limitationsContent = fullTestPlan.limitations || '';
+      this.assumptionsContent = fullTestPlan.assumptions || '';
+      this.teamContent = fullTestPlan.team || '';
+
+      // Convert user stories to HUData
+      this.convertDbTestPlanToHUList(fullTestPlan);
+
+      // Generate preview
+      this.updatePreview();
+    } catch (error) {
+      console.error('❌ Error al seleccionar test plan:', error);
+      this.toastService.error('Ocurrió un error al cargar el plan de pruebas.');
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   convertDbTestPlanToHUList(testPlan: DbTestPlanWithRelations) {
@@ -302,13 +350,13 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         title: us.title,
         generated_scope: us.generated_scope
       });
-      
+
       // Usar el custom_id si existe, sino generar uno temporal basado en el índice
       // NUNCA usar us.id (UUID de BD) como fallback para evitar sobrescribir el custom_id original
       const customId = us.custom_id || `HU_${index + 1}_${testPlan.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20)}`;
-      
+
       console.log(`✅ ID seleccionado para HU ${index}: ${customId}`);
-      
+
       const huData: HUData = {
         id: customId, // Usar el ID personalizado guardado en la BD
         title: us.title || '',
@@ -362,13 +410,13 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     });
   }
 
-  getTestCaseCount(testPlan: DbTestPlanWithRelations): number {
+  getTestCaseCount(testPlan: Partial<DbTestPlanWithRelations>): number {
     return testPlan.user_stories?.reduce((total: number, us: any) => {
       return total + (us.test_cases?.length || 0);
     }, 0) || 0;
   }
 
-  getTotalStepsCount(testPlan: DbTestPlanWithRelations): number {
+  getTotalStepsCount(testPlan: Partial<DbTestPlanWithRelations>): number {
     return testPlan.user_stories?.reduce((total: number, us: any) => {
       return total + (us.test_cases?.reduce((tcTotal: number, tc: any) => {
         return tcTotal + (tc.test_case_steps?.length || 0);
@@ -428,9 +476,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     hu.detailedTestCases = updatedTestCases.map(tc => ({
       title: tc.title,
       preconditions: tc.preconditions,
-      steps: tc.steps.map((step, idx) => ({ 
+      steps: tc.steps.map((step, idx) => ({
         numero_paso: idx + 1,
-        accion: step.accion 
+        accion: step.accion
       })),
       expectedResults: tc.expectedResults,
       isExpanded: tc.isExpanded // Preservar estado del acordeón
@@ -543,7 +591,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const sectionName = sectionNameMap[section];
 
     // Crear resumen de HUs para contexto
-    const huSummary = this.huList.map((hu, idx) => 
+    const huSummary = this.huList.map((hu, idx) =>
       `HU ${idx + 1} (${hu.id}): ${hu.title} - Técnica: ${hu.originalInput.selectedTechnique || 'N/A'}`
     ).join('\n');
 
@@ -581,8 +629,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
           }
 
           // Añadir el contenido mejorado al existente
-          const newContent = existingContent 
-            ? `${existingContent}\n\n${enhancedContent}` 
+          const newContent = existingContent
+            ? `${existingContent}\n\n${enhancedContent}`
             : enhancedContent;
 
           // Actualizar el contenido de la sección
@@ -682,7 +730,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   updatePreview(): void {
     console.log('🔍 updatePreview() llamado');
     console.log('📊 HU List:', this.huList.length);
-    
+
     if (this.huList.length === 0) {
       console.warn('⚠️ No hay HUs para generar preview');
       this.downloadPreviewHtmlContent = '';
@@ -718,7 +766,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     html += `<h2>4. Casos de Prueba</h2>\n`;
     this.huList.forEach(hu => {
       html += `<h3>ID ${hu.id}: ${hu.title}</h3>\n`;
-      
+
       if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
         html += `<ul>\n`;
         hu.detailedTestCases.forEach((tc) => {
@@ -751,7 +799,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     console.log('🔍 downloadWord() llamado');
     console.log('📄 HTML Content:', this.downloadPreviewHtmlContent);
     console.log('📝 HU List length:', this.huList.length);
-    
+
     if (!this.downloadPreviewHtmlContent) {
       console.error('❌ No hay contenido HTML para descargar');
       this.toastService.warning('No hay contenido para descargar. Intenta seleccionar un test plan primero');
@@ -760,7 +808,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     try {
       console.log('🔄 Generando documento HTML...');
-      
+
       // Crear un documento HTML completo con estilos modernos inspirados en Apple
       const fullHtml = `
 <!DOCTYPE html>
@@ -970,16 +1018,16 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 <body>
 ${this.downloadPreviewHtmlContent}
 <footer>
-  <p>Documento generado el ${new Date().toLocaleDateString('es-ES', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  })}</p>
+  <p>Documento generado el ${new Date().toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })}</p>
 </footer>
 </body>
 </html>`;
-      
+
       console.log('✅ HTML generado, descargando...');
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
       saveAs(blob, `plan_pruebas_${this.testPlanTitle || 'documento'}.html`);
@@ -1176,7 +1224,7 @@ ${this.downloadPreviewHtmlContent}
 
     try {
       await this.autoSaveToDatabase(true);
-      
+
       // Actualizar el toast de loading a success con el título del plan
       const planTitle = this.testPlanTitle || 'Test Plan';
       this.toastService.update(loadingToastId, {
@@ -1186,7 +1234,7 @@ ${this.downloadPreviewHtmlContent}
       });
     } catch (error) {
       console.error('❌ Error al guardar:', error);
-      
+
       // Actualizar el toast de loading a error
       this.toastService.update(loadingToastId, {
         type: 'error',
@@ -1203,18 +1251,18 @@ ${this.downloadPreviewHtmlContent}
 
   // === ELIMINAR TEST PLAN ===
 
-  async deleteTestPlan(testPlan: DbTestPlanWithRelations) {
+  async deleteTestPlan(testPlan: Partial<DbTestPlanWithRelations>) {
     const confirmed = confirm(`¿Estás seguro de eliminar "${testPlan.title}"?\n\nEsta acción no se puede deshacer.`);
     if (!confirmed) return;
 
     const loadingToastId = this.toastService.loading('Eliminando test plan...');
     this.isLoading = true;
-    
+
     try {
       const success = await this.databaseService.deleteTestPlan(testPlan.id!);
-      
+
       this.toastService.dismiss(loadingToastId);
-      
+
       if (success) {
         this.toastService.success('Test plan eliminado exitosamente');
         await this.loadTestPlans();

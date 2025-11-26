@@ -2,7 +2,7 @@
 <div class="viewer-container">
   <!-- VISTA DE LISTA -->
   <div *ngIf="!selectedTestPlan" class="list-view">
-    
+
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <div class="spinner"></div>
@@ -12,13 +12,17 @@
     <!-- Error State -->
     <div *ngIf="!isLoading && errorMessage" class="error-state">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="error-icon">
-        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+        <path fill-rule="evenodd"
+          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+          clip-rule="evenodd" />
       </svg>
       <h3>Error al cargar</h3>
       <p>{{ errorMessage }}</p>
       <button class="button-retry" (click)="loadTestPlans()">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clip-rule="evenodd" />
+          <path fill-rule="evenodd"
+            d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
+            clip-rule="evenodd" />
         </svg>
         Reintentar
       </button>
@@ -27,15 +31,18 @@
     <!-- Empty State -->
     <div *ngIf="!isLoading && !errorMessage && testPlans.length === 0" class="empty-state">
       <div class="empty-icon-wrapper">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="empty-icon">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          class="empty-icon">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       </div>
       <h3>No hay planes de prueba</h3>
       <p>Comienza creando tu primer test plan</p>
       <button class="button-create" [routerLink]="['/generator']">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+          <path
+            d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
         </svg>
         Crear Test Plan
       </button>
@@ -45,17 +52,16 @@
     <div *ngIf="!isLoading && !errorMessage && testPlans.length > 0" class="filters-bar">
       <div class="search-container">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="search-icon">
-          <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+          <path fill-rule="evenodd"
+            d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+            clip-rule="evenodd" />
         </svg>
-        <input 
-          type="text" 
-          class="search-input" 
-          placeholder="Buscar por nombre o HU..." 
-          [(ngModel)]="searchQuery"
+        <input type="text" class="search-input" placeholder="Buscar por nombre o HU..." [(ngModel)]="searchQuery"
           (input)="onSearchChange()">
         <button *ngIf="searchQuery" class="clear-search" (click)="searchQuery = ''; onSearchChange()">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            <path
+              d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
           </svg>
         </button>
       </div>
@@ -63,13 +69,29 @@
       <div class="filter-group">
         <label class="filter-label">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 01.628.74v2.288a2.25 2.25 0 01-.659 1.59l-4.682 4.683a2.25 2.25 0 00-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 018 18.25v-5.757a2.25 2.25 0 00-.659-1.591L2.659 6.22A2.25 2.25 0 012 4.629V2.34a.75.75 0 01.628-.74z" clip-rule="evenodd" />
+            <path fill-rule="evenodd"
+              d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 01.628.74v2.288a2.25 2.25 0 01-.659 1.59l-4.682 4.683a2.25 2.25 0 00-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 018 18.25v-5.757a2.25 2.25 0 00-.659-1.591L2.659 6.22A2.25 2.25 0 012 4.629V2.34a.75.75 0 01.628-.74z"
+              clip-rule="evenodd" />
           </svg>
           Sprint
         </label>
         <select class="filter-select" [(ngModel)]="selectedSprintFilter" (change)="onSprintFilterChange()">
           <option value="all">Todos los Sprints</option>
           <option *ngFor="let sprint of getAvailableSprints()" [value]="sprint">{{ sprint }}</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zm16.48 0a.77.77 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654 4.97 4.97 0 002.07-.655z" />
+          </svg>
+          Célula
+        </label>
+        <select class="filter-select" [(ngModel)]="selectedCellFilter" (change)="onCellFilterChange()">
+          <option value="all">Todas las Células</option>
+          <option *ngFor="let cell of getAvailableCells()" [value]="cell">{{ cell }}</option>
         </select>
       </div>
 
@@ -85,8 +107,11 @@
         <div class="sprint-header">
           <div class="sprint-title">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10.75 10.818v2.614A3.13 3.13 0 0011.888 13c.482-.315.612-.648.612-.875 0-.227-.13-.56-.612-.875a3.13 3.13 0 00-1.138-.432zM8.33 8.62c.053.055.115.11.184.164.208.16.46.284.736.363V6.603a2.45 2.45 0 00-.35.13c-.14.065-.27.143-.386.233-.377.292-.514.627-.514.909 0 .184.058.39.202.592.037.051.08.102.128.152z" />
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-6a.75.75 0 01.75.75v.316a3.78 3.78 0 011.653.713c.426.33.744.74.925 1.2a.75.75 0 01-1.395.55 1.35 1.35 0 00-.447-.563 2.187 2.187 0 00-.736-.363V9.3c.698.093 1.383.32 1.959.696.787.514 1.216 1.25 1.216 2.004 0 .86-.504 1.616-1.151 2.093-.323.238-.68.427-1.024.557v.316a.75.75 0 01-1.5 0v-.316a3.78 3.78 0 01-1.653-.713c-.426-.33-.744-.74-.925-1.2a.75.75 0 011.395-.55c.088.17.234.347.447.563.192.196.422.348.736.363v-2.697a6.17 6.17 0 01-1.959-.696C6.045 9.242 5.616 8.506 5.616 7.752c0-.86.504-1.616 1.151-2.093.323-.238.68-.427 1.024-.557V4.75A.75.75 0 0110 4z" clip-rule="evenodd" />
+              <path
+                d="M10.75 10.818v2.614A3.13 3.13 0 0011.888 13c.482-.315.612-.648.612-.875 0-.227-.13-.56-.612-.875a3.13 3.13 0 00-1.138-.432zM8.33 8.62c.053.055.115.11.184.164.208.16.46.284.736.363V6.603a2.45 2.45 0 00-.35.13c-.14.065-.27.143-.386.233-.377.292-.514.627-.514.909 0 .184.058.39.202.592.037.051.08.102.128.152z" />
+              <path fill-rule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-6a.75.75 0 01.75.75v.316a3.78 3.78 0 011.653.713c.426.33.744.74.925 1.2a.75.75 0 01-1.395.55 1.35 1.35 0 00-.447-.563 2.187 2.187 0 00-.736-.363V9.3c.698.093 1.383.32 1.959.696.787.514 1.216 1.25 1.216 2.004 0 .86-.504 1.616-1.151 2.093-.323.238-.68.427-1.024.557v.316a.75.75 0 01-1.5 0v-.316a3.78 3.78 0 01-1.653-.713c-.426-.33-.744-.74-.925-1.2a.75.75 0 011.395-.55c.088.17.234.347.447.563.192.196.422.348.736.363v-2.697a6.17 6.17 0 01-1.959-.696C6.045 9.242 5.616 8.506 5.616 7.752c0-.86.504-1.616 1.151-2.093.323-.238.68-.427 1.024-.557V4.75A.75.75 0 0110 4z"
+                clip-rule="evenodd" />
             </svg>
             Sprint {{ group.sprint }}
           </div>
@@ -99,11 +124,13 @@
             <div class="card-content">
               <!-- Título -->
               <h3 class="card-title" [title]="testPlan.title">{{ testPlan.title }}</h3>
-              
+
               <!-- Fecha compacta -->
               <div class="card-date">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z" clip-rule="evenodd" />
+                  <path fill-rule="evenodd"
+                    d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z"
+                    clip-rule="evenodd" />
                 </svg>
                 {{ formatDate(testPlan.created_at) }}
               </div>
@@ -112,13 +139,16 @@
               <div class="card-metrics">
                 <div class="metric-chip metric-chip-hu">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zm16.48 0a.77.77 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654 4.97 4.97 0 002.07-.655z" />
+                    <path
+                      d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 01-2.07-.655zm16.48 0a.77.77 0 00.357-.442 3 3 0 00-4.308-3.517 6.484 6.484 0 011.907 3.96 2.32 2.32 0 01-.026.654 4.97 4.97 0 002.07-.655z" />
                   </svg>
                   <span>{{ testPlan.user_stories?.length || 0 }} HUs</span>
                 </div>
                 <div class="metric-chip metric-chip-cases">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd"
+                      d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z"
+                      clip-rule="evenodd" />
                   </svg>
                   <span>{{ getTestCaseCount(testPlan) }} Casos</span>
                 </div>
@@ -129,13 +159,18 @@
                 <button class="action-button action-view" (click)="selectTestPlan(testPlan); $event.stopPropagation()">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-                    <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd"
+                      d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                      clip-rule="evenodd" />
                   </svg>
                   Ver detalles
                 </button>
-                <button class="action-button action-delete" (click)="deleteTestPlan(testPlan); $event.stopPropagation()" title="Eliminar">
+                <button class="action-button action-delete" (click)="deleteTestPlan(testPlan); $event.stopPropagation()"
+                  title="Eliminar">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd"
+                      d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+                      clip-rule="evenodd" />
                   </svg>
                 </button>
               </div>
@@ -146,15 +181,18 @@
     </div>
 
     <!-- Sin resultados de búsqueda -->
-    <div *ngIf="!isLoading && !errorMessage && testPlans.length > 0 && filteredTestPlans.length === 0" class="no-results">
+    <div *ngIf="!isLoading && !errorMessage && testPlans.length > 0 && filteredTestPlans.length === 0"
+      class="no-results">
       <div class="no-results-icon">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
       </div>
       <h3>No se encontraron resultados</h3>
       <p>Intenta con otros términos de búsqueda o filtros</p>
-      <button class="button-secondary" (click)="searchQuery = ''; selectedSprintFilter = 'all'; applyFilters()">
+      <button class="button-secondary"
+        (click)="searchQuery = ''; selectedSprintFilter = 'all'; selectedCellFilter = 'all'; applyFilters()">
         Limpiar filtros
       </button>
     </div>
@@ -163,45 +201,39 @@
     <div *ngIf="!isLoading && !errorMessage && filteredTestPlans.length > 0" class="pagination-container">
       <div class="pagination-info">
         <p>
-          Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> - 
-          <strong>{{ Math.min(currentPage * itemsPerPage, filteredTestPlans.length) }}</strong> 
+          Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> -
+          <strong>{{ Math.min(currentPage * itemsPerPage, filteredTestPlans.length) }}</strong>
           de <strong>{{ filteredTestPlans.length }}</strong> {{ filteredTestPlans.length === 1 ? 'plan' : 'planes' }}
         </p>
       </div>
-      
+
       <div class="pagination-controls" *ngIf="totalPages > 1">
         <!-- Botón Anterior -->
-        <button 
-          class="pagination-button pagination-prev" 
-          [disabled]="currentPage === 1"
-          (click)="previousPage()"
+        <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()"
           title="Página anterior">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
+            <path fill-rule="evenodd"
+              d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+              clip-rule="evenodd" />
           </svg>
         </button>
 
         <!-- Números de página -->
         <div class="pagination-numbers">
-          <button 
-            *ngFor="let page of getPageNumbers()"
-            [class.pagination-number]="page > 0"
-            [class.pagination-ellipsis]="page === -1"
-            [class.active]="page === currentPage"
-            [disabled]="page === -1 || page === currentPage"
-            (click)="page > 0 ? goToPage(page) : null">
+          <button *ngFor="let page of getPageNumbers()" [class.pagination-number]="page > 0"
+            [class.pagination-ellipsis]="page === -1" [class.active]="page === currentPage"
+            [disabled]="page === -1 || page === currentPage" (click)="page > 0 ? goToPage(page) : null">
             {{ page === -1 ? '...' : page }}
           </button>
         </div>
 
         <!-- Botón Siguiente -->
-        <button 
-          class="pagination-button pagination-next" 
-          [disabled]="currentPage === totalPages"
-          (click)="nextPage()"
+        <button class="pagination-button pagination-next" [disabled]="currentPage === totalPages" (click)="nextPage()"
           title="Página siguiente">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+            <path fill-rule="evenodd"
+              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+              clip-rule="evenodd" />
           </svg>
         </button>
       </div>
@@ -217,36 +249,42 @@
         <div class="breadcrumb-nav">
           <button class="breadcrumb-button" (click)="backToList()">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd" />
+              <path fill-rule="evenodd"
+                d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z"
+                clip-rule="evenodd" />
             </svg>
             <span>Lista de Planes</span>
           </button>
           <span class="breadcrumb-separator">/</span>
           <span class="breadcrumb-current">Detalle del Plan</span>
         </div>
-        
+
         <!-- Título principal con descripción -->
         <div class="header-title-section">
           <h1 class="header-title">{{ testPlanTitle }}</h1>
           <p class="header-subtitle">
-            {{ huList.length }} {{ huList.length === 1 ? 'Historia de Usuario' : 'Historias de Usuario' }} · 
-            {{ getTestCaseCount(selectedTestPlan) }} Casos de Prueba · 
+            {{ huList.length }} {{ huList.length === 1 ? 'Historia de Usuario' : 'Historias de Usuario' }} ·
+            {{ getTestCaseCount(selectedTestPlan) }} Casos de Prueba ·
             {{ getTotalStepsCount(selectedTestPlan) }} Pasos
           </p>
         </div>
-        
+
         <!-- Botones de acción agrupados -->
         <div class="header-actions">
           <button class="button-secondary-action" (click)="openPreviewModal()" [disabled]="huList.length === 0">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-              <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+              <path fill-rule="evenodd"
+                d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                clip-rule="evenodd" />
             </svg>
             Previsualizar
           </button>
           <button class="button-primary-action" (click)="saveToDatabase()" [disabled]="savingToDatabase">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+              <path fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                clip-rule="evenodd" />
             </svg>
             <span *ngIf="!savingToDatabase">Guardar Cambios</span>
             <span *ngIf="savingToDatabase">Guardando...</span>
@@ -257,13 +295,15 @@
 
     <!-- Contenido del Test Plan -->
     <div class="detail-content">
-      
+
       <!-- SECCIÓN 1: HISTORIAS DE USUARIO Y CASOS DE PRUEBA -->
       <section class="results-section" *ngIf="huList.length > 0">
         <div class="section-header">
           <h2>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="title-icon">
-              <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z" clip-rule="evenodd" />
+              <path fill-rule="evenodd"
+                d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm2.25 8.5a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 3a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5z"
+                clip-rule="evenodd" />
             </svg>
             Historias de Usuario y Casos de Prueba ({{ huList.length }})
           </h2>
@@ -275,9 +315,12 @@
               <h3>{{ hu.id }}: {{ hu.title }}</h3>
               <div class="hu-meta">
                 <span class="sprint-badge">Sprint: {{ hu.sprint }}</span>
-                <span *ngIf="hu.originalInput.selectedTechnique" class="mode-indicator" [title]="'Técnica: ' + hu.originalInput.selectedTechnique">
+                <span *ngIf="hu.originalInput.selectedTechnique" class="mode-indicator"
+                  [title]="'Técnica: ' + hu.originalInput.selectedTechnique">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-icon">
-                    <path fill-rule="evenodd" d="M15.988 3.012A2.25 2.25 0 0013.75 2H6.25a2.25 2.25 0 00-2.238 2.012L4 16.25A2.25 2.25 0 006.25 18h7.5A2.25 2.25 0 0016 15.75l.012-12.738zM6 4.25a.75.75 0 01.75-.75h6.5a.75.75 0 010 1.5h-6.5a.75.75 0 01-.75-.75zm-.75 3.5a.75.75 0 000 1.5h7.5a.75.75 0 000-1.5h-7.5z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd"
+                      d="M15.988 3.012A2.25 2.25 0 0013.75 2H6.25a2.25 2.25 0 00-2.238 2.012L4 16.25A2.25 2.25 0 006.25 18h7.5A2.25 2.25 0 0016 15.75l.012-12.738zM6 4.25a.75.75 0 01.75-.75h6.5a.75.75 0 010 1.5h-6.5a.75.75 0 01-.75-.75zm-.75 3.5a.75.75 0 000 1.5h7.5a.75.75 0 000-1.5h-7.5z"
+                      clip-rule="evenodd" />
                   </svg>
                   {{ hu.originalInput.selectedTechnique }}
                 </span>
@@ -285,7 +328,8 @@
             </div>
 
             <!-- Alcance (si existe) - Mostrar siempre que tenga contenido, independiente del modo -->
-            <details class="plan-section-details" *ngIf="hu.generatedScope && hu.generatedScope.trim()" [open]="hu.isScopeDetailsOpen">
+            <details class="plan-section-details" *ngIf="hu.generatedScope && hu.generatedScope.trim()"
+              [open]="hu.isScopeDetailsOpen">
               <summary class="plan-section-summary">
                 Alcance Generado
                 <span class="summary-indicators">
@@ -299,7 +343,8 @@
             </details>
 
             <!-- Casos de Prueba -->
-            <details class="plan-section-details" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0" [open]="true">
+            <details class="plan-section-details" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0"
+              [open]="true">
               <summary class="plan-section-summary">
                 Casos de Prueba ({{ hu.detailedTestCases.length }})
                 <span class="summary-indicators">
@@ -308,7 +353,7 @@
                 </span>
               </summary>
               <div class="plan-section-content">
-                
+
                 <!-- TABLA DE VISTA PREVIA -->
                 <div class="detailed-test-cases-table-container">
                   <table class="detailed-test-cases-table">
@@ -325,13 +370,17 @@
                       <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
                         <td>{{ hu.id }}_CP{{ i + 1 }}</td>
                         <td>{{ tc.title }}</td>
-                        <td><pre class="table-pre">{{ tc.preconditions }}</pre></td>
+                        <td>
+                          <pre class="table-pre">{{ tc.preconditions }}</pre>
+                        </td>
                         <td>
                           <ul style="margin: 0; padding-left: 20px; list-style: decimal;">
                             <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
                           </ul>
                         </td>
-                        <td><pre class="table-pre">{{ tc.expectedResults }}</pre></td>
+                        <td>
+                          <pre class="table-pre">{{ tc.expectedResults }}</pre>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -340,8 +389,10 @@
                 <!-- Botones de Acción -->
                 <div class="actions">
                   <button (click)="toggleEdit(hu, 'testCases')" class="button-edit">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width: 1em; height: 1em; margin-right: 6px;">
-                      <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                      style="width: 1em; height: 1em; margin-right: 6px;">
+                      <path
+                        d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                     </svg>
                     Editar / Refinar con IA
                   </button>
@@ -365,7 +416,8 @@
         </div>
 
         <!-- Repositorio -->
-        <details class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
+        <details class="plan-section-details static-block"
+          [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
           <summary class="plan-section-summary">
             Repositorio Pruebas VSTS
             <span class="summary-indicators">
@@ -375,16 +427,19 @@
           </summary>
           <div class="plan-section-content">
             <div *ngIf="!editingRepositoryLink">
-              <pre class="static-text"><a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a></pre>
+              <pre
+                class="static-text"><a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a></pre>
             </div>
             <div *ngIf="editingRepositoryLink">
               <textarea [(ngModel)]="repositoryLink" rows="2" class="scrollable-content"></textarea>
             </div>
             <div class="actions">
-              <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary" [disabled]="loadingRepositoryLinkAI">
+              <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary"
+                [disabled]="loadingRepositoryLinkAI">
                 {{ editingRepositoryLink ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('repositoryLink')" class="button-generate" [disabled]="loadingRepositoryLinkAI || editingRepositoryLink">
+              <button (click)="regenerateStaticSectionWithAI('repositoryLink')" class="button-generate"
+                [disabled]="loadingRepositoryLinkAI || editingRepositoryLink">
                 <span *ngIf="loadingRepositoryLinkAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -403,10 +458,12 @@
               <textarea [(ngModel)]="outOfScopeContent" rows="4" class="scrollable-content"></textarea>
             </div>
             <div class="actions">
-              <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary" [disabled]="loadingOutOfScopeAI">
+              <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary"
+                [disabled]="loadingOutOfScopeAI">
                 {{ editingOutOfScope ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate" [disabled]="loadingOutOfScopeAI || editingOutOfScope">
+              <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate"
+                [disabled]="loadingOutOfScopeAI || editingOutOfScope">
                 <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -428,7 +485,8 @@
               <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="loadingStrategyAI">
                 {{ editingStrategy ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate" [disabled]="loadingStrategyAI || editingStrategy">
+              <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate"
+                [disabled]="loadingStrategyAI || editingStrategy">
                 <span *ngIf="loadingStrategyAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -447,10 +505,12 @@
               <textarea [(ngModel)]="limitationsContent" rows="4" class="scrollable-content"></textarea>
             </div>
             <div class="actions">
-              <button (click)="toggleStaticEdit('limitations')" class="button-secondary" [disabled]="loadingLimitationsAI">
+              <button (click)="toggleStaticEdit('limitations')" class="button-secondary"
+                [disabled]="loadingLimitationsAI">
                 {{ editingLimitations ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate" [disabled]="loadingLimitationsAI || editingLimitations">
+              <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate"
+                [disabled]="loadingLimitationsAI || editingLimitations">
                 <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -469,10 +529,12 @@
               <textarea [(ngModel)]="assumptionsContent" rows="8" class="scrollable-content"></textarea>
             </div>
             <div class="actions">
-              <button (click)="toggleStaticEdit('assumptions')" class="button-secondary" [disabled]="loadingAssumptionsAI">
+              <button (click)="toggleStaticEdit('assumptions')" class="button-secondary"
+                [disabled]="loadingAssumptionsAI">
                 {{ editingAssumptions ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate" [disabled]="loadingAssumptionsAI || editingAssumptions">
+              <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate"
+                [disabled]="loadingAssumptionsAI || editingAssumptions">
                 <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -494,7 +556,8 @@
               <button (click)="toggleStaticEdit('team')" class="button-secondary" [disabled]="loadingTeamAI">
                 {{ editingTeam ? 'Guardar' : 'Editar' }}
               </button>
-              <button (click)="regenerateStaticSectionWithAI('team')" class="button-generate" [disabled]="loadingTeamAI || editingTeam">
+              <button (click)="regenerateStaticSectionWithAI('team')" class="button-generate"
+                [disabled]="loadingTeamAI || editingTeam">
                 <span *ngIf="loadingTeamAI" class="spinner-inline"></span>
                 Mejorar con IA
               </button>
@@ -504,101 +567,100 @@
       </div>
     </div>
 
-<!-- Componente oculto para exportar matriz -->
-<app-html-matrix-exporter #matrixExporter></app-html-matrix-exporter>
+    <!-- Componente oculto para exportar matriz -->
+    <app-html-matrix-exporter #matrixExporter></app-html-matrix-exporter>
 
-<!-- MODAL DE EDICIÓN A PANTALLA COMPLETA -->
-<div class="edit-modal-overlay" *ngIf="isEditModalOpen" (click)="closeEditModal()">
-  <div class="edit-modal-container" (click)="$event.stopPropagation()">
-    <!-- Header del Modal -->
-    <div class="edit-modal-header">
-      <div class="edit-modal-title-section">
-        <h2>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-          </svg>
-          Editar / Refinar con IA
-        </h2>
-        <p *ngIf="editingHU">{{ editingHU.id }}: {{ editingHU.title }}</p>
+    <!-- MODAL DE EDICIÓN A PANTALLA COMPLETA -->
+    <div class="edit-modal-overlay" *ngIf="isEditModalOpen" (click)="closeEditModal()">
+      <div class="edit-modal-container" (click)="$event.stopPropagation()">
+        <!-- Header del Modal -->
+        <div class="edit-modal-header">
+          <div class="edit-modal-title-section">
+            <h2>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+              </svg>
+              Editar / Refinar con IA
+            </h2>
+            <p *ngIf="editingHU">{{ editingHU.id }}: {{ editingHU.title }}</p>
+          </div>
+          <button class="edit-modal-close" (click)="closeEditModal()" title="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Contenido del Modal -->
+        <div class="edit-modal-content" *ngIf="editingHU && editingHU.detailedTestCases">
+          <app-test-case-editor [testCases]="editingHU.detailedTestCases" [huId]="editingHU.id"
+            [isLoading]="editingHU.loadingScope ?? false" [refinementTechnique]="editingHU.refinementTechnique || ''"
+            [userRefinementContext]="editingHU.refinementContext || ''" [showRefinementControls]="true"
+            (refineWithAI)="handleConfigRefineWithAI(editingHU, $event)"
+            (testCasesChanged)="handleConfigTestCasesChanged(editingHU, $event)" (cancel)="closeEditModal()">
+          </app-test-case-editor>
+        </div>
       </div>
-      <button class="edit-modal-close" (click)="closeEditModal()" title="Cerrar">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-        </svg>
-      </button>
     </div>
-    
-    <!-- Contenido del Modal -->
-    <div class="edit-modal-content" *ngIf="editingHU && editingHU.detailedTestCases">
-      <app-test-case-editor
-        [testCases]="editingHU.detailedTestCases"
-        [huId]="editingHU.id"
-        [isLoading]="editingHU.loadingScope ?? false"
-        [refinementTechnique]="editingHU.refinementTechnique || ''"
-        [userRefinementContext]="editingHU.refinementContext || ''"
-        [showRefinementControls]="true"
-        (refineWithAI)="handleConfigRefineWithAI(editingHU, $event)"
-        (testCasesChanged)="handleConfigTestCasesChanged(editingHU, $event)"
-        (cancel)="closeEditModal()">
-      </app-test-case-editor>
-    </div>
-  </div>
-</div>
 
-<!-- MODAL DE PREVISUALIZACIÓN DEL PLAN -->
-<div class="preview-modal-overlay" *ngIf="isPreviewModalOpen" (click)="closePreviewModal()">
-  <div class="preview-modal-container" (click)="$event.stopPropagation()">
-    <!-- Header del Modal -->
-    <div class="preview-modal-header">
-      <div class="preview-modal-title-section">
-        <h2>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-            <path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
-          </svg>
-          Previsualización del Plan Descargable
-        </h2>
-        <p>Vista previa del documento que se generará</p>
+    <!-- MODAL DE PREVISUALIZACIÓN DEL PLAN -->
+    <div class="preview-modal-overlay" *ngIf="isPreviewModalOpen" (click)="closePreviewModal()">
+      <div class="preview-modal-container" (click)="$event.stopPropagation()">
+        <!-- Header del Modal -->
+        <div class="preview-modal-header">
+          <div class="preview-modal-title-section">
+            <h2>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+                <path fill-rule="evenodd"
+                  d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                  clip-rule="evenodd" />
+              </svg>
+              Previsualización del Plan Descargable
+            </h2>
+            <p>Vista previa del documento que se generará</p>
+          </div>
+          <button class="preview-modal-close" (click)="closePreviewModal()" title="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Contenido del Modal -->
+        <div class="preview-modal-content">
+          <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre>
+        </div>
+
+        <!-- Footer con acciones -->
+        <div class="preview-modal-footer">
+          <button (click)="copyPreviewToClipboard()" class="button-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path
+                d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.121A1.5 1.5 0 0117 6.621V16.5A1.5 1.5 0 0115.5 18H8.5A1.5 1.5 0 017 16.5v-13z" />
+              <path
+                d="M5 6.5A1.5 1.5 0 016.5 5h3A1.5 1.5 0 0111 3.5V2A1.5 1.5 0 009.5 3.5v10A1.5 1.5 0 0011 15v1.5A1.5 1.5 0 009.5 15h-3A1.5 1.5 0 015 13.5v-7z" />
+            </svg>
+            Copiar Texto del Plan
+          </button>
+
+          <app-word-exporter [testPlanTitle]="testPlanTitle" [repositoryLink]="repositoryLink"
+            [outOfScopeContent]="outOfScopeContent" [strategyContent]="strategyContent"
+            [limitationsContent]="limitationsContent" [assumptionsContent]="assumptionsContent"
+            [teamContent]="teamContent" [huList]="huList">
+          </app-word-exporter>
+
+          <button (click)="downloadWord()" class="button-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd"
+                d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z"
+                clip-rule="evenodd" />
+            </svg>
+            Descargar Plan Completo (.html)
+          </button>
+        </div>
       </div>
-      <button class="preview-modal-close" (click)="closePreviewModal()" title="Cerrar">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-        </svg>
-      </button>
     </div>
-    
-    <!-- Contenido del Modal -->
-    <div class="preview-modal-content">
-      <pre class="download-preview" [innerHTML]="downloadPreviewHtmlContent"></pre>
-    </div>
-
-    <!-- Footer con acciones -->
-    <div class="preview-modal-footer">
-      <button (click)="copyPreviewToClipboard()" class="button-secondary">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.121A1.5 1.5 0 0117 6.621V16.5A1.5 1.5 0 0115.5 18H8.5A1.5 1.5 0 017 16.5v-13z" />
-          <path d="M5 6.5A1.5 1.5 0 016.5 5h3A1.5 1.5 0 0111 3.5V2A1.5 1.5 0 009.5 3.5v10A1.5 1.5 0 0011 15v1.5A1.5 1.5 0 009.5 15h-3A1.5 1.5 0 015 13.5v-7z" />
-        </svg>
-        Copiar Texto del Plan
-      </button>
-      
-      <app-word-exporter
-        [testPlanTitle]="testPlanTitle"
-        [repositoryLink]="repositoryLink"
-        [outOfScopeContent]="outOfScopeContent"
-        [strategyContent]="strategyContent"
-        [limitationsContent]="limitationsContent"
-        [assumptionsContent]="assumptionsContent"
-        [teamContent]="teamContent"
-        [huList]="huList">
-      </app-word-exporter>
-      
-      <button (click)="downloadWord()" class="button-primary">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 003 3.5v13A1.5 1.5 0 004.5 18h11a1.5 1.5 0 001.5-1.5V7.621a1.5 1.5 0 00-.44-1.06l-4.12-4.122A1.5 1.5 0 0011.378 2H4.5zm5 6.5a.75.75 0 00-1.5 0v3.546l-1.073-1.073a.75.75 0 10-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l2.25-2.25a.75.75 0 10-1.06-1.06L10.25 12.046V8.5z" clip-rule="evenodd" />
-        </svg>
-        Descargar Plan Completo (.html)
-      </button>
-    </div>
-  </div>
-</div>

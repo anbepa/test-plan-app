@@ -10,6 +10,7 @@ export interface DbTestPlan {
   limitations?: string;
   assumptions?: string;
   team?: string;
+  cell_name?: string;
   created_at?: string;
   updated_at?: string;
   user_id?: string;

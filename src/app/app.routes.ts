@@ -1,27 +1,24 @@
 // src/app/app.routes.ts
 import { Routes } from '@angular/router';
-import { TestPlanGeneratorComponent } from './test-plan-generator/test-plan-generator.component';
-import { TestPlanViewerComponent } from './test-plan-viewer/test-plan-viewer.component';
-import { WelcomeComponent } from './welcome/welcome.component';
 
 export const routes: Routes = [
   {
     path: '',
-    component: WelcomeComponent,
+    loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent),
     pathMatch: 'full'
   },
   {
     path: 'generator',
-    component: TestPlanGeneratorComponent,
+    loadComponent: () => import('./test-plan-generator/test-plan-generator.component').then(m => m.TestPlanGeneratorComponent),
     title: 'Generador de Test Plans'
   },
   {
     path: 'viewer',
-    component: TestPlanViewerComponent,
+    loadComponent: () => import('./test-plan-viewer/test-plan-viewer.component').then(m => m.TestPlanViewerComponent),
     title: 'Gestor de Test Plans'
   },
   {
     path: '**',
-    component: WelcomeComponent
+    loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent)
   }
 ];

@@ -33,18 +33,18 @@ export class TestPlanGeneratorComponent {
   showTestCaseGenerator: boolean = false;
   isModeSelected: boolean = false;
   formError: string | null = null;
-  
+
   savedUserStoryIds: string[] = [];
   huList: HUData[] = [];
   downloadPreviewHtmlContent: string = '';
-  
+
   showConfirmModal: boolean = false;
   confirmModalTitle: string = '';
   confirmModalMessage: string = '';
   private confirmModalCallback: (() => void) | null = null;
-  
+
   activeTab: 'generate' | 'scenarios' | 'config' = 'generate';
-  
+
   testPlanTitle: string = '';
   repositoryLink: string = 'https://dev.azure.com/YOUR_ORG/YOUR_PROJECT/_git/NU0139001_SAF_MR_Test - Repos (visualstudio.com)';
   outOfScopeContent: string = 'No se probarán funcionalidades o secciones diferentes a los definidos en el alcance.';
@@ -52,6 +52,9 @@ export class TestPlanGeneratorComponent {
   limitationsContent: string = 'No tener los permisos requeridos para la aplicación.';
   assumptionsContent: string = 'El equipo de desarrollo ha realizado pruebas unitarias y de aceptación.\nSe cuenta con los insumos necesarios para realizar las pruebas.\nSe cuenta con las herramientas necesarias para la ejecución de las pruebas.\nSe cuenta con los permisos y accesos requeridos para las pruebas.\nEl equipo de desarrollo tendrá disponibilidad para la corrección de errores.';
   teamContent: string = 'Dueño del Producto – Bancolombia: Diego Fernando Giraldo Hincapie\nAnalista de Desarrollo – Pragma: Eddy Johana Cristancho\nAnalista de Desarrollo – Luis Alfredo Chuscano Remolina\nAnalista de Desarrollo - Kevin David Cuadros Estupinan\nAnalista de Pruebas – TCS: Gabriel Ernesto Montoya Henao\nAnalista de Pruebas – TCS: Andrés Antonio Bernal Padilla';
+
+  cellName: string = '';
+  cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
   editingRepositoryLink: boolean = false;
   editingOutOfScope: boolean = false;
   editingStrategy: boolean = false;
@@ -76,10 +79,10 @@ export class TestPlanGeneratorComponent {
   isLimitationsDetailsOpen: boolean = false;
   isAssumptionsDetailsOpen: boolean = false;
   isTeamDetailsOpen: boolean = false;
-  
+
   showLoadDataPrompt: boolean = false;
   loadingFromStorage: boolean = false;
-  
+
   showSuccessModal: boolean = false;
 
   constructor(
@@ -90,7 +93,7 @@ export class TestPlanGeneratorComponent {
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.checkForStoredData();
@@ -131,7 +134,7 @@ export class TestPlanGeneratorComponent {
   public loadStoredData(): void {
     this.loadingFromStorage = true;
     const state = this.localStorageService.loadTestPlanState();
-    
+
     if (state) {
       this.testPlanTitle = state.testPlanTitle || this.testPlanTitle;
       this.huList = state.huList || [];
@@ -141,13 +144,13 @@ export class TestPlanGeneratorComponent {
       this.limitationsContent = state.limitationsContent || this.limitationsContent;
       this.assumptionsContent = state.assumptionsContent || this.assumptionsContent;
       this.teamContent = state.teamContent || this.teamContent;
-      
+
       this.updatePreview();
       this.toastService.success(`Datos cargados exitosamente! ${state.huList.length} Historia(s) de Usuario recuperadas`);
     } else {
       this.toastService.error('No se pudieron cargar los datos guardados');
     }
-    
+
     this.showLoadDataPrompt = false;
     this.loadingFromStorage = false;
     this.cdr.detectChanges();
@@ -170,7 +173,7 @@ export class TestPlanGeneratorComponent {
       teamContent: this.teamContent,
       lastUpdated: new Date().toISOString()
     };
-    
+
     this.localStorageService.autoSaveTestPlanState(state);
   }
 
@@ -200,7 +203,7 @@ export class TestPlanGeneratorComponent {
       teamContent: this.teamContent,
       lastUpdated: new Date().toISOString()
     };
-    
+
     this.localStorageService.exportStateAsFile(state);
   }
 
@@ -215,7 +218,7 @@ export class TestPlanGeneratorComponent {
 
     const file = input.files[0];
     const state = await this.localStorageService.importStateFromFile(file);
-    
+
     if (state) {
       this.loadStoredData();
     } else {
@@ -235,6 +238,7 @@ export class TestPlanGeneratorComponent {
         id: crypto.randomUUID(),
         title: this.testPlanTitle || 'Plan de Pruebas',
         repository_link: this.repositoryLink || '',
+        cell_name: this.cellName,
         out_of_scope: this.outOfScopeContent || '',
         strategy: this.strategyContent || '',
         limitations: this.limitationsContent || '',
@@ -261,7 +265,7 @@ export class TestPlanGeneratorComponent {
         position: index + 1, // AÑADIDO: Asignar position basada en índice
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        
+
         // Convertir casos de prueba
         test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
           id: crypto.randomUUID(),
@@ -272,7 +276,7 @@ export class TestPlanGeneratorComponent {
           position: tcIndex + 1,  // CORREGIDO: Asignar position basada en índice
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          
+
           // Convertir pasos
           test_case_steps: (tc.steps || []).map((step, stepIndex) => ({
             id: crypto.randomUUID(),
@@ -283,7 +287,7 @@ export class TestPlanGeneratorComponent {
             updated_at: new Date().toISOString()
           }))
         })),
-        
+
         images: [] // Por ahora sin imágenes
       }));
 
@@ -296,10 +300,10 @@ export class TestPlanGeneratorComponent {
 
       // Guardar en la base de datos usando saveCompleteTestPlan
       const planId = await this.databaseService.saveCompleteTestPlan(testPlanData, dbUserStories);
-      
+
       console.log('[DB] Plan guardado con ID:', planId);
       return planId;
-      
+
     } catch (error) {
       console.error('[DB] Error en saveTestPlanToDatabase:', error);
       throw error;
@@ -309,11 +313,11 @@ export class TestPlanGeneratorComponent {
   private escapeHtmlForExport(u: string | undefined | null): string {
     return u
       ? u
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
       : '';
   }
 
@@ -338,30 +342,30 @@ export class TestPlanGeneratorComponent {
   async onHuGeneratedFromChild(huData: HUData) {
     console.log('[PARENT] Recibiendo HU para añadir al plan:', huData.title);
     console.log('[PARENT] HUs en lista antes de agregar:', this.huList.length);
-    
+
     this.huList.push(huData);
-    
+
     console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
     console.log('[PARENT] Iniciando guardado en base de datos...');
-    
+
     // IMPORTANTE: Actualizar el título del plan antes de guardar
     this.updateTestPlanTitle();
-    
+
     this.updatePreview();
     this.saveCurrentState();
-    
+
     if (this.databaseService.isReady()) {
       // Mostrar toast de carga
       const loadingToastId = this.toastService.loading('Guardando plan de pruebas en la base de datos...');
-      
+
       try {
         console.log('💾 Guardando plan completo en BD con', this.huList.length, 'HU(s)');
-        
+
         const testPlanId = await this.saveTestPlanToDatabase();
-        
+
         if (testPlanId) {
           console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
-          
+
           // Actualizar toast de loading a éxito
           const planTitle = this.testPlanTitle || 'Plan de Pruebas';
           this.toastService.update(loadingToastId, {
@@ -369,7 +373,7 @@ export class TestPlanGeneratorComponent {
             message: `✅ "${planTitle}" guardado con ${this.huList.length} HU(s)`,
             duration: 4500
           });
-          
+
           // Redirigir al home después de 2 segundos
           setTimeout(() => {
             this.router.navigate(['/']);
@@ -379,7 +383,7 @@ export class TestPlanGeneratorComponent {
         }
       } catch (error) {
         console.error('[DB] Error guardando en BD:', error);
-        
+
         let errorMessage = 'Error desconocido';
         if (error instanceof Error) {
           errorMessage = error.message;
@@ -389,7 +393,7 @@ export class TestPlanGeneratorComponent {
         } else if (typeof error === 'string') {
           errorMessage = error;
         }
-        
+
         // Actualizar toast de loading a error
         this.toastService.update(loadingToastId, {
           type: 'error',
@@ -401,7 +405,7 @@ export class TestPlanGeneratorComponent {
       console.warn('[DB] Base de datos no configurada, solo guardado local');
       this.toastService.success(`Plan de pruebas creado localmente con ${this.huList.length} Historia${this.huList.length > 1 ? 's' : ''} de Usuario`);
     }
-    
+
     this.resetActiveGeneratorsAndGoToSelection();
     // Cambiar automáticamente a la pestaña de escenarios
     this.activeTab = 'scenarios';
@@ -415,27 +419,31 @@ export class TestPlanGeneratorComponent {
   onHuSavedFromChild(huData: HUData) {
     // Agregar la HU a la lista local
     this.huList.push(huData);
-    
+
     // Incrementar contador de HUs guardadas individualmente
     this.savedUserStoryIds.push(huData.id);
-    
+
     // Actualizar título y preview
     this.updateTestPlanTitle();
     this.updatePreview();
     this.saveCurrentState(); // Guardar en localStorage
-    
+
     // Mostrar toast de éxito
     this.toastService.success(
       `HU "${huData.title}" guardada (${this.savedUserStoryIds.length} HUs)`,
       4000
     );
-    
+
     // Cambiar automáticamente a la pestaña de escenarios
     this.activeTab = 'scenarios';
   }
 
   onGenerationCancelledFromChild() {
     this.resetActiveGeneratorsAndGoToSelection();
+  }
+
+  onCellNameChanged(cellName: string) {
+    this.cellName = cellName;
   }
 
   resetToInitialSelection(): void {
@@ -467,11 +475,11 @@ export class TestPlanGeneratorComponent {
         this.saveCurrentState(); // Guardar cambios
       }
     } else if (section === 'scenarios') {
-       this.toastService.info("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan");
+      this.toastService.info("La edición de casos de prueba se realiza en el componente de generación antes de añadir al plan");
     }
     if (!hu.editingScope && !hu.editingTestCases) {
-        this.updatePreview();
-        this.saveCurrentState(); // Guardar cambios
+      this.updatePreview();
+      this.saveCurrentState(); // Guardar cambios
     }
     this.cdr.detectChanges();
   }
@@ -529,8 +537,8 @@ export class TestPlanGeneratorComponent {
     const wasEditing = this[editingProp] as boolean;
     (this[editingProp] as any) = !wasEditing;
     if (this[editingProp]) { (this[detailsOpenProp] as any) = true; }
-    if (wasEditing && !(this[editingProp] as boolean)) { 
-      this.updatePreview(); 
+    if (wasEditing && !(this[editingProp] as boolean)) {
+      this.updatePreview();
       this.saveCurrentState(); // Guardar cambios
     }
     this.cdr.detectChanges();
@@ -544,8 +552,8 @@ export class TestPlanGeneratorComponent {
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
     this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
-        tap((scopeText: string) => { 
-          hu.generatedScope = scopeText; 
+        tap((scopeText: string) => {
+          hu.generatedScope = scopeText;
           hu.errorScope = null;
           this.saveCurrentState(); // Guardar cambios
         }),
@@ -562,13 +570,13 @@ export class TestPlanGeneratorComponent {
       this.toastService.warning('No hay casos de prueba para refinar');
       return;
     }
-    
+
     hu.loadingScope = true;
     hu.errorScope = null;
-    
+
     const technique = hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
     const userContext = 'Por favor, refina y mejora los siguientes casos de prueba manteniendosu estructura y agregando más detalles donde sea necesario.';
-    
+
     this.geminiService.refineDetailedTestCases(
       hu.originalInput,
       hu.detailedTestCases,
@@ -599,7 +607,7 @@ export class TestPlanGeneratorComponent {
   }
 
   public exportExecutionMatrix(hu: HUData): void {
-    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable"  || tc.title === "Refinamiento no posible con el contexto actual")) {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || tc.title === "Refinamiento no posible con el contexto actual")) {
       this.toastService.warning('No hay casos de prueba válidos para exportar o los casos generados indican un error');
       return;
     }
@@ -633,12 +641,12 @@ export class TestPlanGeneratorComponent {
   public trackHuById = (i: number, hu: HUData): string => hu.id;
 
   private escapeCsvField = (f: string | number | undefined | null): string => {
-      if (f === null || f === undefined) return '';
-      const stringValue = String(f);
-      if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('\r')) {
-          return `"${stringValue.replace(/"/g, '""')}"`;
-      }
-      return stringValue;
+    if (f === null || f === undefined) return '';
+    const stringValue = String(f);
+    if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('\r')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
   };
 
   public getHuSummaryForStaticAI(): string {
@@ -668,20 +676,20 @@ export class TestPlanGeneratorComponent {
     if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
     this.geminiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI())
       .pipe(
-          finalize(() => {
-              if (loadingFlag) (this[loadingFlag] as any) = false;
-              this.updatePreview();
-              this.saveCurrentState(); // Guardar cambios
-              this.cdr.detectChanges();
-            })
+        finalize(() => {
+          if (loadingFlag) (this[loadingFlag] as any) = false;
+          this.updatePreview();
+          this.saveCurrentState(); // Guardar cambios
+          this.cdr.detectChanges();
+        })
       )
       .subscribe({
         next: (aiResponse: string) => {
           if (aiResponse?.trim()) {
             const isPlaceholder =
-                (section === 'outOfScope' && currentContent.trim().toLowerCase().startsWith('no se probarán')) ||
-                (section === 'limitations' && currentContent.trim().toLowerCase().startsWith('no tener los permisos')) ||
-                currentContent.trim() === '';
+              (section === 'outOfScope' && currentContent.trim().toLowerCase().startsWith('no se probarán')) ||
+              (section === 'limitations' && currentContent.trim().toLowerCase().startsWith('no tener los permisos')) ||
+              currentContent.trim() === '';
             const newContent = isPlaceholder ? aiResponse.trim() : currentContent + '\n\n' + aiResponse.trim();
             switch (section) {
               case 'repositoryLink': this.repositoryLink = newContent; break;
@@ -692,11 +700,11 @@ export class TestPlanGeneratorComponent {
               case 'team': this.teamContent = newContent; break;
             }
           } else if (errorFlag) {
-              (this[errorFlag] as any) = 'La IA no generó contenido adicional o la respuesta fue vacía.';
+            (this[errorFlag] as any) = 'La IA no generó contenido adicional o la respuesta fue vacía.';
           }
         },
         error: (err: any) => {
-            if (errorFlag) (this[errorFlag] as any) = err.message || `Error regenerando sección "${sectionNameDisplay}".`;
+          if (errorFlag) (this[errorFlag] as any) = err.message || `Error regenerando sección "${sectionNameDisplay}".`;
         }
       });
   }
@@ -711,7 +719,7 @@ export class TestPlanGeneratorComponent {
       const relevantHuForTitle = [...this.huList].reverse().find(hu => hu.originalInput.generationMode !== undefined) || this.huList[this.huList.length - 1];
       this.testPlanTitle = `TEST PLAN EVC00057_ ${relevantHuForTitle.id} SPRINT ${relevantHuForTitle.sprint}`;
     } else {
-        this.testPlanTitle = 'Plan de Pruebas (Aún sin entradas)';
+      this.testPlanTitle = 'Plan de Pruebas (Aún sin entradas)';
     }
     this.cdr.detectChanges();
   }
@@ -727,20 +735,20 @@ export class TestPlanGeneratorComponent {
     if (this.testPlanTitle) fullPlanContent += `Título del Plan de Pruebas: ${this.testPlanTitle}\n\n`;
     fullPlanContent += `Repositorio pruebas VSTS: ${this.repositoryLink}\n\n`;
     if (this.isAnyHuTextBased()) {
-        fullPlanContent += `ALCANCE:\n\n`;
-        this.huList.forEach(hu => {
-            if (hu.originalInput.generationMode === 'text') {
-                fullPlanContent += `HU ${hu.id}: ${hu.title}\n${hu.generatedScope || 'Alcance no generado o no aplica.'}\n\n`;
-            }
-        });
+      fullPlanContent += `ALCANCE:\n\n`;
+      this.huList.forEach(hu => {
+        if (hu.originalInput.generationMode === 'text') {
+          fullPlanContent += `HU ${hu.id}: ${hu.title}\n${hu.generatedScope || 'Alcance no generado o no aplica.'}\n\n`;
+        }
+      });
     }
     fullPlanContent += `FUERA DEL ALCANCE:\n\n${this.outOfScopeContent}\n\nESTRATEGIA:\n\n${this.strategyContent}\n\n`;
     const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text');
-    if(scenarioHUs.length > 0){
-        fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
-        scenarioHUs.forEach(hu => {
-            fullPlanContent += `ID ${hu.id}: ${hu.title} (Técnica: ${hu.originalInput.selectedTechnique})\n${hu.generatedTestCaseTitles || 'Casos no generados o error.'}\n\n`;
-        });
+    if (scenarioHUs.length > 0) {
+      fullPlanContent += `CASOS DE PRUEBA (Solo Títulos):\n\n`;
+      scenarioHUs.forEach(hu => {
+        fullPlanContent += `ID ${hu.id}: ${hu.title} (Técnica: ${hu.originalInput.selectedTechnique})\n${hu.generatedTestCaseTitles || 'Casos no generados o error.'}\n\n`;
+      });
     }
     fullPlanContent += `LIMITACIONES:\n\n${this.limitationsContent}\n\nSUPUESTOS:\n\n${this.assumptionsContent}\n\nEquipo de Trabajo:\n\n${this.teamContent}\n\n`;
     return fullPlanContent;
@@ -754,23 +762,23 @@ export class TestPlanGeneratorComponent {
     const repoLinkUrl = this.repositoryLink.split(' ')[0];
     fullPlanHtmlContent += `<p><span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${this.escapeHtmlForExport(repoLinkUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtmlForExport(this.repositoryLink)}</a></p>\n\n`;
     if (this.isAnyHuTextBased()) {
-        fullPlanHtmlContent += `<p><span class="preview-section-title">ALCANCE:</span></p>\n`;
-        this.huList.forEach((hu) => {
-          if (hu.originalInput.generationMode === 'text') {
-            fullPlanHtmlContent += `<p><span class="preview-hu-title">HU ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)}</span><br>\n`;
-            fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedScope) || '<em>Alcance no generado o no aplica.</em>'}</p>\n\n`;
-          }
-        });
+      fullPlanHtmlContent += `<p><span class="preview-section-title">ALCANCE:</span></p>\n`;
+      this.huList.forEach((hu) => {
+        if (hu.originalInput.generationMode === 'text') {
+          fullPlanHtmlContent += `<p><span class="preview-hu-title">HU ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)}</span><br>\n`;
+          fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedScope) || '<em>Alcance no generado o no aplica.</em>'}</p>\n\n`;
+        }
+      });
     }
     fullPlanHtmlContent += `<p><span class="preview-section-title">FUERA DEL ALCANCE:</span><br>\n${this.escapeHtmlForExport(this.outOfScopeContent)}</p>\n\n`;
     fullPlanHtmlContent += `<p><span class="preview-section-title">ESTRATEGIA:</span><br>\n${this.escapeHtmlForExport(this.strategyContent)}</p>\n\n`;
     const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text');
-    if(scenarioHUs.length > 0){
-        fullPlanHtmlContent += `<p><span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span></p>\n`;
-        scenarioHUs.forEach((hu) => {
-          fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)} (Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})</span><br>\n`;
-          fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
-        });
+    if (scenarioHUs.length > 0) {
+      fullPlanHtmlContent += `<p><span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span></p>\n`;
+      scenarioHUs.forEach((hu) => {
+        fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)} (Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})</span><br>\n`;
+        fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
+      });
     }
     fullPlanHtmlContent += `<p><span class="preview-section-title">LIMITACIONES:</span><br>\n${this.escapeHtmlForExport(this.limitationsContent)}</p>\n\n`;
     fullPlanHtmlContent += `<p><span class="preview-section-title">SUPUESTOS:</span><br>\n${this.escapeHtmlForExport(this.assumptionsContent)}</p>\n\n`;
@@ -784,8 +792,8 @@ export class TestPlanGeneratorComponent {
       navigator.clipboard.writeText(planText)
         .then(() => this.toastService.success('Plan de pruebas copiado al portapapeles'))
         .catch(err => {
-            console.error('Error al copiar al portapapeles:', err);
-            this.toastService.error('Error al copiar: ' + err);
+          console.error('Error al copiar al portapapeles:', err);
+          this.toastService.error('Error al copiar: ' + err);
         });
     } else {
       this.toastService.error('La API del portapapeles no es compatible con este navegador');

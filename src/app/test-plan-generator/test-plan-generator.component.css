@@ -1882,3 +1882,23 @@ textarea.scrollable-content { min-height: 120px; font-family: inherit; font-size
     font-size: 0.95em;
   }
 }
+/* --- Configuración del Plan --- */
+.plan-config-card {
+    background: #FFFFFF;
+    border-radius: 18px;
+    padding: 32px 40px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+    max-width: 1320px;
+    margin: 0 auto 30px auto;
+}
+
+.plan-config-card h3 {
+    margin-top: 0;
+    margin-bottom: 24px;
+    color: #4a6d7c;
+    font-size: 1.4em;
+    font-weight: 600;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 12px;
+}
