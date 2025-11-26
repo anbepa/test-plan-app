@@ -4,18 +4,22 @@ Aplicación Angular para generación de planes de prueba usando IA (Google Gemin
 
 ## Características
 
-- Generación automática de casos de prueba
-- Técnicas de diseño de pruebas (Clases de Equivalencia, Valores Límite, etc.)
-- Exportación a PDF y HTML
-- Editor de casos de prueba
-- Matriz de trazabilidad
+- ✅ Generación automática de casos de prueba con IA
+- ✅ Técnicas ISTQB (Clases de Equivalencia, Valores Límite, Tablas de Decisión, etc.)
+- ✅ Exportación a Word y Excel con formato profesional
+- ✅ Editor visual de casos de prueba con drag & drop
+- ✅ Matriz de trazabilidad de ejecución
+- ✅ Gestión de planes de prueba con filtros avanzados
+- ✅ Refinamiento inteligente con IA
+- ✅ Persistencia en base de datos (Supabase)
 
 ## Tecnologías
 
-- Angular 19
-- Google Gemini AI (gemini-2.0-flash)
-- Supabase (base de datos)
-- Vercel (despliegue)
+- Angular 19 (Standalone Components)
+- Google Gemini AI (gemini-2.0-flash-exp)
+- Supabase (PostgreSQL)
+- Vercel (Despliegue)
+- ExcelJS & Docx (Exportación)
 
 ## Desarrollo Local
 
@@ -33,7 +37,7 @@ npm install
 
 Crea un archivo `.env.local` con:
 
-```
+```env
 GEMINI_API_KEY=tu_api_key_aqui
 SUPABASE_URL=tu_supabase_url
 SUPABASE_KEY=tu_supabase_anon_key
@@ -81,23 +85,64 @@ vercel --prod
 ## Estructura del Proyecto
 
 ```
-src/
-├── app/
-│   ├── test-plan-generator/     # Generador principal
-│   ├── test-case-generator/     # Generador de casos
-│   ├── test-case-editor/        # Editor de casos
-│   ├── test-plan-viewer/        # Visor de planes
-│   ├── html-matrix-exporter/    # Exportador de matrices
-│   ├── services/                # Servicios (Gemini, DB, etc.)
-│   └── models/                  # Modelos de datos
-├── environments/                # Configuración por entorno
-└── types/                       # Definiciones TypeScript
+src/app/
+├── test-plan-generator/         # Generador principal de planes
+├── test-case-generator/         # Generador de casos individuales
+├── test-case-editor/            # Editor visual de casos
+├── test-case-refiner/           # Refinamiento con IA
+├── test-plan-viewer/            # Visor y gestor de planes
+│   └── components/
+│       └── general-sections/    # Secciones estáticas (alcance, estrategia)
+├── html-matrix-exporter/        # Exportador Excel
+├── word-exporter/               # Exportador Word
+├── confirmation-modal/          # Modal de confirmación
+├── toast/                       # Sistema de notificaciones
+├── services/                    # Servicios centrales
+│   ├── gemini.service.ts       # Integración con IA
+│   ├── database.service.ts     # Operaciones de BD
+│   ├── ai-providers.service.ts # Gestión de proveedores IA
+│   └── app-config.service.ts   # Configuración global
+└── models/                      # Modelos TypeScript
+    ├── hu-data.model.ts        # Modelos UI
+    └── database.model.ts       # Modelos BD
 
 api/
-└── gemini-proxy.ts              # Proxy serverless para Vercel
+└── gemini-proxy.ts              # Proxy serverless Vercel
 
-local-api-server.js              # Proxy local para desarrollo
+local-api-server.js              # Proxy local desarrollo
 ```
+
+## Mantenimiento del Código
+
+### Limpieza Realizada (Nov 2025)
+
+**Archivos eliminados:**
+- ❌ `REFACTORING_ANALYSIS.md` - Documentación obsoleta de refactorización
+- ❌ `REFACTORING_REFINER_COMPONENT.md` - Notas de desarrollo ya implementadas
+
+**Código optimizado:**
+- ✅ Logs de consola mantenidos solo para debugging crítico
+- ✅ Código comentado eliminado (solo se mantienen comentarios explicativos)
+- ✅ Funciones no utilizadas identificadas y documentadas
+- ✅ Imports optimizados y organizados
+
+### Buenas Prácticas
+
+**Logging:**
+- Los `console.log` se mantienen en servicios críticos (DatabaseService, GeminiService) para facilitar debugging en producción
+- Formato estándar: `✅ Éxito`, `❌ Error`, `📊 Info`, `🧠 Proceso`
+
+**Código:**
+- Todos los componentes usan arquitectura standalone
+- Servicios inyectables con `providedIn: 'root'`
+- Modelos TypeScript estrictos para type safety
+- Smart updates para optimizar operaciones de BD
+
+**Base de Datos:**
+- Operaciones batch para mejor rendimiento
+- Transacciones para integridad de datos
+- Índices optimizados en tablas principales
+- Cascade deletes configurados correctamente
 
 ## Licencia
 
