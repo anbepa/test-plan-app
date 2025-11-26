@@ -311,7 +311,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         const target = testCasesToInsert[idx];
         if (target) {
           target.tc.dbId = inserted.id;
-          const { stepsToInsert } = this.calculateStepChanges(target.tc, { test_case_steps: [] } as DbTestCaseWithRelations, inserted.id);
+          const emptyExisting: Partial<DbTestCaseWithRelations> = { test_case_steps: [] };
+          const { stepsToInsert } = this.calculateStepChanges(target.tc, emptyExisting, inserted.id);
           stepInsertRequests.push(...stepsToInsert);
         }
       });
