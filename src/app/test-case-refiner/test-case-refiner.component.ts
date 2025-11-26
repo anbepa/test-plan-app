@@ -104,7 +104,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
       // Buscar el user story en la base de datos
       const { data: userStories, error: fetchError } = await this.databaseService.supabase
-        .from('tbl_user_stories')
+        .from('user_stories')
         .select('id')
         .eq('test_plan_id', this.testPlanId)
         .eq('custom_id', this.hu.id)
@@ -123,7 +123,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
       // Actualizar el user story con la técnica y contexto de refinamiento
       const { error: updateError } = await this.databaseService.supabase
-        .from('tbl_user_stories')
+        .from('user_stories')
         .update({
           refinement_technique: this.hu.refinementTechnique || null,
           refinement_context: this.hu.refinementContext || null
@@ -137,7 +137,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
       // Eliminar los test cases antiguos
       const { error: deleteError } = await this.databaseService.supabase
-        .from('tbl_test_cases')
+        .from('test_cases')
         .delete()
         .eq('user_story_id', userStoryId);
 
@@ -151,7 +151,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         for (const tc of this.hu.detailedTestCases) {
           // Insertar el test case
           const { data: testCaseData, error: tcError } = await this.databaseService.supabase
-            .from('tbl_test_cases')
+            .from('test_cases')
             .insert({
               user_story_id: userStoryId,
               title: tc.title,
@@ -175,7 +175,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
             }));
 
             const { error: stepsError } = await this.databaseService.supabase
-              .from('tbl_test_case_steps')
+              .from('test_case_steps')
               .insert(stepsToInsert);
 
             if (stepsError) {
