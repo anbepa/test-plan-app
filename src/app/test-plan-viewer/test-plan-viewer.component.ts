@@ -300,12 +300,15 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     try {
       console.log('📋 Test plan seleccionado (header):', testPlan);
 
-      // Cargar detalles completos si no los tiene
+      // Siempre obtener la versión completa desde la base de datos para garantizar que
+      // las secciones de detalle (alcance, estrategia, supuestos, etc.) estén presentes.
+      // Los headers traen información parcial y pueden dejar la vista vacía.
       let fullTestPlan: DbTestPlanWithRelations | null = null;
-      if (!testPlan.user_stories || testPlan.user_stories.length === 0 || !testPlan.user_stories[0].test_cases) {
+      try {
         console.log('📥 Cargando detalles completos del test plan...');
         fullTestPlan = await this.databaseService.getTestPlanById(testPlan.id!);
-      } else {
+      } catch (error) {
+        console.error('❌ No se pudo obtener el detalle desde la BD, usando header parcial:', error);
         fullTestPlan = testPlan as DbTestPlanWithRelations;
       }
 
