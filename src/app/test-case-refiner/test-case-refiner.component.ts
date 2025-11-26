@@ -182,12 +182,14 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         id,
         test_cases (
           id,
+          user_story_id,
           title,
           preconditions,
           expected_results,
           position,
           test_case_steps (
             id,
+            test_case_id,
             step_number,
             action
           )
