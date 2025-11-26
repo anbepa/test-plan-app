@@ -215,7 +215,7 @@
                   </div>
 
                   <div class="step-actions">
-                    <button type="button" class="btn-delete-step" (click)="deleteStep(tc, stepIndex)"
+                    <button type="button" class="btn-delete-step" (click)="requestDeleteStep(tc, stepIndex)"
                       title="Eliminar paso">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
                         <path fill-rule="evenodd"
@@ -242,3 +242,8 @@
     </div>
   </div>
 </div>
+
+<app-confirmation-modal [isOpen]="isDeleteModalOpen" [title]="deleteModalTitle" [message]="deleteModalMessage"
+  confirmText="Eliminar" cancelText="Cancelar" type="danger" (confirm)="confirmDeletion()"
+  (cancel)="closeDeleteModal()">
+</app-confirmation-modal>

@@ -307,7 +307,7 @@
 
         <div class="hu-list-container">
           <div *ngFor="let hu of huList; trackBy: trackHuById" class="hu-card">
-            <div class="hu-header" (click)="hu.isExpanded = !hu.isExpanded" [class.expanded]="hu.isExpanded">
+            <div class="hu-header" (click)="toggleHUExpansion(hu)" [class.expanded]="hu.isExpanded">
               <div class="hu-title-section">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="chevron-icon"
                   [class.rotate-90]="hu.isExpanded">

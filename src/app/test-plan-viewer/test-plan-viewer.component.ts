@@ -396,6 +396,12 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   }
 
+  toggleHUExpansion(targetHu: HUData): void {
+    const shouldExpand = !targetHu.isExpanded;
+    this.huList.forEach(hu => hu.isExpanded = false);
+    targetHu.isExpanded = shouldExpand;
+  }
+
   formatDate(dateString: string | undefined): string {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
