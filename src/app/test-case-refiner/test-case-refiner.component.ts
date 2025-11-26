@@ -100,12 +100,99 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
 
     try {
-      // Aquí puedes agregar lógica para guardar en la base de datos si es necesario
-      this.toastService.success('Cambios guardados correctamente');
+      this.isLoading = true;
+
+      // Buscar el user story en la base de datos
+      const { data: userStories, error: fetchError } = await this.databaseService.supabase
+        .from('tbl_user_stories')
+        .select('id')
+        .eq('test_plan_id', this.testPlanId)
+        .eq('custom_id', this.hu.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error al buscar user story:', fetchError);
+        throw fetchError;
+      }
+
+      if (!userStories) {
+        throw new Error('User story no encontrado');
+      }
+
+      const userStoryId = userStories.id;
+
+      // Actualizar el user story con la técnica y contexto de refinamiento
+      const { error: updateError } = await this.databaseService.supabase
+        .from('tbl_user_stories')
+        .update({
+          refinement_technique: this.hu.refinementTechnique || null,
+          refinement_context: this.hu.refinementContext || null
+        })
+        .eq('id', userStoryId);
+
+      if (updateError) {
+        console.error('Error al actualizar user story:', updateError);
+        throw updateError;
+      }
+
+      // Eliminar los test cases antiguos
+      const { error: deleteError } = await this.databaseService.supabase
+        .from('tbl_test_cases')
+        .delete()
+        .eq('user_story_id', userStoryId);
+
+      if (deleteError) {
+        console.error('Error al eliminar test cases antiguos:', deleteError);
+        throw deleteError;
+      }
+
+      // Insertar los nuevos test cases
+      if (this.hu.detailedTestCases && this.hu.detailedTestCases.length > 0) {
+        for (const tc of this.hu.detailedTestCases) {
+          // Insertar el test case
+          const { data: testCaseData, error: tcError } = await this.databaseService.supabase
+            .from('tbl_test_cases')
+            .insert({
+              user_story_id: userStoryId,
+              title: tc.title,
+              preconditions: tc.preconditions,
+              expected_results: tc.expectedResults
+            })
+            .select('id')
+            .single();
+
+          if (tcError) {
+            console.error('Error al insertar test case:', tcError);
+            throw tcError;
+          }
+
+          // Insertar los pasos del test case
+          if (tc.steps && tc.steps.length > 0) {
+            const stepsToInsert = tc.steps.map(step => ({
+              test_case_id: testCaseData.id,
+              step_number: step.numero_paso,
+              action: step.accion
+            }));
+
+            const { error: stepsError } = await this.databaseService.supabase
+              .from('tbl_test_case_steps')
+              .insert(stepsToInsert);
+
+            if (stepsError) {
+              console.error('Error al insertar pasos:', stepsError);
+              throw stepsError;
+            }
+          }
+        }
+      }
+
+      this.toastService.success('Cambios guardados correctamente en la base de datos');
+      this.isLoading = false;
       this.goBack();
     } catch (error) {
       console.error('Error al guardar:', error);
-      this.toastService.error('Error al guardar los cambios');
+      this.toastService.error('Error al guardar los cambios en la base de datos');
+      this.isLoading = false;
     }
   }
 

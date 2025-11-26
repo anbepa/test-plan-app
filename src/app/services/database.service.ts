@@ -29,7 +29,7 @@ export type {
   providedIn: 'root'
 })
 export class DatabaseService {
-  private supabase: SupabaseClient;
+  public supabase: SupabaseClient;
   private static readonly INSERT_CHUNK_SIZE = 200;
 
   constructor() {
