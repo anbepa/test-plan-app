@@ -364,10 +364,13 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
           preconditions: tc.preconditions || '',
           steps: (tc.test_case_steps || []).map((step: any, idx: number) => ({
             numero_paso: idx + 1,
-            accion: step.action || ''
+            accion: step.action || '',
+            dbId: step.id
           })),
           expectedResults: tc.expected_results || '',
-          isExpanded: false // Colapsado por defecto
+          isExpanded: false, // Colapsado por defecto
+          dbId: tc.id,
+          position: tc.position
         })),
         originalInput: {
           generationMode: (us.generation_mode as any) || 'text',
@@ -394,6 +397,12 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.selectedTestPlan = null;
     this.huList = [];
 
+  }
+
+  toggleHUExpansion(targetHu: HUData): void {
+    const shouldExpand = !targetHu.isExpanded;
+    this.huList.forEach(hu => hu.isExpanded = false);
+    targetHu.isExpanded = shouldExpand;
   }
 
   formatDate(dateString: string | undefined): string {

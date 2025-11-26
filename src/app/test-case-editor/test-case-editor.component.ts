@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
 import { ToastService } from '../services/toast.service';
+import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 export interface UIDetailedTestCase extends DetailedTestCase {
   isExpanded?: boolean;
@@ -13,7 +14,7 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   templateUrl: './test-case-editor.component.html',
   styleUrls: ['./test-case-editor.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule]
+  imports: [CommonModule, FormsModule, ConfirmationModalComponent]
 })
 export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() testCases: UIDetailedTestCase[] = [];
@@ -33,6 +34,11 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   draggedStepTestCase: UIDetailedTestCase | null = null;
   dragOverStepId: string = '';
 
+  isDeleteModalOpen = false;
+  deleteModalTitle = '';
+  deleteModalMessage = '';
+  pendingDeletion: { type: 'testCase' | 'step'; testCaseIndex: number; stepIndex?: number } | null = null;
+
   private debounceTimer: any = null;
   private readonly DEBOUNCE_TIME = 1000;
 
@@ -51,7 +57,13 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
 
-    tc.isExpanded = !tc.isExpanded;
+    const willExpand = !tc.isExpanded;
+
+    if (willExpand) {
+      this.ensureSingleExpanded(tcIndex);
+    } else {
+      tc.isExpanded = false;
+    }
 
     this.cdr.markForCheck();
 
@@ -89,9 +101,9 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
       accion: ''
     });
 
-    testCase.isExpanded = true;
-
     const tcIndex = this.testCases.indexOf(testCase);
+
+    this.ensureSingleExpanded(tcIndex);
 
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
@@ -118,7 +130,8 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
       step.numero_paso = idx + 1;
     });
 
-    testCase.isExpanded = true;
+    const tcIndex = this.testCases.indexOf(testCase);
+    this.ensureSingleExpanded(tcIndex);
 
     const scrollY = window.scrollY;
     const scrollX = window.scrollX;
@@ -136,10 +149,6 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
     this.addTestCaseStep(testCase);
   }
 
-  deleteStep(testCase: UIDetailedTestCase, stepIndex: number): void {
-    this.deleteTestCaseStep(testCase, stepIndex);
-  }
-
   addTestCase(): void {
     const newTestCase: UIDetailedTestCase = {
       title: 'Nuevo Caso de Prueba',
@@ -149,16 +158,17 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
       isExpanded: true
     };
     this.testCases.push(newTestCase);
+    const newIndex = this.testCases.length - 1;
+    this.ensureSingleExpanded(newIndex);
     this.emitChanges();
     this.cdr.detectChanges();
   }
 
   deleteTestCase(testCaseIndex: number): void {
-    if (confirm('¿Estás seguro de eliminar este caso de prueba? Esta acción no se puede deshacer.')) {
-      this.testCases.splice(testCaseIndex, 1);
-      this.emitChanges();
-      this.cdr.detectChanges();
-    }
+    this.pendingDeletion = { type: 'testCase', testCaseIndex };
+    this.deleteModalTitle = 'Eliminar caso de prueba';
+    this.deleteModalMessage = '¿Estás seguro de eliminar este caso de prueba? Esta acción no se puede deshacer.';
+    this.isDeleteModalOpen = true;
   }
 
   // Drag and drop functionality
@@ -277,5 +287,45 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
 
   onUserRefinementContextChange(): void {
     this.userRefinementContextChange.emit(this.userRefinementContext);
+  }
+
+  confirmDeletion(): void {
+    if (!this.pendingDeletion) return;
+
+    if (this.pendingDeletion.type === 'testCase') {
+      this.testCases.splice(this.pendingDeletion.testCaseIndex, 1);
+    } else if (this.pendingDeletion.type === 'step' && this.pendingDeletion.stepIndex !== undefined) {
+      const targetTestCase = this.testCases[this.pendingDeletion.testCaseIndex];
+      if (targetTestCase?.steps) {
+        targetTestCase.steps.splice(this.pendingDeletion.stepIndex, 1);
+        targetTestCase.steps.forEach((step, idx) => {
+          step.numero_paso = idx + 1;
+        });
+        this.ensureSingleExpanded(this.pendingDeletion.testCaseIndex);
+      }
+    }
+
+    this.emitChanges();
+    this.cdr.detectChanges();
+    this.closeDeleteModal();
+  }
+
+  closeDeleteModal(): void {
+    this.isDeleteModalOpen = false;
+    this.pendingDeletion = null;
+  }
+
+  requestDeleteStep(testCase: UIDetailedTestCase, stepIndex: number): void {
+    const tcIndex = this.testCases.indexOf(testCase);
+    this.pendingDeletion = { type: 'step', testCaseIndex: tcIndex, stepIndex };
+    this.deleteModalTitle = 'Eliminar paso';
+    this.deleteModalMessage = '¿Estás seguro de eliminar este paso del caso de prueba? Esta acción no se puede deshacer.';
+    this.isDeleteModalOpen = true;
+  }
+
+  private ensureSingleExpanded(activeIndex: number): void {
+    this.testCases.forEach((testCase, idx) => {
+      testCase.isExpanded = idx === activeIndex && activeIndex >= 0;
+    });
   }
 }
