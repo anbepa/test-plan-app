@@ -115,7 +115,7 @@
     <div class="test-cases-scroll-container" *ngIf="testCases.length > 0">
       <!-- 4. Mini Cards for Test Cases -->
       <div *ngFor="let tc of testCases; let tcIndex = index" class="test-case-mini-card"
-        [class.expanded]="tc.isExpanded" [@cardAnimation]>
+        [class.expanded]="tc.isExpanded">
 
         <!-- Card Header -->
         <div class="mini-card-header" (click)="toggleTestCaseExpansion(tc, tcIndex)">
@@ -129,7 +129,7 @@
             </div>
           </div>
           <div class="mini-card-actions" (click)="$event.stopPropagation()">
-            <button type="button" class="btn-delete-mini" (click)="deleteTestCase(tcIndex)" [@fadeOut]
+            <button type="button" class="btn-delete-mini" (click)="deleteTestCase(tcIndex)"
               title="Eliminar caso de prueba">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd"
@@ -148,7 +148,7 @@
         </div>
 
         <!-- Card Content with Accordion Animation -->
-        <div class="mini-card-content" *ngIf="tc.isExpanded" [@accordionAnimation]>
+        <div class="mini-card-content" *ngIf="tc.isExpanded">
           <div class="card-divider"></div>
           <form class="test-case-form">
 
@@ -172,7 +172,7 @@
             <div class="steps-section">
               <div class="steps-header">
                 <h5>Pasos de Ejecución:</h5>
-                <button type="button" class="btn-add-step" (click)="addStep(tc)" [@highlightNew]>
+                <button type="button" class="btn-add-step" (click)="addStep(tc)">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
                     <path
                       d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
@@ -196,7 +196,7 @@
                   [class.drag-over]="dragOverStepId === (huId + '-tc' + tcIndex + '-step' + stepIndex)" draggable="true"
                   (dragstart)="onStepDragStart($event, step, tc)" (dragover)="onStepDragOver($event, step, tc)"
                   (drop)="onStepDrop($event, step, tc)" (dragleave)="onStepDragLeave($event)"
-                  (dragend)="onStepDragEnd($event)" [@highlightNew]>
+                  (dragend)="onStepDragEnd($event)">
 
                   <div class="step-drag-handle" title="Arrastra para reordenar">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
@@ -215,7 +215,7 @@
                   </div>
 
                   <div class="step-actions">
-                    <button type="button" class="btn-delete-step" (click)="deleteStep(tc, stepIndex)" [@fadeOut]
+                    <button type="button" class="btn-delete-step" (click)="deleteStep(tc, stepIndex)"
                       title="Eliminar paso">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
                         <path fill-rule="evenodd"

@@ -1,7 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { trigger, state, style, transition, animate } from '@angular/animations';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
 import { ToastService } from '../services/toast.service';
 
@@ -14,39 +13,7 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   templateUrl: './test-case-editor.component.html',
   styleUrls: ['./test-case-editor.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule],
-  animations: [
-    // Accordion animation for card expansion
-    trigger('accordionAnimation', [
-      transition(':enter', [
-        style({ opacity: 0, height: 0, overflow: 'hidden' }),
-        animate('300ms ease-out', style({ opacity: 1, height: '*' }))
-      ]),
-      transition(':leave', [
-        animate('200ms ease-in', style({ opacity: 0, height: 0 }))
-      ])
-    ]),
-    // Card animation
-    trigger('cardAnimation', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'translateY(10px)' }),
-        animate('250ms ease-out', style({ opacity: 1, transform: 'translateY(0)' }))
-      ])
-    ]),
-    // Fade out for delete actions
-    trigger('fadeOut', [
-      transition(':leave', [
-        animate('200ms ease-in', style({ opacity: 0, transform: 'scale(0.95)' }))
-      ])
-    ]),
-    // Highlight for new items
-    trigger('highlightNew', [
-      transition(':enter', [
-        style({ backgroundColor: '#fef3c7' }),
-        animate('600ms ease-out', style({ backgroundColor: 'transparent' }))
-      ])
-    ])
-  ]
+  imports: [CommonModule, FormsModule]
 })
 export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() testCases: UIDetailedTestCase[] = [];
