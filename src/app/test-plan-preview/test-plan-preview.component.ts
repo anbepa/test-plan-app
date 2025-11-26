@@ -48,8 +48,8 @@ export class TestPlanPreviewComponent implements OnInit {
                 this.testPlan = plan;
                 // Convertir UserStories a HUData
                 this.huList = (plan.user_stories || []).map((us: any, index: number) => {
-                    let originalInput = {
-                        generationMode: 'text' as const,
+                    let originalInput: HUData['originalInput'] = {
+                        generationMode: 'text',
                         description: '',
                         acceptanceCriteria: '',
                         selectedTechnique: ''

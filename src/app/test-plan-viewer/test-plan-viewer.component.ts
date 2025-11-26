@@ -84,6 +84,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   private autoSavePromise: Promise<void> | null = null;
   private autoSaveQueued = false;
 
+  private metadataChanged = false;
+  private structureChanged = false;
+
   constructor(
     private databaseService: DatabaseService,
     private geminiService: GeminiService,
@@ -473,6 +476,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       isExpanded: tc.isExpanded // Preservar estado del acordeón
     }));
 
+    this.structureChanged = true;
     this.autoSaveToDatabase();
   }
 
@@ -502,6 +506,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         hu.detailedTestCases = refined;
         hu.loadingScope = false;
 
+        this.structureChanged = true;
         this.autoSaveToDatabase();
       }),
       catchError((error) => {
@@ -542,6 +547,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         this.teamContent = event.content;
         break;
     }
+    this.metadataChanged = true;
     this.autoSaveToDatabase();
 
     this.cdr.detectChanges();
@@ -714,6 +720,25 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Optimización: Si solo cambiaron metadatos, usar actualización ligera
+    if (this.metadataChanged && !this.structureChanged) {
+      const updates: Partial<DbTestPlan> = {
+        title: this.testPlanTitle,
+        repository_link: this.repositoryLink,
+        out_of_scope: this.outOfScopeContent,
+        strategy: this.strategyContent,
+        limitations: this.limitationsContent,
+        assumptions: this.assumptionsContent,
+        team: this.teamContent
+      };
+
+      await this.databaseService.updateTestPlan(this.selectedTestPlan.id, updates);
+      console.log('✅ Metadatos actualizados (Optimizado)');
+
+      this.metadataChanged = false;
+      return;
+    }
+
     const testPlanData: DbTestPlan = {
       title: this.testPlanTitle,
       repository_link: this.repositoryLink,
@@ -756,6 +781,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     await this.databaseService.updateCompleteTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
     console.log('✅ Auto-guardado exitoso en BD con custom_ids:', userStories.map(us => us.custom_id));
+
+    this.metadataChanged = false;
+    this.structureChanged = false;
   }
 
   private scheduleAutoSaveProcessing(): Promise<void> {

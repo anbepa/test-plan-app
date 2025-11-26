@@ -93,10 +93,9 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
   }
 
-  async saveAndReturn(): Promise<void> {
+  async saveData(): Promise<boolean> {
     if (!this.hu || !this.testPlanId) {
-      this.goBack();
-      return;
+      return false;
     }
 
     try {
@@ -187,13 +186,28 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         }
       }
 
-      this.toastService.success('Cambios guardados correctamente en la base de datos');
       this.isLoading = false;
-      this.goBack();
+      return true;
     } catch (error) {
       console.error('Error al guardar:', error);
       this.toastService.error('Error al guardar los cambios en la base de datos');
       this.isLoading = false;
+      return false;
+    }
+  }
+
+  async save(): Promise<void> {
+    const success = await this.saveData();
+    if (success) {
+      this.toastService.success('Cambios guardados correctamente');
+    }
+  }
+
+  async saveAndReturn(): Promise<void> {
+    const success = await this.saveData();
+    if (success) {
+      this.toastService.success('Cambios guardados correctamente');
+      this.goBack();
     }
   }
 
