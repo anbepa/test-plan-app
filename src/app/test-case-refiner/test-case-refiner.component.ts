@@ -205,6 +205,9 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
 
     this.userStoryDbId = userStory?.id || null;
+    if (this.hu && this.userStoryDbId) {
+      this.hu.dbUuid = this.userStoryDbId;
+    }
     this.existingDbTestCases = this.sortTestCasesByPosition(userStory?.test_cases || []);
     this.alignLocalTestCasesWithDb();
   }
@@ -254,28 +257,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
     this.populateDefaultStepActions();
 
-    const existingTestCaseMap = new Map<string, DbTestCaseWithRelations>(
-      (this.existingDbTestCases || []).map(tc => [tc.id as string, tc])
-    );
-
-    const remainingTestCaseIds = new Set(existingTestCaseMap.keys());
-
-    for (const tc of this.hu.detailedTestCases) {
-      if (tc.dbId && existingTestCaseMap.has(tc.dbId)) {
-        const existingTc = existingTestCaseMap.get(tc.dbId)!;
-        remainingTestCaseIds.delete(tc.dbId);
-        await this.updateTestCaseIfNeeded(tc, existingTc);
-        await this.syncTestCaseSteps(tc, existingTc);
-      } else {
-        await this.insertTestCase(tc, userStoryId);
-      }
-    }
-
-    // Eliminar casos que ya no existen en la HU refinada
-    for (const tcId of remainingTestCaseIds) {
-      await this.databaseService.supabase.from('test_case_steps').delete().eq('test_case_id', tcId);
-      await this.databaseService.supabase.from('test_cases').delete().eq('id', tcId);
-    }
+    // Usar el método optimizado del servicio
+    await this.databaseService.smartUpdateUserStoryTestCases(userStoryId, this.hu.detailedTestCases);
 
     // Refrescar estado local con los IDs actualizados
     await this.loadUserStoryData();
@@ -293,140 +276,5 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         }
       });
     });
-  }
-
-  private async updateTestCaseIfNeeded(tc: DetailedTestCase, existingTc: DbTestCaseWithRelations): Promise<void> {
-    const updates: any = {};
-
-    if (tc.title !== existingTc.title) updates.title = tc.title;
-    if (tc.preconditions !== (existingTc.preconditions || '')) updates.preconditions = tc.preconditions;
-    if (tc.expectedResults !== (existingTc.expected_results || '')) updates.expected_results = tc.expectedResults;
-    if (tc.position !== (existingTc.position ?? null)) updates.position = tc.position ?? null;
-
-    if (Object.keys(updates).length > 0) {
-      const { error } = await this.databaseService.supabase
-        .from('test_cases')
-        .update(updates)
-        .eq('id', existingTc.id);
-
-      if (error) {
-        console.error('Error al actualizar test case:', error);
-        throw error;
-      }
-    }
-  }
-
-  private async insertTestCase(tc: DetailedTestCase, userStoryId: string): Promise<void> {
-    const { data: testCaseData, error: tcError } = await this.databaseService.supabase
-      .from('test_cases')
-      .insert({
-        user_story_id: userStoryId,
-        title: tc.title,
-        preconditions: tc.preconditions,
-        expected_results: tc.expectedResults,
-        position: tc.position ?? null
-      })
-      .select('id')
-      .single();
-
-    if (tcError) {
-      console.error('Error al insertar test case:', tcError);
-      throw tcError;
-    }
-
-    tc.dbId = testCaseData?.id;
-
-    if (tc.steps && tc.steps.length > 0) {
-      await this.insertSteps(tc, tc.dbId!);
-    }
-  }
-
-  private async insertSteps(tc: DetailedTestCase, testCaseId: string): Promise<void> {
-    const stepsPayload = (tc.steps || []).map((step, idx) => ({
-      test_case_id: testCaseId,
-      step_number: idx + 1,
-      action: step.accion
-    }));
-
-    if (stepsPayload.length === 0) return;
-
-    const { data: insertedSteps, error } = await this.databaseService.supabase
-      .from('test_case_steps')
-      .insert(stepsPayload)
-      .select('id, step_number');
-
-    if (error) {
-      console.error('Error al insertar pasos:', error);
-      throw error;
-    }
-
-    if (insertedSteps) {
-      insertedSteps.forEach(inserted => {
-        const localStep = tc.steps?.[inserted.step_number - 1];
-        if (localStep) {
-          localStep.dbId = inserted.id;
-        }
-      });
-    }
-  }
-
-  private async syncTestCaseSteps(tc: DetailedTestCase, existingTc: DbTestCaseWithRelations): Promise<void> {
-    const existingSteps = (existingTc.test_case_steps || []).map(step => ({ ...step } as DbTestCaseStep));
-    const existingStepMap = new Map<string, DbTestCaseStep>(existingSteps.map(step => [step.id as string, step]));
-    const remainingStepIds = new Set(existingStepMap.keys());
-
-    tc.steps = tc.steps || [];
-
-    for (const [idx, step] of tc.steps.entries()) {
-      step.numero_paso = idx + 1;
-      if (!step.accion || !step.accion.trim()) {
-        step.accion = `Paso ${idx + 1}`;
-      }
-
-      if (step.dbId && existingStepMap.has(step.dbId)) {
-        const existingStep = existingStepMap.get(step.dbId)!;
-        remainingStepIds.delete(step.dbId);
-
-        if (existingStep.action !== step.accion || existingStep.step_number !== step.numero_paso) {
-          const { error } = await this.databaseService.supabase
-            .from('test_case_steps')
-            .update({
-              action: step.accion,
-              step_number: step.numero_paso
-            })
-            .eq('id', step.dbId);
-
-          if (error) {
-            console.error('Error al actualizar paso:', error);
-            throw error;
-          }
-        }
-      } else {
-        const { data, error } = await this.databaseService.supabase
-          .from('test_case_steps')
-          .insert({
-            test_case_id: existingTc.id,
-            step_number: step.numero_paso,
-            action: step.accion
-          })
-          .select('id')
-          .single();
-
-        if (error) {
-          console.error('Error al insertar paso:', error);
-          throw error;
-        }
-
-        step.dbId = data?.id;
-      }
-    }
-
-    // Eliminar pasos que ya no existen
-    for (const stepId of remainingStepIds) {
-      await this.databaseService.supabase
-        .from('test_case_steps')
-        .delete()
-        .eq('id', stepId);
-    }
   }
 }

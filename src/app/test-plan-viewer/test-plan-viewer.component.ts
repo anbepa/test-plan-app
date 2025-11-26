@@ -5,7 +5,6 @@ import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database.service';
 import { GeminiService } from '../services/gemini.service';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
-import { TestCaseEditorComponent, UIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
 import { WordExporterComponent } from '../word-exporter/word-exporter.component';
 import { ToastService } from '../services/toast.service';
@@ -18,7 +17,7 @@ import { GeneralSectionsComponent, StaticSectionName } from './components/genera
 @Component({
   selector: 'app-test-plan-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TestCaseEditorComponent, HtmlMatrixExporterComponent, GeneralSectionsComponent, ConfirmationModalComponent],
+  imports: [CommonModule, FormsModule, RouterLink, HtmlMatrixExporterComponent, GeneralSectionsComponent, ConfirmationModalComponent],
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })
@@ -75,10 +74,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
 
   huList: HUData[] = [];
-
-  isEditModalOpen: boolean = false;
-  editingHU: HUData | null = null;
-
 
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private autoSavePromise: Promise<void> | null = null;
@@ -355,6 +350,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
       const huData: HUData = {
         id: customId, // Usar el ID personalizado guardado en la BD
+        dbUuid: us.id, // ID interno de la BD para tracking de cambios
         title: us.title || '',
         sprint: us.sprint || '',
         generatedScope: us.generated_scope || '',
@@ -454,81 +450,12 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     });
   }
 
-  closeEditModal(): void {
-    // Este método ya no se usa con el nuevo flujo, pero lo mantenemos por compatibilidad
-    if (this.editingHU) {
-      this.editingHU.editingScenariosTestCases = false;
-    }
-    this.editingHU = null;
-    this.isEditModalOpen = false;
-    document.body.style.overflow = '';
-    this.cdr.detectChanges();
-  }
-
   openPreview(): void {
     if (!this.selectedTestPlan?.id) {
       this.toastService.warning('No hay un plan de pruebas seleccionado.');
       return;
     }
     this.router.navigate(['/preview', this.selectedTestPlan.id]);
-  }
-
-  handleConfigTestCasesChanged(hu: HUData, updatedTestCases: UIDetailedTestCase[]): void {
-    hu.detailedTestCases = updatedTestCases.map(tc => ({
-      title: tc.title,
-      preconditions: tc.preconditions,
-      steps: tc.steps.map((step, idx) => ({
-        numero_paso: idx + 1,
-        accion: step.accion
-      })),
-      expectedResults: tc.expectedResults,
-      isExpanded: tc.isExpanded // Preservar estado del acordeón
-    }));
-
-    this.structureChanged = true;
-    this.autoSaveToDatabase();
-  }
-
-  handleConfigRefineWithAI(hu: HUData, refinementData: { technique: string; context: string }): void {
-    hu.refinementTechnique = refinementData.technique;
-    hu.refinementContext = refinementData.context;
-    this.refineDetailedTestCases(hu);
-  }
-
-  public refineDetailedTestCases(hu: HUData): void {
-    if (!hu.refinementTechnique || !hu.refinementContext) {
-      this.toastService.warning('Debes seleccionar una técnica y proporcionar contexto para refinar');
-      return;
-    }
-
-    hu.loadingScope = true;
-    hu.errorScope = null;
-    this.cdr.detectChanges();
-
-    this.geminiService.refineDetailedTestCases(
-      hu.originalInput,
-      hu.detailedTestCases || [],
-      hu.refinementTechnique,
-      hu.refinementContext
-    ).pipe(
-      tap((refined: DetailedTestCase[]) => {
-        hu.detailedTestCases = refined;
-        hu.loadingScope = false;
-
-        this.structureChanged = true;
-        this.autoSaveToDatabase();
-      }),
-      catchError((error) => {
-        console.error('Error refinando:', error);
-        hu.errorScope = 'Error al refinar con IA. Intenta de nuevo.';
-        hu.loadingScope = false;
-        this.cdr.detectChanges();
-        return of([]);
-      }),
-      finalize(() => {
-        this.cdr.detectChanges();
-      })
-    ).subscribe();
   }
 
   // === EDICIÓN DE SECCIONES ESTÁTICAS ===
@@ -760,6 +687,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     const userStories: DbUserStoryWithRelations[] = this.huList.map((hu, index) => ({
       test_plan_id: this.selectedTestPlan!.id!,
+      id: hu.dbUuid, // Pasar el ID de BD si existe para que smartUpdate lo reconozca
       custom_id: hu.id,
       title: hu.title,
       description: hu.originalInput.description || '',
@@ -788,7 +716,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       images: []
     }));
 
-    await this.databaseService.updateCompleteTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
+    await this.databaseService.smartUpdateTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
     console.log('✅ Auto-guardado exitoso en BD con custom_ids:', userStories.map(us => us.custom_id));
 
     this.metadataChanged = false;

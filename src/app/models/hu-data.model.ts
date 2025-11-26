@@ -23,6 +23,7 @@ export type GenerationMode = 'text';
 // --- Interfaz Principal HUData ---
 export interface HUData {
   id: string;
+  dbUuid?: string;
   title: string;
   sprint: string;
   originalInput: {

@@ -12,6 +12,7 @@ import type {
   DbUserStoryWithRelations,
   DbTestCaseWithRelations
 } from '../models/database.model';
+import { DetailedTestCase } from '../models/hu-data.model';
 
 // Re-export para compatibilidad con otros componentes
 export type {
@@ -409,6 +410,423 @@ export class DatabaseService {
       console.error('❌ Error:', error);
       return false;
     }
+  }
+
+  /**
+   * Actualizar un test plan de forma inteligente (batch insert/update)
+   * Identifica cambios y solo procesa lo necesario.
+   */
+  async smartUpdateTestPlan(
+    testPlanId: string,
+    testPlanData: DbTestPlan,
+    userStories: DbUserStoryWithRelations[]
+  ): Promise<void> {
+    console.log('🧠 Smart Update: Iniciando proceso optimizado...');
+
+    try {
+      // 1. Actualizar metadatos del test plan
+      await this.updateTestPlan(testPlanId, testPlanData);
+
+      // 2. Obtener estado actual de la BD para comparar
+      const currentTestPlan = await this.getTestPlanById(testPlanId);
+      const currentHUs = (currentTestPlan?.user_stories || []).filter(hu => !!hu.id);
+      const currentHUMap = new Map(currentHUs.map(hu => [hu.id!, hu]));
+
+      const toInsert: DbUserStoryWithRelations[] = [];
+      const toUpdate: DbUserStoryWithRelations[] = [];
+      const toDeleteIds: string[] = [];
+      const unmodifiedIds: string[] = [];
+
+      // 3. Identificar Nuevos y Modificados
+      for (const incomingHU of userStories) {
+        // Si tiene ID y existe en el mapa actual, es candidato a update o unmodified
+        if (incomingHU.id && currentHUMap.has(incomingHU.id)) {
+          const existingHU = currentHUMap.get(incomingHU.id)!;
+          if (this.hasUserStoryChanged(existingHU, incomingHU)) {
+            toUpdate.push(incomingHU);
+          } else {
+            unmodifiedIds.push(incomingHU.id);
+          }
+          // Marcar como procesado eliminándolo del mapa
+          currentHUMap.delete(incomingHU.id!);
+        } else {
+          // Es nuevo (no tiene ID o el ID no está en BD)
+          toInsert.push(incomingHU);
+        }
+      }
+
+      // 4. Identificar Eliminados (los que quedaron en el mapa)
+      toDeleteIds.push(...currentHUMap.keys());
+
+      console.log(`📊 Resumen Smart Update:
+        - Nuevos: ${toInsert.length}
+        - Modificados: ${toUpdate.length}
+        - Sin cambios: ${unmodifiedIds.length}
+        - Eliminados: ${toDeleteIds.length}
+      `);
+
+      // 5. Ejecutar acciones
+
+      // A) ELIMINAR
+      if (toDeleteIds.length > 0) {
+        const { error } = await this.supabase.from('user_stories').delete().in('id', toDeleteIds);
+        if (error) throw error;
+        console.log(`🗑️ ${toDeleteIds.length} HUs eliminadas`);
+      }
+
+      // B) INSERTAR NUEVOS
+      if (toInsert.length > 0) {
+        // Asignar test_plan_id a los nuevos
+        toInsert.forEach(hu => hu.test_plan_id = testPlanId);
+        await this.persistUserStoriesGraph(testPlanId, toInsert);
+        console.log(`✨ ${toInsert.length} HUs nuevas insertadas`);
+      }
+
+      // C) ACTUALIZAR MODIFICADOS
+      if (toUpdate.length > 0) {
+        // 1. Actualizar campos de las HUs (Upsert es eficiente)
+        const updatesPayload = toUpdate.map(hu => ({
+          id: hu.id,
+          test_plan_id: testPlanId,
+          custom_id: hu.custom_id,
+          title: hu.title,
+          description: hu.description,
+          acceptance_criteria: hu.acceptance_criteria,
+          generated_scope: hu.generated_scope,
+          generated_test_case_titles: hu.generated_test_case_titles,
+          generation_mode: hu.generation_mode,
+          sprint: hu.sprint,
+          refinement_technique: hu.refinement_technique,
+          refinement_context: hu.refinement_context,
+          position: hu.position,
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error: updateError } = await this.supabase
+          .from('user_stories')
+          .upsert(updatesPayload);
+
+        if (updateError) throw updateError;
+
+        // 2. Reemplazar Test Cases (Borrar y Recrear para las HUs modificadas)
+        const updateIds = toUpdate.map(hu => hu.id!);
+
+        // Borrar TCs antiguos
+        // Primero borrar sus steps
+        const { error: deleteStepsError } = await this.supabase
+          .from('test_case_steps')
+          .delete()
+          .in('test_case_id', toUpdate.flatMap(hu => hu.test_cases?.map(tc => tc.id) || [])); // Esto puede ser costoso si no tenemos los IDs de los TCs a borrar. 
+
+        // Mejor estrategia: obtener los IDs de los TCs que vamos a borrar.
+        // Pero aquí estamos borrando TODOS los TCs de las HUs modificadas para recrearlos.
+        // Necesitamos saber los IDs de esos TCs.
+
+        // Consultar IDs de TCs a borrar
+        const { data: tcsToDelete } = await this.supabase
+          .from('test_cases')
+          .select('id')
+          .in('user_story_id', updateIds);
+
+        if (tcsToDelete && tcsToDelete.length > 0) {
+          const tcIds = tcsToDelete.map(tc => tc.id);
+          await this.supabase.from('test_case_steps').delete().in('test_case_id', tcIds);
+          await this.supabase.from('test_cases').delete().in('id', tcIds);
+        }
+
+        // Insertar nuevos TCs
+        await this.persistTestCasesAndSteps(toUpdate);
+
+        console.log(`📝 ${toUpdate.length} HUs actualizadas`);
+      }
+
+      console.log('🎉 Smart Update completado exitosamente!');
+
+    } catch (error) {
+      console.error('❌ Error en Smart Update:', error);
+      throw error;
+    }
+  }
+
+  private hasUserStoryChanged(existing: DbUserStoryWithRelations, incoming: DbUserStoryWithRelations): boolean {
+    const simplify = (hu: DbUserStoryWithRelations) => ({
+      title: hu.title,
+      sprint: hu.sprint,
+      desc: hu.description,
+      ac: hu.acceptance_criteria,
+      scope: hu.generated_scope,
+      tech: hu.refinement_technique,
+      ctx: hu.refinement_context,
+      tcs: (hu.test_cases || []).map(tc => ({
+        title: tc.title,
+        pre: tc.preconditions,
+        exp: tc.expected_results,
+        steps: (tc.test_case_steps || []).map(s => s.action)
+      }))
+    });
+
+    return JSON.stringify(simplify(existing)) !== JSON.stringify(simplify(incoming));
+  }
+
+  private async persistTestCasesAndSteps(userStories: DbUserStoryWithRelations[]): Promise<void> {
+    const testCasesPayload: DbTestCase[] = [];
+    const testCaseStepsMeta = new Map<string, { steps: { step_number: number | null | undefined; action: string }[] }>();
+
+    userStories.forEach((us) => {
+      if (!us.id || !us.test_cases?.length) return;
+
+      us.test_cases.forEach((tc, tcIndex) => {
+        const resolvedPosition = tc.position ?? tcIndex + 1;
+        // Usamos un ID temporal o dejamos que la BD lo genere?
+        // Si estamos insertando, la BD genera. Pero necesitamos linkear los steps.
+        // Necesitamos insertar TCs, obtener sus IDs, y luego insertar Steps.
+        // Como es batch, no podemos obtener IDs fácilmente uno por uno.
+        // Solución: Usar persistUserStoriesGraph logic de chunkedInsert con select.
+
+        // Pero persistUserStoriesGraph usa indices de array para mapear.
+        // Aquí podemos hacer lo mismo si aplanamos la lista.
+      });
+    });
+
+    // Reutilicemos la lógica de persistUserStoriesGraph pero adaptada
+    // Aplanamos todos los TCs de todas las HUs
+    const allTestCases: { usId: string, tc: DbTestCaseWithRelations, originalIndex: number }[] = [];
+
+    userStories.forEach(us => {
+      if (us.id && us.test_cases) {
+        us.test_cases.forEach(tc => {
+          allTestCases.push({ usId: us.id!, tc, originalIndex: 0 });
+        });
+      }
+    });
+
+    if (allTestCases.length === 0) return;
+
+    const tcsToInsert = allTestCases.map(item => ({
+      user_story_id: item.usId,
+      title: item.tc.title,
+      preconditions: item.tc.preconditions,
+      expected_results: item.tc.expected_results,
+      position: item.tc.position
+    }));
+
+    const insertedTestCases = await this.chunkedInsert(
+      'test_cases',
+      tcsToInsert,
+      'id, user_story_id, position' // Necesitamos ID para los steps
+    );
+
+    // Ahora los steps
+    // El problema es mapear insertedTestCases con los steps originales.
+    // insertedTestCases viene en orden? Sí, normalmente.
+    // Asumimos orden preservado.
+
+    const stepsPayload: DbTestCaseStep[] = [];
+
+    if (insertedTestCases.length === allTestCases.length) {
+      insertedTestCases.forEach((insertedTc, index) => {
+        const originalTc = allTestCases[index].tc;
+        const steps = originalTc.test_case_steps || [];
+
+        steps.forEach((step, stepIdx) => {
+          if (step.action && step.action.trim()) {
+            stepsPayload.push({
+              test_case_id: insertedTc.id,
+              step_number: step.step_number ?? stepIdx + 1,
+              action: step.action
+            });
+          }
+        });
+      });
+
+      if (stepsPayload.length > 0) {
+        await this.chunkedInsert('test_case_steps', stepsPayload);
+      }
+    } else {
+      console.error('❌ Mismatch en inserción de TCs, no se pueden guardar steps con seguridad.');
+    }
+  }
+
+  /**
+   * Actualizar los casos de prueba de una HU de forma inteligente
+   */
+  async smartUpdateUserStoryTestCases(userStoryId: string, testCases: DetailedTestCase[]): Promise<void> {
+    console.log(`🧠 Smart Update TCs para HU ${userStoryId}...`);
+
+    if (!userStoryId) {
+      console.error('❌ smartUpdateUserStoryTestCases: userStoryId is missing!');
+      throw new Error('userStoryId is required for smartUpdateUserStoryTestCases');
+    }
+
+    try {
+      // 1. Obtener estado actual
+      const { data: existingTCs, error } = await this.supabase
+        .from('test_cases')
+        .select('*, test_case_steps(*)')
+        .eq('user_story_id', userStoryId);
+
+      if (error) throw error;
+
+      const existingMap = new Map((existingTCs || []).map(tc => [tc.id, tc]));
+
+      const tcsToInsert: DetailedTestCase[] = [];
+      const tcsToUpdate: DetailedTestCase[] = [];
+      const tcsToDeleteIds: string[] = [];
+      const tcsUnmodifiedIds: string[] = [];
+
+      // 2. Clasificar
+      for (const tc of testCases) {
+        if (tc.dbId && existingMap.has(tc.dbId)) {
+          const existing = existingMap.get(tc.dbId)!;
+          if (this.hasTestCaseChanged(existing, tc)) {
+            tcsToUpdate.push(tc);
+          } else {
+            tcsUnmodifiedIds.push(tc.dbId);
+          }
+          existingMap.delete(tc.dbId);
+        } else {
+          tcsToInsert.push(tc);
+        }
+      }
+
+      // Los que quedan en el mapa son para borrar
+      tcsToDeleteIds.push(...existingMap.keys());
+
+      console.log(`📊 Resumen TCs:
+        - Nuevos: ${tcsToInsert.length}
+        - Modificados: ${tcsToUpdate.length}
+        - Sin cambios: ${tcsUnmodifiedIds.length}
+        - Eliminados: ${tcsToDeleteIds.length}
+      `);
+
+      // 3. Ejecutar acciones
+
+      // A) DELETE
+      if (tcsToDeleteIds.length > 0) {
+        // Primero eliminar los pasos asociados (Constraint FK)
+        await this.supabase.from('test_case_steps').delete().in('test_case_id', tcsToDeleteIds);
+
+        // Luego eliminar los test cases
+        await this.supabase.from('test_cases').delete().in('id', tcsToDeleteIds);
+        console.log(`🗑️ ${tcsToDeleteIds.length} TCs eliminados`);
+      }
+
+      // B) INSERT
+      if (tcsToInsert.length > 0) {
+        const tcsPayload = tcsToInsert.map(tc => {
+          if (!userStoryId) throw new Error('userStoryId missing during payload creation');
+          return {
+            user_story_id: userStoryId,
+            title: tc.title,
+            preconditions: tc.preconditions,
+            expected_results: tc.expectedResults,
+            position: tc.position
+          };
+        });
+
+        const { data: insertedTCs, error: insertError } = await this.supabase
+          .from('test_cases')
+          .insert(tcsPayload)
+          .select();
+
+        if (insertError) throw insertError;
+
+        // Insertar pasos para los nuevos TCs
+        if (insertedTCs) {
+          const stepsPayload: DbTestCaseStep[] = [];
+          insertedTCs.forEach((inserted, idx) => {
+            const original = tcsToInsert[idx];
+            original.steps.forEach((s, sIdx) => {
+              if (s.accion && s.accion.trim()) {
+                stepsPayload.push({
+                  test_case_id: inserted.id,
+                  step_number: sIdx + 1,
+                  action: s.accion
+                });
+              }
+            });
+          });
+
+          if (stepsPayload.length > 0) {
+            await this.chunkedInsert('test_case_steps', stepsPayload);
+          }
+        }
+        console.log(`✨ ${tcsToInsert.length} TCs nuevos insertados`);
+      }
+
+      // C) UPDATE
+      if (tcsToUpdate.length > 0) {
+        // Actualizar campos de TCs
+        const updatesPayload = tcsToUpdate.map(tc => ({
+          id: tc.dbId,
+          user_story_id: userStoryId,
+          title: tc.title,
+          preconditions: tc.preconditions,
+          expected_results: tc.expectedResults,
+          position: tc.position,
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error: updateError } = await this.supabase
+          .from('test_cases')
+          .upsert(updatesPayload);
+
+        if (updateError) throw updateError;
+
+        // Reemplazar pasos para TCs modificados (Estrategia: Borrar y Recrear pasos)
+        const updateIds = tcsToUpdate.map(tc => tc.dbId!);
+
+        // Borrar pasos antiguos
+        await this.supabase
+          .from('test_case_steps')
+          .delete()
+          .in('test_case_id', updateIds);
+
+        // Insertar nuevos pasos
+        const newStepsPayload: DbTestCaseStep[] = [];
+        tcsToUpdate.forEach(tc => {
+          tc.steps.forEach((s, sIdx) => {
+            if (s.accion && s.accion.trim()) {
+              newStepsPayload.push({
+                test_case_id: tc.dbId!,
+                step_number: sIdx + 1,
+                action: s.accion
+              });
+            }
+          });
+        });
+
+        if (newStepsPayload.length > 0) {
+          await this.chunkedInsert('test_case_steps', newStepsPayload);
+        }
+        console.log(`📝 ${tcsToUpdate.length} TCs actualizados`);
+      }
+
+    } catch (error) {
+      console.error('❌ Error en smartUpdateUserStoryTestCases:', error);
+      throw error;
+    }
+  }
+
+  private hasTestCaseChanged(existing: any, incoming: DetailedTestCase): boolean {
+    // Simplificar para comparar
+    const simplifyExisting = {
+      t: existing.title,
+      p: existing.preconditions || '',
+      e: existing.expected_results || '',
+      pos: existing.position,
+      s: (existing.test_case_steps || []).sort((a: any, b: any) => a.step_number - b.step_number).map((s: any) => s.action)
+    };
+
+    const simplifyIncoming = {
+      t: incoming.title,
+      p: incoming.preconditions || '',
+      e: incoming.expectedResults || '',
+      pos: incoming.position,
+      s: (incoming.steps || []).map(s => s.accion)
+    };
+
+    return JSON.stringify(simplifyExisting) !== JSON.stringify(simplifyIncoming);
   }
 
   /**
