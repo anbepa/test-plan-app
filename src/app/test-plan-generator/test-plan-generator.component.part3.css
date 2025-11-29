@@ -1,0 +1,400 @@
+.detailed-test-cases-table th, .detailed-test-cases-table td { border: 1px solid #e0e0e0; padding: 10px 12px; text-align: left; vertical-align: top; }
+.detailed-test-cases-table th { background-color: #f8f9fa; font-weight: 600; color: #343a40; position: sticky; top: 0; z-index: 1; }
+.detailed-test-cases-table tbody tr:nth-child(even) { background-color: #fdfdfd; }
+.detailed-test-cases-table tbody tr:hover:not([style*="opacity: 0.4"]) { background-color: #f0f4f8; }
+.detailed-test-cases-table .table-pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; font-family: inherit; font-size: inherit; background-color: transparent; border: none; padding: 0; max-height: none; line-height: 1.5; display: block; max-width: 250px; overflow-wrap: break-word; }
+
+.loading-message { display: flex; align-items: center; justify-content: center; padding: 20px; font-style: italic; color: #555; }
+.button-download { padding: 12px 25px; font-size: 1.1em; }
+
+/* NUEVOS ESTILOS PARA EDICIÓN DE CASOS DE PRUEBA EN EL PLAN */
+.test-case-edit-card-in-plan {
+    background-color: #ffffff;
+    border: 1px solid #d1d9e6; /* Borde más neutro */
+    border-radius: 6px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.test-case-edit-card-in-plan h4 {
+    color: #3b5a6b;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    display: flex;
+    align-items: baseline;
+    font-weight: 600;
+    flex-wrap: wrap;
+}
+.test-case-edit-card-in-plan .form-control.inline-edit {
+    flex-grow: 1;
+    margin-left: 10px;
+    padding: 7px 10px;
+    font-size: 0.9em;
+    font-weight: normal;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    line-height: 1.3;
+    min-width: 180px;
+}
+@media (max-width: 576px) {
+    .test-case-edit-card-in-plan h4 {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .test-case-edit-card-in-plan .form-control.inline-edit {
+        margin-left: 0;
+        margin-top: 8px;
+        width: 100%;
+    }
+}
+
+.test-case-edit-card-in-plan .form-group {
+    margin-bottom: 15px;
+}
+.test-case-edit-card-in-plan .form-group label {
+    font-weight: 600;
+    color: #5c6770;
+    margin-bottom: 5px;
+    font-size: 0.85em;
+}
+.test-case-edit-card-in-plan .form-group textarea.form-control {
+    min-height: 60px;
+    font-size: 0.9em;
+    padding: 8px;
+    background-color: #fff;
+}
+.test-case-edit-card-in-plan h5 {
+    color: #435a66;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    font-size: 1em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.test-case-steps-table-for-plan th,
+.test-case-steps-table-for-plan td {
+    font-size: 0.9em;
+    padding: 8px 10px;
+}
+.test-case-steps-table-for-plan textarea.table-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    font-size: 0.95em;
+    border-radius: 3px;
+    border: 1px solid #b0bec5;
+    min-height: 36px;
+    line-height: 1.4;
+    resize: vertical;
+    font-family: inherit;
+}
+.test-case-steps-table-for-plan textarea.table-input:focus {
+    border-color: #8a9b8c;
+    box-shadow: 0 0 0 0.15rem rgba(138, 155, 140, 0.2);
+}
+
+.test-case-steps-table-for-plan tbody tr[draggable="true"]:hover {
+    cursor: grab;
+    background-color: #f7faff;
+}
+.test-case-steps-table-for-plan tr.drag-over-element td {
+    border-top: 2px dashed #007bff;
+    border-bottom: 2px dashed #007bff;
+    background-color: #e6f2ff;
+}
+.test-case-edit-card-in-plan h5 .button-secondary.button-small-icon {
+    background-color: #e0e7ff;
+    border: 1px solid #c7d2fe;
+    color: #4338ca;
+}
+.test-case-edit-card-in-plan h5 .button-secondary.button-small-icon:hover {
+    background-color: #c7d2fe;
+}
+
+
+/* --- Adaptación Responsive --- */
+@media (max-width: 768px) {
+    .container { 
+        margin: 0 auto;
+        padding: 32px 24px;
+    }
+    h1 { font-size: 1.8em; } h2 { font-size: 1.5em; }
+    .form-header-actions { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .form-header-actions h2 { font-size: 1.4em; }
+    .results-section .section-header h2 { font-size: 1.7em; }
+    .static-plan-sections-container .section-header h2 { font-size: 1.4em; }
+    .hu-header h3 { font-size: 1.2em; }
+    .form-grid { grid-template-columns: 1fr; }
+    .actions { flex-direction: column; align-items: stretch; }
+    .actions button { width: 100%; margin-right: 0; }
+    .actions button:last-child { margin-bottom: 0; }
+    .regen-picker-inline, .regen-buttons-container { flex-direction: column; align-items: stretch; gap: 10px; }
+    .regen-buttons-container button { width: 100%; margin-left: 0; }
+    .detailed-test-cases-table th, .detailed-test-cases-table td { padding: 8px 10px; font-size: 0.85em; }
+    .detailed-test-cases-table .table-pre { max-width: 150px; }
+    .hu-header { flex-direction: column; align-items: flex-start; }
+    .hu-meta { margin-top: 10px; width: 100%; justify-content: flex-start;}
+    .mode-card { width: 100%; max-width: 320px; min-height: auto; padding-bottom: 20px; }
+    .hu-card > .plan-section-details { margin-left: 10px; margin-right: 10px; }
+    .download-actions-container { flex-direction: column; }
+    .download-actions-container button { width: 100%; max-width: 300px; margin-left: auto; margin-right: auto; }
+    .image-preview-item { width: calc(33.333% - 10px); }
+    .image-preview-item .image-preview { height: 80px; }
+}
+@media (max-width: 576px) {
+    .container { 
+        padding: 24px 16px;
+        padding-bottom: 80px;
+    }
+    h1 { font-size: 1.5em; } h2 { font-size: 1.3em; }
+    .form-header-actions h2 { font-size: 1.2em; }
+    .results-section .section-header h2 { font-size: 1.4em; }
+    .static-plan-sections-container .section-header h2 { font-size: 1.2em; }
+    .hu-header h3 { font-size: 1.1em; }
+    .form-section, .hu-card, .plan-section-content, .static-plan-sections-container { 
+        padding: 24px 16px;
+        border-radius: 12px;
+    }
+    .hu-header { padding: 10px 15px; }
+    .hu-card > .plan-section-details { margin-left: 0; margin-right: 0; margin-top:10px; }
+    .detailed-test-cases-table th, .detailed-test-cases-table td { padding: 6px 8px; font-size: 0.8em; }
+    .detailed-test-cases-table .table-pre { line-height: 1.4; max-width: 100px; }
+    .flow-step-image { max-width: 70px; max-height: 50px; }
+    .initial-selection-cards-container { gap: 15px; }
+    .mode-card { min-height: auto; padding: 20px 15px;}
+    .image-preview-item { width: calc(50% - 8px); }
+    .image-preview-item .image-preview { height: 100px; }
+}
+
+/* --- Estilos para Modal de Almacenamiento --- */
+.storage-prompt-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.storage-prompt-modal {
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.storage-prompt-header {
+    background: linear-gradient(135deg, #4a6d7c 0%, #3b5a6b 100%);
+    color: #fff;
+    padding: 20px 25px;
+    border-radius: 10px 10px 0 0;
+}
+
+.storage-prompt-header h3 {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 600;
+}
+
+.storage-prompt-body {
+    padding: 25px;
+}
+
+.storage-prompt-body p {
+    margin: 0 0 15px 0;
+    font-size: 1em;
+    color: #343a40;
+    line-height: 1.5;
+}
+
+.storage-info {
+    background-color: #f8f9fa;
+    border-left: 4px solid #4a6d7c;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 15px;
+}
+
+.storage-info p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #495057;
+}
+
+.storage-prompt-actions {
+    padding: 0 25px 25px 25px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.storage-prompt-actions .button-primary,
+.storage-prompt-actions .button-secondary {
+    flex: 1;
+    margin: 0;
+    padding: 12px 20px;
+    font-size: 0.95em;
+}
+
+/* --- Barra de Herramientas de Almacenamiento --- */
+.storage-toolbar {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.storage-toolbar-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.storage-info-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.storage-icon {
+    font-size: 1.5em;
+}
+
+.storage-text {
+    font-size: 0.95em;
+    color: #495057;
+    font-weight: 500;
+}
+
+.storage-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.button-danger {
+    background-color: #dc3545;
+    color: #fff;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.button-danger:hover {
+    background-color: #c82333;
+    transform: translateY(-1px);
+}
+
+.button-danger:disabled {
+    background-color: #adb5bd;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ========================================
+   ESTILOS RESPONSIVE
+   ======================================== */
+
+/* Tablets (768px - 1024px) */
+@media (max-width: 1024px) {
+    .container {
+        max-width: 95%;
+        padding: 20px;
+        margin: 20px auto;
+    }
+    
+    h1 {
+        font-size: 1.8em;
+    }
+    
+    h2 {
+        font-size: 1.5em;
+    }
+    
+    .tabs-navigation {
+        padding: 12px 12px 0 12px;
+        gap: 4px;
+    }
+    
+    .tab-button {
+        padding: 10px 14px;
+        font-size: 0.95em;
+    }
+    
+    .tab-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .detailed-test-cases-table {
+        font-size: 0.9em;
+    }
+    
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td {
+        padding: 8px;
+    }
+}
+
+/* Mobile (320px - 767px) */
+@media (max-width: 767px) {
+    .container {
+        max-width: 100%;
+        padding: 15px;
+        margin: 10px auto;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+    
+    h1 {
+        font-size: 1.5em;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    
+    h2 {
+        font-size: 1.3em;
+    }
+    
+    /* Pestañas en Mobile */
+    .tabs-navigation {
+        padding: 8px 8px 0 8px;
+        gap: 2px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }

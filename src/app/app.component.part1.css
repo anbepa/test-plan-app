@@ -1,0 +1,400 @@
+/* ========================================
+   LAYOUT PRINCIPAL - SIDEBAR + MAIN
+   ======================================== */
+
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  background-color: #f5f5f7;
+}
+
+/* ========================================
+   SIDEBAR - MENÚ LATERAL
+   ======================================== */
+
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: 220px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-right: 1px solid #e5e5e7;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+/* Sidebar colapsado (solo íconos) */
+.sidebar.collapsed {
+  width: 64px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+.sidebar.collapsed:hover,
+.sidebar.temporary-expanded {
+  width: 220px !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed:hover {
+  overflow: visible;
+}
+
+/* ========================================
+   LOGO / BRAND SECTION
+   ======================================== */
+
+.logo-section {
+  padding: 16px 20px 12px 20px;
+  border-bottom: 1px solid #e5e5e7;
+  position: relative;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1d1d1f;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  padding: 6px 0;
+}
+
+.app-logo:hover {
+  opacity: 0.8;
+}
+
+.logo-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: none; /* Ocultar el ícono </> cuando está expandido */
+  align-items: center;
+  justify-content: center;
+  color: #0071e3;
+}
+
+.logo-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.logo-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+/* Logo compacto para modo contraído */
+.logo-compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.logo-compact-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0071e3;
+  background: rgba(0, 113, 227, 0.1);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.logo-compact-icon:hover {
+  background: rgba(0, 113, 227, 0.2);
+  transform: scale(1.05);
+}
+
+.logo-compact-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar.collapsed .logo-title {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar.temporary-expanded .app-logo {
+  display: flex;
+}
+
+/* ========================================
+   MENU HEADER (TOGGLE BUTTON)
+   ======================================== */
+
+.menu-header {
+  padding: 8px 20px 12px 20px;
+  border-bottom: 1px solid #e5e5e7;
+}
+
+.menu-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: #1d1d1f;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.menu-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.menu-toggle-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #86868b;
+}
+
+.menu-toggle-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.menu-toggle-label {
+  flex: 1;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.menu-toggle-arrow {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #86868b;
+  transition: transform 0.2s ease;
+}
+
+.menu-toggle-arrow svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sidebar.collapsed .menu-toggle-btn {
+  justify-content: center;
+  padding: 8px 12px;
+  width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar.collapsed .menu-toggle-label,
+.sidebar.collapsed .menu-toggle-arrow {
+  display: none;
+}
+
+.sidebar.temporary-expanded .menu-toggle-label,
+.sidebar.temporary-expanded .menu-toggle-arrow {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ========================================
+   NAVEGACIÓN
+   ======================================== */
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.menu-list {
+  list-style: none;
+  padding: 12px 12px;
+  margin: 0;
+}
+
+.menu-item {
+  margin-bottom: 2px;
+}
+
+/* Links del menú */
+.menu-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: #1d1d1f;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.menu-link:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1d1d1f;
+}
+
+.menu-link.active {
+  background: #e8e8ed;
+  color: #1d1d1f;
+  font-weight: 600;
+}
+
+/* Íconos del menú */
+.menu-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #86868b;
+  transition: all 0.2s ease;
+}
+
+.menu-link.active .menu-icon {
+  color: #0071e3;
+}
+
+.menu-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Efectos especiales en modo contraído */
+.sidebar.collapsed .menu-icon {
+  position: relative;
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.sidebar.collapsed .menu-icon svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+
+.sidebar.collapsed .menu-link:hover .menu-icon {
+  background: rgba(0, 113, 227, 0.15);
+  color: #0071e3;
+  transform: scale(1.05);
+}
+
+.sidebar.collapsed .menu-link.active .menu-icon {
+  background: rgba(0, 113, 227, 0.2);
+  color: #0071e3;
+}
+
+.sidebar.collapsed .menu-toggle-icon {
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.sidebar.collapsed .menu-toggle-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.sidebar.collapsed .menu-toggle-btn:hover .menu-toggle-icon {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(1.05);
+}
+
+.sidebar.collapsed .menu-link {
+  justify-content: center;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.sidebar.temporary-expanded .menu-link {
+  justify-content: flex-start;
+  padding: 8px 12px;
+}
+
+/* Labels del menú */
+.menu-label {
+  flex: 1;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.sidebar.collapsed .menu-label {
+  display: none;
+}
+
+.sidebar.temporary-expanded .menu-label {
+  display: block;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ========================================
+   HOVER EXPANSION - MEJORADO
+   ======================================== */
+
+/* La expansión temporal en hover */
+.sidebar.collapsed:hover {
+  width: 220px !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.15);
+  z-index: 1001;

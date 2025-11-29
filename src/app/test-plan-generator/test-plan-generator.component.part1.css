@@ -1,0 +1,400 @@
+/* src/app/test-plan-generator/test-plan-generator.component.css */
+
+/* ========================================
+   ESTILOS DE NAVEGACIÓN POR PESTAÑAS
+   ======================================== */
+
+/* Contenedor de Pestañas */
+.tabs-navigation {
+    display: flex;
+    gap: 8px;
+    background-color: #f8f9fa;
+    padding: 16px 16px 0 16px;
+    border-bottom: 2px solid #dee2e6;
+    margin-bottom: 0;
+}
+
+/* Botones de Pestaña */
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #6c757d;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    white-space: nowrap;
+}
+
+.tab-button:hover {
+    color: #495057;
+    background-color: rgba(0,0,0,0.03);
+    border-radius: 8px 8px 0 0;
+}
+
+.tab-button.active {
+    color: #3b5a6b;
+    font-weight: 600;
+    border-bottom-color: #4a6d7c;
+    background-color: #ffffff;
+    border-radius: 8px 8px 0 0;
+}
+
+/* Iconos de Pestaña */
+.tab-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* Badge de Contador */
+.tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background-color: #4a6d7c;
+    color: white;
+    font-size: 0.75em;
+    font-weight: 600;
+    border-radius: 11px;
+    margin-left: 4px;
+}
+
+.tab-button.active .tab-badge {
+    background-color: #3b5a6b;
+}
+
+/* Contenido de Pestañas */
+.tab-content {
+    animation: fadeIn 0.3s ease-in;
+    background-color: #ffffff;
+    min-height: 400px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Estado Vacío */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #6c757d;
+}
+
+.empty-icon {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    opacity: 0.4;
+}
+
+.empty-text {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.empty-subtext {
+    font-size: 0.95em;
+    color: #6c757d;
+    max-width: 400px;
+}
+
+/* ========================================
+   ESTILOS ORIGINALES
+   ======================================== */
+
+/* PALETA DE COLORES SOBRIOS */
+body {
+    background-color: #f8f9fa; margin: 0; padding: 0;
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif; line-height: 1.6; color: #343a40;
+}
+
+/* Contenedor general con max-width ampliado estilo Apple/Notion */
+.container { 
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* ========================================
+   PANEL DE COLECCI\u00d3N DE HUs (REFACTORIZADO)
+   ======================================== */
+
+/* Contenedor Principal */
+.hu-collection-panel {
+    margin: 24px 0 32px 0;
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+/* Header Section - Nuevo dise\u00f1o con \u00edcono grande */
+.panel-header-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, #4a6d7c 0%, #3b5a6b 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.panel-title-area {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.panel-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 14px;
+    flex-shrink: 0;
+    backdrop-filter: blur(10px);
+}
+
+.panel-main-icon {
+    width: 32px;
+    height: 32px;
+    color: #ffffff;
+}
+
+.panel-title-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.panel-title {
+    margin: 0;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
+
+.panel-subtitle {
+    margin: 0;
+    font-size: 0.9em;
+    color: rgba(255,255,255,0.85);
+    font-weight: 400;
+}
+
+/* Bot\u00f3n de Guardar Primario - Dise\u00f1o Premium */
+.btn-save-primary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: #ffffff;
+    color: #3b5a6b;
+    border: none;
+    border-radius: 10px;
+    font-size: 1em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    white-space: nowrap;
+}
+
+.btn-save-primary:hover:not(:disabled) {
+    background: #f8f9fa;
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.btn-save-primary:active:not(:disabled) {
+    transform: translateY(-1px) scale(1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.btn-save-primary:disabled {
+    background: rgba(255,255,255,0.5);
+    color: rgba(59,90,107,0.5);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-save-primary .btn-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+/* Grid de Cards de HUs */
+.hu-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    padding: 24px;
+    background: #f8f9fa;
+}
+
+/* Card Individual de HU - Dise\u00f1o Moderno */
+.hu-card {
+    background: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.hu-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    border-color: #4a6d7c;
+}
+
+/* Header de Card */
+.hu-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.hu-card-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, #4a6d7c 0%, #3b5a6b 100%);
+    border-radius: 50%;
+    box-shadow: 0 3px 10px rgba(74, 109, 124, 0.3);
+}
+
+.number-text {
+    font-size: 1.3em;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+/* Badge de M\u00e9todo */
+.hu-card-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-text {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+    border: 1px solid #90caf9;
+}
+
+.badge-image {
+    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+    color: #6a1b9a;
+    border: 1px solid #ce93d8;
+}
+
+.badge-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* Body de Card */
+.hu-card-body {
+    padding: 18px;
+}
+
+.hu-card-title {
+    margin: 0 0 14px 0;
+    font-size: 1.05em;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+/* Estad\u00edsticas de Card */
+.hu-card-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88em;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.stat-icon {
+    width: 18px;
+    height: 18px;
+    color: #4a6d7c;
+    flex-shrink: 0;
+}
+
+/* Secci\u00f3n de Agregar M\u00e1s */
+.add-more-section {
+    padding: 24px;
+    background: #ffffff;
+}
+
+.divider-with-text {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.divider-line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #dee2e6 50%, transparent 100%);
+}
+
+.divider-text {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;

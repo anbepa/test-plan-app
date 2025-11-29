@@ -1,0 +1,48 @@
+  padding: 16px 20px 12px 20px;
+  text-align: left;
+}
+
+.sidebar.temporary-expanded .menu-header {
+  padding: 8px 20px 12px 20px;
+  text-align: left;
+}
+
+/* Animación suave para íconos */
+.menu-icon, .menu-toggle-icon, .logo-icon {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estado de hover mejorado */
+.menu-link:hover .menu-icon,
+.menu-toggle-btn:hover .menu-toggle-icon {
+  transform: scale(1.05);
+}
+
+/* Indicador visual para elementos activos en modo contraído */
+.sidebar.collapsed .menu-link.active {
+  background: rgba(0, 113, 227, 0.1);
+  position: relative;
+}
+
+.sidebar.collapsed .menu-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #0071e3;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Mejorar spacing en modo expandido */
+.sidebar:not(.collapsed) .menu-header {
+  margin-bottom: 8px;
+}
+
+/* Transiciones suaves para todos los elementos */
+* {
+  transition-property: opacity, transform, background-color, color;
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

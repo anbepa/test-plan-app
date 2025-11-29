@@ -1,0 +1,400 @@
+    
+    .tab-button {
+        padding: 10px 12px;
+        font-size: 0.85em;
+        flex-shrink: 0;
+    }
+    
+    .tab-button span:not(.tab-badge) {
+        display: none; /* Ocultar texto en móvil, solo mostrar iconos */
+    }
+    
+    .tab-icon {
+        width: 24px;
+        height: 24px;
+        margin: 0;
+    }
+    
+    .tab-badge {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        min-width: 18px;
+        height: 18px;
+        font-size: 0.7em;
+    }
+    
+    /* Contenido de pestañas */
+    .tab-content {
+        min-height: 300px;
+        padding: 10px;
+    }
+    
+    /* Sección de selección inicial */
+    .welcome-subtitle {
+        font-size: 0.95em;
+        padding: 0 10px;
+    }
+    
+    .selection-prompt-title {
+        font-size: 1.3em;
+        margin-bottom: 20px;
+    }
+    
+    .initial-selection-cards-container {
+        gap: 15px;
+        padding: 0 10px;
+    }
+    
+    .mode-card {
+        width: 100%;
+        max-width: 350px;
+        min-height: 180px;
+        padding: 15px 12px;
+    }
+    
+    .mode-card-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .mode-card-title {
+        font-size: 1em;
+    }
+    
+    .mode-card-description {
+        font-size: 0.8em;
+    }
+    
+    /* Escenarios */
+    .results-section .section-header h2 {
+        font-size: 1.4em;
+    }
+    
+    .hu-card {
+        margin-bottom: 20px;
+    }
+    
+    .hu-header {
+        padding: 12px 15px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .hu-header h3 {
+        font-size: 1.2em;
+        margin-bottom: 10px;
+    }
+    
+    .hu-meta {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .sprint-badge,
+    .mode-indicator {
+        font-size: 0.75em;
+        padding: 4px 10px;
+    }
+    
+    /* Accordions */
+    .hu-card > .plan-section-details {
+        margin: 0 10px 12px 10px;
+    }
+    
+    .plan-section-summary {
+        padding: 10px 12px;
+        font-size: 0.95em;
+    }
+    
+    .plan-section-content {
+        padding: 15px 12px;
+    }
+    
+    /* Tablas responsive */
+    .detailed-test-cases-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .detailed-test-cases-table {
+        font-size: 0.75em;
+        min-width: 600px;
+    }
+    
+    .detailed-test-cases-table th,
+    .detailed-test-cases-table td {
+        padding: 6px 4px;
+    }
+    
+    .table-pre {
+        font-size: 0.85em;
+    }
+    
+    /* Botones */
+    .actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .actions button {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 0;
+        justify-content: center;
+    }
+    
+    .button-primary,
+    .button-secondary,
+    .button-edit,
+    .button-generate,
+    .button-cancel {
+        font-size: 0.9em;
+        padding: 10px 14px;
+    }
+    
+    /* Secciones estáticas */
+    .static-plan-sections-container {
+        padding: 0 10px;
+    }
+    
+    .static-plan-sections-container .section-header h2 {
+        font-size: 1.3em;
+    }
+    
+    /* Preview section */
+    .download-preview {
+        font-size: 0.75em;
+        padding: 12px;
+    }
+    
+    .download-actions-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .download-actions-container button {
+        width: 100%;
+    }
+    
+    /* Estados vacíos */
+    .empty-state {
+        padding: 40px 15px;
+    }
+    
+    .empty-icon {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .empty-text {
+        font-size: 1.1em;
+    }
+    
+    .empty-subtext {
+        font-size: 0.9em;
+    }
+    
+    /* Storage toolbar */
+    .storage-toolbar-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .storage-info-display {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .storage-actions {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .storage-actions button,
+    .storage-actions label {
+        flex: 1 1 auto;
+        min-width: 140px;
+    }
+}
+
+/* Extra Small Mobile (320px - 480px) */
+@media (max-width: 480px) {
+    .container {
+        padding: 10px;
+        margin: 5px auto;
+    }
+    
+    h1 {
+        font-size: 1.3em;
+    }
+    
+    .tabs-navigation {
+        padding: 6px;
+        justify-content: space-around;
+    }
+    
+    .tab-button {
+        padding: 12px 8px;
+        min-width: 60px;
+    }
+    
+    .mode-card {
+        min-height: 160px;
+    }
+    
+    .detailed-test-cases-table {
+        font-size: 0.7em;
+    }
+    
+    .hu-header h3 {
+        font-size: 1.1em;
+    }
+    
+    .plan-section-summary {
+        font-size: 0.9em;
+    }
+    
+    .button-primary,
+    .button-secondary,
+    .button-edit,
+    .button-generate,
+    .button-cancel {
+        font-size: 0.85em;
+        padding: 9px 12px;
+    }
+    
+    /* Ajustar iconos SVG en botones pequeños */
+    .actions button svg {
+        width: 0.9em;
+        height: 0.9em;
+        margin-right: 4px;
+    }
+}
+
+/* Landscape Mobile */
+@media (max-width: 767px) and (orientation: landscape) {
+    .tab-content {
+        min-height: 200px;
+    }
+    
+    .empty-state {
+        padding: 30px 15px;
+    }
+    
+    .empty-icon {
+        width: 50px;
+        height: 50px;
+    }
+}
+
+/* Ajustes responsive para la barra de almacenamiento */
+@media (max-width: 768px) {
+    .storage-toolbar-content {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .storage-info-display {
+        justify-content: center;
+    }
+    
+    .storage-actions {
+        justify-content: center;
+    }
+    
+    .storage-actions button,
+    .storage-actions label {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .storage-prompt-actions {
+        flex-direction: column;
+    }
+    
+    .storage-prompt-actions .button-primary,
+    .storage-prompt-actions .button-secondary {
+        width: 100%;
+    }
+}
+
+/* Animación de guardado automático */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.auto-saving {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ===========================================
+   RESPONSIVE DESIGN - MOBILE OPTIMIZATION
+   =========================================== */
+
+/* Tablets (768px - 1024px) */
+@media (max-width: 1024px) {
+    .container {
+        margin: 0 auto;
+        padding: 32px 32px;
+    }
+
+    .hu-list-container {
+        gap: 15px;
+    }
+
+    .hu-card {
+        padding: 15px;
+    }
+
+    .detailed-test-cases-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .detailed-test-cases-table {
+        min-width: 900px;
+    }
+}
+
+/* Móviles (320px - 767px) */
+@media (max-width: 767px) {
+    .container {
+        margin: 0 auto;
+        padding: 24px 16px;
+        border-radius: 12px;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+        margin-bottom: 15px;
+    }
+
+    h2 {
+        font-size: 1.3rem;
+    }
+
+    .tabs-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-button {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+        min-width: 100px;
+    }
+
+    .tab-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .welcome-subtitle {
+        font-size: 0.95rem;

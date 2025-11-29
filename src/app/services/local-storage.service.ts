@@ -1,6 +1,7 @@
 // src/app/services/local-storage.service.ts
-import { Injectable } from '@angular/core';
+import { Inject, Injectable } from '@angular/core';
 import { HUData } from '../models/hu-data.model';
+import { STORAGE_ENGINE, StorageEngine } from './storage-engine.token';
 
 export interface TestPlanState {
   testPlanTitle: string;
@@ -20,16 +21,13 @@ export interface TestPlanState {
 export class LocalStorageService {
   private readonly STORAGE_KEY = 'testPlanState';
 
-  constructor() {}
+  constructor(@Inject(STORAGE_ENGINE) private readonly storage: StorageEngine) {}
 
   /**
    * Verifica si hay un estado guardado en localStorage
    */
   hasStoredState(): boolean {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return false;
-    }
-    const stored = localStorage.getItem(this.STORAGE_KEY);
+    const stored = this.storage.getItem(this.STORAGE_KEY);
     return stored !== null && stored.length > 0;
   }
 
@@ -42,7 +40,7 @@ export class LocalStorageService {
     }
     
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const stored = this.storage.getItem(this.STORAGE_KEY);
       if (!stored) return null;
       
       const state: TestPlanState = JSON.parse(stored);
@@ -65,7 +63,7 @@ export class LocalStorageService {
     }
     
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const stored = this.storage.getItem(this.STORAGE_KEY);
       if (!stored) return null;
       
       return JSON.parse(stored) as TestPlanState;
@@ -79,16 +77,12 @@ export class LocalStorageService {
    * Guarda el estado en localStorage (auto-save)
    */
   autoSaveTestPlanState(state: TestPlanState): void {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return;
-    }
-    
     try {
       const stateWithTimestamp = {
         ...state,
         lastUpdated: new Date().toISOString()
       };
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(stateWithTimestamp));
+      this.storage.setItem(this.STORAGE_KEY, JSON.stringify(stateWithTimestamp));
     } catch (error) {
       console.error('Error al guardar el estado en localStorage:', error);
     }
@@ -98,12 +92,8 @@ export class LocalStorageService {
    * Limpia el estado guardado
    */
   clearTestPlanState(): void {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return;
-    }
-    
     try {
-      localStorage.removeItem(this.STORAGE_KEY);
+      this.storage.removeItem(this.STORAGE_KEY);
     } catch (error) {
       console.error('Error al limpiar el estado:', error);
     }
@@ -156,12 +146,8 @@ export class LocalStorageService {
    * Obtiene el tamaño del almacenamiento formateado
    */
   getStorageSizeFormatted(): string {
-    if (typeof window === 'undefined' || !window.localStorage) {
-      return '0 KB';
-    }
-    
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const stored = this.storage.getItem(this.STORAGE_KEY);
       if (!stored) return '0 KB';
       
       const bytes = new Blob([stored]).size;

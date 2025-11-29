@@ -1,0 +1,400 @@
+    margin-left: 4px;
+    font-weight: 600;
+}
+
+.validation-error {
+    color: #EF4444;
+    font-size: 13px;
+    margin-top: 6px;
+}
+
+.validation-error.small-error-text {
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* === BUTTONS - APPLE STYLE === */
+
+/* Primary Button - Azul moderno Tailwind */
+.button-primary {
+    background-color: #2563eb;
+    color: #FFFFFF;
+    padding: 14px 24px;
+    min-height: 44px;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    gap: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.button-primary.full-width-action {
+    width: 100%;
+    max-width: 100%;
+    margin-top: 24px;
+    padding: 16px 24px;
+    min-height: 48px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.button-primary:hover:not(:disabled) {
+    background-color: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.button-primary:disabled {
+    background-color: #9CA3AF;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.button-primary .button-icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* Secondary Button - White with Border */
+.button-secondary {
+    background-color: #FFFFFF;
+    color: #374151;
+    padding: 12px 24px;
+    border: 1px solid #D1D5DB;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    gap: 6px;
+}
+
+.button-secondary:hover:not(:disabled) {
+    background-color: #F9FAFB;
+    border-color: #9CA3AF;
+    transform: translateY(-1px);
+}
+
+.button-secondary:disabled {
+    background-color: #F3F4F6;
+    color: #9CA3AF;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Cancel Button */
+.button-cancel {
+    background-color: #FFFFFF;
+    color: #DC2626;
+    padding: 12px 24px;
+    border: 1px solid #FCA5A5;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    gap: 6px;
+}
+
+.button-cancel:hover:not(:disabled) {
+    background-color: #FEF2F2;
+    border-color: #DC2626;
+    transform: translateY(-1px);
+}
+
+/* Generate Button */
+.button-generate {
+    background-color: #ECFDF5;
+    color: #059669;
+    padding: 12px 24px;
+    border: 1px solid #A7F3D0;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    gap: 6px;
+}
+
+.button-generate:hover:not(:disabled) {
+    background-color: #D1FAE5;
+    border-color: #059669;
+    transform: translateY(-1px);
+}
+
+/* Edit Button */
+.button-edit {
+    background-color: #F5F3FF;
+    color: #7C3AED;
+    padding: 12px 24px;
+    border: 1px solid #DDD6FE;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    gap: 6px;
+}
+
+.button-edit:hover:not(:disabled) {
+    background-color: #EDE9FE;
+    border-color: #7C3AED;
+    transform: translateY(-1px);
+}
+
+/* Save Individual Button - Gris elegante, ajustado a contenido */
+.button-save-individual {
+    background-color: #5e6472;
+    color: #FFFFFF;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-decoration: none;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    width: auto;
+}
+
+.button-save-individual:hover:not(:disabled) {
+    background-color: #6b7280;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(94, 100, 114, 0.25);
+}
+
+.button-save-individual:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.button-save-individual:disabled {
+    background-color: #9ca3af;
+    color: #d1d5db;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.button-save-individual .button-icon {
+    width: 14px;
+    height: 14px;
+    stroke-width: 1.5;
+}
+
+/* Badge de contador de HUs - Chip pequeño y elegante */
+.hu-counter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background-color: #fff7d1;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #b88a0d;
+    margin-right: 8px;
+    margin-bottom: 8px;
+    cursor: help;
+}
+
+.hu-counter-badge .badge-icon {
+    width: 12px;
+    height: 12px;
+    color: #b88a0d;
+}
+
+/* === WARNING BANNER - APPLE STYLE === */
+
+.storage-warning-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: #FFF9E6;
+    border-left: 4px solid #FBBF24;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.08);
+}
+
+.storage-warning-banner .warning-icon {
+    width: 20px;
+    height: 20px;
+    color: #D97706;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.storage-warning-banner .warning-content {
+    flex: 1;
+}
+
+.storage-warning-banner .warning-content strong {
+    color: #92400E;
+    font-size: 14px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.storage-warning-banner .warning-content p {
+    margin: 0;
+    color: #78350F;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 70ch;
+}
+
+.storage-warning-banner .warning-content p strong {
+    display: inline;
+    color: #78350F;
+    font-weight: 600;
+}
+
+.button-primary:disabled,
+.button-secondary:disabled,
+.button-cancel:disabled,
+.button-generate:disabled,
+.button-edit:disabled {
+    background-color: #adb5bd;
+    color: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.7;
+}
+
+.button-secondary:disabled {
+    background-color: #e9ecef;
+}
+
+
+.button-secondary {
+    background-color: #868e96;
+    color: #fff;
+    max-width: 200px;
+}
+
+.button-secondary:hover:not(:disabled) {
+    background-color: #6c757d;
+    transform: translateY(-1px);
+}
+
+.button-cancel {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+.button-cancel:hover:not(:disabled) {
+    background-color: #c82333;
+    transform: translateY(-1px);
+}
+
+.button-edit {
+    background-color: #6f42c1;
+    color: #fff;
+}
+
+.button-edit:hover:not(:disabled) {
+    background-color: #5a32a3;
+    transform: translateY(-1px);
+}
+
+.button-generate {
+    background-color: #28a745;
+    color: #fff;
+}
+
+.button-generate:hover:not(:disabled) {
+    background-color: #218838;
+    transform: translateY(-1px);
+}
+
+/* Iconos de botones */
+.button-icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* === ERROR MESSAGES & SPINNER - APPLE STYLE === */
+
+.error-message {
+    background-color: #FEF2F2;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+    padding: 14px 18px;
+    margin-top: 20px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.error-message p {
+    margin: 0;
+}
+
+/* Spinner - Apple Style */
+.spinner {
+    border: 3px solid #E5E7EB;
+    border-top: 3px solid #0071E3;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-right: 8px;
+    vertical-align: text-bottom;
+}
+
+.spinner-inline {
+    border: 2px solid #E5E7EB;
+    border-top: 2px solid #0071E3;
+    border-radius: 50%;
+    width: 14px;
+    height: 14px;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+

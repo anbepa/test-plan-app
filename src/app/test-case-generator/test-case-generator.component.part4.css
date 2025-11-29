@@ -1,0 +1,400 @@
+}
+
+.test-case-steps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+}
+
+.test-case-steps-table th,
+.test-case-steps-table td {
+    border: 1px solid #e9ecef;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.test-case-steps-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+}
+
+.test-case-steps-table tbody tr[draggable="true"]:hover:not([class*="loading"]) {
+    cursor: grab;
+    background-color: #f7faff;
+}
+
+.test-case-steps-table tr.drag-over-element td {
+    border-top: 2px dashed #0d6efd;
+    border-bottom: 2px dashed #0d6efd;
+    background-color: #eef6ff;
+}
+
+.test-case-steps-table textarea.table-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    font-size: 0.95em;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    min-height: 40px;
+    line-height: 1.5;
+    resize: vertical;
+    overflow-y: hidden;
+    font-family: inherit;
+}
+
+.test-case-steps-table textarea.table-input:focus {
+    border-color: #8a9b8c;
+    box-shadow: 0 0 0 0.15rem rgba(138, 155, 140, 0.2);
+    overflow-y: auto;
+}
+
+.test-case-steps-table td.action-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.button-small-icon {
+    padding: 5px 7px !important;
+    font-size: 0.9em !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    min-width: auto;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.button-small-icon svg {
+    width: 1em;
+    height: 1em;
+}
+
+.delete-step-button {
+    padding: 8px 10px !important;
+    font-size: 0.9em !important;
+    line-height: 1;
+    min-width: auto;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-step-button svg {
+    width: 1.3em;
+    height: 1.3em;
+}
+
+.add-step-action-container {
+    margin-top: 10px;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.add-step-button {
+    background-color: #e0e7ff;
+    border: 1px solid #c7d2fe;
+    color: #4338ca;
+    padding: 7px 15px !important;
+    font-weight: 500;
+}
+
+.add-step-button svg {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 6px;
+}
+
+.add-step-button:hover:not(:disabled) {
+    background-color: #c7d2fe;
+}
+
+.loading-message-full-editor {
+    text-align: center;
+    padding: 30px 20px;
+    font-style: italic;
+    color: #5c6770;
+    font-size: 1.1em;
+}
+
+.loading-message-full-editor .spinner {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 10px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+/* --- Contenedor de Acciones del Formulario Principal --- */
+.form-actions.main-form-actions {
+    text-align: center;
+    margin-top: 15px;
+    padding-top: 0;
+    border-top: none;
+}
+
+.form-actions.main-form-actions .button-primary.full-width-action {
+    width: auto;
+    max-width: 350px;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+}
+
+/* === FINAL ACTIONS SECTION - APPLE STYLE === */
+
+.form-actions.editor-form-actions {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #E5E7EB;
+    text-align: center;
+}
+
+.form-actions.editor-form-actions.final-actions-group {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.form-actions.editor-form-actions.final-actions-group .button-primary,
+.form-actions.editor-form-actions.final-actions-group .button-secondary,
+.form-actions.editor-form-actions.final-actions-group .button-save-individual {
+    min-width: 200px;
+    margin: 0;
+}
+
+/* HU Counter Badge - Apple Style */
+.hu-counter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background-color: #FEF3C7;
+    border: 1px solid #FDE047;
+    border-radius: 18px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #92400E;
+    box-shadow: 0 2px 6px rgba(253, 224, 71, 0.15);
+}
+
+.hu-counter-badge .badge-icon {
+    width: 14px;
+    height: 14px;
+    color: #F59E0B;
+}
+
+/* === ERROR MESSAGES - SPECIFIC === */
+
+.error-message.generated-data-error {
+    margin-top: 10px;
+    margin-bottom: 15px;
+}
+
+.error-message.initial-form-error {
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+
+/* === RESPONSIVE - APPLE STYLE === */
+
+/* Tablets and below */
+@media (max-width: 768px) {
+
+    /* Adjust padding */
+    .form-section {
+        padding: 24px 20px;
+    }
+
+    /* Header adjustments - Stack vertically */
+    .form-header-actions {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .header-titles {
+        text-align: center;
+    }
+
+    .form-header-actions h2.main-title {
+        font-size: 22px;
+    }
+
+    .form-header-actions .subtitle {
+        font-size: 14px;
+    }
+
+    .button-cancel-action {
+        width: auto;
+    }
+
+    /* Form grid to single column */
+    .form-grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+    }
+
+    .form-group.full-width {
+        grid-column: span 1;
+    }
+
+    /* Button adjustments */
+    .button-small {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Images preview */
+    .image-preview-item {
+        width: calc(33.333% - 10px);
+    }
+
+    .image-preview-item .image-preview {
+        height: 80px;
+    }
+
+    /* Editor sections */
+    .generated-test-cases-editor {
+        padding: 24px 20px;
+    }
+
+    .generated-test-cases-editor>h3 {
+        font-size: 20px;
+    }
+
+    .scope-display-section {
+        max-width: 100%;
+    }
+
+    .preview-table-container h4 {
+        font-size: 15px;
+    }
+
+    .test-case-edit-card h4.accordion-header {
+        font-size: 16px;
+    }
+
+    .test-case-steps-table th,
+    .test-case-steps-table td {
+        padding: 8px;
+        font-size: 13px;
+    }
+
+    .refinement-controls .actions.refinement-actions button {
+        width: 100%;
+        margin-right: 0;
+    }
+
+    .form-actions.editor-form-actions.final-actions-group button {
+        flex-grow: 1;
+        min-width: 150px;
+    }
+}
+
+/* Mobile devices */
+@media (max-width: 576px) {
+
+    /* Page container */
+    :host {
+        padding: 20px 12px;
+    }
+
+    /* Form card */
+    .form-section {
+        padding: 20px 16px;
+        border-radius: 16px;
+    }
+
+    /* Editor section */
+    .generated-test-cases-editor {
+        padding: 20px 16px;
+    }
+
+    /* Typography */
+    .form-header-actions h2.main-title {
+        font-size: 20px;
+    }
+
+    .form-header-actions .subtitle {
+        font-size: 13px;
+    }
+
+    .generated-test-cases-editor>h3 {
+        font-size: 18px;
+    }
+
+    .preview-table-container h4 {
+        font-size: 14px;
+    }
+
+    /* Form inputs */
+    .form-group input[type="text"],
+    .form-group textarea,
+    .form-group select,
+    .form-control {
+        font-size: 16px;
+        /* Prevent zoom on iOS */
+        padding: 11px 12px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+    }
+
+    /* Buttons */
+    .button-primary,
+    .button-secondary,
+    .button-cancel,
+    .button-generate,
+    .button-edit,
+    .button-save-individual,
+    .button-cancel-action {
+        font-size: 13px;
+        padding: 10px 18px;
+        min-width: auto;
+        width: 100%;
+    }
+
+    .button-primary.full-width-action {
+        font-size: 14px;
+        padding: 12px 20px;
+    }
+
+    /* Final actions group - stack vertically */
+    .form-actions.editor-form-actions.final-actions-group {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .form-actions.editor-form-actions.final-actions-group .button-primary,
+    .form-actions.editor-form-actions.final-actions-group .button-secondary,
+    .form-actions.editor-form-actions.final-actions-group .button-save-individual {
+        width: 100%;
+        min-width: auto;
+    }
+
+    /* HU Counter Badge */
+    .hu-counter-badge {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Warning banner */
+    .storage-warning-banner {
+        padding: 12px 14px;
+        flex-direction: column;
+        gap: 8px;

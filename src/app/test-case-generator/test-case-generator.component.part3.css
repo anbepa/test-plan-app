@@ -1,0 +1,400 @@
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* === GENERATED TEST CASES EDITOR - APPLE STYLE === */
+
+.generated-test-cases-editor {
+    margin-top: 16px;
+    padding: 36px;
+    background-color: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 18px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.04);
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.generated-test-cases-editor>h3 {
+    color: #111827;
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 18px;
+    text-align: center;
+}
+
+/* Scope Section - Sin restricción de ancho, ocupa el ancho completo del contenedor */
+.scope-display-section {
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+.scope-display-section strong {
+    font-weight: 600;
+    font-size: 16px;
+    color: #111827;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.scope-display-section pre {
+    background-color: #F8FAFC;
+    border: 1px solid #E5E7EB;
+    border-radius: 16px;
+    padding: 20px 28px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.55;
+    color: rgba(55, 65, 81, 0.85);
+}
+
+.scope-display-section pre.loading-text {
+    color: #9CA3AF;
+    font-style: italic;
+}
+
+/* === TABLE - APPLE STYLE WITH RESPONSIVE === */
+
+.preview-table-container {
+    margin-bottom: 18px;
+}
+
+.preview-table-container h4 {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    margin-top: 20px;
+}
+
+.preview-only-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 12px;
+    background-color: #FFFFFF;
+}
+
+.preview-only-table th {
+    background-color: #F8FAFC;
+    font-weight: 600;
+    color: #374151;
+    text-align: left;
+    padding: 10px 14px;
+    border: 1px solid #E5E7EB;
+}
+
+.preview-only-table td {
+    border: 1px solid #E5E7EB;
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+    color: rgba(55, 65, 81, 0.85);
+}
+
+.preview-only-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.preview-only-table tbody tr:hover {
+    background-color: #F9FAFB;
+}
+
+.preview-only-table pre.table-pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    font-family: inherit;
+    font-size: inherit;
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    line-height: 1.5;
+}
+
+.preview-only-table ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style: decimal;
+    line-height: 1.6;
+}
+
+.preview-only-table ul li {
+    margin-bottom: 4px;
+}
+
+/* Responsive Table - Card Style for Mobile */
+@media (max-width: 768px) {
+    :host {
+        padding: 24px 24px;
+    }
+
+    .form-section {
+        padding: 32px 24px;
+        border-radius: 16px;
+    }
+
+    .preview-only-table thead {
+        display: none;
+    }
+
+    .preview-only-table,
+    .preview-only-table tbody,
+    .preview-only-table tr,
+    .preview-only-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .preview-only-table tr {
+        margin-bottom: 20px;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        overflow: hidden;
+        background-color: #FFFFFF;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .preview-only-table td {
+        border: none;
+        border-bottom: 1px solid #F3F4F6;
+        padding: 12px 16px;
+        position: relative;
+        padding-left: 45%;
+    }
+
+    .preview-only-table td:last-child {
+        border-bottom: none;
+    }
+
+    .preview-only-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 16px;
+        width: 40%;
+        font-weight: 600;
+        color: #6B7280;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+}
+
+.no-content-message {
+    text-align: center;
+    padding: 32px 20px;
+    color: #6B7280;
+    font-style: italic;
+    background-color: #F9FAFB;
+    border: 1px dashed #D1D5DB;
+    border-radius: 12px;
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+
+.refinement-controls {
+    background-color: #f0f4f7;
+    border: 1px solid #d0dbe2;
+    border-radius: 6px;
+    padding: 20px;
+    margin-top: 10px;
+    margin-bottom: 25px;
+}
+
+.refinement-controls h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #4a6d7c;
+    font-size: 1.2em;
+    font-weight: 600;
+    border-bottom: 1px solid #d0dbe2;
+    padding-bottom: 10px;
+}
+
+.refinement-controls .form-group {
+    margin-bottom: 15px;
+}
+
+.refinement-controls .form-group label {
+    font-size: 0.9em;
+}
+
+.refinement-controls .actions.refinement-actions {
+    border-top: none;
+    padding-top: 10px;
+    margin-top: 5px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+.refinement-controls .actions.refinement-actions button {
+    margin-bottom: 0;
+}
+
+
+.test-case-edit-card {
+    background-color: #fdfdff;
+    border: 1px solid #e0e7ff;
+    border-radius: 6px;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Accordion Header Styles */
+.test-case-edit-card h4.accordion-header {
+    color: #435a66;
+    margin-top: 0;
+    margin-bottom: 0;
+    /* Remove bottom margin, content will provide spacing */
+    font-size: 1.15em;
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    flex-wrap: wrap;
+    cursor: pointer;
+    user-select: none;
+    /* Prevent text selection on click */
+    padding: 10px 0;
+    /* Add some padding for click area if needed */
+}
+
+.test-case-edit-card h4.accordion-header .accordion-indicator {
+    margin-right: 10px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 1.1em;
+    /* Adjust size of SVG/char */
+    color: #435a66;
+    transition: transform 0.2s ease-in-out;
+}
+
+.test-case-edit-card h4.accordion-header .accordion-indicator svg {
+    transition: transform 0.2s ease-in-out;
+    /* Smooth icon transition if any */
+}
+
+.test-case-edit-card h4.accordion-header .test-case-number-prefix {
+    margin-right: 10px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.form-control.inline-edit {
+    flex-grow: 1;
+    padding: 8px 12px;
+    font-size: 0.95em;
+    font-weight: normal;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+    line-height: 1.4;
+    min-width: 200px;
+    margin-left: 5px;
+    /* Space from prefix */
+}
+
+/* Accordion Content Styles */
+.test-case-edit-card .accordion-content {
+    padding-top: 15px;
+    margin-top: 15px;
+    /* Space between header and content */
+    border-top: 1px solid #e0e7ff;
+    /* Separator line */
+    /* For CSS transitions (optional, requires more setup for dynamic height)
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease-out, padding-top 0.3s ease-out, margin-top 0.3s ease-out;
+    will-change: max-height, padding-top, margin-top; */
+}
+
+/*
+.test-case-edit-card .accordion-content.expanded {
+    max-height: 3000px; /* Large enough value for content */
+/*    transition: max-height 0.35s ease-in;
+}
+*/
+
+
+@media (max-width: 600px) {
+    :host {
+        padding: 16px 16px;
+    }
+
+    .form-section {
+        padding: 24px 16px;
+        border-radius: 12px;
+    }
+
+    .test-case-edit-card h4.accordion-header {
+        /* Ensure this applies to accordion header too */
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .test-case-edit-card h4.accordion-header .test-case-number-prefix {
+        /* Span with "Caso de Prueba #X" */
+        margin-right: 0;
+        margin-bottom: 8px;
+    }
+
+    .test-case-edit-card h4.accordion-header .accordion-indicator {
+        margin-bottom: 5px;
+        /* If header wraps, give indicator space */
+    }
+
+    .form-control.inline-edit {
+        width: 100%;
+        margin-left: 0;
+        /* Full width on small screens */
+    }
+}
+
+.test-case-edit-card .form-group {
+    margin-bottom: 18px;
+}
+
+.test-case-edit-card .form-group label {
+    font-weight: 600;
+    color: #5c6770;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+}
+
+.test-case-edit-card .form-group textarea.form-control {
+    min-height: 70px;
+    font-size: 0.95em;
+    padding: 10px;
+    background-color: #fff;
+    font-family: inherit;
+}
+
+.test-case-edit-card h5 {
+    /* "Pasos del Caso de Prueba:" */
+    color: #435a66;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 1.05em;
+    font-weight: 600;
+}
+
+/* Tabla de Pasos del Caso de Prueba */
+.detailed-test-cases-table-container {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    background-color: #fff;

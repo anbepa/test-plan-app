@@ -1,8 +1,8 @@
 // src/app/services/ai-providers.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { Observable, BehaviorSubject, throwError } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
 
 /**
  * Interface para proveedores de IA
@@ -49,6 +49,19 @@ export class AiProvidersService {
     this.loadProviders();
   }
 
+  private extractProviders(response: ApiResponse<AiProvider>): AiProvider[] {
+    if (response.status !== 'success' || !response.providers) {
+      throw new Error(response.message || 'Error al obtener proveedores');
+    }
+
+    return response.providers;
+  }
+
+  private logAndPropagateError(error: unknown): Observable<never> {
+    console.error('❌ Error en AiProvidersService:', error);
+    return throwError(() => error);
+  }
+
   /**
    * Cargar lista de proveedores desde el backend
    */
@@ -69,13 +82,11 @@ export class AiProvidersService {
    */
   getProviders(): Observable<AiProvider[]> {
     return this.http.get<ApiResponse<AiProvider>>(`${this.baseUrl}/get-providers`).pipe(
-      tap(response => {
-        if (response.status === 'success' && response.providers) {
-          return response.providers;
-        }
-        throw new Error(response.message || 'Error al obtener proveedores');
-      }),
-      tap((response: any) => response.providers)
+      map((response) => this.extractProviders(response)),
+      tap((providers) => console.log('✅ Proveedores obtenidos desde API:', providers.length)),
+      // Mantener interfaz Observable<AiProvider[]> propagando el error original
+      // para que los consumidores puedan gestionarlo adecuadamente.
+      catchError((error) => this.logAndPropagateError(error))
     );
   }
 
