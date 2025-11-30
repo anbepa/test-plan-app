@@ -1,0 +1,31 @@
+<div class="modal-overlay" *ngIf="isVisible">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Generando con Chain of Thought</h3>
+            <div class="spinner"></div>
+        </div>
+
+        <div class="steps-container">
+            <div class="step-item" *ngFor="let step of steps" [ngClass]="stepStatus[step.id]">
+                <div class="step-icon">
+                    <span *ngIf="stepStatus[step.id] !== 'completed' && stepStatus[step.id] !== 'error'">{{ step.icon
+                        }}</span>
+                    <span *ngIf="stepStatus[step.id] === 'completed'" class="check-icon">✓</span>
+                    <span *ngIf="stepStatus[step.id] === 'error'" class="error-icon">✕</span>
+                </div>
+                <div class="step-info">
+                    <span class="step-label">{{ step.label }}</span>
+                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'in_progress'">{{ currentMessage }}</span>
+                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'completed'">Completado</span>
+                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'pending'">En espera...</span>
+                </div>
+                <div class="step-status-indicator"></div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <p class="footer-note">Por favor espera, estamos asegurando la mejor calidad con nuestro proceso de 3 fases.
+            </p>
+        </div>
+    </div>
+</div>

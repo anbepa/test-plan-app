@@ -1,8 +1,8 @@
 // src/app/services/gemini.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable, throwError, of, from, concat } from 'rxjs';
+import { catchError, map, concatMap, delay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import { PROMPTS } from '../config/prompts.config';
 import {
@@ -45,6 +45,13 @@ interface GeminiError {
 }
 interface GeminiErrorResponse {
   error?: GeminiError;
+}
+
+export interface CoTStepResult {
+  step: 'ARCHITECT' | 'GENERATOR' | 'AUDITOR';
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  data?: any;
+  message?: string;
 }
 
 @Injectable({
@@ -424,6 +431,193 @@ export class GeminiService {
     );
   }
 
+  /**
+   * Generación de Casos de Prueba con Chain of Thought (3 Fases)
+   */
+  public generateTestCasesCoT(
+    description: string,
+    acceptanceCriteria: string,
+    technique: string,
+    additionalContext?: string
+  ): Observable<CoTStepResult> {
+    const timestamp = new Date().toISOString();
+    const contextWithTimestamp = `${additionalContext || ''}\n\n[Generación solicitada en: ${timestamp}]`.trim();
+
+    return new Observable<CoTStepResult>(observer => {
+      (async () => {
+        try {
+          // --- FASE 1: EL ARQUITECTO ---
+          observer.next({ step: 'ARCHITECT', status: 'in_progress', message: 'El Arquitecto está analizando la estrategia...' });
+
+          const architectPrompt = PROMPTS.ARCHITECT_PROMPT(description, acceptanceCriteria, technique, contextWithTimestamp);
+          const architectPayload = {
+            contents: [{ parts: [{ text: architectPrompt }] }],
+            generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+          };
+
+          const architectResponse = await this.callGemini('generateTextCases', architectPayload).toPromise();
+          const architectText = this.getTextFromParts(architectResponse?.candidates?.[0]?.content?.parts).trim();
+          const architectJSON = this.cleanAndParseJSON(architectText);
+
+          observer.next({ step: 'ARCHITECT', status: 'completed', data: architectJSON, message: 'Estrategia definida.' });
+
+          // Espera de 5 segundos
+          await new Promise(resolve => setTimeout(resolve, 5000));
+
+          // --- FASE 2: EL GENERADOR ---
+          observer.next({ step: 'GENERATOR', status: 'in_progress', message: 'El Generador está escribiendo los casos de prueba...' });
+
+          const generatorPrompt = PROMPTS.GENERATOR_COT_PROMPT(JSON.stringify(architectJSON), technique);
+          const generatorPayload = {
+            contents: [{ parts: [{ text: generatorPrompt }] }],
+            generationConfig: { maxOutputTokens: 5000, temperature: 0.7 }
+          };
+
+          const generatorResponse = await this.callGemini('generateTextCases', generatorPayload).toPromise();
+          const generatorText = this.getTextFromParts(generatorResponse?.candidates?.[0]?.content?.parts).trim();
+          // No parseamos todavía, pasamos el texto crudo al Auditor para que él valide
+
+          observer.next({ step: 'GENERATOR', status: 'completed', data: { rawText: generatorText }, message: 'Casos generados preliminarmente.' });
+
+          // Espera de 5 segundos
+          await new Promise(resolve => setTimeout(resolve, 5000));
+
+          // --- FASE 3: EL AUDITOR ---
+          observer.next({ step: 'AUDITOR', status: 'in_progress', message: 'El Auditor está revisando y puliendo los casos...' });
+
+          const auditorPrompt = PROMPTS.AUDITOR_PROMPT(
+            `HU: ${description}\nCA: ${acceptanceCriteria}`,
+            JSON.stringify(architectJSON),
+            generatorText
+          );
+          const auditorPayload = {
+            contents: [{ parts: [{ text: auditorPrompt }] }],
+            generationConfig: { maxOutputTokens: 5000, temperature: 0.3 } // Temperatura baja para rigor
+          };
+
+          const auditorResponse = await this.callGemini('generateTextCases', auditorPayload).toPromise();
+          const auditorText = this.getTextFromParts(auditorResponse?.candidates?.[0]?.content?.parts).trim();
+          const finalJSON = this.cleanAndParseJSON(auditorText);
+
+          observer.next({ step: 'AUDITOR', status: 'completed', data: finalJSON, message: 'Proceso finalizado con éxito.' });
+          observer.complete();
+
+        } catch (error: any) {
+          console.error('[CoT Error]', error);
+          observer.error(error);
+        }
+      })();
+    });
+  }
+
+  /**
+   * Refinamiento de Casos de Prueba con Chain of Thought (3 Fases)
+   */
+  public refineTestCasesCoT(
+    originalHuInput: HUData['originalInput'],
+    editedTestCases: DetailedTestCase[],
+    newTechnique: string,
+    userReanalysisContext: string
+  ): Observable<CoTStepResult> {
+    return new Observable<CoTStepResult>(observer => {
+      (async () => {
+        try {
+          const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
+
+          // --- FASE 1: ARQUITECTO DE REFINAMIENTO ---
+          observer.next({ step: 'ARCHITECT', status: 'in_progress', message: 'Analizando solicitud de cambios...' });
+
+          const architectPrompt = PROMPTS.REFINE_ARCHITECT_PROMPT(currentCasesStr, userReanalysisContext, newTechnique);
+          const architectPayload = {
+            contents: [{ parts: [{ text: architectPrompt }] }],
+            generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+          };
+
+          const architectResponse = await this.callGemini('refineDetailedTestCases', architectPayload).toPromise();
+          const architectText = this.getTextFromParts(architectResponse?.candidates?.[0]?.content?.parts).trim();
+          const architectJSON = this.cleanAndParseJSON(architectText);
+
+          observer.next({ step: 'ARCHITECT', status: 'completed', data: architectJSON, message: 'Directivas de cambio definidas.' });
+
+          await new Promise(resolve => setTimeout(resolve, 5000));
+
+          // --- FASE 2: GENERADOR DE REFINAMIENTO ---
+          observer.next({ step: 'GENERATOR', status: 'in_progress', message: 'Aplicando cambios a los casos de prueba...' });
+
+          const generatorPrompt = PROMPTS.REFINE_GENERATOR_PROMPT(JSON.stringify(architectJSON), currentCasesStr);
+          const generatorPayload = {
+            contents: [{ parts: [{ text: generatorPrompt }] }],
+            generationConfig: { maxOutputTokens: 5000, temperature: 0.7 }
+          };
+
+          const generatorResponse = await this.callGemini('refineDetailedTestCases', generatorPayload).toPromise();
+          const generatorText = this.getTextFromParts(generatorResponse?.candidates?.[0]?.content?.parts).trim();
+
+          observer.next({ step: 'GENERATOR', status: 'completed', data: { rawText: generatorText }, message: 'Cambios aplicados.' });
+
+          await new Promise(resolve => setTimeout(resolve, 5000));
+
+          // --- FASE 3: AUDITOR DE REFINAMIENTO ---
+          observer.next({ step: 'AUDITOR', status: 'in_progress', message: 'Verificando cumplimiento de la solicitud...' });
+
+          const auditorPrompt = PROMPTS.REFINE_AUDITOR_PROMPT(userReanalysisContext, generatorText);
+          const auditorPayload = {
+            contents: [{ parts: [{ text: auditorPrompt }] }],
+            generationConfig: { maxOutputTokens: 5000, temperature: 0.3 }
+          };
+
+          const auditorResponse = await this.callGemini('refineDetailedTestCases', auditorPayload).toPromise();
+          const auditorText = this.getTextFromParts(auditorResponse?.candidates?.[0]?.content?.parts).trim();
+          const finalJSON = this.cleanAndParseJSON(auditorText);
+
+          observer.next({ step: 'AUDITOR', status: 'completed', data: finalJSON, message: 'Refinamiento verificado.' });
+          observer.complete();
+
+        } catch (error: any) {
+          console.error('[CoT Refinement Error]', error);
+          observer.error(error);
+        }
+      })();
+    });
+  }
+
+  private cleanAndParseJSON(rawText: string): any {
+    let jsonText = rawText.trim();
+
+    // 1. Intentar encontrar el bloque JSON usando índices de llaves/corchetes
+    const firstBrace = jsonText.indexOf('{');
+    const firstBracket = jsonText.indexOf('[');
+    const lastBrace = jsonText.lastIndexOf('}');
+    const lastBracket = jsonText.lastIndexOf(']');
+
+    let startIndex = -1;
+    let endIndex = -1;
+
+    // Determinar si empieza con { o [
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      startIndex = firstBrace;
+      endIndex = lastBrace;
+    } else if (firstBracket !== -1) {
+      startIndex = firstBracket;
+      endIndex = lastBracket;
+    }
+
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      jsonText = jsonText.substring(startIndex, endIndex + 1);
+    } else {
+      // Fallback: Si no encuentra estructura clara, intentar limpiar markdown común
+      if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+      if (jsonText.startsWith("```")) { jsonText = jsonText.substring(3); }
+      if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+    }
+
+    try {
+      return JSON.parse(jsonText);
+    } catch (e) {
+      console.error('Error parsing JSON. Raw text:', rawText, 'Cleaned text:', jsonText);
+      throw e;
+    }
+  }
   private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
     // Usar la cola para controlar el rate limiting
     return new Observable<DetailedTestCase[]>(observer => {
