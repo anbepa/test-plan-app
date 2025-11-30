@@ -257,7 +257,7 @@ export class GeminiService {
           const generatorPrompt = PROMPTS.GENERATOR_COT_PROMPT(JSON.stringify(architectJSON), technique);
           const generatorPayload = {
             contents: [{ parts: [{ text: generatorPrompt }] }],
-            generationConfig: { maxOutputTokens: 5000, temperature: 0.7 }
+            generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
           };
 
           const generatorResponse = await this.callGemini('generateTextCases', generatorPayload).toPromise();
@@ -279,7 +279,7 @@ export class GeminiService {
           );
           const auditorPayload = {
             contents: [{ parts: [{ text: auditorPrompt }] }],
-            generationConfig: { maxOutputTokens: 5000, temperature: 0.3 } // Temperatura baja para rigor
+            generationConfig: { maxOutputTokens: 8192, temperature: 0.3 } // Temperatura baja para rigor
           };
 
           const auditorResponse = await this.callGemini('generateTextCases', auditorPayload).toPromise();
@@ -310,11 +310,12 @@ export class GeminiService {
       (async () => {
         try {
           const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
+          const originalReqStr = `Historia de Usuario: ${originalHuInput.description}\nCriterios de Aceptación: ${originalHuInput.acceptanceCriteria}`;
 
           // --- FASE 1: ARQUITECTO DE REFINAMIENTO ---
           observer.next({ step: 'ARCHITECT', status: 'in_progress', message: 'Analizando solicitud de cambios...' });
 
-          const architectPrompt = PROMPTS.REFINE_ARCHITECT_PROMPT(currentCasesStr, userReanalysisContext, newTechnique);
+          const architectPrompt = PROMPTS.REFINE_ARCHITECT_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
           const architectPayload = {
             contents: [{ parts: [{ text: architectPrompt }] }],
             generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
@@ -331,10 +332,10 @@ export class GeminiService {
           // --- FASE 2: GENERADOR DE REFINAMIENTO ---
           observer.next({ step: 'GENERATOR', status: 'in_progress', message: 'Aplicando cambios a los casos de prueba...' });
 
-          const generatorPrompt = PROMPTS.REFINE_GENERATOR_PROMPT(JSON.stringify(architectJSON), currentCasesStr);
+          const generatorPrompt = PROMPTS.REFINE_GENERATOR_PROMPT(originalReqStr, JSON.stringify(architectJSON), currentCasesStr);
           const generatorPayload = {
             contents: [{ parts: [{ text: generatorPrompt }] }],
-            generationConfig: { maxOutputTokens: 5000, temperature: 0.7 }
+            generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
           };
 
           const generatorResponse = await this.callGemini('refineDetailedTestCases', generatorPayload).toPromise();
@@ -347,10 +348,10 @@ export class GeminiService {
           // --- FASE 3: AUDITOR DE REFINAMIENTO ---
           observer.next({ step: 'AUDITOR', status: 'in_progress', message: 'Verificando cumplimiento de la solicitud...' });
 
-          const auditorPrompt = PROMPTS.REFINE_AUDITOR_PROMPT(userReanalysisContext, generatorText);
+          const auditorPrompt = PROMPTS.REFINE_AUDITOR_PROMPT(originalReqStr, userReanalysisContext, generatorText);
           const auditorPayload = {
             contents: [{ parts: [{ text: auditorPrompt }] }],
-            generationConfig: { maxOutputTokens: 5000, temperature: 0.3 }
+            generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
           };
 
           const auditorResponse = await this.callGemini('refineDetailedTestCases', auditorPayload).toPromise();
@@ -456,13 +457,10 @@ export class GeminiService {
   private repairTruncatedJSON(jsonText: string): string {
     // Asumimos que jsonText ya viene trimmeado desde cleanAndParseJSON,
     // pero lo aseguramos para evitar problemas de índices si no lo estuviera.
-    // Sin embargo, para el lookahead, necesitamos que los índices coincidan.
-    // Si cleanAndParseJSON ya hizo trim, esto es inocuo.
     const repaired = jsonText;
 
-    // Contar llaves y corchetes abiertos vs cerrados
-    let braceCount = 0;
-    let bracketCount = 0;
+    // Pila para rastrear los cierres esperados ('}' o ']')
+    const closingStack: string[] = [];
     let inString = false;
     let escapeNext = false;
     let lastCompletePosition = -1;
@@ -491,37 +489,33 @@ export class GeminiService {
 
       if (!inString) {
         if (char === '{') {
-          braceCount++;
+          closingStack.push('}');
           lastCompletePosition = i;
         }
         if (char === '}') {
-          braceCount--;
+          closingStack.pop(); // Asumimos JSON bien formado hasta el corte
           lastCompletePosition = i;
         }
         if (char === '[') {
-          bracketCount++;
+          closingStack.push(']');
           lastCompletePosition = i;
         }
         if (char === ']') {
-          bracketCount--;
+          closingStack.pop();
           lastCompletePosition = i;
         }
-        // Comas son puntos de corte válidos
-        if (char === ',') lastCompletePosition = i;
+        // Comas y dos puntos son puntos de corte válidos (fuera de strings)
+        if (char === ',' || char === ':') lastCompletePosition = i;
       }
     }
 
-    console.log('[repairTruncatedJSON] Llaves sin cerrar:', braceCount);
-    console.log('[repairTruncatedJSON] Corchetes sin cerrar:', bracketCount);
+    console.log('[repairTruncatedJSON] Stack de cierre pendiente:', closingStack);
     console.log('[repairTruncatedJSON] String abierto:', inString);
 
     // Si estamos dentro de un string truncado, cortar hasta la última posición completa
     if (inString) {
       console.log('[repairTruncatedJSON] String truncado detectado, cortando hasta última posición válida:', lastCompletePosition);
 
-      // Si lastCompletePosition es -1, significa que el string empezó al principio o no hubo nada válido antes.
-      // Devolvemos estructura vacía o lo que corresponda según los contadores (que serán 0 o inconsistentes).
-      // Pero mejor cortamos a vacío y dejamos que la recursión maneje (probablemente devolverá "").
       if (lastCompletePosition === -1) {
         return "";
       }
@@ -529,8 +523,6 @@ export class GeminiService {
       let newRepaired = repaired.substring(0, lastCompletePosition + 1);
 
       // Lookahead: Verificar si lo que acabamos de "salvar" era una clave.
-      // Si el siguiente caracter (ignorando espacios) en el texto ORIGINAL era ':',
-      // entonces cortamos justo antes del valor, dejando una clave colgando.
       let nextCharIndex = lastCompletePosition + 1;
       while (nextCharIndex < repaired.length && /\s/.test(repaired[nextCharIndex])) {
         nextCharIndex++;
@@ -540,8 +532,6 @@ export class GeminiService {
         newRepaired += ': null';
       }
 
-      // Si al cortar nos quedamos con una clave sin valor explícita (ej: "key":), agregamos null
-      // (Esto maneja el caso donde el corte incluyó el :)
       if (newRepaired.trim().endsWith(':')) {
         newRepaired += ' null';
       }
@@ -560,14 +550,9 @@ export class GeminiService {
       finalRepaired += ' null';
     }
 
-    // Cerrar corchetes abiertos
-    for (let i = 0; i < bracketCount; i++) {
-      finalRepaired += ']';
-    }
-
-    // Cerrar llaves abiertas
-    for (let i = 0; i < braceCount; i++) {
-      finalRepaired += '}';
+    // Cerrar estructuras pendientes en orden inverso (LIFO)
+    while (closingStack.length > 0) {
+      finalRepaired += closingStack.pop();
     }
 
     console.log('[repairTruncatedJSON] JSON reparado (últimos 100 chars):', finalRepaired.substring(Math.max(0, finalRepaired.length - 100)));

@@ -35,11 +35,10 @@ PROCEDE A GENERAR TU RESPUESTA PARA LA SECCIÓN "${sectionName}":
 
   // --- PROMPTS PARA CHAIN OF THOUGHT (CoT) ---
 
-  // FASE 1: EL ARQUITECTO (Limpieza y Estrategia)
+  // FASE 1: EL ARQUITECTO (ISTQB Test Analysis)
   ARCHITECT_PROMPT: (description: string, acceptanceCriteria: string, technique: string, additionalContext?: string): string => `
-Eres "El Arquitecto", un QA Lead experto en estrategia de pruebas.
-Tu objetivo es DISEÑAR una estrategia de pruebas EFICIENTE y CONCISA.
-**TU ENEMIGO ES LA REDUNDANCIA.** No queremos miles de casos, queremos los MEJORES casos.
+Eres "El Arquitecto", un QA Lead experto en **ISTQB TEST ANALYSIS**.
+Tu objetivo es realizar el ANÁLISIS DE PRUEBAS: Identificar las **Condiciones de Prueba** para asegurar una **COBERTURA TOTAL** de los Criterios de Aceptación.
 
 **ENTRADA:**
 1.  **Historia de Usuario (HU):** ${description}
@@ -47,82 +46,89 @@ Tu objetivo es DISEÑAR una estrategia de pruebas EFICIENTE y CONCISA.
 3.  **Técnica Solicitada:** "${technique}"
 ${additionalContext ? `4.  **Contexto Adicional:** ${additionalContext}` : ''}
 
-**TAREA:**
-1.  **Analiza:** Identifica el "Happy Path" y los flujos alternativos CRÍTICOS.
-2.  **AGRUPA:** Si varios criterios se pueden validar en un solo flujo lógico, AGRÚPALOS. No crees un caso por cada criterio si un solo recorrido puede cubrir 3.
-3.  **FILTRA:** Descarta pruebas triviales o redundantes.
-4.  **Estructura:** Genera la estrategia.
+**TU PROCESO (ISTQB TEST ANALYSIS):**
+1.  **Desglose de Criterios:** Analiza CADA criterio de aceptación individualmente.
+2.  **Identifica Condiciones de Prueba:** Para cada criterio, define qué condiciones específicas lo validan (Happy Path, Excepciones, Bordes).
+    *   **IMPORTANTE:** Si un criterio tiene múltiples reglas (ej: "Validar A y B"), crea condiciones separadas para A y para B si es necesario para probarlas bien.
+3.  **Aplica la Técnica "${technique}":** Úsala para encontrar variaciones y bordes, no para reducir el alcance.
+4.  **Estrategia:** Agrupa SOLO si las validaciones son triviales. Si son reglas de negocio complejas, mantenlas separadas.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
 {
-  "analysis_summary": "Resumen ultra-conciso (1 línea).",
-  "scope_definition": "Qué entra y qué NO (conciso).",
-  "key_variables": ["Var1", "Var2"],
-  "strategy_directives": [
-    "Instrucción 1: Cubrir Happy Path (validando CA1, CA2 y CA3 juntos)",
-    "Instrucción 2: Probar error crítico X"
+  "analysis_summary": "Resumen del análisis.",
+  "scope_definition": "Alcance detallado.",
+  "test_conditions": [
+    "Condición 1 (CA1): [Descripción precisa]",
+    "Condición 2 (CA1 - Excepción): [Descripción precisa]",
+    "Condición 3 (CA2): [Descripción precisa]"
+  ],
+  "design_strategy": [
+    "Estrategia 1: Crear escenarios independientes para condiciones críticas.",
+    "Estrategia 2: Combinar condiciones simples X e Y en un flujo."
   ]
 }
 \`\`\`
 `,
 
-  // FASE 2: EL GENERADOR (Tu Prompt Maestro adaptado)
+  // FASE 2: EL GENERADOR (ISTQB Test Design & Implementation)
   GENERATOR_COT_PROMPT: (architectOutputJSON: string, technique: string): string => `
-Eres "El Generador", un Ingeniero de QA Senior.
-Tu misión: Generar casos de prueba **CONCISOS, ÚNICOS Y DIRECTOS**.
-**CALIDAD SOBRE CANTIDAD.**
+Eres "El Generador", un Ingeniero de QA Senior encargado del **ISTQB TEST DESIGN**.
+Recibes las Condiciones de Prueba. Tu misión es **GARANTIZAR LA COBERTURA**.
+No sacrifiques cobertura por brevedad.
 
-**ESTRATEGIA:**
+**ANÁLISIS DEL ARQUITECTO:**
 \`\`\`json
 ${architectOutputJSON}
 \`\`\`
 
-**REGLAS DE ORO (SÍGUELAS O FALLARÁS):**
-1.  **CERO REDUNDANCIA:** Si un escenario A ya valida el login, el escenario B NO debe volver a validar el login paso a paso, asume la precondición.
-2.  **CONCISIÓN EXTREMA:**
-    *   Pasos: Máximo 6-8 palabras por paso. "Hacer clic en Guardar" (Bien) vs "El usuario debe mover el mouse y hacer clic en el botón que dice Guardar" (Mal).
-    *   Resultados: Directos al grano. "Datos guardados y alerta visible".
-3.  **AGRUPACIÓN LÓGICA:** Un caso de prueba puede verificar múltiples validaciones menores si ocurren en la misma pantalla.
-4.  **NO INVENTAR:** Solo lo que está en la estrategia.
+**TÉCNICA:** "${technique}"
+
+**TU PROCESO (ISTQB TEST DESIGN):**
+1.  **Cobertura Exhaustiva:** Revisa la lista de "test_conditions". CADA UNA debe tener su propio escenario o ser el foco principal de uno.
+2.  **NO Agrupes Excesivamente:** Si agrupar 3 condiciones en un solo caso hace que el caso sea confuso o que una falla oculte las otras, **SEPÁRALOS**.
+3.  **Diseño de Escenarios:** Crea casos de prueba robustos.
+4.  **Implementación:** Pasos claros y resultados esperados específicos.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
 {
   "testCases": [
     {
-      "title": "Verificar [Acción] exitosa",
-      "preconditions": "Usuario Admin logueado",
-      "steps": [{"numero_paso": 1, "accion": "Ingresar datos válidos"}, {"numero_paso": 2, "accion": "Guardar"}],
-      "expectedResults": "Registro creado exitosamente"
+      "title": "Verificar [Condición Específica]",
+      "preconditions": "...",
+      "steps": [
+        {"numero_paso": 1, "accion": "..."}
+      ],
+      "expectedResults": "..."
     }
   ]
 }
 \`\`\`
 `,
 
-  // FASE 3: EL AUDITOR (Refinamiento y Cumplimiento)
+  // FASE 3: EL AUDITOR (ISTQB Review & Optimization)
   AUDITOR_PROMPT: (originalInput: string, architectStrategy: string, generatedCases: string): string => `
-Eres "El Auditor". Tu trabajo es **CORTAR GRASA**.
-Recibes casos de prueba y debes eliminar TODO lo que sobre.
+Eres "El Auditor", encargado de la **REVISIÓN DE COBERTURA**.
+Tu prioridad es que **NO FALTEN PRUEBAS**.
 
 **ENTRADA:**
 1.  **HU Original:** ${originalInput}
-2.  **Estrategia:** ${architectStrategy}
-3.  **Casos:** ${generatedCases}
+2.  **Análisis (Arquitecto):** ${architectStrategy}
+3.  **Casos Generados:** ${generatedCases}
 
-**TAREA:**
-1.  **DETECTAR DUPLICADOS:** Si dos casos prueban casi lo mismo, FUSIÓNALOS o ELIMINA el menos importante.
-2.  **SIMPLIFICAR:** Si un paso es muy largo, resúmelo.
-3.  **VALIDAR:** Asegura que cumplan la estrategia.
+**TU TAREA:**
+1.  **Verificar Trazabilidad:** ¿Están cubiertos TODOS los Criterios de Aceptación originales?
+2.  **Detectar Huecos:** Si el Arquitecto identificó 10 condiciones y solo ves 5 casos, algo está mal. **AGREGA LOS FALTANTES.**
+3.  **Calidad:** Mantén la claridad, pero no borres casos válidos solo por "hacer espacio".
 
 **FORMATO DE SALIDA (JSON FINAL):**
-Devuelve SOLO el JSON optimizado.
+Devuelve el JSON completo.
 \`\`\`json
 {
-  "scope": "Alcance conciso",
+  "scope": "Alcance completo",
   "testCases": [
-    // Casos optimizados y únicos
+    // Casos finales
   ]
 }
 \`\`\`
@@ -131,84 +137,108 @@ Devuelve SOLO el JSON optimizado.
   // --- PROMPTS PARA REFINAMIENTO (CoT) ---
 
   // FASE 1: ARQUITECTO DE REFINAMIENTO
-  REFINE_ARCHITECT_PROMPT: (currentCases: string, userContext: string, technique: string): string => `
-Eres "El Arquitecto de Refinamiento".
-El usuario quiere mejorar sus casos. Tu objetivo es interpretar qué quiere y **EVITAR QUE EL GENERADOR SE VUELVA LOCO creando duplicados.**
+  REFINE_ARCHITECT_PROMPT: (originalRequirements: string, currentCases: string, userContext: string, technique: string): string => `
+Eres "El Arquitecto de Refinamiento" (ISTQB Test Analyst).
+Tu objetivo es decidir la mejor estrategia para actualizar los casos de prueba.
 
-**CASOS ACTUALES:**
+**ENTRADAS:**
+1.  **Requisitos Originales (HU + Criterios):**
+${originalRequirements}
+
+2.  **Casos de Prueba Actuales (en el editor):**
 ${currentCases}
 
-**SOLICITUD (CONTEXTO):**
-"${userContext}"
+3.  **Solicitud del Usuario (Contexto):** "${userContext}"
+4.  **Técnica Solicitada:** "${technique}"
+
+**LÓGICA DE DECISIÓN (CRÍTICO):**
+Analiza los "Casos de Prueba Actuales" comparándolos con una generación estándar.
+
+*   **ESCENARIO A (Regeneración):** Si los casos actuales parecen ser la salida inicial genérica, no han sido modificados manualmente, o están vacíos/incompletos, Y el usuario pide una técnica específica, asume que quiere **RE-CREAR** la suite desde cero para aplicar esa técnica correctamente.
+    *   *Acción:* Ignora la estructura de los casos actuales. Define una estrategia para crear nuevos casos basados en los "Requisitos Originales" y la "Técnica".
+
+*   **ESCENARIO B (Refinamiento):** Si detectas que el usuario ha modificado manualmente los casos (agregó pasos específicos, datos concretos, cambió títulos), asume que quiere **MEJORAR** su borrador.
+    *   *Acción:* Respeta el trabajo manual del usuario. Define directivas para optimizar, completar y aplicar la técnica SOBRE los casos existentes, sin borrar su contenido personalizado.
 
 **TAREA:**
-1.  Entiende el cambio.
-2.  Si el usuario pide "Agregar X", asegúrate de decir "Agregar X SIN REPETIR lo que ya está".
-3.  Si pide "Corregir Y", di "Modificar Y in-place".
+1.  Determina si es Escenario A o B.
+2.  Define las directivas claras para el Generador.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
 {
-  "refinement_analysis": "Análisis breve.",
+  "refinement_analysis": "Explica si detectaste modificaciones manuales o si es una regeneración (Escenario A o B).",
+  "strategy_type": "REGENERATE" | "REFINE",
   "change_directives": [
-    "Directiva 1: Modificar caso 3 para incluir X",
-    "Directiva 2: Eliminar redundancia en casos de login"
+    "Directiva 1: ...",
+    "Directiva 2: ..."
   ]
 }
 \`\`\`
 `,
 
   // FASE 2: GENERADOR DE REFINAMIENTO
-  REFINE_GENERATOR_PROMPT: (architectDirectives: string, currentCases: string): string => `
-Eres "El Generador de Refinamiento".
-Tienes una lista de casos y directivas.
-**TU PRIORIDAD NÚMERO 1: NO DUPLICAR.**
-**TU PRIORIDAD NÚMERO 2: MANTENERLO CONCISO.**
+  REFINE_GENERATOR_PROMPT: (originalRequirements: string, architectOutput: string, currentCases: string): string => `
+Eres "El Generador de Refinamiento" (ISTQB Test Designer).
+Ejecuta las directivas del Arquitecto.
 
-**DIRECTIVAS:**
-${architectDirectives}
+**REQUISITOS ORIGINALES:**
+${originalRequirements}
 
-**CASOS:**
+**DIRECTIVAS DEL ARQUITECTO:**
+${architectOutput}
+
+**CASOS ACTUALES:**
 ${currentCases}
 
 **INSTRUCCIONES:**
-1.  Modifica los casos existentes siempre que sea posible. NO crees nuevos a menos que sea estrictamente necesario.
-2.  Si una directiva dice "probar error", mira si ya hay un caso de error y adáptalo.
-3.  Mantén los textos cortos.
+1.  Lee el "strategy_type" del Arquitecto.
+2.  **Si es "REGENERATE":** Ignora los casos actuales. Genera una NUEVA suite de pruebas completa basada en los Requisitos Originales y las directivas.
+3.  **Si es "REFINE":** Toma los casos actuales y aplícales las mejoras solicitadas. NO elimines detalles específicos que parezcan escritos por el usuario (datos, pasos custom).
+4.  Asegura la calidad ISTQB en ambos casos.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
-[
-  {
-    "title": "...",
-    "preconditions": "...",
-    "steps": [...],
-    "expectedResults": "..."
-  }
-]
+{
+  "testCases": [
+    {
+      "title": "...",
+      "preconditions": "...",
+      "steps": [
+        {"numero_paso": 1, "accion": "..."}
+      ],
+      "expectedResults": "..."
+    }
+  ]
+}
 \`\`\`
 `,
 
   // FASE 3: AUDITOR DE REFINAMIENTO
-  REFINE_AUDITOR_PROMPT: (userRequest: string, refinedCases: string): string => `
-Eres "El Auditor de Refinamiento".
-Filtro final.
-**SI VES CASOS REPETIDOS, BÓRRALOS.**
-**SI VES TEXTO INNECESARIO, BÓRRALO.**
+  REFINE_AUDITOR_PROMPT: (originalRequirements: string, userRequest: string, refinedCases: string): string => `
+Eres "El Auditor de Refinamiento" (ISTQB Reviewer).
+Verifica la calidad y cobertura final.
 
-**SOLICITUD:** "${userRequest}"
+**REQUISITOS ORIGINALES:**
+${originalRequirements}
 
-**CASOS:**
+**SOLICITUD USUARIO:** "${userRequest}"
+
+**CASOS REFINADOS:**
 ${refinedCases}
 
 **TAREA:**
-Devuelve el JSON limpio, único y conciso.
+1.  Verificar Trazabilidad: ¿Los casos cubren los Requisitos Originales?
+2.  Verificar Solicitud: ¿Se aplicó la técnica/contexto solicitado?
+3.  Si faltan pruebas críticas, agrégalas.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
-[
-  // Array final
-]
+{
+  "testCases": [
+    // Array final de casos validados
+  ]
+}
 \`\`\`
 `
 };
