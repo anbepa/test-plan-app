@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
-import { GeminiService } from '../services/gemini.service';
+import { GeminiService, CoTStepResult } from '../services/gemini.service';
 import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
 import { DatabaseService, DbUserStoryWithRelations } from '../services/database.service';
 import { ToastService } from '../services/toast.service';
@@ -571,39 +571,57 @@ export class TestPlanGeneratorComponent {
       return;
     }
 
-    hu.loadingScope = true;
-    hu.errorScope = null;
+    const technique = hu.refinementTechnique || hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
+    const userContext = hu.refinementContext || 'Por favor, refina y mejora los siguientes casos de prueba manteniendo su estructura y agregando más detalles donde sea necesario.';
 
-    const technique = hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
-    const userContext = 'Por favor, refina y mejora los siguientes casos de prueba manteniendosu estructura y agregando más detalles donde sea necesario.';
+    console.log('[REFINEMENT] Iniciando refinamiento CoT para HU:', hu.id);
+    console.log('[REFINEMENT] Técnica:', technique);
+    console.log('[REFINEMENT] Contexto:', userContext);
 
-    this.geminiService.refineDetailedTestCases(
+    // Usar CoT para refinamiento
+    this.geminiService.refineTestCasesCoT(
       hu.originalInput,
       hu.detailedTestCases,
       technique,
       userContext
-    )
-      .pipe(
-        tap((refinedCases: DetailedTestCase[]) => {
-          if (refinedCases && refinedCases.length > 0) {
+    ).subscribe({
+      next: (result: any) => {
+        console.log('[REFINEMENT] CoT Step:', result.step, 'Status:', result.status);
+
+        if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
+          let refinedCases = result.data;
+
+          // El Auditor puede devolver { scope, testCases } o solo testCases
+          if (result.data.testCases) {
+            refinedCases = result.data.testCases;
+          }
+
+          if (Array.isArray(refinedCases) && refinedCases.length > 0) {
             hu.detailedTestCases = refinedCases;
             hu.errorScope = null;
             this.saveCurrentState();
-            this.toastService.success('Casos de prueba refinados exitosamente');
+            this.updatePreview();
+            this.toastService.success('Casos de prueba refinados exitosamente con CoT');
           } else {
             hu.errorScope = 'No se pudieron refinar los casos de prueba';
+            this.toastService.error('No se pudieron refinar los casos de prueba');
           }
-        }),
-        catchError((error: any) => {
-          hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error refinando casos de prueba';
-          return of([]);
-        }),
-        finalize(() => {
-          hu.loadingScope = false;
-          this.updatePreview();
-          this.cdr.detectChanges();
-        })
-      ).subscribe();
+        }
+      },
+      error: (error: any) => {
+        console.error('[REFINEMENT] Error en CoT:', error);
+        hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error refinando casos de prueba';
+        this.toastService.error(`Error refinando casos de prueba: ${hu.errorScope}`);
+        hu.loadingScope = false;
+        this.cdr.detectChanges();
+      },
+      complete: () => {
+        console.log('[REFINEMENT] CoT completado');
+        hu.loadingScope = false;
+        this.updatePreview();
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   public exportExecutionMatrix(hu: HUData): void {

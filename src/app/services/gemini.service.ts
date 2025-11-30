@@ -15,7 +15,7 @@ import {
 interface GeminiTextPart { text: string; }
 interface GeminiContent { parts: GeminiTextPart[]; }
 interface ProxyRequestBody {
-  action: 'generateScope' | 'generateTextCases' | 'enhanceStaticSection' | 'refineDetailedTestCases' | 'generateScopeAndCases';
+  action: 'generateScope' | 'generateTextCases' | 'enhanceStaticSection' | 'refineDetailedTestCases';
   payload: any;
 }
 interface GeminiCandidate {
@@ -200,224 +200,11 @@ export class GeminiService {
     );
   }
 
-  public generateDetailedTestCasesTextBased(description: string, acceptanceCriteria: string, technique: string, additionalContext?: string): Observable<DetailedTestCase[]> {
-    const timestamp = new Date().toISOString();
-    const contextWithTimestamp = `${additionalContext || ''}\n\n[Generación solicitada en: ${timestamp}]`.trim();
-
-    const promptText = PROMPTS.SCENARIOS_DETAILED_TEXT_BASED(description, acceptanceCriteria, technique, contextWithTimestamp);
-    const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 4096, temperature: 0.7 }  // Aumentado de 0.2 a 0.7
-    };
-    const requestToProxy: ProxyRequestBody = { action: 'generateTextCases', payload: geminiPayload };
-    return this.sendGenerationRequestThroughProxy(requestToProxy);
-  }
-
-  /**
-   * NUEVO MÉTODO: Genera alcance y casos de prueba en UNA SOLA petición
-   * Retorna un objeto con { scope: string, testCases: DetailedTestCase[] }
-   */
-  public generateScopeAndTestCasesCombined(
-    description: string,
-    acceptanceCriteria: string,
-    technique: string,
-    additionalContext?: string
-  ): Observable<{ scope: string; testCases: DetailedTestCase[] }> {
-    // Agregar timestamp para forzar variabilidad en las respuestas
-    const timestamp = new Date().toISOString();
-    const contextWithTimestamp = `${additionalContext || ''}\n\n[Generación solicitada en: ${timestamp}]`.trim();
-
-    const promptText = PROMPTS.SCOPE_AND_TEST_CASES_COMBINED(description, acceptanceCriteria, technique, contextWithTimestamp);
-    const geminiPayload = {
-      contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: {
-        maxOutputTokens: 5000,
-        temperature: 0.7  // Aumentado de 0.2 a 0.7 para mayor variabilidad
-      }
-    };
-
-    console.log('[COMBINED] Enviando petición combinada de alcance + casos de prueba');
-
-    return new Observable<{ scope: string; testCases: DetailedTestCase[] }>(observer => {
-      this.enqueueRequest(async () => {
-        try {
-          const apiCall = this.useProxy
-            ? this.http.post<GeminiResponse>(this.proxyApiUrl, { action: 'generateScopeAndCases', payload: geminiPayload })
-            : this.callGeminiDirect(geminiPayload);
-
-          const response = await apiCall.pipe(
-            catchError(this.handleError)
-          ).toPromise();
-
-          if (!response) {
-            observer.next({
-              scope: 'No se pudo generar el alcance.',
-              testCases: [{
-                title: "Error de API",
-                preconditions: "No se recibió respuesta de la API.",
-                steps: [{ numero_paso: 1, accion: "La API no devolvió ninguna respuesta." }],
-                expectedResults: "N/A"
-              }]
-            });
-            observer.complete();
-            return;
-          }
-
-          const rawText = this.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim() || '';
-          console.log('[COMBINED] Respuesta recibida (primeros 200 chars):', rawText.substring(0, 200));
-
-          if (!rawText) {
-            observer.next({
-              scope: 'Respuesta vacía de la API.',
-              testCases: [{
-                title: "Error de API",
-                preconditions: "Respuesta vacía de la API.",
-                steps: [{ numero_paso: 1, accion: "Respuesta vacía de la API." }],
-                expectedResults: "N/A"
-              }]
-            });
-            observer.complete();
-            return;
-          }
-
-          // Limpiar marcadores de código
-          let jsonText = rawText;
-          if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-          if (jsonText.startsWith("```")) { jsonText = jsonText.substring(3); }
-          if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
-          jsonText = jsonText.trim();
-
-          // Verificar que sea un objeto JSON
-          if (!jsonText.startsWith("{")) {
-            console.error('[COMBINED] Error: La respuesta no es un objeto JSON válido');
-            observer.next({
-              scope: 'Error de formato en la respuesta.',
-              testCases: [{
-                title: "Error de Formato",
-                preconditions: "Respuesta no fue objeto JSON.",
-                steps: [{ numero_paso: 1, accion: `Respuesta cruda: ${rawText.substring(0, 200)}` }],
-                expectedResults: "N/A"
-              }]
-            });
-            observer.complete();
-            return;
-          }
-
-          try {
-            const parsedResponse: any = JSON.parse(jsonText);
-
-            // Validar estructura
-            if (!parsedResponse.scope || !parsedResponse.testCases) {
-              console.error('[COMBINED] Error: Respuesta JSON no tiene la estructura esperada');
-              observer.next({
-                scope: 'Error de estructura en la respuesta.',
-                testCases: [{
-                  title: "Error de Estructura",
-                  preconditions: "Respuesta JSON no tuvo formato esperado.",
-                  steps: [{ numero_paso: 1, accion: `Respuesta: ${JSON.stringify(parsedResponse).substring(0, 200)}` }],
-                  expectedResults: "N/A"
-                }]
-              });
-              observer.complete();
-              return;
-            }
-
-            let scope = parsedResponse.scope || 'No se pudo generar el alcance.';
-            let testCases: DetailedTestCase[] = [];
-
-            // Limitar alcance a 4 líneas
-            scope = scope.split('\n').slice(0, 4).join('\n');
-            console.log('[COMBINED] Alcance extraído:', scope);
-
-            // Procesar casos de prueba
-            if (Array.isArray(parsedResponse.testCases) && parsedResponse.testCases.length > 0) {
-              testCases = parsedResponse.testCases.map((tc: any, index: number) => {
-                const detailedTc: DetailedTestCase = {
-                  title: tc.title || `Caso ${index + 1}`,
-                  preconditions: tc.preconditions || 'No especificadas',
-                  steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                    numero_paso: s.numero_paso || (i + 1),
-                    accion: s.accion || "Paso no descrito"
-                  })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
-                  expectedResults: tc.expectedResults || 'No especificado'
-                };
-                return detailedTc;
-              });
-              console.log('[COMBINED] Casos de prueba procesados:', testCases.length);
-            } else {
-              console.warn('[COMBINED] No se encontraron casos de prueba en la respuesta');
-              testCases = [{
-                title: "Sin casos de prueba",
-                preconditions: "La respuesta no incluyó casos de prueba.",
-                steps: [{ numero_paso: 1, accion: "No se generaron casos de prueba." }],
-                expectedResults: "N/A"
-              }];
-            }
-
-            observer.next({ scope, testCases });
-            observer.complete();
-
-          } catch (parseError: any) {
-            console.error('[COMBINED] Error al parsear JSON:', parseError);
-            observer.next({
-              scope: 'Error al procesar la respuesta.',
-              testCases: [{
-                title: "Error de Parseo JSON",
-                preconditions: "No se pudo parsear la respuesta.",
-                steps: [{ numero_paso: 1, accion: `Error: ${parseError.message}` }],
-                expectedResults: "N/A"
-              }]
-            });
-            observer.complete();
-          }
-
-        } catch (error) {
-          console.error('[COMBINED] Error en la petición:', error);
-          observer.error(error);
-        }
-      });
-    });
-  }
 
 
 
-  public refineDetailedTestCases(
-    originalHuInput: HUData['originalInput'],
-    editedTestCases: DetailedTestCase[],
-    newTechnique: string,
-    userReanalysisContext: string
-  ): Observable<DetailedTestCase[]> {
-    const timestamp = new Date().toISOString();
-    const contextWithTimestamp = `${userReanalysisContext}\n\n[Refinamiento solicitado en: ${timestamp}]`.trim();
 
-    const currentTestCasesJSON = JSON.stringify(editedTestCases, null, 2);
-    const promptText = PROMPTS.REFINE_DETAILED_TEST_CASES(
-      'text',
-      originalHuInput.description,
-      originalHuInput.acceptanceCriteria,
-      currentTestCasesJSON,
-      newTechnique,
-      contextWithTimestamp
-    );
-    const parts = [{ text: promptText }];
-    const geminiPayload = {
-      contents: [{ parts: parts }],
-      generationConfig: {
-        maxOutputTokens: 8192,
-        temperature: 0.7,  // Aumentado de 0.3 a 0.7
-        topP: 0.95,
-        topK: 40
-      },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-      ]
-    };
-    const requestToProxy: ProxyRequestBody = { action: 'refineDetailedTestCases', payload: geminiPayload };
-    return this.sendGenerationRequestThroughProxy(requestToProxy);
-  }
+
 
   public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
     const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
@@ -584,40 +371,210 @@ export class GeminiService {
   private cleanAndParseJSON(rawText: string): any {
     let jsonText = rawText.trim();
 
-    // 1. Intentar encontrar el bloque JSON usando índices de llaves/corchetes
+    console.log('[cleanAndParseJSON] Texto crudo (primeros 500 chars):', jsonText.substring(0, 500));
+
+    // 1. Limpiar marcadores de código markdown
+    if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
+    if (jsonText.startsWith("```")) { jsonText = jsonText.substring(3); }
+    if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+    jsonText = jsonText.trim();
+
+    // 2. Identificar el inicio del JSON
     const firstBrace = jsonText.indexOf('{');
     const firstBracket = jsonText.indexOf('[');
-    const lastBrace = jsonText.lastIndexOf('}');
-    const lastBracket = jsonText.lastIndexOf(']');
 
     let startIndex = -1;
-    let endIndex = -1;
-
-    // Determinar si empieza con { o [
     if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
       startIndex = firstBrace;
-      endIndex = lastBrace;
     } else if (firstBracket !== -1) {
       startIndex = firstBracket;
+    }
+
+    // Si no encontramos inicio de JSON, fallar
+    if (startIndex === -1) {
+      throw new Error('No se encontró un objeto o array JSON en la respuesta.');
+    }
+
+    // Texto candidato desde el inicio encontrado
+    const jsonCandidate = jsonText.substring(startIndex);
+
+    // 3. Intentar parsear usando la lógica de extracción original (por si hay texto al final)
+    const lastBrace = jsonCandidate.lastIndexOf('}');
+    const lastBracket = jsonCandidate.lastIndexOf(']');
+    let endIndex = -1;
+
+    // Determinar el final probable
+    if (startIndex === firstBrace) { // Es un objeto
+      endIndex = lastBrace;
+    } else { // Es un array
       endIndex = lastBracket;
     }
 
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      jsonText = jsonText.substring(startIndex, endIndex + 1);
-    } else {
-      // Fallback: Si no encuentra estructura clara, intentar limpiar markdown común
-      if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
-      if (jsonText.startsWith("```")) { jsonText = jsonText.substring(3); }
-      if (jsonText.endsWith("```")) { jsonText = jsonText.substring(0, jsonText.length - 3); }
+    // Intentar parsear el bloque extraído "limpiamente"
+    if (endIndex !== -1 && endIndex > 0) {
+      const extracted = jsonCandidate.substring(0, endIndex + 1);
+      try {
+        // Limpieza básica de saltos de línea en strings antes de parsear
+        const cleanExtracted = extracted.replace(/\\n/g, '\\n');
+        const parsed = JSON.parse(cleanExtracted);
+        console.log('[cleanAndParseJSON] ✅ JSON extraído y parseado exitosamente');
+        return parsed;
+      } catch (e) {
+        console.warn('[cleanAndParseJSON] ⚠️ Falló el parseo del bloque extraído, intentando con el texto completo/reparación...');
+      }
     }
 
+    // 4. Si falló la extracción limpia, intentar con el candidato completo y reparación
+    let textToParse = jsonCandidate.replace(/\\n/g, '\\n');
+
     try {
-      return JSON.parse(jsonText);
-    } catch (e) {
-      console.error('Error parsing JSON. Raw text:', rawText, 'Cleaned text:', jsonText);
-      throw e;
+      const parsed = JSON.parse(textToParse);
+      console.log('[cleanAndParseJSON] ✅ JSON completo parseado exitosamente');
+      return parsed;
+    } catch (e: any) {
+      console.warn('[cleanAndParseJSON] ⚠️ Error parseando JSON completo, intentando reparar...');
+      console.warn('[cleanAndParseJSON] Error original:', e.message);
+
+      // INTENTO DE REPARACIÓN: Detectar JSON truncado
+      try {
+        const repaired = this.repairTruncatedJSON(textToParse);
+        const parsed = JSON.parse(repaired);
+        console.log('[cleanAndParseJSON] ✅ JSON reparado y parseado exitosamente');
+        return parsed;
+      } catch (repairError: any) {
+        console.error('[cleanAndParseJSON] ❌ No se pudo reparar el JSON');
+        console.error('[cleanAndParseJSON] Error de reparación:', repairError.message);
+        console.error('[cleanAndParseJSON] Texto (primeros 1000 chars):', textToParse.substring(0, 1000));
+        throw new Error(`Error parseando JSON: ${e.message}. El JSON parece estar truncado o malformado.`);
+      }
     }
   }
+
+  /**
+   * Intenta reparar JSON truncado cerrando objetos y arrays incompletos
+   */
+  private repairTruncatedJSON(jsonText: string): string {
+    // Asumimos que jsonText ya viene trimmeado desde cleanAndParseJSON,
+    // pero lo aseguramos para evitar problemas de índices si no lo estuviera.
+    // Sin embargo, para el lookahead, necesitamos que los índices coincidan.
+    // Si cleanAndParseJSON ya hizo trim, esto es inocuo.
+    const repaired = jsonText;
+
+    // Contar llaves y corchetes abiertos vs cerrados
+    let braceCount = 0;
+    let bracketCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let lastCompletePosition = -1;
+
+    for (let i = 0; i < repaired.length; i++) {
+      const char = repaired[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        // Si acabamos de cerrar un string, marcar esta posición como "completa"
+        if (!inString) {
+          lastCompletePosition = i;
+        }
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          braceCount++;
+          lastCompletePosition = i;
+        }
+        if (char === '}') {
+          braceCount--;
+          lastCompletePosition = i;
+        }
+        if (char === '[') {
+          bracketCount++;
+          lastCompletePosition = i;
+        }
+        if (char === ']') {
+          bracketCount--;
+          lastCompletePosition = i;
+        }
+        // Comas son puntos de corte válidos
+        if (char === ',') lastCompletePosition = i;
+      }
+    }
+
+    console.log('[repairTruncatedJSON] Llaves sin cerrar:', braceCount);
+    console.log('[repairTruncatedJSON] Corchetes sin cerrar:', bracketCount);
+    console.log('[repairTruncatedJSON] String abierto:', inString);
+
+    // Si estamos dentro de un string truncado, cortar hasta la última posición completa
+    if (inString) {
+      console.log('[repairTruncatedJSON] String truncado detectado, cortando hasta última posición válida:', lastCompletePosition);
+
+      // Si lastCompletePosition es -1, significa que el string empezó al principio o no hubo nada válido antes.
+      // Devolvemos estructura vacía o lo que corresponda según los contadores (que serán 0 o inconsistentes).
+      // Pero mejor cortamos a vacío y dejamos que la recursión maneje (probablemente devolverá "").
+      if (lastCompletePosition === -1) {
+        return "";
+      }
+
+      let newRepaired = repaired.substring(0, lastCompletePosition + 1);
+
+      // Lookahead: Verificar si lo que acabamos de "salvar" era una clave.
+      // Si el siguiente caracter (ignorando espacios) en el texto ORIGINAL era ':',
+      // entonces cortamos justo antes del valor, dejando una clave colgando.
+      let nextCharIndex = lastCompletePosition + 1;
+      while (nextCharIndex < repaired.length && /\s/.test(repaired[nextCharIndex])) {
+        nextCharIndex++;
+      }
+
+      if (nextCharIndex < repaired.length && repaired[nextCharIndex] === ':') {
+        newRepaired += ': null';
+      }
+
+      // Si al cortar nos quedamos con una clave sin valor explícita (ej: "key":), agregamos null
+      // (Esto maneja el caso donde el corte incluyó el :)
+      if (newRepaired.trim().endsWith(':')) {
+        newRepaired += ' null';
+      }
+
+      // Recalcular recursivamente
+      return this.repairTruncatedJSON(newRepaired);
+    }
+
+    let finalRepaired = repaired;
+
+    // Eliminar comas finales si existen (trailing commas)
+    finalRepaired = finalRepaired.replace(/,\s*$/, '');
+
+    // Si termina en ':', significa que se cortó esperando un valor (pero no dentro de un string)
+    if (finalRepaired.trim().endsWith(':')) {
+      finalRepaired += ' null';
+    }
+
+    // Cerrar corchetes abiertos
+    for (let i = 0; i < bracketCount; i++) {
+      finalRepaired += ']';
+    }
+
+    // Cerrar llaves abiertas
+    for (let i = 0; i < braceCount; i++) {
+      finalRepaired += '}';
+    }
+
+    console.log('[repairTruncatedJSON] JSON reparado (últimos 100 chars):', finalRepaired.substring(Math.max(0, finalRepaired.length - 100)));
+
+    return finalRepaired;
+  }
+
   private sendGenerationRequestThroughProxy(requestToProxy: ProxyRequestBody): Observable<DetailedTestCase[]> {
     // Usar la cola para controlar el rate limiting
     return new Observable<DetailedTestCase[]>(observer => {
