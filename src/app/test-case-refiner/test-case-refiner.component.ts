@@ -4,10 +4,10 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TestCaseEditorComponent } from '../test-case-editor/test-case-editor.component';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
-import { DatabaseService } from '../services/database.service';
-import { GeminiService, CoTStepResult } from '../services/gemini.service';
+import { DatabaseService } from '../services/database/database.service';
+import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
 import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
-import { ToastService } from '../services/toast.service';
+import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations, DbTestCaseStep } from '../models/database.model';
 
 @Component({
@@ -190,7 +190,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   private async loadUserStoryData(): Promise<void> {
     if (!this.hu || !this.testPlanId) return;
 
-    const { data: userStory, error } = await this.databaseService.supabase
+    let query = this.databaseService.supabase
       .from('user_stories')
       .select(`
         id,
@@ -208,10 +208,18 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
             action
           )
         )
-      `)
-      .eq('test_plan_id', this.testPlanId)
-      .eq('custom_id', this.hu.id)
-      .single();
+      `);
+
+    // Priorizar búsqueda por UUID si existe, es más seguro
+    if (this.hu.dbUuid) {
+      query = query.eq('id', this.hu.dbUuid);
+    } else {
+      query = query.eq('test_plan_id', this.testPlanId)
+        .eq('custom_id', this.hu.id);
+    }
+
+    // Usar limit(1).single() para evitar error si hay duplicados (PGRST116)
+    const { data: userStory, error } = await query.limit(1).single();
 
     if (error) {
       console.error('Error al cargar user story:', error);

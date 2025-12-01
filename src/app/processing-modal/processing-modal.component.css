@@ -172,3 +172,35 @@
     color: #9ca3af;
     margin: 0;
 }
+
+/* === NUEVOS ESTILOS PARA DETALLES === */
+.step-sublabel {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+    /* font-style: italic; */
+}
+
+.process-details-box {
+    margin-top: 20px;
+    padding: 12px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.current-action {
+    color: #2563eb;
+    margin: 0 0 4px 0;
+}
+
+.detail-text {
+    color: #475569;
+    margin: 0;
+    font-family: var(--font-family-text, sans-serif);
+    line-height: 1.4;
+    max-height: 80px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}

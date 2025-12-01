@@ -2,9 +2,9 @@ import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, 
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
-import { GeminiService, CoTStepResult } from '../services/gemini.service';
+import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
 import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
-import { ToastService } from '../services/toast.service';
+import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';

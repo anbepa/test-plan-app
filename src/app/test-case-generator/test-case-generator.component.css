@@ -1,43 +1,23 @@
-/* src/app/test-case-generator/test-case-generator.component.css */
+/* test-case-generator - Estilos específicos del componente */
+/* Los estilos compartidos están en src/styles/shared-components.css */
 
-/* === APPLE STYLE - CLEAN & MINIMAL === */
-
-/* Page Container - Sin restricciones de ancho fijas */
 :host {
     display: block !important;
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background-color: #FAFAFA;
     box-sizing: border-box !important;
 }
 
-/* Form Card Container - Apple Style con ancho ampliado */
-.form-section {
-    background: #FFFFFF;
-    border-radius: 18px;
-    padding: 32px 40px;
-    border: 1px solid #E5E7EB;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
-    margin: 20px;
-    width: calc(100% - 40px);
-}
-
-/* Form Header - Two Line Title with Right Button */
-/* ========================================
-   HEADER COMPACTO - Estandarizado con Viewer
-   ======================================== */
-
+/* === HEADER COMPACTO === */
 .form-header-compact {
     background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
     border-radius: 16px;
     padding: 1.25rem 1.5rem;
     margin: -24px -24px 24px -24px;
-    box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.05),
-        0 0 0 1px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.02);
     border: 1px solid rgba(229, 231, 235, 0.8);
 }
 
@@ -48,17 +28,6 @@
     gap: 16px;
 }
 
-.header-main {
-    flex: 1;
-}
-
-.header-text-column {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-}
-
 .section-title {
     font-size: 1.5rem;
     font-weight: 700;
@@ -66,12 +35,6 @@
     margin: 0;
     line-height: 1.3;
     letter-spacing: -0.02em;
-}
-
-.header-subtitle-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 .hu-subtitle {
@@ -93,230 +56,77 @@
     border: none;
 }
 
-.subtitle-inline {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280;
+/* === FORM LAYOUT === */
+/* === FORM LAYOUT === */
+.form-section {
+    background: #FFFFFF;
+    border-radius: 18px;
+    padding: 32px 40px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
+    margin: 20px auto;
+    width: calc(100% - 40px);
+    max-width: 1200px;
+    /* Limitar ancho máximo para evitar dispersión */
 }
 
-.btn-cancel-compact {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    background: transparent;
-    border: 1px solid #d2d2d7;
-    border-radius: 8px;
-    color: #1d1d1f;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.btn-cancel-compact:hover:not(:disabled) {
-    background: rgba(0, 0, 0, 0.04);
-    border-color: #86868b;
-}
-
-.btn-cancel-compact:active:not(:disabled) {
-    background: #e8e8ed;
-}
-
-.btn-cancel-compact:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-.btn-cancel-compact svg {
-    width: 16px;
-    height: 16px;
-}
-
-/* Estilos antiguos (mantener para compatibilidad) */
-.form-header-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 20px;
-    gap: 20px;
-}
-
-.header-titles {
-    flex: 1;
-    text-align: center;
-}
-
-.form-header-actions h2.main-title {
-    margin-bottom: 4px;
-    border-bottom: none;
-    font-size: 26px;
-    font-weight: 600;
-    color: #111827;
-    text-align: center;
-    line-height: 1.3;
-}
-
-.form-header-actions .subtitle {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 400;
-    color: #6B7280;
-    text-align: center;
-}
-
-.form-header-actions .hu-title-inline {
-    font-size: 18px;
-    font-weight: 400;
-    color: #6B7280;
-}
-
-/* Cancel Button - Secondary Style Aligned Right */
-.button-cancel-action {
-    padding: 8px 18px;
-    border-radius: 10px;
-    background-color: #F3F4F6;
-    color: #374151;
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    flex-shrink: 0;
-    align-self: flex-start;
-}
-
-.button-cancel-action:hover:not(:disabled) {
-    background-color: #E5E7EB;
-    transform: translateY(-1px);
-}
-
-.button-cancel-action:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.button-small {
-    padding: 10px 18px;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-/* Form Grid - Responsive */
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
+    gap: 24px;
+    /* Aumentar gap ligeramente */
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
     .form-grid {
         grid-template-columns: 1fr;
     }
 }
 
-@media (min-width: 768px) {
-    .form-group.full-width {
-        grid-column: span 2;
-    }
+/* Aplicar full-width sin media query para asegurar especificidad, 
+   luego el media query de mobile lo sobrescribirá si es necesario (1 columna es full width implícito) */
+.form-group.full-width {
+    grid-column: 1 / -1;
 }
 
-/* Form Group */
 .form-group {
     margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
 }
 
-/* Labels - Apple Typography */
 .form-group label {
     display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    font-size: 14px;
-    color: rgba(60, 60, 67, 0.75);
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #374151;
 }
 
-/* Inputs - Apple Style */
-.form-group input[type="text"],
-.form-group textarea,
-.form-group select,
 .form-control {
     width: 100%;
-    padding: 12px 14px;
-    border: 1px solid #D1D5DB;
-    border-radius: 12px;
-    font-size: 14px;
-    box-sizing: border-box;
-    transition: all 0.25s ease;
-    font-family: inherit;
-    background-color: #FFFFFF;
-    color: #111827;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    background-color: #fff;
+    color: #1f2937;
 }
 
-.form-group textarea {
-    min-height: 120px;
-    resize: vertical;
-}
-
-/* Focus State - Apple Blue */
-.form-group input[type="text"]:focus,
-.form-group textarea:focus,
-.form-group select:not([disabled]):focus,
 .form-control:focus {
-    border-color: #0071E3;
-    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
-    outline: none;
+    border-color: #2563eb;
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
-/* Readonly State */
-.form-group input[readonly] {
-    background-color: #F3F4F6;
-    color: #6B7280;
-    cursor: not-allowed;
-}
-
-/* Textarea */
-.form-group textarea,
 textarea.form-control {
-    resize: vertical;
     min-height: 100px;
-    font-family: inherit;
-    line-height: 1.5;
+    resize: vertical;
 }
 
-/* File Input - Apple Style */
-.form-group input[type="file"] {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 12px 14px;
-    border: 1px solid #D1D5DB;
-    border-radius: 12px;
-    display: block;
-    background-color: #FFFFFF;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.form-group input[type="file"]::file-selector-button {
-    margin-right: 12px;
-    padding: 8px 15px;
-    border: none;
-    background-color: #e9ecef;
-    color: #343a40;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    font-weight: 500;
-}
-
-.form-group input[type="file"]::file-selector-button:hover {
-    background-color: #dee2e6;
-}
-
+/* === PREVIEW DE IMÁGENES === */
 .image-preview-container {
     margin-top: 15px;
     border: 1px dashed #ced4da;
@@ -324,13 +134,6 @@ textarea.form-control {
     border-radius: 5px;
     background-color: #f8f9fa;
     overflow: hidden;
-}
-
-.image-preview-container p {
-    margin-bottom: 10px;
-    font-weight: 600;
-    color: #343a40;
-    text-align: left;
 }
 
 .image-preview-container.multiple-previews {
@@ -353,7 +156,7 @@ textarea.form-control {
     box-sizing: border-box;
     position: relative;
     cursor: grab;
-    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, opacity 0.2s ease-out;
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
 }
 
 .image-preview-item.drag-over-element {
@@ -395,7 +198,114 @@ textarea.form-control {
     line-height: 1.3;
 }
 
-/* Required Indicator & Validation */
+/* === CASOS DE PRUEBA === */
+.test-cases-list {
+    margin-top: 24px;
+}
+
+.test-case-card {
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.2s ease;
+}
+
+.test-case-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.test-case-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    cursor: pointer;
+}
+
+.test-case-title-input {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    flex: 1;
+}
+
+.test-case-steps {
+    margin-top: 16px;
+}
+
+.test-step-item {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: flex-start;
+}
+
+.step-number {
+    min-width: 32px;
+    height: 32px;
+    background: #F3F4F6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: #6B7280;
+    flex-shrink: 0;
+}
+
+.step-action-input {
+    flex: 1;
+}
+
+/* === MODAL COT === */
+.cot-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.cot-modal-content {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.cot-step {
+    padding: 16px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    border-left: 4px solid #E5E7EB;
+}
+
+.cot-step.in-progress {
+    border-left-color: #3B82F6;
+    background: #EFF6FF;
+}
+
+.cot-step.completed {
+    border-left-color: #10B981;
+    background: #ECFDF5;
+}
+
+.cot-step.error {
+    border-left-color: #EF4444;
+    background: #FEF2F2;
+}
+
+/* === UTILIDADES === */
 .required-indicator {
     color: #EF4444;
     margin-left: 4px;
@@ -408,219 +318,6 @@ textarea.form-control {
     margin-top: 6px;
 }
 
-.validation-error.small-error-text {
-    font-size: 12px;
-    margin-top: 4px;
-}
-
-/* === BUTTONS - APPLE STYLE === */
-
-/* Primary Button - Azul moderno Tailwind */
-.button-primary {
-    background-color: #2563eb;
-    color: #FFFFFF;
-    padding: 14px 24px;
-    min-height: 44px;
-    border: none;
-    border-radius: 14px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    gap: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.button-primary.full-width-action {
-    width: 100%;
-    max-width: 100%;
-    margin-top: 24px;
-    padding: 16px 24px;
-    min-height: 48px;
-    font-size: 15px;
-    font-weight: 600;
-}
-
-.button-primary:hover:not(:disabled) {
-    background-color: #1d4ed8;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-}
-
-.button-primary:disabled {
-    background-color: #9CA3AF;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
-.button-primary .button-icon {
-    width: 14px;
-    height: 14px;
-}
-
-/* Secondary Button - White with Border */
-.button-secondary {
-    background-color: #FFFFFF;
-    color: #374151;
-    padding: 12px 24px;
-    border: 1px solid #D1D5DB;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.25s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    gap: 6px;
-}
-
-.button-secondary:hover:not(:disabled) {
-    background-color: #F9FAFB;
-    border-color: #9CA3AF;
-    transform: translateY(-1px);
-}
-
-.button-secondary:disabled {
-    background-color: #F3F4F6;
-    color: #9CA3AF;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Cancel Button */
-.button-cancel {
-    background-color: #FFFFFF;
-    color: #DC2626;
-    padding: 12px 24px;
-    border: 1px solid #FCA5A5;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.25s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    gap: 6px;
-}
-
-.button-cancel:hover:not(:disabled) {
-    background-color: #FEF2F2;
-    border-color: #DC2626;
-    transform: translateY(-1px);
-}
-
-/* Generate Button */
-.button-generate {
-    background-color: #ECFDF5;
-    color: #059669;
-    padding: 12px 24px;
-    border: 1px solid #A7F3D0;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.25s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    gap: 6px;
-}
-
-.button-generate:hover:not(:disabled) {
-    background-color: #D1FAE5;
-    border-color: #059669;
-    transform: translateY(-1px);
-}
-
-/* Edit Button */
-.button-edit {
-    background-color: #F5F3FF;
-    color: #7C3AED;
-    padding: 12px 24px;
-    border: 1px solid #DDD6FE;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.25s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    gap: 6px;
-}
-
-.button-edit:hover:not(:disabled) {
-    background-color: #EDE9FE;
-    border-color: #7C3AED;
-    transform: translateY(-1px);
-}
-
-/* Save Individual Button - Gris elegante, ajustado a contenido */
-.button-save-individual {
-    background-color: #5e6472;
-    color: #FFFFFF;
-    padding: 10px 18px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    text-decoration: none;
-    margin-right: 8px;
-    margin-bottom: 8px;
-    width: auto;
-}
-
-.button-save-individual:hover:not(:disabled) {
-    background-color: #6b7280;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(94, 100, 114, 0.25);
-}
-
-.button-save-individual:active:not(:disabled) {
-    transform: translateY(0);
-}
-
-.button-save-individual:disabled {
-    background-color: #9ca3af;
-    color: #d1d5db;
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.button-save-individual .button-icon {
-    width: 14px;
-    height: 14px;
-    stroke-width: 1.5;
-}
-
-/* Badge de contador de HUs - Chip pequeño y elegante */
 .hu-counter-badge {
     display: inline-flex;
     align-items: center;
@@ -637,167 +334,7 @@ textarea.form-control {
     cursor: help;
 }
 
-.hu-counter-badge .badge-icon {
-    width: 12px;
-    height: 12px;
-    color: #b88a0d;
-}
-
-/* === WARNING BANNER - APPLE STYLE === */
-
-.storage-warning-banner {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    background-color: #FFF9E6;
-    border-left: 4px solid #FBBF24;
-    border-radius: 12px;
-    padding: 14px 18px;
-    margin-bottom: 18px;
-    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.08);
-}
-
-.storage-warning-banner .warning-icon {
-    width: 20px;
-    height: 20px;
-    color: #D97706;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.storage-warning-banner .warning-content {
-    flex: 1;
-}
-
-.storage-warning-banner .warning-content strong {
-    color: #92400E;
-    font-size: 14px;
-    font-weight: 600;
-    display: block;
-    margin-bottom: 4px;
-}
-
-.storage-warning-banner .warning-content p {
-    margin: 0;
-    color: #78350F;
-    font-size: 13px;
-    line-height: 1.5;
-    max-width: 70ch;
-}
-
-.storage-warning-banner .warning-content p strong {
-    display: inline;
-    color: #78350F;
-    font-weight: 600;
-}
-
-.button-primary:disabled,
-.button-secondary:disabled,
-.button-cancel:disabled,
-.button-generate:disabled,
-.button-edit:disabled {
-    background-color: #adb5bd;
-    color: #6c757d;
-    cursor: not-allowed;
-    transform: none;
-    opacity: 0.7;
-}
-
-.button-secondary:disabled {
-    background-color: #e9ecef;
-}
-
-
-.button-secondary {
-    background-color: #868e96;
-    color: #fff;
-    max-width: 200px;
-}
-
-.button-secondary:hover:not(:disabled) {
-    background-color: #6c757d;
-    transform: translateY(-1px);
-}
-
-.button-cancel {
-    background-color: #dc3545;
-    color: #fff;
-}
-
-.button-cancel:hover:not(:disabled) {
-    background-color: #c82333;
-    transform: translateY(-1px);
-}
-
-.button-edit {
-    background-color: #6f42c1;
-    color: #fff;
-}
-
-.button-edit:hover:not(:disabled) {
-    background-color: #5a32a3;
-    transform: translateY(-1px);
-}
-
-.button-generate {
-    background-color: #28a745;
-    color: #fff;
-}
-
-.button-generate:hover:not(:disabled) {
-    background-color: #218838;
-    transform: translateY(-1px);
-}
-
-/* Iconos de botones */
-.button-icon {
-    width: 16px;
-    height: 16px;
-}
-
-/* === ERROR MESSAGES & SPINNER - APPLE STYLE === */
-
-.error-message {
-    background-color: #FEF2F2;
-    color: #DC2626;
-    border: 1px solid #FCA5A5;
-    padding: 14px 18px;
-    margin-top: 20px;
-    border-radius: 12px;
-    text-align: center;
-    font-weight: 500;
-    font-size: 14px;
-}
-
-.error-message p {
-    margin: 0;
-}
-
-/* Spinner - Apple Style */
-.spinner {
-    border: 3px solid #E5E7EB;
-    border-top: 3px solid #0071E3;
-    border-radius: 50%;
-    width: 16px;
-    height: 16px;
-    animation: spin 0.8s linear infinite;
-    display: inline-block;
-    margin-right: 8px;
-    vertical-align: text-bottom;
-}
-
-.spinner-inline {
-    border: 2px solid #E5E7EB;
-    border-top: 2px solid #0071E3;
-    border-radius: 50%;
-    width: 14px;
-    height: 14px;
-    animation: spin 0.8s linear infinite;
-    display: inline-block;
-    margin-right: 6px;
-    vertical-align: middle;
-}
-
+/* === ANIMACIONES === */
 @keyframes spin {
     0% {
         transform: rotate(0deg);
@@ -808,925 +345,259 @@ textarea.form-control {
     }
 }
 
-/* === GENERATED TEST CASES EDITOR - APPLE STYLE === */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
 
-.generated-test-cases-editor {
-    margin-top: 16px;
-    padding: 36px;
-    background-color: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 18px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.04);
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.generated-test-cases-editor>h3 {
-    color: #111827;
-    font-size: 22px;
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* === ACCIONES DEL FORMULARIO === */
+.form-actions {
+    margin-top: 32px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.button-primary {
+    background-color: #2563eb;
+    color: #FFFFFF;
+    padding: 14px 24px;
+    min-height: 48px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 16px;
     font-weight: 600;
-    margin-top: 0;
-    margin-bottom: 18px;
-    text-align: center;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
 }
 
-/* Scope Section - Sin restricción de ancho, ocupa el ancho completo del contenedor */
-.scope-display-section {
-    margin-bottom: 20px;
+.button-primary:hover:not(:disabled) {
+    background-color: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.3);
+}
+
+.button-primary:disabled {
+    background-color: #9CA3AF;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.full-width-action {
     width: 100%;
 }
 
-.scope-display-section strong {
-    font-weight: 600;
-    font-size: 16px;
+/* Botón cancelar */
+.btn-cancel-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #4b5563;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel-compact:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
     color: #111827;
-    display: block;
-    margin-bottom: 10px;
 }
 
-.scope-display-section pre {
-    background-color: #F8FAFC;
-    border: 1px solid #E5E7EB;
-    border-radius: 16px;
-    padding: 20px 28px;
+.btn-cancel-compact svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* === TABLA DE CASOS DE PRUEBA DETALLADOS === */
+.detailed-test-cases-table-container {
+    overflow-x: auto;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    background: white;
+}
+
+.detailed-test-cases-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.detailed-test-cases-table th,
+.detailed-test-cases-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    vertical-align: top;
+    color: var(--text-primary, #111827);
+}
+
+.detailed-test-cases-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    color: var(--text-secondary, #4b5563);
+    white-space: nowrap;
+    border-bottom-width: 2px;
+}
+
+.detailed-test-cases-table tr:last-child td {
+    border-bottom: none;
+}
+
+.detailed-test-cases-table tr:hover td {
+    background-color: #f9fafb;
+}
+
+/* Fix for preformatted text looking like code */
+.table-pre {
     white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
     font-family: inherit;
-    font-size: 14px;
-    line-height: 1.55;
-    color: rgba(55, 65, 81, 0.85);
+    /* Use main font, not monospace */
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-primary, #111827);
+    max-width: 400px;
+    /* Prevent extremely wide content */
 }
 
-.scope-display-section pre.loading-text {
-    color: #9CA3AF;
-    font-style: italic;
+/* List styles in table */
+.detailed-test-cases-table ul,
+.detailed-test-cases-table ol {
+    margin: 0;
+    padding-left: 1.25rem;
 }
 
-/* === TABLE - APPLE STYLE WITH RESPONSIVE === */
+.detailed-test-cases-table li {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
 
+.detailed-test-cases-table li:last-child {
+    margin-bottom: 0;
+}
+
+/* Preview table specific styles */
 .preview-table-container {
-    margin-bottom: 18px;
+    margin-top: 2rem;
 }
 
 .preview-table-container h4 {
+    font-size: 1.125rem;
+    font-weight: 600;
     color: #111827;
-    font-size: 16px;
-    font-weight: 500;
-    margin-bottom: 12px;
-    margin-top: 20px;
+    margin-bottom: 1rem;
 }
 
-.preview-only-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    margin-bottom: 12px;
-    background-color: #FFFFFF;
-}
+/* === ESTILOS FALTANTES PARA BOTONES Y ALCANCE === */
 
-.preview-only-table th {
-    background-color: #F8FAFC;
-    font-weight: 600;
+/* Botón Guardar HU Individual */
+.button-save-individual {
+    background-color: #F3F4F6;
     color: #374151;
-    text-align: left;
-    padding: 10px 14px;
-    border: 1px solid #E5E7EB;
-}
-
-.preview-only-table td {
-    border: 1px solid #E5E7EB;
-    padding: 10px 14px;
-    text-align: left;
-    vertical-align: top;
-    color: rgba(55, 65, 81, 0.85);
-}
-
-.preview-only-table tbody tr {
-    transition: background-color 0.2s ease;
-}
-
-.preview-only-table tbody tr:hover {
-    background-color: #F9FAFB;
-}
-
-.preview-only-table pre.table-pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
-    font-family: inherit;
-    font-size: inherit;
-    background-color: transparent;
-    border: none;
-    padding: 0;
-    line-height: 1.5;
-}
-
-.preview-only-table ul {
-    margin: 0;
-    padding-left: 20px;
-    list-style: decimal;
-    line-height: 1.6;
-}
-
-.preview-only-table ul li {
-    margin-bottom: 4px;
-}
-
-/* Responsive Table - Card Style for Mobile */
-@media (max-width: 768px) {
-    :host {
-        padding: 24px 24px;
-    }
-
-    .form-section {
-        padding: 32px 24px;
-        border-radius: 16px;
-    }
-
-    .preview-only-table thead {
-        display: none;
-    }
-
-    .preview-only-table,
-    .preview-only-table tbody,
-    .preview-only-table tr,
-    .preview-only-table td {
-        display: block;
-        width: 100%;
-    }
-
-    .preview-only-table tr {
-        margin-bottom: 20px;
-        border: 1px solid #E5E7EB;
-        border-radius: 12px;
-        overflow: hidden;
-        background-color: #FFFFFF;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-    .preview-only-table td {
-        border: none;
-        border-bottom: 1px solid #F3F4F6;
-        padding: 12px 16px;
-        position: relative;
-        padding-left: 45%;
-    }
-
-    .preview-only-table td:last-child {
-        border-bottom: none;
-    }
-
-    .preview-only-table td:before {
-        content: attr(data-label);
-        position: absolute;
-        left: 16px;
-        width: 40%;
-        font-weight: 600;
-        color: #6B7280;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-}
-
-.no-content-message {
-    text-align: center;
-    padding: 32px 20px;
-    color: #6B7280;
-    font-style: italic;
-    background-color: #F9FAFB;
-    border: 1px dashed #D1D5DB;
+    padding: 14px 24px;
+    min-height: 48px;
+    border: 1px solid #D1D5DB;
     border-radius: 12px;
-    margin-top: 15px;
-    font-size: 14px;
-}
-
-
-.refinement-controls {
-    background-color: #f0f4f7;
-    border: 1px solid #d0dbe2;
-    border-radius: 6px;
-    padding: 20px;
-    margin-top: 10px;
-    margin-bottom: 25px;
-}
-
-.refinement-controls h4 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    color: #4a6d7c;
-    font-size: 1.2em;
-    font-weight: 600;
-    border-bottom: 1px solid #d0dbe2;
-    padding-bottom: 10px;
-}
-
-.refinement-controls .form-group {
-    margin-bottom: 15px;
-}
-
-.refinement-controls .form-group label {
-    font-size: 0.9em;
-}
-
-.refinement-controls .actions.refinement-actions {
-    border-top: none;
-    padding-top: 10px;
-    margin-top: 5px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-start;
-}
-
-.refinement-controls .actions.refinement-actions button {
-    margin-bottom: 0;
-}
-
-
-.test-case-edit-card {
-    background-color: #fdfdff;
-    border: 1px solid #e0e7ff;
-    border-radius: 6px;
-    padding: 15px 20px;
-    margin-bottom: 25px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-/* Accordion Header Styles */
-.test-case-edit-card h4.accordion-header {
-    color: #435a66;
-    margin-top: 0;
-    margin-bottom: 0;
-    /* Remove bottom margin, content will provide spacing */
-    font-size: 1.15em;
-    display: flex;
-    align-items: center;
-    font-weight: 600;
-    flex-wrap: wrap;
     cursor: pointer;
-    user-select: none;
-    /* Prevent text selection on click */
-    padding: 10px 0;
-    /* Add some padding for click area if needed */
-}
-
-.test-case-edit-card h4.accordion-header .accordion-indicator {
-    margin-right: 10px;
-    display: inline-flex;
-    align-items: center;
-    font-size: 1.1em;
-    /* Adjust size of SVG/char */
-    color: #435a66;
-    transition: transform 0.2s ease-in-out;
-}
-
-.test-case-edit-card h4.accordion-header .accordion-indicator svg {
-    transition: transform 0.2s ease-in-out;
-    /* Smooth icon transition if any */
-}
-
-.test-case-edit-card h4.accordion-header .test-case-number-prefix {
-    margin-right: 10px;
-    white-space: nowrap;
-    line-height: 1.4;
-}
-
-.form-control.inline-edit {
-    flex-grow: 1;
-    padding: 8px 12px;
-    font-size: 0.95em;
-    font-weight: normal;
-    border-radius: 4px;
-    border: 1px solid #ced4da;
-    line-height: 1.4;
-    min-width: 200px;
-    margin-left: 5px;
-    /* Space from prefix */
-}
-
-/* Accordion Content Styles */
-.test-case-edit-card .accordion-content {
-    padding-top: 15px;
-    margin-top: 15px;
-    /* Space between header and content */
-    border-top: 1px solid #e0e7ff;
-    /* Separator line */
-    /* For CSS transitions (optional, requires more setup for dynamic height)
-    overflow: hidden;
-    max-height: 0;
-    transition: max-height 0.3s ease-out, padding-top 0.3s ease-out, margin-top 0.3s ease-out;
-    will-change: max-height, padding-top, margin-top; */
-}
-
-/*
-.test-case-edit-card .accordion-content.expanded {
-    max-height: 3000px; /* Large enough value for content */
-/*    transition: max-height 0.35s ease-in;
-}
-*/
-
-
-@media (max-width: 600px) {
-    :host {
-        padding: 16px 16px;
-    }
-
-    .form-section {
-        padding: 24px 16px;
-        border-radius: 12px;
-    }
-
-    .test-case-edit-card h4.accordion-header {
-        /* Ensure this applies to accordion header too */
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .test-case-edit-card h4.accordion-header .test-case-number-prefix {
-        /* Span with "Caso de Prueba #X" */
-        margin-right: 0;
-        margin-bottom: 8px;
-    }
-
-    .test-case-edit-card h4.accordion-header .accordion-indicator {
-        margin-bottom: 5px;
-        /* If header wraps, give indicator space */
-    }
-
-    .form-control.inline-edit {
-        width: 100%;
-        margin-left: 0;
-        /* Full width on small screens */
-    }
-}
-
-.test-case-edit-card .form-group {
-    margin-bottom: 18px;
-}
-
-.test-case-edit-card .form-group label {
+    font-size: 16px;
     font-weight: 600;
-    color: #5c6770;
-    margin-bottom: 6px;
-    font-size: 0.9em;
-}
-
-.test-case-edit-card .form-group textarea.form-control {
-    min-height: 70px;
-    font-size: 0.95em;
-    padding: 10px;
-    background-color: #fff;
-    font-family: inherit;
-}
-
-.test-case-edit-card h5 {
-    /* "Pasos del Caso de Prueba:" */
-    color: #435a66;
-    margin-top: 20px;
-    margin-bottom: 10px;
-    font-size: 1.05em;
-    font-weight: 600;
-}
-
-/* Tabla de Pasos del Caso de Prueba */
-.detailed-test-cases-table-container {
-    width: 100%;
-    overflow-x: auto;
-    margin-bottom: 10px;
-    border: 1px solid #dee2e6;
-    border-radius: 5px;
-    background-color: #fff;
-}
-
-.test-case-steps-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
-}
-
-.test-case-steps-table th,
-.test-case-steps-table td {
-    border: 1px solid #e9ecef;
-    padding: 10px 12px;
-    text-align: left;
-    vertical-align: top;
-}
-
-.test-case-steps-table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
-    color: #495057;
-}
-
-.test-case-steps-table tbody tr[draggable="true"]:hover:not([class*="loading"]) {
-    cursor: grab;
-    background-color: #f7faff;
-}
-
-.test-case-steps-table tr.drag-over-element td {
-    border-top: 2px dashed #0d6efd;
-    border-bottom: 2px dashed #0d6efd;
-    background-color: #eef6ff;
-}
-
-.test-case-steps-table textarea.table-input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 8px 10px;
-    font-size: 0.95em;
-    border-radius: 4px;
-    border: 1px solid #ced4da;
-    min-height: 40px;
-    line-height: 1.5;
-    resize: vertical;
-    overflow-y: hidden;
-    font-family: inherit;
-}
-
-.test-case-steps-table textarea.table-input:focus {
-    border-color: #8a9b8c;
-    box-shadow: 0 0 0 0.15rem rgba(138, 155, 140, 0.2);
-    overflow-y: auto;
-}
-
-.test-case-steps-table td.action-cell {
-    text-align: center;
-    vertical-align: middle;
-}
-
-.button-small-icon {
-    padding: 5px 7px !important;
-    font-size: 0.9em !important;
-    line-height: 1 !important;
-    margin: 0 !important;
-    min-width: auto;
-    border-radius: 4px;
+    transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
 }
 
-.button-small-icon svg {
-    width: 1em;
-    height: 1em;
+.button-save-individual:hover:not(:disabled) {
+    background-color: #E5E7EB;
+    border-color: #9CA3AF;
+    color: #111827;
 }
 
-.delete-step-button {
-    padding: 8px 10px !important;
-    font-size: 0.9em !important;
-    line-height: 1;
-    min-width: auto;
-    border-radius: 4px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+.button-save-individual:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
-.delete-step-button svg {
-    width: 1.3em;
-    height: 1.3em;
+/* Sección de Alcance */
+.scope-display-section {
+    background-color: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
 }
 
-.add-step-action-container {
-    margin-top: 10px;
-    margin-bottom: 15px;
-    text-align: left;
+.scope-display-section h4 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: #374151;
+    font-weight: 600;
 }
 
-.add-step-button {
-    background-color: #e0e7ff;
-    border: 1px solid #c7d2fe;
-    color: #4338ca;
-    padding: 7px 15px !important;
-    font-weight: 500;
+.scope-content {
+    font-family: var(--font-family-text);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #1F2937;
+    white-space: pre-wrap;
+    /* Mantiene saltos de línea pero permite wrapping */
 }
 
-.add-step-button svg {
-    width: 1.2em;
-    height: 1.2em;
-    margin-right: 6px;
-}
-
-.add-step-button:hover:not(:disabled) {
-    background-color: #c7d2fe;
-}
-
-.loading-message-full-editor {
-    text-align: center;
-    padding: 30px 20px;
-    font-style: italic;
-    color: #5c6770;
-    font-size: 1.1em;
-}
-
-.loading-message-full-editor .spinner {
-    width: 24px;
-    height: 24px;
-    margin-bottom: 10px;
-    display: block;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-
-/* --- Contenedor de Acciones del Formulario Principal --- */
-.form-actions.main-form-actions {
-    text-align: center;
-    margin-top: 15px;
-    padding-top: 0;
-    border-top: none;
-}
-
-.form-actions.main-form-actions .button-primary.full-width-action {
-    width: auto;
-    max-width: 350px;
-    margin-left: auto;
-    margin-right: auto;
-    display: block;
-}
-
-/* === FINAL ACTIONS SECTION - APPLE STYLE === */
-
-.form-actions.editor-form-actions {
-    margin-top: 20px;
-    padding-top: 18px;
-    border-top: 1px solid #E5E7EB;
-    text-align: center;
-}
-
-.form-actions.editor-form-actions.final-actions-group {
-    margin-top: 20px;
-    padding-top: 18px;
-    border-top: none;
+/* Ajuste de acciones finales */
+.final-actions-group {
     display: flex;
-    justify-content: center;
+    gap: 16px;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    /* Centrar botones */
     flex-wrap: wrap;
 }
 
-.form-actions.editor-form-actions.final-actions-group .button-primary,
-.form-actions.editor-form-actions.final-actions-group .button-secondary,
-.form-actions.editor-form-actions.final-actions-group .button-save-individual {
-    min-width: 200px;
-    margin: 0;
+.button-icon {
+    width: 20px;
+    height: 20px;
 }
 
-/* HU Counter Badge - Apple Style */
+/* Badge contador */
 .hu-counter-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 14px;
-    background-color: #FEF3C7;
-    border: 1px solid #FDE047;
-    border-radius: 18px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #92400E;
-    box-shadow: 0 2px 6px rgba(253, 224, 71, 0.15);
-}
-
-.hu-counter-badge .badge-icon {
-    width: 14px;
-    height: 14px;
-    color: #F59E0B;
-}
-
-/* === ERROR MESSAGES - SPECIFIC === */
-
-.error-message.generated-data-error {
-    margin-top: 10px;
-    margin-bottom: 15px;
-}
-
-.error-message.initial-form-error {
-    margin-top: 10px;
-    margin-bottom: 0;
-}
-
-
-/* === RESPONSIVE - APPLE STYLE === */
-
-/* Tablets and below */
-@media (max-width: 768px) {
-
-    /* Adjust padding */
-    .form-section {
-        padding: 24px 20px;
-    }
-
-    /* Header adjustments - Stack vertically */
-    .form-header-actions {
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
-    }
-
-    .header-titles {
-        text-align: center;
-    }
-
-    .form-header-actions h2.main-title {
-        font-size: 22px;
-    }
-
-    .form-header-actions .subtitle {
-        font-size: 14px;
-    }
-
-    .button-cancel-action {
-        width: auto;
-    }
-
-    /* Form grid to single column */
-    .form-grid {
-        grid-template-columns: 1fr;
-        gap: 18px;
-    }
-
-    .form-group.full-width {
-        grid-column: span 1;
-    }
-
-    /* Button adjustments */
-    .button-small {
-        width: 100%;
-        text-align: center;
-    }
-
-    /* Images preview */
-    .image-preview-item {
-        width: calc(33.333% - 10px);
-    }
-
-    .image-preview-item .image-preview {
-        height: 80px;
-    }
-
-    /* Editor sections */
-    .generated-test-cases-editor {
-        padding: 24px 20px;
-    }
-
-    .generated-test-cases-editor>h3 {
-        font-size: 20px;
-    }
-
-    .scope-display-section {
-        max-width: 100%;
-    }
-
-    .preview-table-container h4 {
-        font-size: 15px;
-    }
-
-    .test-case-edit-card h4.accordion-header {
-        font-size: 16px;
-    }
-
-    .test-case-steps-table th,
-    .test-case-steps-table td {
-        padding: 8px;
-        font-size: 13px;
-    }
-
-    .refinement-controls .actions.refinement-actions button {
-        width: 100%;
-        margin-right: 0;
-    }
-
-    .form-actions.editor-form-actions.final-actions-group button {
-        flex-grow: 1;
-        min-width: 150px;
-    }
-}
-
-/* Mobile devices */
-@media (max-width: 576px) {
-
-    /* Page container */
-    :host {
-        padding: 20px 12px;
-    }
-
-    /* Form card */
-    .form-section {
-        padding: 20px 16px;
-        border-radius: 16px;
-    }
-
-    /* Editor section */
-    .generated-test-cases-editor {
-        padding: 20px 16px;
-    }
-
-    /* Typography */
-    .form-header-actions h2.main-title {
-        font-size: 20px;
-    }
-
-    .form-header-actions .subtitle {
-        font-size: 13px;
-    }
-
-    .generated-test-cases-editor>h3 {
-        font-size: 18px;
-    }
-
-    .preview-table-container h4 {
-        font-size: 14px;
-    }
-
-    /* Form inputs */
-    .form-group input[type="text"],
-    .form-group textarea,
-    .form-group select,
-    .form-control {
-        font-size: 16px;
-        /* Prevent zoom on iOS */
-        padding: 11px 12px;
-    }
-
-    .form-group label {
-        font-size: 13px;
-    }
-
-    /* Buttons */
-    .button-primary,
-    .button-secondary,
-    .button-cancel,
-    .button-generate,
-    .button-edit,
-    .button-save-individual,
-    .button-cancel-action {
-        font-size: 13px;
-        padding: 10px 18px;
-        min-width: auto;
-        width: 100%;
-    }
-
-    .button-primary.full-width-action {
-        font-size: 14px;
-        padding: 12px 20px;
-    }
-
-    /* Final actions group - stack vertically */
-    .form-actions.editor-form-actions.final-actions-group {
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .form-actions.editor-form-actions.final-actions-group .button-primary,
-    .form-actions.editor-form-actions.final-actions-group .button-secondary,
-    .form-actions.editor-form-actions.final-actions-group .button-save-individual {
-        width: 100%;
-        min-width: auto;
-    }
-
-    /* HU Counter Badge */
-    .hu-counter-badge {
-        width: 100%;
-        justify-content: center;
-    }
-
-    /* Warning banner */
-    .storage-warning-banner {
-        padding: 12px 14px;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .storage-warning-banner .warning-icon {
-        align-self: flex-start;
-    }
-
-    /* Images preview */
-    .image-preview-item {
-        width: calc(50% - 8px);
-    }
-
-    .image-preview-item .image-preview {
-        height: 100px;
-    }
-
-    /* Tables */
-    .test-case-steps-table th,
-    .test-case-steps-table td {
-        padding: 6px 8px;
-        font-size: 12px;
-    }
-
-    /* Action buttons */
-    .form-actions.editor-form-actions,
-    .form-actions.main-form-actions {
-        text-align: center;
-    }
-
-    .form-actions.editor-form-actions .button-primary,
-    .form-actions.main-form-actions .button-primary.full-width-action,
-    .form-actions.editor-form-actions.final-actions-group button {
-        width: 100%;
-        max-width: 100%;
-        margin-left: auto;
-        margin-right: auto;
-    }
-}
-
-/* Disabled states */
-.test-case-edit-card input:disabled,
-.test-case-edit-card textarea:disabled,
-.test-case-steps-table textarea.table-input:disabled,
-.refinement-controls select:disabled,
-.refinement-controls textarea:disabled {
-    background-color: #F3F4F6;
-    color: #6B7280;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-
-/* ========================================
-   TOOLTIPS PERSONALIZADOS - APPLE STYLE
-   ======================================== */
-
-/* Tooltip container */
-.has-tooltip {
-    position: relative;
-}
-
-/* Tooltip content */
-.has-tooltip::before {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: calc(100% + 12px);
-    left: 50%;
-    transform: translateX(-50%) translateY(4px);
-    padding: 10px 16px;
-    background: rgba(0, 0, 0, 0.88);
-    color: #FFFFFF;
-    font-size: 13px;
+    background-color: #EFF6FF;
+    color: #2563EB;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
     font-weight: 500;
-    line-height: 1.4;
-    border-radius: 8px;
-    white-space: normal;
-    max-width: 280px;
-    width: max-content;
-    text-align: center;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-    z-index: 10001;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    backdrop-filter: blur(10px);
+    /* margin-right: auto; ELIMINADO para permitir centrado */
 }
 
-/* Tooltip arrow */
-.has-tooltip::after {
-    content: '';
-    position: absolute;
-    bottom: calc(100% + 4px);
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
-    border-top: 8px solid rgba(0, 0, 0, 0.88);
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-    z-index: 10001;
-}
-
-/* Show tooltip on hover */
-.has-tooltip:hover::before,
-.has-tooltip:hover::after {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(-50%) translateY(0);
-}
-
-/* No mostrar tooltip cuando el botón está deshabilitado */
-.has-tooltip:disabled::before,
-.has-tooltip:disabled::after {
-    display: none;
-}
-
-/* Responsive para tooltips en móviles */
-@media (max-width: 768px) {
-    .has-tooltip::before {
-        max-width: 220px;
-        font-size: 12px;
-        padding: 8px 12px;
-        bottom: calc(100% + 10px);
-    }
-
-    .has-tooltip::after {
-        bottom: calc(100% + 2px);
-    }
+.badge-icon {
+    width: 16px;
+    height: 16px;
 }

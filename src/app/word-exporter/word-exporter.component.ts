@@ -2,7 +2,7 @@ import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, TabStopPosition, TabStopType } from 'docx';
 import { saveAs } from 'file-saver';
-import { ToastService } from '../services/toast.service';
+import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
 
 @Component({
@@ -33,6 +33,152 @@ export class WordExporterComponent {
   private getAPAIndent(): number {
     return this.convertInchesToTwip(0.25);
   }
+
+  previewInHtml(): void {
+    if (!this.testPlanTitle || this.huList.length === 0) {
+      this.toastService.warning('No hay información completa para generar los escenarios');
+      return;
+    }
+
+    try {
+      // Generar HTML en formato de tabla de matriz de ejecución
+      let htmlContent = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Matriz de Ejecución - ${this.testPlanTitle}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      font-size: 11pt;
+    }
+    h1 {
+      font-size: 16pt;
+      margin-bottom: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+      text-align: center;
+    }
+    .id-column {
+      width: 8%;
+      text-align: center;
+      font-weight: bold;
+    }
+    .scenario-column {
+      width: 20%;
+    }
+    .preconditions-column {
+      width: 20%;
+    }
+    .steps-column {
+      width: 27%;
+    }
+    .expected-column {
+      width: 25%;
+    }
+    ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Matriz de Ejecución - ${this.testPlanTitle}</h1>
+  
+  <table>
+    <thead>
+      <tr>
+        <th class="id-column">ID Caso</th>
+        <th class="scenario-column">Escenario</th>
+        <th class="preconditions-column">Precondiciones</th>
+        <th class="steps-column">Pasos</th>
+        <th class="expected-column">Resultado Esperado</th>
+      </tr>
+    </thead>
+    <tbody>
+`;
+
+      // Generar filas de la tabla para cada caso de prueba
+      this.huList.forEach(hu => {
+        if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
+          hu.detailedTestCases.forEach((tc, index) => {
+            const idCaso = `${hu.id}_CP${index + 1}`;
+
+            htmlContent += `
+      <tr>
+        <td class="id-column">${idCaso}</td>
+        <td class="scenario-column">${tc.title || ''}</td>
+        <td class="preconditions-column">${tc.preconditions || 'No especificadas'}</td>
+        <td class="steps-column">`;
+
+            // Agregar pasos como lista numerada
+            if (tc.steps && tc.steps.length > 0) {
+              htmlContent += `
+          <ol>
+`;
+              tc.steps.forEach(step => {
+                htmlContent += `            <li>${step.accion}</li>\n`;
+              });
+              htmlContent += `          </ol>`;
+            } else {
+              htmlContent += 'No hay pasos definidos';
+            }
+
+            htmlContent += `
+        </td>
+        <td class="expected-column">${tc.expectedResults || 'No especificados'}</td>
+      </tr>
+`;
+          });
+        }
+      });
+
+      htmlContent += `
+    </tbody>
+  </table>
+</body>
+</html>
+`;
+
+      // Descargar el archivo HTML
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const fileName = `Matriz_Ejecucion_${this.testPlanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.html`;
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+
+      window.URL.revokeObjectURL(url);
+
+      this.toastService.success('Matriz de ejecución descargada exitosamente');
+    } catch (error) {
+      console.error('Error generando matriz de ejecución:', error);
+      this.toastService.error('Error al generar la matriz de ejecución');
+    }
+  }
+
+
 
   async exportToWord(): Promise<void> {
     if (!this.testPlanTitle || this.huList.length === 0) {
@@ -68,15 +214,15 @@ export class WordExporterComponent {
       // Generar y descargar archivo
       const blob = await Packer.toBlob(doc);
       const fileName = `Plan_de_Pruebas_${this.testPlanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.docx`;
-      
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       link.click();
-      
+
       window.URL.revokeObjectURL(url);
-      
+
       this.toastService.success('Documento Word descargado exitosamente con formato APA');
     } catch (error) {
       console.error('Error exportando a Word:', error);
@@ -131,7 +277,7 @@ export class WordExporterComponent {
           spacing: { after: 120 },
         })
       );
-      
+
       // Contenido del alcance - usar generatedScope como en preview
       if (hu.generatedScope) {
         content.push(
@@ -274,7 +420,7 @@ export class WordExporterComponent {
     );
 
     return content;
-  }  private generateHuContent(): Paragraph[] {
+  } private generateHuContent(): Paragraph[] {
     const paragraphs: Paragraph[] = [];
 
     this.huList.forEach(hu => {
@@ -296,7 +442,7 @@ export class WordExporterComponent {
       if (hu.originalInput?.description) {
         paragraphs.push(
           new Paragraph({
-            style: "APAParagraph", 
+            style: "APAParagraph",
             children: [
               new TextRun({
                 text: hu.originalInput.description,

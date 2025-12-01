@@ -148,9 +148,12 @@
       <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
 
       <div *ngIf="componentState === 'previewingGenerated'" class="scope-display-section">
-        <strong>Alcance Generado:</strong> <span *ngIf="loadingScope" class="spinner-inline"></span>
-        <pre
-          [class.loading-text]="loadingScope">{{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o no aplica.') }}</pre>
+        <h4>Alcance Generado</h4>
+        <div class="scope-content" [class.loading-text]="loadingScope">
+          <span *ngIf="loadingScope" class="spinner-inline"></span>
+          {{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o
+          no aplica.') }}
+        </div>
       </div>
 
       <!-- MODO PREVISUALIZACIÓN -->
@@ -177,9 +180,9 @@
                   <pre class="table-pre">{{ tc.preconditions }}</pre>
                 </td>
                 <td data-label="Paso a Paso">
-                  <ul *ngIf="tc.steps && tc.steps.length > 0">
+                  <ol *ngIf="tc.steps && tc.steps.length > 0">
                     <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
-                  </ul>
+                  </ol>
                   <span *ngIf="!tc.steps || tc.steps.length === 0">N/A</span>
                 </td>
                 <td data-label="Resultado Esperado">

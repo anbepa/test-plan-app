@@ -337,7 +337,7 @@
               <div class="plan-section-block" *ngIf="hu.generatedScope && hu.generatedScope.trim()">
                 <h4 class="section-subtitle">Alcance Generado</h4>
                 <div class="plan-section-content">
-                  <pre class="generated-text">{{ hu.generatedScope }}</pre>
+                  <div class="generated-text">{{ hu.generatedScope }}</div>
                 </div>
               </div>
 
@@ -393,7 +393,7 @@
                   <button (click)="exportExecutionMatrix(hu)" class="button-secondary">
                     Exportar Matriz (.csv)
                   </button>
-                  <button (click)="exportExecutionMatrixToHtml(hu)" class="button-secondary">
+                  <button (click)="exportExecutionMatrixToExcel(hu)" class="button-secondary">
                     Exportar Matriz (.xlsx)
                   </button>
                 </div>
@@ -419,7 +419,7 @@
     </div>
 
     <!-- Componente oculto para exportar matriz -->
-    <app-html-matrix-exporter #matrixExporter></app-html-matrix-exporter>
+    <app-excel-matrix-exporter #matrixExporter></app-excel-matrix-exporter>
   </div>
 </div>
 

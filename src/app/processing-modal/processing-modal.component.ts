@@ -1,6 +1,6 @@
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { CoTStepResult } from '../services/gemini.service';
+import { CoTStepResult } from '../services/ai/gemini.service';
 
 @Component({
     selector: 'app-processing-modal',
@@ -14,9 +14,9 @@ export class ProcessingModalComponent implements OnChanges {
     @Input() currentStepResult: CoTStepResult | null = null;
 
     steps = [
-        { id: 'ARCHITECT', label: 'Arquitecto', icon: '📐', description: 'Definiendo estrategia...' },
-        { id: 'GENERATOR', label: 'Generador', icon: '⚙️', description: 'Creando casos de prueba...' },
-        { id: 'AUDITOR', label: 'Auditor', icon: '🔍', description: 'Verificando calidad...' }
+        { id: 'ARCHITECT', label: 'Arquitecto', icon: '1', description: 'Definiendo estrategia...' },
+        { id: 'GENERATOR', label: 'Generador', icon: '2', description: 'Creando casos de prueba...' },
+        { id: 'AUDITOR', label: 'Auditor', icon: '3', description: 'Verificando calidad...' }
     ];
 
     stepStatus: { [key: string]: 'pending' | 'in_progress' | 'completed' | 'error' } = {
@@ -26,6 +26,8 @@ export class ProcessingModalComponent implements OnChanges {
     };
 
     currentMessage: string = 'Iniciando proceso...';
+
+    processDetails: string | null = null;
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['isVisible'] && this.isVisible) {
@@ -43,13 +45,30 @@ export class ProcessingModalComponent implements OnChanges {
             'GENERATOR': 'pending',
             'AUDITOR': 'pending'
         };
-        this.currentMessage = 'Iniciando proceso...';
+        this.currentMessage = 'Iniciando análisis inteligente...';
+        this.processDetails = null;
     }
 
     private updateStatus(result: CoTStepResult): void {
         this.stepStatus[result.step] = result.status;
-        if (result.message) {
+
+        // Mensajes más amigables según el paso
+        if (result.status === 'in_progress') {
+            if (result.step === 'ARCHITECT') this.currentMessage = 'Analizando requisitos y definiendo estrategia de pruebas...';
+            if (result.step === 'GENERATOR') this.currentMessage = 'Redactando escenarios de prueba detallados paso a paso...';
+            if (result.step === 'AUDITOR') this.currentMessage = 'Revisando consistencia, ortografía y cobertura...';
+        } else if (result.message) {
             this.currentMessage = result.message;
+        }
+
+        // Extraer detalles interesantes
+        if (result.step === 'ARCHITECT' && result.status === 'completed' && result.data?.scope_definition) {
+            this.processDetails = `Alcance definido: ${result.data.scope_definition.substring(0, 150)}...`;
+        }
+
+        if (result.step === 'GENERATOR' && result.status === 'completed' && result.data?.detailedTestCases) {
+            const count = result.data.detailedTestCases.length;
+            this.processDetails = `Se han redactado ${count} casos de prueba preliminares.`;
         }
 
         // Auto-complete previous steps if current is in progress

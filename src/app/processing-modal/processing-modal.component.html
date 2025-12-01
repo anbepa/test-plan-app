@@ -1,7 +1,7 @@
 <div class="modal-overlay" *ngIf="isVisible">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>Generando con Chain of Thought</h3>
+            <h3>Generando Casos de Prueba con IA</h3>
             <div class="spinner"></div>
         </div>
 
@@ -15,12 +15,17 @@
                 </div>
                 <div class="step-info">
                     <span class="step-label">{{ step.label }}</span>
-                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'in_progress'">{{ currentMessage }}</span>
-                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'completed'">Completado</span>
-                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'pending'">En espera...</span>
+                    <span class="step-sublabel">{{ step.description }}</span>
+                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'in_progress'">En progreso...</span>
                 </div>
                 <div class="step-status-indicator"></div>
             </div>
+        </div>
+
+        <!-- Nueva sección de detalles en vivo -->
+        <div class="process-details-box" *ngIf="currentMessage || processDetails">
+            <p class="current-action" *ngIf="currentMessage"><strong>Estado:</strong> {{ currentMessage }}</p>
+            <p class="detail-text" *ngIf="processDetails">{{ processDetails }}</p>
         </div>
 
         <div class="modal-footer">

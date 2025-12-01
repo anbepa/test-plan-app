@@ -1,4 +1,5 @@
 /* You can add global styles to this file, and also import other style files */
+@import './styles/shared-components.css';
 
 /* =====================================================
    APPLE DESIGN SYSTEM - Global Styles
@@ -7,22 +8,40 @@
 
 :root {
   /* Colors - Apple Palette */
-  --primary-color: #007AFF;           /* iOS Blue */
-  --secondary-color: #5856D6;         /* iOS Purple */
-  --accent-color: #34C759;            /* iOS Green */
-  --error-color: #FF3B30;             /* iOS Red */
-  --warning-color: #FF9500;           /* iOS Orange */
-  
+  --primary-color: #007AFF;
+  /* iOS Blue */
+  --secondary-color: #5856D6;
+  /* iOS Purple */
+  --accent-color: #34C759;
+  /* iOS Green */
+  --error-color: #FF3B30;
+  /* iOS Red */
+  --warning-color: #FF9500;
+  /* iOS Orange */
+
   /* Neutral Colors */
-  --background-color: #FFFFFF;        /* Pure White */
-  --surface-color: #F5F5F7;           /* Apple Light Gray */
-  --border-color: #D1D1D6;            /* Apple Border Gray */
-  --text-primary: #1D1D1F;            /* Apple Black */
-  --text-secondary: #6E6E73;          /* Apple Gray */
-  --text-tertiary: #8E8E93;           /* Apple Light Gray Text */
-  
-  /* Typography - San Francisco Font */
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  --background-color: #FFFFFF;
+  /* Pure White */
+  --surface-color: #F5F5F7;
+  /* Apple Light Gray */
+  --border-color: #D1D1D6;
+  /* Apple Border Gray */
+  --text-primary: #1D1D1F;
+  /* Apple Black */
+  --text-secondary: #6E6E73;
+  /* Apple Gray */
+  --text-tertiary: #8E8E93;
+  /* Apple Light Gray Text */
+
+  /* Typography - San Francisco Font System */
+  /* SF Pro for interfaces - macOS/iOS system font */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --font-family-text: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Legacy variable for compatibility */
+  --font-family: var(--font-family-base);
+
   --font-size-xs: 11px;
   --font-size-sm: 13px;
   --font-size-md: 15px;
@@ -30,13 +49,13 @@
   --font-size-xl: 22px;
   --font-size-2xl: 28px;
   --font-size-3xl: 34px;
-  
+
   /* Font Weights */
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  
+
   /* Spacing - Apple 8px Grid System */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
@@ -45,20 +64,20 @@
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
-  
+
   /* Border Radius - Apple Rounded Corners */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 18px;
   --radius-full: 9999px;
-  
+
   /* Shadows - Apple Subtle Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.16);
-  
+
   /* Transitions - Apple Smooth Animations */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -95,19 +114,65 @@ body {
    Typography
    ===================================================== */
 
-h1, h2, h3, h4, h5, h6 {
+h1 {
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
 
-h1 { font-size: var(--font-size-3xl); }
-h2 { font-size: var(--font-size-2xl); }
-h3 { font-size: var(--font-size-xl); }
-h4 { font-size: var(--font-size-lg); }
-h5 { font-size: var(--font-size-md); }
-h6 { font-size: var(--font-size-sm); }
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-family-display);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+  letter-spacing: -0.02em;
+  /* Tighter tracking for display text */
+  line-height: 1.2;
+  /* Retain line-height from original h1-h6 block */
+}
+
+p,
+span,
+div,
+input,
+textarea,
+button,
+select,
+label,
+li {
+  font-family: var(--font-family-text);
+  letter-spacing: 0;
+  /* Normal tracking for body text */
+}
+
+h1 {
+  font-size: var(--font-size-3xl);
+}
+
+h2 {
+  font-size: var(--font-size-2xl);
+}
+
+h3 {
+  font-size: var(--font-size-xl);
+}
+
+h4 {
+  font-size: var(--font-size-lg);
+}
+
+h5 {
+  font-size: var(--font-size-md);
+}
+
+h6 {
+  font-size: var(--font-size-sm);
+}
 
 p {
   margin-bottom: var(--spacing-md);
@@ -128,7 +193,8 @@ a:hover {
    Buttons - Apple Style
    ===================================================== */
 
-button, .btn {
+button,
+.btn {
   font-family: var(--font-family);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
@@ -143,7 +209,8 @@ button, .btn {
   gap: var(--spacing-sm);
 }
 
-button:disabled, .btn:disabled {
+button:disabled,
+.btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -152,7 +219,9 @@ button:disabled, .btn:disabled {
    Forms - Apple Style
    ===================================================== */
 
-input, textarea, select {
+input,
+textarea,
+select {
   font-family: var(--font-family);
   font-size: var(--font-size-md);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -163,13 +232,16 @@ input, textarea, select {
   transition: all var(--transition-fast);
 }
 
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-tertiary);
 }
 
@@ -195,30 +267,81 @@ input::placeholder, textarea::placeholder {
    Utilities
    ===================================================== */
 
-.text-sm { font-size: var(--font-size-sm); }
-.text-md { font-size: var(--font-size-md); }
-.text-lg { font-size: var(--font-size-lg); }
-.text-xl { font-size: var(--font-size-xl); }
+.text-sm {
+  font-size: var(--font-size-sm);
+}
 
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-tertiary { color: var(--text-tertiary); }
+.text-md {
+  font-size: var(--font-size-md);
+}
 
-.font-medium { font-weight: var(--font-weight-medium); }
-.font-semibold { font-weight: var(--font-weight-semibold); }
-.font-bold { font-weight: var(--font-weight-bold); }
+.text-lg {
+  font-size: var(--font-size-lg);
+}
 
-.mt-sm { margin-top: var(--spacing-sm); }
-.mt-md { margin-top: var(--spacing-md); }
-.mt-lg { margin-top: var(--spacing-lg); }
+.text-xl {
+  font-size: var(--font-size-xl);
+}
 
-.mb-sm { margin-bottom: var(--spacing-sm); }
-.mb-md { margin-bottom: var(--spacing-md); }
-.mb-lg { margin-bottom: var(--spacing-lg); }
+.text-primary {
+  color: var(--text-primary);
+}
 
-.p-sm { padding: var(--spacing-sm); }
-.p-md { padding: var(--spacing-md); }
-.p-lg { padding: var(--spacing-lg); }
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-tertiary {
+  color: var(--text-tertiary);
+}
+
+.font-medium {
+  font-weight: var(--font-weight-medium);
+}
+
+.font-semibold {
+  font-weight: var(--font-weight-semibold);
+}
+
+.font-bold {
+  font-weight: var(--font-weight-bold);
+}
+
+.mt-sm {
+  margin-top: var(--spacing-sm);
+}
+
+.mt-md {
+  margin-top: var(--spacing-md);
+}
+
+.mt-lg {
+  margin-top: var(--spacing-lg);
+}
+
+.mb-sm {
+  margin-bottom: var(--spacing-sm);
+}
+
+.mb-md {
+  margin-bottom: var(--spacing-md);
+}
+
+.mb-lg {
+  margin-bottom: var(--spacing-lg);
+}
+
+.p-sm {
+  padding: var(--spacing-sm);
+}
+
+.p-md {
+  padding: var(--spacing-md);
+}
+
+.p-lg {
+  padding: var(--spacing-lg);
+}
 
 /* =====================================================
    Scrollbar - Apple Style

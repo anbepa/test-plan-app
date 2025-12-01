@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { DatabaseService, DbTestPlanWithRelations } from '../services/database.service';
-import { ToastService } from '../services/toast.service';
+import { DatabaseService, DbTestPlanWithRelations } from '../services/database/database.service';
+import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
 import { WordExporterComponent } from '../word-exporter/word-exporter.component';
 

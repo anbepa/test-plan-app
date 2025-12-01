@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDe
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
-import { ToastService } from '../services/toast.service';
+import { ToastService } from '../services/core/toast.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 export interface UIDetailedTestCase extends DetailedTestCase {
