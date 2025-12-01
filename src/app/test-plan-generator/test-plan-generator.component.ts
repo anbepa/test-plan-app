@@ -3,14 +3,15 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
-import { GeminiService } from '../services/gemini.service';
-import { LocalStorageService, TestPlanState } from '../services/local-storage.service';
-import { DatabaseService, DbUserStoryWithRelations } from '../services/database.service';
-import { ToastService } from '../services/toast.service';
+import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
+import { LocalStorageService, TestPlanState } from '../services/core/local-storage.service';
+import { DatabaseService, DbUserStoryWithRelations } from '../services/database/database.service';
+import { ToastService } from '../services/core/toast.service';
+import { TestPlanMapperService } from '../services/test-plan-mapper.service';
+import { ExportService } from '../services/export.service';
 import { catchError, finalize, tap, of } from 'rxjs';
-import { saveAs } from 'file-saver';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
-import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
+import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -23,11 +24,11 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
     CommonModule,
     FormsModule,
     TestCaseGeneratorComponent,
-    HtmlMatrixExporterComponent,
+    ExcelMatrixExporterComponent,
   ],
 })
 export class TestPlanGeneratorComponent {
-  @ViewChild('matrixExporter') matrixExporter!: HtmlMatrixExporterComponent;
+  @ViewChild('matrixExporter') matrixExporter!: ExcelMatrixExporterComponent;
 
   currentGenerationMode: GenerationMode | null = null;
   showTestCaseGenerator: boolean = false;
@@ -90,6 +91,8 @@ export class TestPlanGeneratorComponent {
     public localStorageService: LocalStorageService,
     private databaseService: DatabaseService,
     private router: Router,
+    private mapper: TestPlanMapperService,
+    private exportService: ExportService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
@@ -234,62 +237,21 @@ export class TestPlanGeneratorComponent {
 
   private async saveTestPlanToDatabase(): Promise<string | null> {
     try {
-      const testPlanData = {
-        id: crypto.randomUUID(),
-        title: this.testPlanTitle || 'Plan de Pruebas',
-        repository_link: this.repositoryLink || '',
-        cell_name: this.cellName,
-        out_of_scope: this.outOfScopeContent || '',
-        strategy: this.strategyContent || '',
-        limitations: this.limitationsContent || '',
-        assumptions: this.assumptionsContent || '',
-        team: this.teamContent || '',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      const testPlanData = this.mapper.createDbTestPlan(
+        this.testPlanTitle,
+        this.cellName,
+        this.repositoryLink,
+        this.outOfScopeContent,
+        this.strategyContent,
+        this.limitationsContent,
+        this.assumptionsContent,
+        this.teamContent
+      );
 
-      // Convertir HUData[] a DbUserStoryWithRelations[]
-      const dbUserStories: DbUserStoryWithRelations[] = this.huList.map((hu, index) => ({
-        id: crypto.randomUUID(),
-        custom_id: hu.id, // AÑADIDO: Guardar el ID personalizado de la HU
-        title: hu.title || `Historia ${index + 1}`,
-        sprint: hu.sprint || '',
-        description: hu.originalInput.description || '',
-        acceptance_criteria: hu.originalInput.acceptanceCriteria || '',
-        generation_mode: hu.originalInput.generationMode,
-        generated_scope: hu.generatedScope || '',
-        generated_test_case_titles: hu.generatedTestCaseTitles || '',
-        refinement_technique: hu.refinementTechnique || undefined,
-        refinement_context: hu.refinementContext || undefined,
-        test_plan_id: testPlanData.id, // Asignar el ID del plan
-        position: index + 1, // AÑADIDO: Asignar position basada en índice
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-
-        // Convertir casos de prueba
-        test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
-          id: crypto.randomUUID(),
-          user_story_id: '', // Se asignará en el servicio
-          title: tc.title || `Caso ${tcIndex + 1}`,
-          preconditions: tc.preconditions || '',
-          expected_results: tc.expectedResults || '',
-          position: tcIndex + 1,  // CORREGIDO: Asignar position basada en índice
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-
-          // Convertir pasos
-          test_case_steps: (tc.steps || []).map((step, stepIndex) => ({
-            id: crypto.randomUUID(),
-            test_case_id: '', // Se asignará en el servicio
-            step_number: step.numero_paso || stepIndex + 1,
-            action: step.accion || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }))
-        })),
-
-        images: [] // Por ahora sin imágenes
-      }));
+      const dbUserStories = this.mapper.mapHUListToDbUserStories(
+        this.huList,
+        testPlanData.id!
+      );
 
       console.log('💾 Datos del plan a guardar:', {
         titulo: testPlanData.title,
@@ -298,7 +260,6 @@ export class TestPlanGeneratorComponent {
         totalCasos: dbUserStories.reduce((sum, us) => sum + (us.test_cases?.length || 0), 0)
       });
 
-      // Guardar en la base de datos usando saveCompleteTestPlan
       const planId = await this.databaseService.saveCompleteTestPlan(testPlanData, dbUserStories);
 
       console.log('[DB] Plan guardado con ID:', planId);
@@ -310,16 +271,7 @@ export class TestPlanGeneratorComponent {
     }
   }
 
-  private escapeHtmlForExport(u: string | undefined | null): string {
-    return u
-      ? u
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-      : '';
-  }
+
 
   selectInitialMode(mode: GenerationMode): void {
     if (mode !== 'text') {
@@ -571,59 +523,71 @@ export class TestPlanGeneratorComponent {
       return;
     }
 
-    hu.loadingScope = true;
-    hu.errorScope = null;
+    const technique = hu.refinementTechnique || hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
+    const userContext = hu.refinementContext || 'Por favor, refina y mejora los siguientes casos de prueba manteniendo su estructura y agregando más detalles donde sea necesario.';
 
-    const technique = hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
-    const userContext = 'Por favor, refina y mejora los siguientes casos de prueba manteniendosu estructura y agregando más detalles donde sea necesario.';
+    console.log('[REFINEMENT] Iniciando refinamiento CoT para HU:', hu.id);
+    console.log('[REFINEMENT] Técnica:', technique);
+    console.log('[REFINEMENT] Contexto:', userContext);
 
-    this.geminiService.refineDetailedTestCases(
+    // Usar CoT para refinamiento
+    this.geminiService.refineTestCasesCoT(
       hu.originalInput,
       hu.detailedTestCases,
       technique,
       userContext
-    )
-      .pipe(
-        tap((refinedCases: DetailedTestCase[]) => {
-          if (refinedCases && refinedCases.length > 0) {
+    ).subscribe({
+      next: (result: any) => {
+        console.log('[REFINEMENT] CoT Step:', result.step, 'Status:', result.status);
+
+        if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
+          let refinedCases = result.data;
+
+          // El Auditor puede devolver { scope, testCases } o solo testCases
+          if (result.data.testCases) {
+            refinedCases = result.data.testCases;
+          }
+
+          if (Array.isArray(refinedCases) && refinedCases.length > 0) {
             hu.detailedTestCases = refinedCases;
             hu.errorScope = null;
             this.saveCurrentState();
-            this.toastService.success('Casos de prueba refinados exitosamente');
+            this.updatePreview();
+            this.toastService.success('Casos de prueba refinados exitosamente con CoT');
           } else {
             hu.errorScope = 'No se pudieron refinar los casos de prueba';
+            this.toastService.error('No se pudieron refinar los casos de prueba');
           }
-        }),
-        catchError((error: any) => {
-          hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error refinando casos de prueba';
-          return of([]);
-        }),
-        finalize(() => {
-          hu.loadingScope = false;
-          this.updatePreview();
-          this.cdr.detectChanges();
-        })
-      ).subscribe();
+        }
+      },
+      error: (error: any) => {
+        console.error('[REFINEMENT] Error en CoT:', error);
+        hu.errorScope = (typeof error === 'string' ? error : error.message) || 'Error refinando casos de prueba';
+        this.toastService.error(`Error refinando casos de prueba: ${hu.errorScope}`);
+        hu.loadingScope = false;
+        this.cdr.detectChanges();
+      },
+      complete: () => {
+        console.log('[REFINEMENT] CoT completado');
+        hu.loadingScope = false;
+        this.updatePreview();
+        this.cdr.detectChanges();
+      }
+    });
   }
 
   public exportExecutionMatrix(hu: HUData): void {
-    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0 || hu.detailedTestCases.some(tc => tc.title.startsWith("Error") || tc.title === "Información Insuficiente" || tc.title === "Imágenes no interpretables o técnica no aplicable" || tc.title === "Refinamiento no posible con el contexto actual")) {
-      this.toastService.warning('No hay casos de prueba válidos para exportar o los casos generados indican un error');
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+      this.toastService.warning('No hay casos de prueba válidos para exportar');
       return;
     }
-    const csvHeader = ["ID Caso", "Escenario de Prueba", "Precondiciones", "Paso a Paso", "Resultado Esperado"];
-    const csvRows = hu.detailedTestCases.map((tc, index) => {
-      const stepsString = Array.isArray(tc.steps) ? tc.steps.map(step => `${step.numero_paso}. ${step.accion}`).join('\n') : 'Pasos no disponibles.';
-      return [
-        this.escapeCsvField(hu.id + '_CP' + (index + 1)),
-        this.escapeCsvField(tc.title),
-        this.escapeCsvField(tc.preconditions),
-        this.escapeCsvField(stepsString),
-        this.escapeCsvField(tc.expectedResults)
-      ];
-    });
-    const csvFullContent = [csvHeader.join(','), ...csvRows.map(row => row.join(','))].join('\r\n');
-    saveAs(new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }), `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`);
+
+    try {
+      this.exportService.exportToCSV(hu);
+      this.toastService.success('Matriz exportada exitosamente');
+    } catch (error) {
+      this.toastService.error('Error al exportar la matriz');
+    }
   }
 
   public exportExecutionMatrixToHtml(hu: HUData): void {
@@ -640,25 +604,10 @@ export class TestPlanGeneratorComponent {
 
   public trackHuById = (i: number, hu: HUData): string => hu.id;
 
-  private escapeCsvField = (f: string | number | undefined | null): string => {
-    if (f === null || f === undefined) return '';
-    const stringValue = String(f);
-    if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('\r')) {
-      return `"${stringValue.replace(/"/g, '""')}"`;
-    }
-    return stringValue;
-  };
+
 
   public getHuSummaryForStaticAI(): string {
-    if (this.huList.length === 0) return "No hay Historias de Usuario definidas aún.";
-    let summary = this.huList.map(hu => {
-      let huDesc = `ID ${hu.id} (${hu.title}): Modo "${hu.originalInput.generationMode}".`;
-      if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
-        huDesc += ` Descripción: ${hu.originalInput.description.substring(0, 70)}...`;
-      }
-      return `- ${huDesc}`;
-    }).join('\n');
-    return summary.length > 1500 ? summary.substring(0, 1500) + "\n... (resumen truncado para no exceder límites de prompt)" : summary;
+    return this.mapper.getHuSummaryForAI(this.huList);
   }
 
   public regenerateStaticSectionWithAI(section: 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team'): void {
@@ -710,17 +659,11 @@ export class TestPlanGeneratorComponent {
   }
 
   public formatSimpleScenarioTitles(titles: string[]): string {
-    if (!titles || titles.length === 0) return 'No se generaron escenarios.';
-    return titles.map((title, index) => `${index + 1}. ${title}`).join('\n');
+    return this.exportService.formatSimpleScenarioTitles(titles);
   }
 
   public updateTestPlanTitle(): void {
-    if (this.huList.length > 0) {
-      const relevantHuForTitle = [...this.huList].reverse().find(hu => hu.originalInput.generationMode !== undefined) || this.huList[this.huList.length - 1];
-      this.testPlanTitle = `TEST PLAN EVC00057_ ${relevantHuForTitle.id} SPRINT ${relevantHuForTitle.sprint}`;
-    } else {
-      this.testPlanTitle = 'Plan de Pruebas (Aún sin entradas)';
-    }
+    this.testPlanTitle = this.mapper.generateTestPlanTitle(this.huList);
     this.cdr.detectChanges();
   }
 
@@ -758,31 +701,31 @@ export class TestPlanGeneratorComponent {
     if (this.huList.length === 0 && !this.testPlanTitle) { return '<p style="text-align:center; color:#6c757d;">Plan de pruebas aún no generado. Añade entradas.</p>'; }
     let fullPlanHtmlContent = '';
     const currentDateForHtml = new Date().toISOString().split('T')[0];
-    if (this.testPlanTitle) { fullPlanHtmlContent += `<p><span class="preview-section-title">Título del Plan de Pruebas:</span> ${this.escapeHtmlForExport(this.testPlanTitle)}</p>\n\n`; }
+    if (this.testPlanTitle) { fullPlanHtmlContent += `<p><span class="preview-section-title">Título del Plan de Pruebas:</span> ${this.exportService.escapeHtml(this.testPlanTitle)}</p>\n\n`; }
     const repoLinkUrl = this.repositoryLink.split(' ')[0];
-    fullPlanHtmlContent += `<p><span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${this.escapeHtmlForExport(repoLinkUrl)}" target="_blank" rel="noopener noreferrer">${this.escapeHtmlForExport(this.repositoryLink)}</a></p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">Repositorio pruebas VSTS:</span> <a href="${this.exportService.escapeHtml(repoLinkUrl)}" target="_blank" rel="noopener noreferrer">${this.exportService.escapeHtml(this.repositoryLink)}</a></p>\n\n`;
     if (this.isAnyHuTextBased()) {
       fullPlanHtmlContent += `<p><span class="preview-section-title">ALCANCE:</span></p>\n`;
       this.huList.forEach((hu) => {
         if (hu.originalInput.generationMode === 'text') {
-          fullPlanHtmlContent += `<p><span class="preview-hu-title">HU ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)}</span><br>\n`;
-          fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedScope) || '<em>Alcance no generado o no aplica.</em>'}</p>\n\n`;
+          fullPlanHtmlContent += `<p><span class="preview-hu-title">HU ${this.exportService.escapeHtml(hu.id)}: ${this.exportService.escapeHtml(hu.title)}</span><br>\n`;
+          fullPlanHtmlContent += `${this.exportService.escapeHtml(hu.generatedScope) || '<em>Alcance no generado o no aplica.</em>'}</p>\n\n`;
         }
       });
     }
-    fullPlanHtmlContent += `<p><span class="preview-section-title">FUERA DEL ALCANCE:</span><br>\n${this.escapeHtmlForExport(this.outOfScopeContent)}</p>\n\n`;
-    fullPlanHtmlContent += `<p><span class="preview-section-title">ESTRATEGIA:</span><br>\n${this.escapeHtmlForExport(this.strategyContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">FUERA DEL ALCANCE:</span><br>\n${this.exportService.escapeHtml(this.outOfScopeContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">ESTRATEGIA:</span><br>\n${this.exportService.escapeHtml(this.strategyContent)}</p>\n\n`;
     const scenarioHUs = this.huList.filter(hu => hu.originalInput.generationMode === 'text');
     if (scenarioHUs.length > 0) {
       fullPlanHtmlContent += `<p><span class="preview-section-title">CASOS DE PRUEBA (Solo Títulos):</span></p>\n`;
       scenarioHUs.forEach((hu) => {
-        fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.escapeHtmlForExport(hu.id)}: ${this.escapeHtmlForExport(hu.title)} (Técnica: ${this.escapeHtmlForExport(hu.originalInput.selectedTechnique)})</span><br>\n`;
-        fullPlanHtmlContent += `${this.escapeHtmlForExport(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
+        fullPlanHtmlContent += `<p><span class="preview-hu-title">ID ${this.exportService.escapeHtml(hu.id)}: ${this.exportService.escapeHtml(hu.title)} (Técnica: ${this.exportService.escapeHtml(hu.originalInput.selectedTechnique)})</span><br>\n`;
+        fullPlanHtmlContent += `${this.exportService.escapeHtml(hu.generatedTestCaseTitles) || '<em>Casos no generados o error.</em>'}</p>\n\n`;
       });
     }
-    fullPlanHtmlContent += `<p><span class="preview-section-title">LIMITACIONES:</span><br>\n${this.escapeHtmlForExport(this.limitationsContent)}</p>\n\n`;
-    fullPlanHtmlContent += `<p><span class="preview-section-title">SUPUESTOS:</span><br>\n${this.escapeHtmlForExport(this.assumptionsContent)}</p>\n\n`;
-    fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span><br>\n${this.escapeHtmlForExport(this.teamContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">LIMITACIONES:</span><br>\n${this.exportService.escapeHtml(this.limitationsContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">SUPUESTOS:</span><br>\n${this.exportService.escapeHtml(this.assumptionsContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span><br>\n${this.exportService.escapeHtml(this.teamContent)}</p>\n\n`;
     return fullPlanHtmlContent;
   }
 
@@ -809,13 +752,6 @@ export class TestPlanGeneratorComponent {
     // Funcionalidad DOCX deshabilitada temporalmente debido a incompatibilidades con el navegador
     // La librería html-to-docx requiere módulos de Node.js que no están disponibles en el navegador
     this.toastService.info('La descarga en formato DOCX no está disponible. Se descargará como HTML');
-    this.downloadHtmlFallback(htmlContent);
+    this.exportService.exportToHTML(htmlContent, this.testPlanTitle || 'PlanDePruebas');
   }
-
-  private downloadHtmlFallback(htmlContent: string): void {
-    const blob = new Blob(['\uFEFF', htmlContent], { type: 'text/html;charset=utf-8' });
-    saveAs(blob, `${this.escapeFilename(this.testPlanTitle || 'PlanDePruebas')}_Fallback.html`);
-  }
-
-  private escapeFilename = (filename: string): string => filename.replace(/[^a-z0-9_.\-]/gi, '_').substring(0, 50);
 }

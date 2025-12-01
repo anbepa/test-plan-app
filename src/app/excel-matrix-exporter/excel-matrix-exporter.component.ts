@@ -1,18 +1,17 @@
-// src/app/html-matrix-exporter/html-matrix-exporter.component.ts
+// src/app/excel-matrix-exporter/excel-matrix-exporter.component.ts
 
 import { Component, Inject, PLATFORM_ID } from '@angular/core';
-import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HUData } from '../models/hu-data.model';
-import { ToastService } from '../services/toast.service';
+import { isPlatformBrowser } from '@angular/common';
 import * as XLSX from 'xlsx';
+import { HUData } from '../models/hu-data.model';
+import { ToastService } from '../services/core/toast.service';
 
 @Component({
-  selector: 'app-html-matrix-exporter',
-  standalone: true,
-  imports: [CommonModule],
-  template: '', // No se necesita template ni css propio
+  selector: 'app-excel-matrix-exporter',
+  templateUrl: './excel-matrix-exporter.component.html',
+  styleUrls: ['./excel-matrix-exporter.component.css']
 })
-export class HtmlMatrixExporterComponent {
+export class ExcelMatrixExporterComponent {
   private isBrowser: boolean;
 
   constructor(
@@ -45,7 +44,7 @@ export class HtmlMatrixExporterComponent {
       const worksheetData: any[][] = [];
 
       // ========== HEADER COMPACTO (Filas 1-3) ==========
-      
+
       // Fila 1: Título principal del documento
       worksheetData.push([
         'MATRIZ DE EJECUCIÓN DE CASOS DE PRUEBA',
@@ -62,7 +61,7 @@ export class HtmlMatrixExporterComponent {
         month: 'long',
         day: 'numeric'
       });
-      
+
       worksheetData.push([
         'Historia de Usuario:',
         hu.id || 'N/A',
@@ -101,17 +100,17 @@ export class HtmlMatrixExporterComponent {
         { hpt: 25 },  // Fila 3: Set y Estado
         { hpt: 30 }   // Fila 4: Encabezados
       ];
-      
+
       let currentRow = 4; // Empezar después del header (fila 4 = índice 3)
 
       // Combinar celdas del header
       // Fila 1: Título completo
       merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
-      
+
       // Fila 2: HU y Fecha
       merges.push({ s: { r: 1, c: 1 }, e: { r: 1, c: 2 } });
       merges.push({ s: { r: 1, c: 4 }, e: { r: 1, c: 5 } });
-      
+
       // Fila 3: Set y Estado
       merges.push({ s: { r: 2, c: 1 }, e: { r: 2, c: 2 } });
       merges.push({ s: { r: 2, c: 4 }, e: { r: 2, c: 5 } });
@@ -139,7 +138,7 @@ export class HtmlMatrixExporterComponent {
           steps.forEach((step, stepIdx) => {
             // Numeración automática: "1. ", "2. ", etc.
             const pasoNumerado = `${stepIdx + 1}. ${step.accion}`;
-            
+
             if (stepIdx === 0) {
               // Primera fila del caso con toda la info
               worksheetData.push([
@@ -161,7 +160,7 @@ export class HtmlMatrixExporterComponent {
                 '' // Resultado vacío (será combinado)
               ]);
             }
-            
+
             // Altura expandible automática para evidencias (mínimo 100pt)
             rowHeights.push({ hpt: 100 });
             currentRow++;
@@ -394,7 +393,7 @@ export class HtmlMatrixExporterComponent {
       console.log(`   📝 Numeración: Pasos numerados automáticamente (1, 2, 3...)`);
       console.log(`   📸 Evidencias: Celdas expandibles con altura automática`);
       console.log(`   📋 Estructura: 6 columnas (ID, Escenario, Precondiciones, Pasos, Evidencias, Resultado)`);
-      
+
       this.toastService.success('Archivo Excel generado exitosamente');
     } catch (error) {
       console.error('❌ Error generando archivo Excel:', error);

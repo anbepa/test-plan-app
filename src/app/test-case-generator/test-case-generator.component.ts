@@ -2,8 +2,9 @@ import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, 
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
-import { GeminiService } from '../services/gemini.service';
-import { ToastService } from '../services/toast.service';
+import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
+import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
+import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
@@ -22,7 +23,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ProcessingModalComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -57,6 +58,9 @@ export class TestCaseGeneratorComponent implements OnInit {
   loadingScenarios: boolean = false;
   errorScope: string | null = null;
   errorScenarios: string | null = null;
+
+  isProcessingModalVisible: boolean = false;
+  currentCoTStepResult: CoTStepResult | null = null;
 
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
@@ -201,168 +205,71 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.refinementTechnique = this.currentSelectedTechnique;
     this.cdr.detectChanges();
 
-    // NUEVO ENFOQUE: Una sola petición para alcance + casos de prueba
+    // NUEVO ENFOQUE: Chain of Thought (3 Fases)
     if (huData.originalInput.generationMode === 'text') {
-      this.loadingScope = true;
-      this.loadingScenarios = true;
+      this.isProcessingModalVisible = true;
+      this.currentCoTStepResult = null;
 
-      console.log('[GENERATION] Iniciando generación combinada de alcance + casos de prueba');
+      console.log('[GENERATION] Iniciando generación CoT');
 
-      this.geminiService.generateScopeAndTestCasesCombined(
+      this.geminiService.generateTestCasesCoT(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique
-      ).pipe(
-        tap(result => {
-          console.log('[GENERATION] Resultado combinado recibido');
-          console.log('[GENERATION] Alcance:', result.scope);
-          console.log('[GENERATION] Casos de prueba:', result.testCases.length);
-
-          if (this.generatedHUData) {
-            // Asignar alcance
-            this.generatedHUData.generatedScope = result.scope;
-
-            // Asignar casos de prueba
-            this.generatedHUData.detailedTestCases = result.testCases.map((tc, index) => {
-              const detailedTc: UIDetailedTestCase = {
-                ...tc,
-                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                  numero_paso: s.numero_paso || (i + 1),
-                  accion: s.accion || "Paso no descrito"
-                })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
-                isExpanded: index === 0
-              };
-              return detailedTc;
-            });
-
-            this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
-              result.testCases.map(tc => tc.title)
-            );
-
-            console.log('[GENERATION] Datos asignados correctamente a generatedHUData');
-          }
-        }),
-        catchError(e => {
-          const errorMsg = (typeof e === 'string' ? e : e.message) || 'Error al generar alcance y casos de prueba.';
-          console.error('[GENERATION] Error:', errorMsg);
-
-          this.errorScope = errorMsg;
-          this.errorScenarios = errorMsg;
-
-          if (this.generatedHUData) {
-            this.generatedHUData.errorScope = errorMsg;
-            this.generatedHUData.generatedScope = 'Error al generar el alcance.';
-
-            const errorTc: UIDetailedTestCase = {
-              title: 'Error Crítico en Generación',
-              preconditions: errorMsg,
-              steps: [{ numero_paso: 1, accion: 'La generación falló. Por favor, intenta nuevamente.' }],
-              expectedResults: 'N/A',
-              isExpanded: true
-            };
-            this.generatedHUData.detailedTestCases = [errorTc];
-          }
-
-          return of(null);
-        }),
-        finalize(() => {
-          this.loadingScope = false;
-          this.loadingScenarios = false;
-          this.componentState = 'previewingGenerated';
+      ).subscribe({
+        next: (result: CoTStepResult) => {
+          this.currentCoTStepResult = result;
           this.cdr.detectChanges();
 
+          if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
+            console.log('[GENERATION] CoT Completado. Datos:', result.data);
+
+            if (this.generatedHUData) {
+              this.generatedHUData.generatedScope = result.data.scope || 'Scope no generado';
+
+              const rawTestCases = result.data.testCases || [];
+              this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => {
+                const detailedTc: UIDetailedTestCase = {
+                  ...tc,
+                  steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
+                    numero_paso: s.numero_paso || (i + 1),
+                    accion: s.accion || "Paso no descrito"
+                  })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                  isExpanded: index === 0
+                };
+                return detailedTc;
+              });
+
+              this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
+                rawTestCases.map((tc: any) => tc.title)
+              );
+            }
+          }
+        },
+        error: (e) => {
+          console.error('[GENERATION] Error en CoT:', e);
+          this.isProcessingModalVisible = false;
+          this.errorScope = 'Error durante la generación CoT.';
+          this.errorScenarios = 'Error durante la generación CoT.';
+          this.cdr.detectChanges();
+        },
+        complete: () => {
           setTimeout(() => {
-            const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-            textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
-          }, 0);
-        })
-      ).subscribe();
+            this.isProcessingModalVisible = false;
+            this.componentState = 'previewingGenerated';
+            this.cdr.detectChanges();
+
+            setTimeout(() => {
+              const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
+              textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+            }, 0);
+          }, 1000); // Pequeña pausa para ver el check final
+        }
+      });
     }
   }
 
-  private _generateOrRefineDetailedTestCases$(
-    huData: UIHUData,
-    technique: string,
-    userContext?: string,
-    mode: 'initial' | 'refinement' = 'initial'
-  ): Observable<UIDetailedTestCase[]> {
-    if (!this.generatedHUData) return of([]);
-    this.loadingScenarios = true;
-    let genObs$: Observable<OriginalDetailedTestCase[]>;
-    if (mode === 'refinement') {
-      const originalTestCasesForRefinement = huData.detailedTestCases.map(uiTc => {
-        const { isExpanded, ...originalTc } = uiTc;
-        return originalTc as OriginalDetailedTestCase;
-      });
-      genObs$ = this.geminiService.refineDetailedTestCases(
-        huData.originalInput,
-        originalTestCasesForRefinement,
-        technique,
-        userContext || ''
-      );
-    } else {
-      if (huData.originalInput.description && huData.originalInput.acceptanceCriteria) {
-        genObs$ = this.geminiService.generateDetailedTestCasesTextBased(huData.originalInput.description, huData.originalInput.acceptanceCriteria, technique, userContext);
-      } else {
-        this.loadingScenarios = false;
-        this.cdr.detectChanges();
-        return of([]);
-      }
-    }
-    return genObs$.pipe(
-      tap((tcs: OriginalDetailedTestCase[]) => {
-        if (this.generatedHUData) {
-          const existingExpansionStates = new Map<string, boolean>();
-          if (mode === 'refinement') {
-            this.generatedHUData.detailedTestCases.forEach(existingTc => {
-              existingExpansionStates.set(existingTc.title, existingTc.isExpanded || false);
-            });
-          }
-          this.generatedHUData.detailedTestCases = tcs.map((tc, index) => {
-            const detailedTc: UIDetailedTestCase = {
-              ...tc,
-              steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                numero_paso: s.numero_paso || (i + 1),
-                accion: s.accion || "Paso no descrito"
-              })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
-              isExpanded: mode === 'refinement' ? (existingExpansionStates.get(tc.title) || false) : (index === 0)
-            };
-            return detailedTc;
-          });
-          this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(tcs.map(tc => tc.title));
-        }
-      }),
-      catchError(e => {
-        const errorMsg = (typeof e === 'string' ? e : e.message) || `Error al ${mode === 'initial' ? 'generar' : 'refinar'} casos de prueba.`;
-        this.errorScenarios = errorMsg;
-        if (this.generatedHUData) {
-          const errorTc: UIDetailedTestCase = {
-            title: `Error Crítico en ${mode === 'initial' ? 'Generación' : 'Refinamiento'} `,
-            preconditions: errorMsg,
-            steps: [],
-            expectedResults: "N/A",
-            isExpanded: true
-          };
-          this.generatedHUData.detailedTestCases = [errorTc];
-          this.generatedHUData.generatedTestCaseTitles = "Error en el proceso.";
-        }
-        return of(this.generatedHUData?.detailedTestCases || []);
-      }),
-      finalize(() => {
-        this.loadingScenarios = false;
-        this.cdr.detectChanges();
-        setTimeout(() => {
-          if (this.componentState === 'editingForRefinement' && this.generatedHUData && this.generatedHUData.detailedTestCases) {
-            this.generatedHUData.detailedTestCases.forEach((tc, index) => {
-              if (tc.isExpanded) {
-                this.autoGrowTextareasInCardByIndex(index);
-              }
-            });
-          }
-        }, 0);
-      })
-    );
-  }
+
 
   startRefinementMode(): void {
     if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
@@ -407,23 +314,82 @@ export class TestCaseGeneratorComponent implements OnInit {
         });
       }
     });
-    this._generateOrRefineDetailedTestCases$(
-      this.generatedHUData,
+    // Refinamiento con CoT
+    this.isProcessingModalVisible = true;
+    this.currentCoTStepResult = null;
+
+    // Preparar casos para envío (quitar propiedades UI)
+    const casesToRefine = this.generatedHUData.detailedTestCases.map(uiTc => {
+      const { isExpanded, ...originalTc } = uiTc;
+      return originalTc as OriginalDetailedTestCase;
+    });
+
+    this.geminiService.refineTestCasesCoT(
+      this.generatedHUData.originalInput,
+      casesToRefine,
       this.refinementTechnique,
-      this.userRefinementContext,
-      'refinement'
-    ).subscribe(() => {
-      this.componentState = 'editingForRefinement';
-      this.cdr.detectChanges();
-      setTimeout(() => {
-        if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
-          this.generatedHUData.detailedTestCases.forEach((tc, index) => {
-            if (tc.isExpanded) {
-              this.autoGrowTextareasInCardByIndex(index);
-            }
-          });
+      this.userRefinementContext
+    ).subscribe({
+      next: (result: CoTStepResult) => {
+        this.currentCoTStepResult = result;
+        this.cdr.detectChanges();
+
+        if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
+          // El Auditor devuelve { scope: ..., testCases: ... } o solo testCases?
+          // REFINE_AUDITOR_PROMPT devuelve solo testCases array en JSON.
+          // Verificamos estructura.
+          let refinedCases = result.data;
+          if (result.data.testCases) {
+            refinedCases = result.data.testCases;
+          }
+
+          if (this.generatedHUData) {
+            // Mantener estado de expansión
+            const existingExpansionStates = new Map<string, boolean>();
+            this.generatedHUData.detailedTestCases.forEach(existingTc => {
+              existingExpansionStates.set(existingTc.title, existingTc.isExpanded || false);
+            });
+
+            this.generatedHUData.detailedTestCases = refinedCases.map((tc: any, index: number) => {
+              const detailedTc: UIDetailedTestCase = {
+                ...tc,
+                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
+                  numero_paso: s.numero_paso || (i + 1),
+                  accion: s.accion || "Paso no descrito"
+                })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                isExpanded: existingExpansionStates.get(tc.title) || (index === 0)
+              };
+              return detailedTc;
+            });
+
+            this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
+              refinedCases.map((tc: any) => tc.title)
+            );
+          }
         }
-      }, 0);
+      },
+      error: (e) => {
+        console.error('[REFINEMENT] Error en CoT:', e);
+        this.isProcessingModalVisible = false;
+        this.formError = 'Error durante el refinamiento CoT.';
+        this.cdr.detectChanges();
+      },
+      complete: () => {
+        setTimeout(() => {
+          this.isProcessingModalVisible = false;
+          this.componentState = 'editingForRefinement';
+          this.cdr.detectChanges();
+          setTimeout(() => {
+            if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
+              this.generatedHUData.detailedTestCases.forEach((tc, index) => {
+                if (tc.isExpanded) {
+                  this.autoGrowTextareasInCardByIndex(index);
+                }
+              });
+            }
+          }, 0);
+        }, 1000);
+      }
     });
   }
 

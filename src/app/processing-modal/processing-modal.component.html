@@ -1,0 +1,36 @@
+<div class="modal-overlay" *ngIf="isVisible">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Generando Casos de Prueba con IA</h3>
+            <div class="spinner"></div>
+        </div>
+
+        <div class="steps-container">
+            <div class="step-item" *ngFor="let step of steps" [ngClass]="stepStatus[step.id]">
+                <div class="step-icon">
+                    <span *ngIf="stepStatus[step.id] !== 'completed' && stepStatus[step.id] !== 'error'">{{ step.icon
+                        }}</span>
+                    <span *ngIf="stepStatus[step.id] === 'completed'" class="check-icon">✓</span>
+                    <span *ngIf="stepStatus[step.id] === 'error'" class="error-icon">✕</span>
+                </div>
+                <div class="step-info">
+                    <span class="step-label">{{ step.label }}</span>
+                    <span class="step-sublabel">{{ step.description }}</span>
+                    <span class="step-desc" *ngIf="stepStatus[step.id] === 'in_progress'">En progreso...</span>
+                </div>
+                <div class="step-status-indicator"></div>
+            </div>
+        </div>
+
+        <!-- Nueva sección de detalles en vivo -->
+        <div class="process-details-box" *ngIf="currentMessage || processDetails">
+            <p class="current-action" *ngIf="currentMessage"><strong>Estado:</strong> {{ currentMessage }}</p>
+            <p class="detail-text" *ngIf="processDetails">{{ processDetails }}</p>
+        </div>
+
+        <div class="modal-footer">
+            <p class="footer-note">Por favor espera, estamos asegurando la mejor calidad con nuestro proceso de 3 fases.
+            </p>
+        </div>
+    </div>
+</div>

@@ -2,27 +2,28 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
-import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database.service';
-import { GeminiService } from '../services/gemini.service';
+import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database/database.service';
+import { GeminiService } from '../services/ai/gemini.service';
+import { ToastService } from '../services/core/toast.service';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
-import { HtmlMatrixExporterComponent } from '../html-matrix-exporter/html-matrix-exporter.component';
-import { WordExporterComponent } from '../word-exporter/word-exporter.component';
-import { ToastService } from '../services/toast.service';
-import { catchError, finalize, tap, of } from 'rxjs';
-import { saveAs } from 'file-saver';
+import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
+
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import { TestPlanMapperService } from '../services/test-plan-mapper.service';
+import { ExportService } from '../services/export.service';
+import { catchError, finalize, tap, of } from 'rxjs';
 
 import { GeneralSectionsComponent, StaticSectionName } from './components/general-sections/general-sections.component';
 
 @Component({
   selector: 'app-test-plan-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, HtmlMatrixExporterComponent, GeneralSectionsComponent, ConfirmationModalComponent],
+  imports: [CommonModule, FormsModule, RouterLink, ExcelMatrixExporterComponent, GeneralSectionsComponent, ConfirmationModalComponent],
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })
 export class TestPlanViewerComponent implements OnInit, OnDestroy {
-  @ViewChild('matrixExporter') matrixExporter!: HtmlMatrixExporterComponent;
+  @ViewChild('matrixExporter') matrixExporter!: ExcelMatrixExporterComponent;
 
   Math = Math;
 
@@ -50,8 +51,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   assumptionsContent: string = '';
   teamContent: string = '';
 
-
-
   loadingRepositoryLinkAI: boolean = false;
   loadingOutOfScopeAI: boolean = false;
   loadingStrategyAI: boolean = false;
@@ -71,8 +70,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   errorAssumptionsAI: string | null = null;
   errorTeamAI: string | null = null;
 
-
-
   huList: HUData[] = [];
 
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -87,6 +84,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     private geminiService: GeminiService,
     private router: Router,
     private route: ActivatedRoute,
+    private mapper: TestPlanMapperService,
+    private exportService: ExportService,
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
   ) { }
@@ -190,7 +189,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   nextPage(): void {
-    this.goToPage(this.currentPage + 1);
+    this.goToPage(this.currentPage - 1);
   }
 
   previousPage(): void {
@@ -334,59 +333,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   convertDbTestPlanToHUList(testPlan: DbTestPlanWithRelations) {
-    this.huList = (testPlan.user_stories || []).map((us: any, index: number) => {
-      console.log(`🔍 VIEWER cargando HU ${index}:`, {
-        custom_id: us.custom_id,
-        db_id: us.id,
-        title: us.title,
-        generated_scope: us.generated_scope
-      });
-
-      // Usar el custom_id si existe, sino generar uno temporal basado en el índice
-      // NUNCA usar us.id (UUID de BD) como fallback para evitar sobrescribir el custom_id original
-      const customId = us.custom_id || `HU_${index + 1}_${testPlan.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20)}`;
-
-      console.log(`✅ ID seleccionado para HU ${index}: ${customId}`);
-
-      const huData: HUData = {
-        id: customId, // Usar el ID personalizado guardado en la BD
-        dbUuid: us.id, // ID interno de la BD para tracking de cambios
-        title: us.title || '',
-        sprint: us.sprint || '',
-        generatedScope: us.generated_scope || '',
-        generatedTestCaseTitles: us.generated_test_case_titles || '',
-        detailedTestCases: (us.test_cases || []).map((tc: any, tcIdx: number) => ({
-          title: tc.title || '',
-          preconditions: tc.preconditions || '',
-          steps: (tc.test_case_steps || []).map((step: any, idx: number) => ({
-            numero_paso: idx + 1,
-            accion: step.action || '',
-            dbId: step.id
-          })),
-          expectedResults: tc.expected_results || '',
-          isExpanded: false, // Colapsado por defecto
-          dbId: tc.id,
-          position: tc.position
-        })),
-        originalInput: {
-          generationMode: (us.generation_mode as any) || 'text',
-          description: us.description || '',
-          acceptanceCriteria: us.acceptance_criteria || '',
-          selectedTechnique: us.refinement_technique || undefined
-        },
-        refinementTechnique: us.refinement_technique || '',
-        refinementContext: us.refinement_context || '',
-        isScopeDetailsOpen: !!(us.generated_scope && us.generated_scope.trim()), // Abrir automáticamente si hay alcance
-        isScenariosDetailsOpen: false,
-        isExpanded: false, // HU Colapsada por defecto
-        editingScope: false,
-        editingTestCases: false,
-        editingScenariosTestCases: false,
-        loadingScope: false,
-        errorScope: null
-      };
-      return huData;
-    });
+    this.huList = this.mapper.mapDbTestPlanToHUList(testPlan);
   }
 
   backToList() {
@@ -457,8 +404,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     }
     this.router.navigate(['/preview', this.selectedTestPlan.id]);
   }
-
-  // === EDICIÓN DE SECCIONES ESTÁTICAS ===
 
   // === EDICIÓN DE SECCIONES ESTÁTICAS ===
 
@@ -565,14 +510,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
           switch (section) {
             case 'repositoryLink':
               this.repositoryLink = newContent;
-              this.repositoryLink = newContent;
               break;
             case 'outOfScope':
               this.outOfScopeContent = newContent;
-              this.outOfScopeContent = newContent;
               break;
             case 'strategy':
-              this.strategyContent = newContent;
               this.strategyContent = newContent;
               break;
             case 'limitations':
@@ -609,43 +551,83 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   exportExecutionMatrix(hu: HUData): void {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+      this.toastService.warning('No hay casos de prueba válidos para exportar');
+      return;
+    }
+
+    try {
+      this.exportService.exportToCSV(hu);
+      this.toastService.success('Matriz exportada exitosamente');
+    } catch (error) {
+      this.toastService.error('Error al exportar la matriz');
+    }
+  }
+
+  exportExecutionMatrixToExcel(hu: HUData): void {
+    if (this.matrixExporter) {
+      this.matrixExporter.generateMatrixExcel(hu);
+    } else {
+      this.toastService.error('El componente para exportar no se ha cargado correctamente');
+    }
+  }
+
+  exportExecutionMatrixToHtml(hu: HUData): void {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
       this.toastService.warning('No hay casos de prueba para exportar');
       return;
     }
 
-    let csvContent = 'ID Caso,Escenario de Prueba,Precondiciones,Pasos,Resultado Esperado\n';
-
-    hu.detailedTestCases.forEach((tc, index) => {
-      const id = `${hu.id}_CP${index + 1}`;
-      const steps = tc.steps.map((s, i) => `${i + 1}. ${s.accion}`).join(' | ');
-      const row = [
-        id,
-        tc.title,
-        tc.preconditions || '',
-        steps,
-        tc.expectedResults || ''
-      ].map(cell => `"${cell.replace(/"/g, '""')}"`).join(',');
-
-      csvContent += row + '\n';
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    saveAs(blob, `matriz_ejecucion_${hu.id}.csv`);
-    this.toastService.success('Matriz exportada en formato CSV');
-  }
-
-  exportExecutionMatrixToHtml(hu: HUData): void {
-    if (!this.matrixExporter) {
-      this.toastService.error('Componente de exportación no disponible');
-      return;
-    }
-
-    // Llamar al método generateMatrixExcel que está implementado
     try {
-      this.matrixExporter.generateMatrixExcel(hu);
-      // El toast de éxito se muestra dentro de generateMatrixExcel
+      // Generar contenido HTML básico para la matriz
+      let htmlContent = `
+        <html>
+        <head>
+          <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid black; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+          </style>
+        </head>
+        <body>
+          <h1>Matriz de Ejecución - ${hu.id}</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>ID Caso</th>
+                <th>Escenario</th>
+                <th>Precondiciones</th>
+                <th>Pasos</th>
+                <th>Resultado Esperado</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      hu.detailedTestCases.forEach((tc, index) => {
+        const stepsHtml = tc.steps.map(s => `${s.numero_paso}. ${s.accion}`).join('<br>');
+        htmlContent += `
+          <tr>
+            <td>${hu.id}_CP${index + 1}</td>
+            <td>${tc.title}</td>
+            <td>${tc.preconditions}</td>
+            <td>${stepsHtml}</td>
+            <td>${tc.expectedResults}</td>
+          </tr>
+        `;
+      });
+
+      htmlContent += `
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      this.exportService.exportToHTML(htmlContent, `Matriz_${hu.id}`);
+      this.toastService.success('Matriz exportada a HTML exitosamente');
     } catch (error) {
-      this.toastService.error('Error al generar el archivo Excel');
+      console.error('Error exportando a HTML:', error);
+      this.toastService.error('Error al exportar la matriz a HTML');
     }
   }
 
@@ -803,8 +785,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     }
   }
-
-
 
   // === ELIMINAR TEST PLAN ===
 

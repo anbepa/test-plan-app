@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDe
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
-import { ToastService } from '../services/toast.service';
+import { ToastService } from '../services/core/toast.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 export interface UIDetailedTestCase extends DetailedTestCase {
@@ -37,7 +37,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   isDeleteModalOpen = false;
   deleteModalTitle = '';
   deleteModalMessage = '';
-  pendingDeletion: { type: 'testCase' | 'step'; testCaseIndex: number; stepIndex?: number } | null = null;
+  pendingDeletion: { type: 'testCase' | 'step' | 'allTestCases'; testCaseIndex?: number; stepIndex?: number } | null = null;
 
   private debounceTimer: any = null;
   private readonly DEBOUNCE_TIME = 1000;
@@ -171,6 +171,13 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
     this.isDeleteModalOpen = true;
   }
 
+  deleteAllTestCases(): void {
+    this.pendingDeletion = { type: 'allTestCases' };
+    this.deleteModalTitle = 'Eliminar todos los casos de prueba';
+    this.deleteModalMessage = '¿Estás seguro de eliminar TODOS los casos de prueba? Esta acción no se puede deshacer.';
+    this.isDeleteModalOpen = true;
+  }
+
   // Drag and drop functionality
   onStepDragStart(event: DragEvent, step: TestCaseStep, testCase: UIDetailedTestCase): void {
     this.draggedStep = step;
@@ -292,9 +299,9 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   confirmDeletion(): void {
     if (!this.pendingDeletion) return;
 
-    if (this.pendingDeletion.type === 'testCase') {
+    if (this.pendingDeletion.type === 'testCase' && this.pendingDeletion.testCaseIndex !== undefined) {
       this.testCases.splice(this.pendingDeletion.testCaseIndex, 1);
-    } else if (this.pendingDeletion.type === 'step' && this.pendingDeletion.stepIndex !== undefined) {
+    } else if (this.pendingDeletion.type === 'step' && this.pendingDeletion.testCaseIndex !== undefined && this.pendingDeletion.stepIndex !== undefined) {
       const targetTestCase = this.testCases[this.pendingDeletion.testCaseIndex];
       if (targetTestCase?.steps) {
         targetTestCase.steps.splice(this.pendingDeletion.stepIndex, 1);
@@ -303,6 +310,8 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
         });
         this.ensureSingleExpanded(this.pendingDeletion.testCaseIndex);
       }
+    } else if (this.pendingDeletion.type === 'allTestCases') {
+      this.testCases.splice(0, this.testCases.length);
     }
 
     this.emitChanges();
