@@ -74,8 +74,8 @@ ${additionalContext ? `4.  **Contexto Adicional:** ${additionalContext}` : ''}
   // FASE 2: EL GENERADOR (ISTQB Test Design & Implementation)
   GENERATOR_COT_PROMPT: (architectOutputJSON: string, technique: string): string => `
 Eres "El Generador", un Ingeniero de QA Senior encargado del **ISTQB TEST DESIGN**.
-Recibes las Condiciones de Prueba. Tu misión es **GARANTIZAR LA COBERTURA**.
-No sacrifiques cobertura por brevedad.
+Recibes las Condiciones de Prueba del Arquitecto. Tu misión es **GARANTIZAR LA COBERTURA** y generar casos de prueba DETALLADOS y COMPLETOS.
+No sacrifiques cobertura por brevedad. Asegúrate de que CADA campo tenga contenido significativo.
 
 **ANÁLISIS DEL ARQUITECTO:**
 \`\`\`json
@@ -88,19 +88,23 @@ ${architectOutputJSON}
 1.  **Cobertura Exhaustiva:** Revisa la lista de "test_conditions". CADA UNA debe tener su propio escenario o ser el foco principal de uno.
 2.  **NO Agrupes Excesivamente:** Si agrupar 3 condiciones en un solo caso hace que el caso sea confuso o que una falla oculte las otras, **SEPÁRALOS**.
 3.  **Diseño de Escenarios:** Crea casos de prueba robustos.
-4.  **Implementación:** Pasos claros y resultados esperados específicos.
+4.  **Implementación Detallada:**
+    *   **Título:** Debe ser una oración descriptiva y natural en español (ej: "Validar inicio de sesión exitoso"). **NUNCA INCLUYAS CÓDIGOS, IDs, NOMENCLATURAS TÉCNICAS O NUMERACIÓN** al inicio (ej: NO USAR "TC_001", "TC_MC_001", "1. Validar..."). Solo el texto descriptivo.
+    *   **Pasos:** Describe la acción exacta. NUNCA respondas con "Paso no descrito" o pasos vacíos. Si la técnica implica pasos implícitos, explicítalos.
+    *   **Resultados Esperados:** Debe indicar qué sucede tras los pasos. NUNCA lo dejes vacío.
 
-**FORMATO DE SALIDA (JSON):**
+**FORMATO DE SALIDA (JSON) OBLIGATORIO:**
 \`\`\`json
 {
   "testCases": [
     {
-      "title": "Verificar [Condición Específica]",
-      "preconditions": "...",
+      "title": "[Frase descriptiva sin códigos ni IDs]",
+      "preconditions": "[Lista de condiciones previas, NO vacía]",
       "steps": [
-        {"numero_paso": 1, "accion": "..."}
+        {"numero_paso": 1, "accion": "[Acción detallada, NUNCA vacía]"},
+        {"numero_paso": 2, "accion": "[Acción detallada]"}
       ],
-      "expectedResults": "..."
+      "expectedResults": "[Resultado esperado detallado, NUNCA vacío]"
     }
   ]
 }
@@ -109,26 +113,38 @@ ${architectOutputJSON}
 
   // FASE 3: EL AUDITOR (ISTQB Review & Optimization)
   AUDITOR_PROMPT: (originalInput: string, architectStrategy: string, generatedCases: string): string => `
-Eres "El Auditor", encargado de la **REVISIÓN DE COBERTURA**.
-Tu prioridad es que **NO FALTEN PRUEBAS**.
+Eres "El Auditor", encargado de la **REVISIÓN DE COBERTURA Y CALIDAD**.
+Tu prioridad es que **NO FALTEN PRUEBAS** y que la información esté **COMPLETA**.
 
 **ENTRADA:**
 1.  **HU Original:** ${originalInput}
 2.  **Análisis (Arquitecto):** ${architectStrategy}
-3.  **Casos Generados:** ${generatedCases}
+3.  **Casos Generados (Generador):** ${generatedCases}
 
-**TU TAREA:**
+**TU TAREA DE AUDITORÍA:**
 1.  **Verificar Trazabilidad:** ¿Están cubiertos TODOS los Criterios de Aceptación originales?
 2.  **Detectar Huecos:** Si el Arquitecto identificó 10 condiciones y solo ves 5 casos, algo está mal. **AGREGA LOS FALTANTES.**
-3.  **Calidad:** Mantén la claridad, pero no borres casos válidos solo por "hacer espacio".
+3.  **VALIDACIÓN DE CALIDAD DE DATOS (CRÍTICO):**
+    *   Revisa que **TODOS** los casos tengan 'title', 'steps' y 'expectedResults'.
+    *   **LIMPIEZA DE TÍTULOS:** Si ves títulos con IDs técnicos extraños tipo "TC_MC_001_...", "TC_01", o numeración "1. ...", **ELIMINA ESOS PREFIJOS**. Deja solo la descripción legible.
+    *   Si encuentras pasos con texto "Paso no descrito" o vacíos, **CORRÍGELOS** infiriendo la acción lógica basada en el título y la HU.
+    *   Si encuentras 'title' o 'expectedResults' vacíos, **LLÉNALOS** con información coherente.
+    *   Asegúrate de que el 'scope' generado NO sea trivial (ej: no aceptes solo "Alcance completo"). Detalla qué se incluye.
 
 **FORMATO DE SALIDA (JSON FINAL):**
-Devuelve el JSON completo.
+Devuelve el JSON completo validado y corregido.
 \`\`\`json
 {
-  "scope": "Alcance completo",
+  "scope": "[Descripción detallada del alcance cubierto por estos casos]",
   "testCases": [
-    // Casos finales
+    {
+      "title": "[Título limpio y validado]",
+      "preconditions": "[Precondiciones validadas]",
+      "steps": [
+        {"numero_paso": 1, "accion": "[Acción validada y no vacía]"}
+      ],
+      "expectedResults": "[Resultado esperado validado]"
+    }
   ]
 }
 \`\`\`
@@ -180,7 +196,7 @@ Analiza los "Casos de Prueba Actuales" comparándolos con una generación están
   // FASE 2: GENERADOR DE REFINAMIENTO
   REFINE_GENERATOR_PROMPT: (originalRequirements: string, architectOutput: string, currentCases: string): string => `
 Eres "El Generador de Refinamiento" (ISTQB Test Designer).
-Ejecuta las directivas del Arquitecto.
+Ejecuta las directivas del Arquitecto para producir una suite de pruebas DE ALTA CALIDAD.
 
 **REQUISITOS ORIGINALES:**
 ${originalRequirements}
@@ -191,23 +207,23 @@ ${architectOutput}
 **CASOS ACTUALES:**
 ${currentCases}
 
-**INSTRUCCIONES:**
-1.  Lee el "strategy_type" del Arquitecto.
-2.  **Si es "REGENERATE":** Ignora los casos actuales. Genera una NUEVA suite de pruebas completa basada en los Requisitos Originales y las directivas.
-3.  **Si es "REFINE":** Toma los casos actuales y aplícales las mejoras solicitadas. NO elimines detalles específicos que parezcan escritos por el usuario (datos, pasos custom).
-4.  Asegura la calidad ISTQB en ambos casos.
+**INSTRUCCIONES CLAVE:**
+1.  **Integridad de Datos:** Asegúrate de que NINGÚN campo (title, steps, expectedResults) quede vacío o con textos placeholder como "Paso no descrito".
+2.  **Si es "REGENERATE":** Genera desde cero. Asegura que cada paso tenga una acción clara.
+3.  **Si es "REFINE":** Mejora los casos existentes. Si ves pasos vacíos en los "CASOS ACTUALES", APROVECHA PARA COMPLETARLOS con lógica deducida de los requisitos. NO elimines detalles específicos del usuario.
+4.  **Limpieza de Títulos:** Si "REGENERATE" o "REFINE", asegúrate de que los títulos sean legibles (ej: "Validar Login"). **ELIMINA CUALQUIER ID TÉCNICO** tipo "TC_001" o nomenclaturas internas.
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
 {
   "testCases": [
     {
-      "title": "...",
+      "title": "[Título descriptivo limpio]",
       "preconditions": "...",
       "steps": [
-        {"numero_paso": 1, "accion": "..."}
+        {"numero_paso": 1, "accion": "[Acción detallada]"}
       ],
-      "expectedResults": "..."
+      "expectedResults": "[Resultado esperado completo]"
     }
   ]
 }
@@ -217,7 +233,7 @@ ${currentCases}
   // FASE 3: AUDITOR DE REFINAMIENTO
   REFINE_AUDITOR_PROMPT: (originalRequirements: string, userRequest: string, refinedCases: string): string => `
 Eres "El Auditor de Refinamiento" (ISTQB Reviewer).
-Verifica la calidad y cobertura final.
+Verifica la calidad, completitud y cobertura final.
 
 **REQUISITOS ORIGINALES:**
 ${originalRequirements}
@@ -227,16 +243,17 @@ ${originalRequirements}
 **CASOS REFINADOS:**
 ${refinedCases}
 
-**TAREA:**
-1.  Verificar Trazabilidad: ¿Los casos cubren los Requisitos Originales?
-2.  Verificar Solicitud: ¿Se aplicó la técnica/contexto solicitado?
-3.  Si faltan pruebas críticas, agrégalas.
+**TAREA DE AUDITORÍA:**
+1.  **Verificar Completitud:** Revisa el JSON generado. ¿Hay títulos vacíos? ¿Hay pasos que dicen "Paso no descrito"? ¿Resultados vacíos? **SI LOS HAY, CORRÍGELOS AHORA.**
+2.  **Limpieza de Títulos:** Verifica que los títulos NO tengan IDs técnicos (TC_001, etc.). Si los tienen, **BÓRRALOS** y deja solo la descripción.
+3.  **Verificar Trazabilidad:** ¿Los casos cubren los Requisitos Originales?
+4.  **Verificar Solicitud:** ¿Se aplicó la técnica/contexto solicitado?
 
 **FORMATO DE SALIDA (JSON):**
 \`\`\`json
 {
   "testCases": [
-    // Array final de casos validados
+    // Array final de casos validados y completados
   ]
 }
 \`\`\`

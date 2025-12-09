@@ -1,7 +1,7 @@
 require('dotenv').config({ path: '.env.local', override: true });
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = 3000;
@@ -22,21 +22,30 @@ app.post('/api/gemini-proxy', async (req, res) => {
     }
 
     const { payload, action } = req.body;
-    const { contents, generationConfig } = payload || req.body;
+    // Extract the actual API body from the proxy payload or use body directly
+    const apiBody = payload || req.body;
 
-    console.log(`[API] Gemini API call received (action: ${action || 'direct'})`);
+    console.log(`[API] Gemini API call received (action: ${action || 'direct'}) - Model: gemini-2.5-flash`);
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
 
-    const result = await model.generateContent({
-      contents,
-      generationConfig
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(apiBody)
     });
 
-    const responseData = result.response;
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error('[ERROR] Gemini API Error Response:', JSON.stringify(responseData, null, 2));
+      return res.status(response.status).json(responseData);
+    }
 
     console.log(`[SUCCESS] Gemini response successful`);
+    // The frontend expects the raw API response structure (candidates, etc.)
     res.status(200).json(responseData);
 
   } catch (error) {
@@ -48,5 +57,6 @@ app.post('/api/gemini-proxy', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n[SERVER] Local API server running on http://localhost:${PORT}`);
   console.log(`[ENDPOINT] http://localhost:${PORT}/api/gemini-proxy`);
-  console.log(`[API_KEY] GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Configured' : 'Missing'}\n`);
+  console.log(`[API_KEY] GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Configured' : 'Missing'}`);
+  console.log(`[MODEL] Using gemini-2.5-flash-lite (v1 REST API)\n`);
 });
