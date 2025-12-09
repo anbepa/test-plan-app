@@ -87,8 +87,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: architectPrompt }] }],
             generationConfig: {
               maxOutputTokens: 2000,
-              temperature: 0.5,
-              responseMimeType: 'application/json'
+              temperature: 0.5
             }
           };
 
@@ -109,8 +108,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: generatorPrompt }] }],
             generationConfig: {
               maxOutputTokens: 16384,
-              temperature: 0.7,
-              responseMimeType: 'application/json'
+              temperature: 0.7
             }
           };
 
@@ -135,8 +133,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: auditorPrompt }] }],
             generationConfig: {
               maxOutputTokens: 16384,
-              temperature: 0.3,
-              responseMimeType: 'application/json'
+              temperature: 0.3
             }
           };
 
@@ -185,8 +182,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: architectPrompt }] }],
             generationConfig: {
               maxOutputTokens: 2000,
-              temperature: 0.5,
-              responseMimeType: 'application/json'
+              temperature: 0.5
             }
           };
 
@@ -206,8 +202,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: generatorPrompt }] }],
             generationConfig: {
               maxOutputTokens: 16384,
-              temperature: 0.7,
-              responseMimeType: 'application/json'
+              temperature: 0.7
             }
           };
 
@@ -226,8 +221,7 @@ export class GeminiService {
             contents: [{ parts: [{ text: auditorPrompt }] }],
             generationConfig: {
               maxOutputTokens: 16384,
-              temperature: 0.3,
-              responseMimeType: 'application/json'
+              temperature: 0.3
             }
           };
 
