@@ -2,7 +2,7 @@
 
 ## 📋 Resumen
 
-Sistema centralizado para gestionar proveedores de IA (Gemini, DeepSeek, Copilot) mediante variables de entorno, funcionando tanto en desarrollo local como en Vercel.
+Sistema centralizado para gestionar proveedores de IA (Gemini, DeepSeek) mediante variables de entorno, funcionando tanto en desarrollo local como en Vercel.
 
 ---
 
@@ -21,20 +21,15 @@ cp .env.example .env.local
 Edita `.env.local` con tus credenciales:
 
 ```bash
-# Proveedor activo (gemini | deepseek | copilot)
+# Proveedor activo (gemini | deepseek)
 AI_PROVIDER=deepseek
 
 # Google Gemini
 GEMINI_API_KEY=AIzaSy...
-GEMINI_MODEL=gemini-2.5-flash-lite
 
 # DeepSeek
 DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_MODEL=deepseek-chat
-
-# GitHub Copilot
-COPILOT_API_KEY=ghp_...
-COPILOT_MODEL=gpt-4o
 ```
 
 ### 3. Reiniciar servidor
@@ -55,7 +50,6 @@ En Vercel Dashboard → Settings → Environment Variables:
 |----------|---------|-------------|
 | `AI_PROVIDER` | `deepseek` | Proveedor activo (gemini o deepseek) |
 | `GEMINI_API_KEY` | `AIzaSy...` | API Key de Gemini |
-| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | Modelo de Gemini |
 | `DEEPSEEK_API_KEY` | `sk-...` | API Key de DeepSeek |
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Modelo de DeepSeek |
 

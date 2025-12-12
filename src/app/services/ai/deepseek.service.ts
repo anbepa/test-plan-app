@@ -8,7 +8,6 @@ import {
 } from '../../models/hu-data.model';
 import { DeepSeekClientService, DeepSeekRequest } from './deepseek-client.service';
 import { GeminiParserService } from './gemini-parser.service'; // Reusamos el parser si es útil para limpiar JSON
-import { CoTStepResult } from './gemini.service'; // Reusamos la interfaz
 
 @Injectable({
     providedIn: 'root'
@@ -58,7 +57,6 @@ export class DeepSeekService {
             map(response => this.getContentFromResponse(response).trim())
         );
     }
-
 
     /**
      * Generación DIRECTA (sin CoT) - 1 sola llamada, respuestas concisas
@@ -129,4 +127,5 @@ export class DeepSeekService {
             })
         );
     }
+
 }

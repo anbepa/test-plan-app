@@ -33,7 +33,7 @@ export function getAIConfig(): AIConfig {
                 id: 'gemini',
                 name: 'gemini',
                 displayName: 'Google Gemini',
-                model: process.env['GEMINI_MODEL'] || 'gemini-2.5-flash-lite',
+                model: 'gemini-2.5-flash-lite',
                 apiKey: process.env['GEMINI_API_KEY'] || '',
                 enabled: !!process.env['GEMINI_API_KEY']
             },

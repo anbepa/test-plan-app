@@ -10,13 +10,6 @@ import {
 import { GeminiClientService } from './gemini-client.service';
 import { GeminiParserService } from './gemini-parser.service';
 
-export interface CoTStepResult {
-  step: 'ARCHITECT' | 'GENERATOR' | 'AUDITOR';
-  status: 'pending' | 'in_progress' | 'completed' | 'error';
-  data?: any;
-  message?: string;
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -58,185 +51,50 @@ export class GeminiService {
   }
 
   /**
-   * Generación de Casos de Prueba con Chain of Thought (3 Fases)
+   * Generación directa de casos de prueba (sin CoT)
    */
-  public generateTestCasesCoT(
+  public generateTestCasesDirect(
     description: string,
     acceptanceCriteria: string,
-    technique: string,
-    additionalContext?: string
-  ): Observable<CoTStepResult> {
-    const timestamp = new Date().toISOString();
-    const contextWithTimestamp = `${additionalContext || ''}\n\n[Generación solicitada en: ${timestamp}]`.trim();
+    technique: string
+  ): Observable<any> {
+    const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
+    const payload: any = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+    };
 
-    return new Observable<CoTStepResult>(observer => {
-      (async () => {
-        try {
-          // --- FASE 1: EL ARQUITECTO ---
-          observer.next({ step: 'ARCHITECT', status: 'in_progress', message: 'El Arquitecto está analizando la estrategia...' });
-
-          const architectPrompt = PROMPTS.ARCHITECT_PROMPT(description, acceptanceCriteria, technique, contextWithTimestamp);
-
-          // DEBUG: Loguear el prompt completo
-          console.log('[DEBUG] Description:', description);
-          console.log('[DEBUG] Acceptance Criteria:', acceptanceCriteria);
-          console.log('[DEBUG] Technique:', technique);
-          console.log('[DEBUG] Architect Prompt (primeros 1000 chars):', architectPrompt.substring(0, 1000));
-
-          const architectPayload = {
-            contents: [{ parts: [{ text: architectPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 2000,
-              temperature: 0.5
-            }
-          };
-
-          const architectResponse = await this.geminiClient.callGemini('generateTextCases', architectPayload).toPromise();
-          const architectText = this.geminiParser.getTextFromParts(architectResponse?.candidates?.[0]?.content?.parts).trim();
-          const architectJSON = this.geminiParser.cleanAndParseJSON(architectText);
-
-          observer.next({ step: 'ARCHITECT', status: 'completed', data: architectJSON, message: 'Estrategia definida.' });
-
-          // Espera de 5 segundos
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          // --- FASE 2: EL GENERADOR ---
-          observer.next({ step: 'GENERATOR', status: 'in_progress', message: 'El Generador está escribiendo los casos de prueba...' });
-
-          const generatorPrompt = PROMPTS.GENERATOR_COT_PROMPT(JSON.stringify(architectJSON), technique);
-          const generatorPayload = {
-            contents: [{ parts: [{ text: generatorPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 16384,
-              temperature: 0.7
-            }
-          };
-
-          const generatorResponse = await this.geminiClient.callGemini('generateTextCases', generatorPayload).toPromise();
-          const generatorText = this.geminiParser.getTextFromParts(generatorResponse?.candidates?.[0]?.content?.parts).trim();
-          // No parseamos todavía, pasamos el texto crudo al Auditor para que él valide
-
-          observer.next({ step: 'GENERATOR', status: 'completed', data: { rawText: generatorText }, message: 'Casos generados preliminarmente.' });
-
-          // Espera de 5 segundos
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          // --- FASE 3: EL AUDITOR ---
-          observer.next({ step: 'AUDITOR', status: 'in_progress', message: 'El Auditor está revisando y puliendo los casos...' });
-
-          const auditorPrompt = PROMPTS.AUDITOR_PROMPT(
-            `HU: ${description}\nCA: ${acceptanceCriteria}`,
-            JSON.stringify(architectJSON),
-            generatorText
-          );
-          const auditorPayload = {
-            contents: [{ parts: [{ text: auditorPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 16384,
-              temperature: 0.3
-            }
-          };
-
-          const auditorResponse = await this.geminiClient.callGemini('generateTextCases', auditorPayload).toPromise();
-          const auditorText = this.geminiParser.getTextFromParts(auditorResponse?.candidates?.[0]?.content?.parts).trim();
-          const finalJSON = this.geminiParser.cleanAndParseJSON(auditorText);
-
-          // IMPORTANTE: Preservar el alcance detallado definido por el Arquitecto
-          // El Generador/Auditor a veces lo simplifican demasiado (ej: "Alcance completo")
-          if (architectJSON && architectJSON.scope_definition) {
-            console.log('[CoT] Restaurando definición de alcance del Arquitecto');
-            finalJSON.scope = architectJSON.scope_definition;
-          }
-
-          observer.next({ step: 'AUDITOR', status: 'completed', data: finalJSON, message: 'Proceso finalizado con éxito.' });
-          observer.complete();
-
-        } catch (error: any) {
-          console.error('[CoT Error]', error);
-          observer.error(error);
-        }
-      })();
-    });
+    return this.geminiClient.callGemini('generateTextCases', payload).pipe(
+      map(response => {
+        const textContent = this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim();
+        return this.geminiParser.cleanAndParseJSON(textContent);
+      })
+    );
   }
 
   /**
-   * Refinamiento de Casos de Prueba con Chain of Thought (3 Fases)
+   * Refinamiento directo de casos de prueba (sin CoT)
    */
-  public refineTestCasesCoT(
+  public refineTestCasesDirect(
     originalHuInput: HUData['originalInput'],
     editedTestCases: DetailedTestCase[],
     newTechnique: string,
     userReanalysisContext: string
-  ): Observable<CoTStepResult> {
-    return new Observable<CoTStepResult>(observer => {
-      (async () => {
-        try {
-          const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
-          const originalReqStr = `Historia de Usuario: ${originalHuInput.description}\nCriterios de Aceptación: ${originalHuInput.acceptanceCriteria}`;
+  ): Observable<any> {
+    const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
+    const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
 
-          // --- FASE 1: ARQUITECTO DE REFINAMIENTO ---
-          observer.next({ step: 'ARCHITECT', status: 'in_progress', message: 'Analizando solicitud de cambios...' });
+    const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+    const payload: any = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+    };
 
-          const architectPrompt = PROMPTS.REFINE_ARCHITECT_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
-          const architectPayload = {
-            contents: [{ parts: [{ text: architectPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 2000,
-              temperature: 0.5
-            }
-          };
-
-          const architectResponse = await this.geminiClient.callGemini('refineDetailedTestCases', architectPayload).toPromise();
-          const architectText = this.geminiParser.getTextFromParts(architectResponse?.candidates?.[0]?.content?.parts).trim();
-          const architectJSON = this.geminiParser.cleanAndParseJSON(architectText);
-
-          observer.next({ step: 'ARCHITECT', status: 'completed', data: architectJSON, message: 'Directivas de cambio definidas.' });
-
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          // --- FASE 2: GENERADOR DE REFINAMIENTO ---
-          observer.next({ step: 'GENERATOR', status: 'in_progress', message: 'Aplicando cambios a los casos de prueba...' });
-
-          const generatorPrompt = PROMPTS.REFINE_GENERATOR_PROMPT(originalReqStr, JSON.stringify(architectJSON), currentCasesStr);
-          const generatorPayload = {
-            contents: [{ parts: [{ text: generatorPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 16384,
-              temperature: 0.7
-            }
-          };
-
-          const generatorResponse = await this.geminiClient.callGemini('refineDetailedTestCases', generatorPayload).toPromise();
-          const generatorText = this.geminiParser.getTextFromParts(generatorResponse?.candidates?.[0]?.content?.parts).trim();
-
-          observer.next({ step: 'GENERATOR', status: 'completed', data: { rawText: generatorText }, message: 'Cambios aplicados.' });
-
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          // --- FASE 3: AUDITOR DE REFINAMIENTO ---
-          observer.next({ step: 'AUDITOR', status: 'in_progress', message: 'Verificando cumplimiento de la solicitud...' });
-
-          const auditorPrompt = PROMPTS.REFINE_AUDITOR_PROMPT(originalReqStr, userReanalysisContext, generatorText);
-          const auditorPayload = {
-            contents: [{ parts: [{ text: auditorPrompt }] }],
-            generationConfig: {
-              maxOutputTokens: 16384,
-              temperature: 0.3
-            }
-          };
-
-          const auditorResponse = await this.geminiClient.callGemini('refineDetailedTestCases', auditorPayload).toPromise();
-          const auditorText = this.geminiParser.getTextFromParts(auditorResponse?.candidates?.[0]?.content?.parts).trim();
-          const finalJSON = this.geminiParser.cleanAndParseJSON(auditorText);
-
-          observer.next({ step: 'AUDITOR', status: 'completed', data: finalJSON, message: 'Refinamiento verificado.' });
-          observer.complete();
-
-        } catch (error: any) {
-          console.error('[CoT Refinement Error]', error);
-          observer.error(error);
-        }
-      })();
-    });
+    return this.geminiClient.callGemini('refineDetailedTestCases', payload).pipe(
+      map(response => {
+        const textContent = this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim();
+        return this.geminiParser.cleanAndParseJSON(textContent);
+      })
+    );
   }
 }

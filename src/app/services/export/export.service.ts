@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HUData } from '../models/hu-data.model';
+import { HUData } from '../../models/hu-data.model';
 import { saveAs } from 'file-saver';
 
 /**

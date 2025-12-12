@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { HUData } from '../models/hu-data.model';
-import { DbTestPlan, DbUserStoryWithRelations } from './database/database.service';
+import { HUData } from '../../models/hu-data.model';
+import { DbTestPlan, DbUserStoryWithRelations } from './database.service';
 
 /**
  * Servicio para transformar datos entre formatos de la aplicación y la base de datos

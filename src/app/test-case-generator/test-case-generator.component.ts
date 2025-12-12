@@ -2,9 +2,7 @@ import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, 
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
-import { CoTStepResult } from '../services/ai/gemini.service';
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
-import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
 import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
@@ -24,7 +22,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ProcessingModalComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -59,9 +57,6 @@ export class TestCaseGeneratorComponent implements OnInit {
   loadingScenarios: boolean = false;
   errorScope: string | null = null;
   errorScenarios: string | null = null;
-
-  isProcessingModalVisible: boolean = false;
-  currentCoTStepResult: CoTStepResult | null = null;
 
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
