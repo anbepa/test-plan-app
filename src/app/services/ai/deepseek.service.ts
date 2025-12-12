@@ -59,6 +59,38 @@ export class DeepSeekService {
         );
     }
 
+    /**
+     * Generación con interfaz CoT pero usando el flujo directo de DeepSeek.
+     * Esto asegura compatibilidad con AiUnifiedService cuando DeepSeek es el proveedor activo.
+     */
+    public generateTestCasesCoT(
+        description: string,
+        acceptanceCriteria: string,
+        technique: string,
+        additionalContext?: string
+    ): Observable<CoTStepResult> {
+        return new Observable<CoTStepResult>(observer => {
+            observer.next({
+                step: 'GENERATOR',
+                status: 'in_progress',
+                message: 'Generando casos con DeepSeek en modo directo (sin CoT)'
+            });
+
+            this.generateTestCasesDirect(description, acceptanceCriteria, technique).subscribe({
+                next: data => {
+                    observer.next({
+                        step: 'AUDITOR',
+                        status: 'completed',
+                        data,
+                        message: 'Generación completada mediante modo directo de DeepSeek.'
+                    });
+                    observer.complete();
+                },
+                error: err => observer.error(err)
+            });
+        });
+    }
+
 
     /**
      * Generación DIRECTA (sin CoT) - 1 sola llamada, respuestas concisas
@@ -128,5 +160,36 @@ export class DeepSeekService {
                 return finalJSON;
             })
         );
+    }
+
+    /**
+     * Refinamiento compatible con la interfaz CoT reutilizando el flujo directo de DeepSeek.
+     */
+    public refineTestCasesCoT(
+        originalHuInput: HUData['originalInput'],
+        editedTestCases: DetailedTestCase[],
+        newTechnique: string,
+        userReanalysisContext: string
+    ): Observable<CoTStepResult> {
+        return new Observable<CoTStepResult>(observer => {
+            observer.next({
+                step: 'GENERATOR',
+                status: 'in_progress',
+                message: 'Refinando casos con DeepSeek en modo directo (sin CoT)'
+            });
+
+            this.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext).subscribe({
+                next: data => {
+                    observer.next({
+                        step: 'AUDITOR',
+                        status: 'completed',
+                        data,
+                        message: 'Refinamiento completado mediante modo directo de DeepSeek.'
+                    });
+                    observer.complete();
+                },
+                error: err => observer.error(err)
+            });
+        });
     }
 }

@@ -8,8 +8,8 @@ import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { LocalStorageService, TestPlanState } from '../services/core/local-storage.service';
 import { DatabaseService, DbUserStoryWithRelations } from '../services/database/database.service';
 import { ToastService } from '../services/core/toast.service';
-import { TestPlanMapperService } from '../services/test-plan-mapper.service';
-import { ExportService } from '../services/export.service';
+import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
+import { ExportService } from '../services/export/export.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
@@ -258,7 +258,10 @@ export class TestPlanGeneratorComponent {
         titulo: testPlanData.title,
         planId: testPlanData.id,
         cantidadHUs: dbUserStories.length,
-        totalCasos: dbUserStories.reduce((sum, us) => sum + (us.test_cases?.length || 0), 0)
+        totalCasos: dbUserStories.reduce(
+          (sum: number, us: DbUserStoryWithRelations) => sum + (us.test_cases?.length || 0),
+          0
+        )
       });
 
       const planId = await this.databaseService.saveCompleteTestPlan(testPlanData, dbUserStories);
