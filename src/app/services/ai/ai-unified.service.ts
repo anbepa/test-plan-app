@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { GeminiService, CoTStepResult } from './gemini.service';
+import { GeminiService } from './gemini.service';
 import { DeepSeekService } from './deepseek.service';
 import { AiProvidersService } from './ai-providers.service';
 import { DetailedTestCase, HUData } from '../../models/hu-data.model';
@@ -27,8 +27,8 @@ export class AiUnifiedService {
         const activeProvider = this.providersService.getActiveProvider();
 
         if (!activeProvider) {
-            console.warn('[AI Unified] No hay proveedor activo, usando Gemini por defecto');
-            return this.geminiService;
+            console.warn('[AI Unified] No hay proveedor activo, usando DeepSeek por defecto');
+            return this.deepSeekService;
         }
 
         console.log(`[AI Unified] Usando proveedor: ${activeProvider.name}`);
@@ -37,8 +37,9 @@ export class AiUnifiedService {
             case 'deepseek':
                 return this.deepSeekService;
             case 'gemini':
-            default:
                 return this.geminiService;
+            default:
+                return this.deepSeekService;
         }
     }
 
@@ -63,21 +64,7 @@ export class AiUnifiedService {
     }
 
     /**
-     * Generar casos de prueba con Chain of Thought
-     */
-    public generateTestCasesCoT(
-        description: string,
-        acceptanceCriteria: string,
-        technique: string,
-        additionalContext?: string
-    ): Observable<CoTStepResult> {
-        const service = this.getActiveService();
-        return service.generateTestCasesCoT(description, acceptanceCriteria, technique, additionalContext);
-    }
-
-    /**
-     * Generar casos de prueba con generación DIRECTA (sin CoT)
-     * Más rápido y conciso - ideal para DeepSeek
+     * Generar casos de prueba usando el flujo directo del proveedor activo
      */
     public generateTestCasesDirect(
         description: string,
@@ -86,32 +73,16 @@ export class AiUnifiedService {
     ): Observable<any> {
         const service = this.getActiveService();
 
-        // Solo DeepSeek tiene modo directo implementado
-        if (service instanceof DeepSeekService) {
-            return service.generateTestCasesDirect(description, acceptanceCriteria, technique);
+        if ('generateTestCasesDirect' in service) {
+            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique);
         }
 
-        // Fallback: usar CoT para Gemini
-        console.warn('[AI Unified] Modo directo no disponible para Gemini, usando CoT');
-        return service.generateTestCasesCoT(description, acceptanceCriteria, technique);
+        console.warn('[AI Unified] El proveedor activo no soporta generación directa, usando DeepSeek');
+        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique);
     }
 
     /**
-     * Refinar casos de prueba con Chain of Thought
-     */
-    public refineTestCasesCoT(
-        originalHuInput: HUData['originalInput'],
-        editedTestCases: DetailedTestCase[],
-        newTechnique: string,
-        userReanalysisContext: string
-    ): Observable<CoTStepResult> {
-        const service = this.getActiveService();
-        return service.refineTestCasesCoT(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
-    }
-
-    /**
-     * Refinar casos de prueba con refinamiento DIRECTO (sin CoT)
-     * Más rápido y conciso - ideal para DeepSeek
+     * Refinar casos de prueba usando el flujo directo del proveedor activo
      */
     public refineTestCasesDirect(
         originalHuInput: HUData['originalInput'],
@@ -121,14 +92,12 @@ export class AiUnifiedService {
     ): Observable<any> {
         const service = this.getActiveService();
 
-        // Solo DeepSeek tiene modo directo implementado
-        if (service instanceof DeepSeekService) {
-            return service.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
+        if ('refineTestCasesDirect' in service) {
+            return (service as any).refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
         }
 
-        // Fallback: usar CoT para Gemini
-        console.warn('[AI Unified] Refinamiento directo no disponible para Gemini, usando CoT');
-        return service.refineTestCasesCoT(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
+        console.warn('[AI Unified] El proveedor activo no soporta refinamiento directo, usando DeepSeek');
+        return this.deepSeekService.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
     }
 
     /**
@@ -136,6 +105,6 @@ export class AiUnifiedService {
      */
     public getActiveProviderName(): string {
         const activeProvider = this.providersService.getActiveProvider();
-        return activeProvider?.displayName || 'Gemini (por defecto)';
+        return activeProvider?.displayName || 'DeepSeek (por defecto)';
     }
 }
