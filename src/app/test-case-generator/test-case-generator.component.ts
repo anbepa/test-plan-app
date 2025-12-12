@@ -2,7 +2,8 @@ import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, 
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
-import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
+import { CoTStepResult } from '../services/ai/gemini.service';
+import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
 import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
@@ -71,7 +72,7 @@ export class TestCaseGeneratorComponent implements OnInit {
   private readonly windowsTemplateId = '1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
 
   constructor(
-    private geminiService: GeminiService,
+    private aiService: AiUnifiedService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
     private elRef: ElementRef,
@@ -205,29 +206,27 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.refinementTechnique = this.currentSelectedTechnique;
     this.cdr.detectChanges();
 
-    // NUEVO ENFOQUE: Chain of Thought (3 Fases)
+    // GENERACIÓN DIRECTA (1 llamada, más rápida)
     if (huData.originalInput.generationMode === 'text') {
-      this.isProcessingModalVisible = true;
-      this.currentCoTStepResult = null;
+      this.loadingScenarios = true;
+      this.errorScenarios = null;
 
-      console.log('[GENERATION] Iniciando generación CoT');
+      console.log('[GENERATION] Iniciando generación DIRECTA (modo rápido)');
 
-      this.geminiService.generateTestCasesCoT(
+      this.aiService.generateTestCasesDirect(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique
       ).subscribe({
-        next: (result: CoTStepResult) => {
-          this.currentCoTStepResult = result;
-          this.cdr.detectChanges();
-
-          if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
-            console.log('[GENERATION] CoT Completado. Datos:', result.data);
+        next: (result: any) => {
+          // Resultado directo sin fases CoT
+          if (result && result.testCases) {
+            console.log('[GENERATION] Directo Completado. Datos:', result);
 
             if (this.generatedHUData) {
-              this.generatedHUData.generatedScope = result.data.scope || 'Scope no generado';
+              this.generatedHUData.generatedScope = result.scope || 'Scope no generado';
 
-              const rawTestCases = result.data.testCases || [];
+              const rawTestCases = result.testCases || [];
               this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => {
                 const detailedTc: UIDetailedTestCase = {
                   ...tc,
@@ -247,23 +246,21 @@ export class TestCaseGeneratorComponent implements OnInit {
           }
         },
         error: (e) => {
-          console.error('[GENERATION] Error en CoT:', e);
-          this.isProcessingModalVisible = false;
-          this.errorScope = 'Error durante la generación CoT.';
-          this.errorScenarios = 'Error durante la generación CoT.';
+          console.error('[GENERATION] Error en modo directo:', e);
+          this.loadingScenarios = false;
+          this.errorScope = 'Error durante la generación directa.';
+          this.errorScenarios = 'Error durante la generación directa.';
           this.cdr.detectChanges();
         },
         complete: () => {
-          setTimeout(() => {
-            this.isProcessingModalVisible = false;
-            this.componentState = 'previewingGenerated';
-            this.cdr.detectChanges();
+          this.loadingScenarios = false;
+          this.componentState = 'previewingGenerated';
+          this.cdr.detectChanges();
 
-            setTimeout(() => {
-              const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-              textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
-            }, 0);
-          }, 1000); // Pequeña pausa para ver el check final
+          setTimeout(() => {
+            const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
+            textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+          }, 0);
         }
       });
     }
@@ -314,9 +311,9 @@ export class TestCaseGeneratorComponent implements OnInit {
         });
       }
     });
-    // Refinamiento con CoT
-    this.isProcessingModalVisible = true;
-    this.currentCoTStepResult = null;
+    // Refinamiento DIRECTO (1 llamada, más rápido)
+    this.loadingScenarios = true;
+    this.errorScenarios = null;
 
     // Preparar casos para envío (quitar propiedades UI)
     const casesToRefine = this.generatedHUData.detailedTestCases.map(uiTc => {
@@ -324,24 +321,16 @@ export class TestCaseGeneratorComponent implements OnInit {
       return originalTc as OriginalDetailedTestCase;
     });
 
-    this.geminiService.refineTestCasesCoT(
+    this.aiService.refineTestCasesDirect(
       this.generatedHUData.originalInput,
       casesToRefine,
       this.refinementTechnique,
       this.userRefinementContext
     ).subscribe({
-      next: (result: CoTStepResult) => {
-        this.currentCoTStepResult = result;
-        this.cdr.detectChanges();
-
-        if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
-          // El Auditor devuelve { scope: ..., testCases: ... } o solo testCases?
-          // REFINE_AUDITOR_PROMPT devuelve solo testCases array en JSON.
-          // Verificamos estructura.
-          let refinedCases = result.data;
-          if (result.data.testCases) {
-            refinedCases = result.data.testCases;
-          }
+      next: (result: any) => {
+        // Resultado directo sin fases CoT
+        if (result && result.testCases) {
+          let refinedCases = result.testCases;
 
           if (this.generatedHUData) {
             // Mantener estado de expansión
@@ -369,26 +358,24 @@ export class TestCaseGeneratorComponent implements OnInit {
         }
       },
       error: (e) => {
-        console.error('[REFINEMENT] Error en CoT:', e);
-        this.isProcessingModalVisible = false;
-        this.formError = 'Error durante el refinamiento CoT.';
+        console.error('[REFINEMENT] Error en modo directo:', e);
+        this.loadingScenarios = false;
+        this.formError = 'Error durante el refinamiento directo.';
         this.cdr.detectChanges();
       },
       complete: () => {
+        this.loadingScenarios = false;
+        this.componentState = 'editingForRefinement';
+        this.cdr.detectChanges();
         setTimeout(() => {
-          this.isProcessingModalVisible = false;
-          this.componentState = 'editingForRefinement';
-          this.cdr.detectChanges();
-          setTimeout(() => {
-            if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
-              this.generatedHUData.detailedTestCases.forEach((tc, index) => {
-                if (tc.isExpanded) {
-                  this.autoGrowTextareasInCardByIndex(index);
-                }
-              });
-            }
-          }, 0);
-        }, 1000);
+          if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
+            this.generatedHUData.detailedTestCases.forEach((tc, index) => {
+              if (tc.isExpanded) {
+                this.autoGrowTextareasInCardByIndex(index);
+              }
+            });
+          }
+        }, 0);
       }
     });
   }

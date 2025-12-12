@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
-import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
+import { CoTStepResult } from '../services/ai/gemini.service';
+import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { LocalStorageService, TestPlanState } from '../services/core/local-storage.service';
 import { DatabaseService, DbUserStoryWithRelations } from '../services/database/database.service';
 import { ToastService } from '../services/core/toast.service';
@@ -87,7 +88,7 @@ export class TestPlanGeneratorComponent {
   showSuccessModal: boolean = false;
 
   constructor(
-    private geminiService: GeminiService,
+    private aiService: AiUnifiedService,
     public localStorageService: LocalStorageService,
     private databaseService: DatabaseService,
     private router: Router,
@@ -502,7 +503,7 @@ export class TestPlanGeneratorComponent {
       return;
     }
     hu.editingScope = false; hu.isScopeDetailsOpen = true; hu.loadingScope = true; hu.errorScope = null;
-    this.geminiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
+    this.aiService.generateTestPlanSections(hu.originalInput.description!, hu.originalInput.acceptanceCriteria!)
       .pipe(
         tap((scopeText: string) => {
           hu.generatedScope = scopeText;
@@ -531,7 +532,7 @@ export class TestPlanGeneratorComponent {
     console.log('[REFINEMENT] Contexto:', userContext);
 
     // Usar CoT para refinamiento
-    this.geminiService.refineTestCasesCoT(
+    this.aiService.refineTestCasesCoT(
       hu.originalInput,
       hu.detailedTestCases,
       technique,
@@ -623,7 +624,7 @@ export class TestPlanGeneratorComponent {
       default: return;
     }
     if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
-    this.geminiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI())
+    this.aiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI())
       .pipe(
         finalize(() => {
           if (loadingFlag) (this[loadingFlag] as any) = false;

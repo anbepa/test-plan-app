@@ -1,8 +1,6 @@
 // src/app/services/ai/ai-providers.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { BehaviorSubject } from 'rxjs';
 
 /**
  * Interface para proveedores de IA
@@ -19,104 +17,85 @@ export interface AiProvider {
 }
 
 /**
- * Interface para respuesta de la API
- */
-interface ApiResponse<T> {
-  status: 'success' | 'error';
-  message?: string;
-  providers?: T[];
-  provider?: string;
-  activeProvider?: string;
-}
-
-/**
- * Servicio para gestionar proveedores de IA
- * Comunica con los endpoints /api/admin/*
+ * Servicio simplificado para gestionar proveedores de IA
+ * Usa localStorage para persistir la configuración
  */
 @Injectable({
   providedIn: 'root'
 })
 export class AiProvidersService {
-  
-  private readonly baseUrl = '/api/admin';
-  
+
+  private readonly STORAGE_KEY = 'active_ai_provider';
+
+  // Proveedores disponibles (hardcoded)
+  private readonly availableProviders: AiProvider[] = [
+    {
+      id: 'gemini',
+      name: 'gemini',
+      displayName: 'Google Gemini',
+      endpointUrl: 'https://generativelanguage.googleapis.com/v1/models/',
+      defaultModel: 'gemini-2.5-flash-lite',
+      isActive: false, // Desactivado (alcanzó cuota)
+      hasApiKey: true,
+      metadata: { tier: 'free', rateLimit: '20/day' }
+    },
+    {
+      id: 'deepseek',
+      name: 'deepseek',
+      displayName: 'DeepSeek',
+      endpointUrl: 'https://api.deepseek.com/chat/completions',
+      defaultModel: 'deepseek-chat',
+      isActive: true, // ACTIVO POR DEFECTO
+      hasApiKey: true,
+      metadata: { tier: 'paid', rateLimit: 'varies' }
+    }
+  ];
+
   // Estado reactivo de proveedores
-  private providersSubject = new BehaviorSubject<AiProvider[]>([]);
+  private providersSubject = new BehaviorSubject<AiProvider[]>(this.availableProviders);
   public providers$ = this.providersSubject.asObservable();
-  
-  constructor(private http: HttpClient) {
-    // Cargar proveedores al iniciar
-    this.loadProviders();
+
+  constructor() {
+    // Cargar proveedor activo desde localStorage
+    this.loadActiveProviderFromStorage();
   }
 
   /**
-   * Cargar lista de proveedores desde el backend
+   * Cargar el proveedor activo desde localStorage
    */
-  loadProviders(): void {
-    this.getProviders().subscribe({
-      next: (providers) => {
-        this.providersSubject.next(providers);
-        console.log('✅ Proveedores cargados:', providers.length);
-      },
-      error: (error) => {
-        console.error('❌ Error al cargar proveedores:', error);
-      }
-    });
+  private loadActiveProviderFromStorage(): void {
+    const savedProviderId = localStorage.getItem(this.STORAGE_KEY);
+
+    if (savedProviderId) {
+      console.log(`[AI Providers] Proveedor guardado en localStorage: ${savedProviderId}`);
+      this.setActiveProvider(savedProviderId);
+    } else {
+      console.log('[AI Providers] Usando proveedor por defecto: deepseek');
+    }
   }
 
   /**
-   * Obtener lista de proveedores (sin API keys)
+   * Obtener lista de proveedores disponibles
    */
-  getProviders(): Observable<AiProvider[]> {
-    return this.http.get<ApiResponse<AiProvider>>(`${this.baseUrl}/get-providers`).pipe(
-      tap(response => {
-        if (response.status === 'success' && response.providers) {
-          return response.providers;
-        }
-        throw new Error(response.message || 'Error al obtener proveedores');
-      }),
-      tap((response: any) => response.providers)
-    );
-  }
-
-  /**
-   * Guardar o actualizar proveedor
-   */
-  saveProvider(
-    provider: string,
-    displayName: string,
-    apiKey: string,
-    endpointUrl: string,
-    defaultModel?: string,
-    isActive?: boolean
-  ): Observable<any> {
-    const body = {
-      provider,
-      displayName,
-      apiKey,
-      endpointUrl,
-      defaultModel,
-      isActive
-    };
-
-    return this.http.post<ApiResponse<any>>(`${this.baseUrl}/save-provider`, body).pipe(
-      tap(() => {
-        // Recargar proveedores después de guardar
-        this.loadProviders();
-      })
-    );
+  getProviders(): AiProvider[] {
+    return this.providersSubject.getValue();
   }
 
   /**
    * Activar un proveedor específico
    */
-  setActiveProvider(provider: string): Observable<any> {
-    return this.http.post<ApiResponse<any>>(`${this.baseUrl}/set-active-provider`, { provider }).pipe(
-      tap(() => {
-        // Recargar proveedores después de activar
-        this.loadProviders();
-      })
-    );
+  setActiveProvider(providerId: string): void {
+    const providers = this.availableProviders.map(p => ({
+      ...p,
+      isActive: p.id === providerId
+    }));
+
+    this.providersSubject.next(providers);
+
+    // Guardar en localStorage
+    localStorage.setItem(this.STORAGE_KEY, providerId);
+
+    console.log(`✅ Proveedor activo cambiado a: ${providerId}`);
   }
 
   /**
@@ -124,13 +103,27 @@ export class AiProvidersService {
    */
   getActiveProvider(): AiProvider | null {
     const providers = this.providersSubject.getValue();
-    return providers.find(p => p.isActive) || null;
+    const activeProvider = providers.find(p => p.isActive);
+
+    if (!activeProvider) {
+      console.warn('[AI Providers] No hay proveedor activo, usando DeepSeek por defecto');
+      return providers.find(p => p.id === 'deepseek') || null;
+    }
+
+    return activeProvider;
   }
 
   /**
    * Verificar si hay al menos un proveedor configurado
    */
   hasConfiguredProviders(): boolean {
-    return this.providersSubject.getValue().length > 0;
+    return this.availableProviders.length > 0;
+  }
+
+  /**
+   * Obtener ID del proveedor activo
+   */
+  getActiveProviderId(): string {
+    return this.getActiveProvider()?.id || 'deepseek';
   }
 }
