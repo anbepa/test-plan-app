@@ -9,8 +9,8 @@ import { HUData, DetailedTestCase } from '../models/hu-data.model';
 import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
 
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
-import { TestPlanMapperService } from '../services/test-plan-mapper.service';
-import { ExportService } from '../services/export.service';
+import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
+import { ExportService } from '../services/export/export.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 
 import { GeneralSectionsComponent, StaticSectionName } from './components/general-sections/general-sections.component';

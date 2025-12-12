@@ -5,15 +5,14 @@ import { FormsModule } from '@angular/forms';
 import { TestCaseEditorComponent } from '../test-case-editor/test-case-editor.component';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
 import { DatabaseService } from '../services/database/database.service';
-import { GeminiService, CoTStepResult } from '../services/ai/gemini.service';
-import { ProcessingModalComponent } from '../processing-modal/processing-modal.component';
+import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations, DbTestCaseStep } from '../models/database.model';
 
 @Component({
   selector: 'app-test-case-refiner',
   standalone: true,
-  imports: [CommonModule, FormsModule, TestCaseEditorComponent, ProcessingModalComponent],
+  imports: [CommonModule, FormsModule, TestCaseEditorComponent],
   templateUrl: './test-case-refiner.component.html',
   styleUrls: ['./test-case-refiner.component.css']
 })
@@ -24,15 +23,12 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   private userStoryDbId: string | null = null;
   private existingDbTestCases: DbTestCaseWithRelations[] = [];
 
-  isProcessingModalVisible: boolean = false;
-  currentCoTStepResult: CoTStepResult | null = null;
-
   constructor(
     private router: Router,
     private route: ActivatedRoute,
     private location: Location,
     private databaseService: DatabaseService,
-    private geminiService: GeminiService,
+    private aiService: AiUnifiedService,
     private toastService: ToastService
   ) { }
 
@@ -63,45 +59,30 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.hu.refinementTechnique = event.technique;
     this.hu.refinementContext = event.context;
 
-    this.isProcessingModalVisible = true;
-    this.currentCoTStepResult = null;
-
     try {
-      this.geminiService.refineTestCasesCoT(
+      this.aiService.refineTestCasesDirect(
         this.hu.originalInput,
         this.hu.detailedTestCases,
         event.technique,
         event.context
       ).subscribe({
-        next: (result: CoTStepResult) => {
-          this.currentCoTStepResult = result;
-
-          if (result.step === 'AUDITOR' && result.status === 'completed' && result.data) {
-            let refinedCases = result.data;
-            if (result.data.testCases) {
-              refinedCases = result.data.testCases;
-            }
-            if (this.hu) {
-              this.hu.detailedTestCases = refinedCases;
-            }
+        next: (result: any) => {
+          if (result?.testCases && this.hu) {
+            this.hu.detailedTestCases = result.testCases;
             this.toastService.success('Casos de prueba refinados con éxito');
           }
         },
         error: (error) => {
           console.error('Error al refinar casos de prueba:', error);
           this.toastService.error('Error al refinar casos de prueba con IA');
-          this.isProcessingModalVisible = false;
         },
         complete: () => {
-          setTimeout(() => {
-            this.isProcessingModalVisible = false;
-          }, 1000);
+          // No action needed
         }
       });
     } catch (error) {
       console.error('Error al iniciar refinamiento:', error);
       this.toastService.error('Error al iniciar refinamiento');
-      this.isProcessingModalVisible = false;
     }
   }
 
