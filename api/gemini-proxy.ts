@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 5000; // 5 segundos entre peticiones
-const MODEL_VERSION = process.env['GEMINI_MODEL'] || 'gemini-2.5-flash-lite';
+const MODEL_VERSION = 'gemini-2.5-flash-lite';
 
 async function waitForRateLimit(): Promise<void> {
   const now = Date.now();
