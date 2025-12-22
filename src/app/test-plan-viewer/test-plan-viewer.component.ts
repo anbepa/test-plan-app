@@ -189,7 +189,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   nextPage(): void {
-    this.goToPage(this.currentPage - 1);
+    this.goToPage(this.currentPage + 1);
   }
 
   previousPage(): void {

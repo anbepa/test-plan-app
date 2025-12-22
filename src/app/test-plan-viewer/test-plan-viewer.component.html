@@ -221,11 +221,13 @@
 
         <!-- Números de página -->
         <div class="pagination-numbers">
-          <button *ngFor="let page of getPageNumbers()" [class.pagination-number]="page > 0"
-            [class.pagination-ellipsis]="page === -1" [class.active]="page === currentPage"
-            [disabled]="page === -1 || page === currentPage" (click)="page > 0 ? goToPage(page) : null">
-            {{ page === -1 ? '...' : page }}
-          </button>
+          <ng-container *ngFor="let page of getPageNumbers()">
+            <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage"
+              [disabled]="page === currentPage" (click)="goToPage(page)">
+              {{ page }}
+            </button>
+            <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
+          </ng-container>
         </div>
 
         <!-- Botón Siguiente -->
