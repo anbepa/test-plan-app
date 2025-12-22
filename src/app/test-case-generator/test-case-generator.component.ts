@@ -308,6 +308,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     });
     // Refinamiento DIRECTO (1 llamada, más rápido)
     this.loadingScenarios = true;
+    this.cdr.detectChanges();
     this.errorScenarios = null;
 
     // Preparar casos para envío (quitar propiedades UI)

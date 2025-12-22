@@ -204,7 +204,7 @@
       <!-- MODO EDICIÓN PARA REFINAMIENTO (NUEVO COMPONENTE) -->
       <ng-container *ngIf="componentState === 'editingForRefinement'">
         <app-test-case-editor [testCases]="generatedHUData.detailedTestCases" [huId]="generatedHUData.id || 'temp'"
-          [isLoading]="loadingScenarios" [(refinementTechnique)]="refinementTechnique"
+          [isLoading]="loadingScenarios" [isRefining]="loadingScenarios" [(refinementTechnique)]="refinementTechnique"
           [(userRefinementContext)]="userRefinementContext" [showRefinementControls]="true"
           (refineWithAI)="handleRefineWithAI($event)" (testCasesChanged)="handleTestCasesChanged($event)"
           (cancel)="cancelRefinementEditing()">
@@ -233,7 +233,7 @@
               clip-rule="evenodd" />
           </svg>
           <span>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1
-            ? 's' : '' }} (temporal)</span>
+            ? 's' : '' }}</span>
         </div>
 
         <!-- Botón Guardar HU Individual -->
@@ -244,7 +244,7 @@
             <path
               d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
           </svg>
-          Guardar HU (Temporal)
+          Guardar HU
         </button>
 
         <!-- Botón Confirmar y Añadir al Plan -->
@@ -256,7 +256,7 @@
               d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
               clip-rule="evenodd" />
           </svg>
-          Confirmar y Añadir al Plan (BD)
+          Confirmar y Añadir al Plan
         </button>
       </div>
       <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">

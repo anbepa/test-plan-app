@@ -20,6 +20,7 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   @Input() testCases: UIDetailedTestCase[] = [];
   @Input() huId: string = '';
   @Input() isLoading: boolean = false;
+  @Input() isRefining: boolean = false;
   @Input() refinementTechnique: string = '';
   @Input() userRefinementContext: string = '';
   @Input() showRefinementControls: boolean = true;

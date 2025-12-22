@@ -1,7 +1,7 @@
 <div class="container">
   <!-- Componente de Generación -->
   <app-test-case-generator *ngIf="showTestCaseGenerator" [initialGenerationMode]="currentGenerationMode!"
-    [initialSprint]="'Sprint Actual'" [accumulatedHUsCount]="huList.length" (huSaved)="onHuSavedFromChild($event)"
+    [initialSprint]="''" [accumulatedHUsCount]="huList.length" (huSaved)="onHuSavedFromChild($event)"
     (huGenerated)="onHuGeneratedFromChild($event)" (generationCancelled)="onGenerationCancelledFromChild()"
     (cellNameChanged)="onCellNameChanged($event)">
   </app-test-case-generator>

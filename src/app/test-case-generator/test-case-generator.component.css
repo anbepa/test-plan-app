@@ -576,6 +576,15 @@ textarea.form-control {
     justify-content: center;
     /* Centrar botones */
     flex-wrap: wrap;
+    margin: 2rem auto 0;
+    max-width: 800px;
+}
+
+.final-actions-group .button-save-individual,
+.final-actions-group .button-primary {
+    flex: 1;
+    min-width: 250px;
+    white-space: nowrap;
 }
 
 .button-icon {
