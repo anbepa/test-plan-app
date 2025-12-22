@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -20,6 +20,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   hu: HUData | null = null;
   testPlanId: string = '';
   isLoading: boolean = false;
+  isRefining: boolean = false;
   private userStoryDbId: string | null = null;
   private existingDbTestCases: DbTestCaseWithRelations[] = [];
 
@@ -29,7 +30,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     private location: Location,
     private databaseService: DatabaseService,
     private aiService: AiUnifiedService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private cdr: ChangeDetectorRef
   ) { }
 
   ngOnInit(): void {
@@ -60,6 +62,9 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.hu.refinementContext = event.context;
 
     try {
+      this.isLoading = true;
+      this.isRefining = true;
+      this.cdr.detectChanges();
       this.aiService.refineTestCasesDirect(
         this.hu.originalInput,
         this.hu.detailedTestCases,
@@ -75,9 +80,14 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         error: (error) => {
           console.error('Error al refinar casos de prueba:', error);
           this.toastService.error('Error al refinar casos de prueba con IA');
+          this.isLoading = false;
+          this.isRefining = false;
+          this.cdr.detectChanges();
         },
         complete: () => {
-          // No action needed
+          this.isLoading = false;
+          this.isRefining = false;
+          this.cdr.detectChanges();
         }
       });
     } catch (error) {

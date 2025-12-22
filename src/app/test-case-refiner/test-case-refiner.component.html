@@ -14,7 +14,7 @@
             </div>
 
             <div class="header-actions">
-                <button class="btn-cancel" (click)="goBack()">
+                <button class="btn-cancel" (click)="goBack()" [disabled]="isLoading">
                     Cancelar
                 </button>
                 <button class="btn-save-only" (click)="save()" [disabled]="isLoading">
@@ -36,10 +36,10 @@
     <!-- Main Content -->
     <div class="refiner-content">
         <app-test-case-editor [testCases]="hu.detailedTestCases || []" [huId]="hu.id" [isLoading]="isLoading"
-            [refinementTechnique]="hu.refinementTechnique || ''" [userRefinementContext]="hu.refinementContext || ''"
-            [showRefinementControls]="true" (refineWithAI)="handleRefineWithAI($event)"
-            (testCasesChanged)="handleTestCasesChanged($event)" (cancel)="goBack()"
-            (refinementTechniqueChange)="onRefinementTechniqueChange($event)"
+            [isRefining]="isRefining" [refinementTechnique]="hu.refinementTechnique || ''"
+            [userRefinementContext]="hu.refinementContext || ''" [showRefinementControls]="true"
+            (refineWithAI)="handleRefineWithAI($event)" (testCasesChanged)="handleTestCasesChanged($event)"
+            (cancel)="goBack()" (refinementTechniqueChange)="onRefinementTechniqueChange($event)"
             (userRefinementContextChange)="onUserRefinementContextChange($event)">
         </app-test-case-editor>
     </div>
