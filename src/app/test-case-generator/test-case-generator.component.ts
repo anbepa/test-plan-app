@@ -150,6 +150,81 @@ export class TestCaseGeneratorComponent implements OnInit {
     }
   }
 
+  private normalizeSteps(rawSteps: any): TestCaseStep[] {
+    const normalizeAction = (value: any): string => {
+      if (typeof value === 'string') return value.trim();
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    };
+
+    const fromArray = (stepsArray: any[]): TestCaseStep[] => {
+      const normalized = stepsArray
+        .map((step: any, index: number) => {
+          if (typeof step === 'string') {
+            const cleanText = step.replace(/^\s*\d+[\.)-]?\s*/, '').trim();
+            return {
+              numero_paso: index + 1,
+              accion: cleanText || 'Paso no descrito'
+            };
+          }
+
+          if (step && typeof step === 'object') {
+            const action = normalizeAction(
+              step.accion ?? step.action ?? step.paso ?? step.step ?? step.description ?? step.descripcion
+            );
+            const stepNumber = Number(step.numero_paso ?? step.step_number ?? step.number ?? (index + 1));
+
+            return {
+              numero_paso: Number.isFinite(stepNumber) && stepNumber > 0 ? stepNumber : index + 1,
+              accion: action || 'Paso no descrito'
+            };
+          }
+
+          return {
+            numero_paso: index + 1,
+            accion: 'Paso no descrito'
+          };
+        })
+        .filter((s: TestCaseStep) => !!s.accion && s.accion.trim().length > 0);
+
+      return normalized.map((step, index) => ({
+        numero_paso: index + 1,
+        accion: step.accion
+      }));
+    };
+
+    if (Array.isArray(rawSteps)) {
+      const parsed = fromArray(rawSteps);
+      return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+    }
+
+    if (typeof rawSteps === 'string') {
+      const lines = rawSteps
+        .split(/\r?\n|;+/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      if (lines.length > 0) {
+        return fromArray(lines);
+      }
+    }
+
+    if (rawSteps && typeof rawSteps === 'object') {
+      if (Array.isArray(rawSteps.steps)) {
+        const parsed = fromArray(rawSteps.steps);
+        return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+      }
+
+      const values = Object.values(rawSteps).filter(v => typeof v === 'string' || typeof v === 'object');
+      if (values.length > 0) {
+        const parsed = fromArray(values);
+        return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+      }
+    }
+
+    return [{ numero_paso: 1, accion: 'Paso no descrito' }];
+  }
+
   isFormInvalidForGeneration(): boolean {
     if (!this.huFormDirective?.form || !this.currentGenerationMode) return true;
     const commonRequired = !this.currentSprint || !this.currentHuTitle || !this.currentSelectedTechnique;
@@ -225,10 +300,9 @@ export class TestCaseGeneratorComponent implements OnInit {
               this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => {
                 const detailedTc: UIDetailedTestCase = {
                   ...tc,
-                  steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                    numero_paso: s.numero_paso || (i + 1),
-                    accion: s.accion || "Paso no descrito"
-                  })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                  steps: this.normalizeSteps(
+                    tc.steps ?? tc.stepByStep ?? tc.step_by_step ?? tc.pasoAPaso ?? tc.pasos ?? tc.procedure
+                  ),
                   isExpanded: index === 0
                 };
                 return detailedTc;
@@ -338,10 +412,9 @@ export class TestCaseGeneratorComponent implements OnInit {
             this.generatedHUData.detailedTestCases = refinedCases.map((tc: any, index: number) => {
               const detailedTc: UIDetailedTestCase = {
                 ...tc,
-                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                  numero_paso: s.numero_paso || (i + 1),
-                  accion: s.accion || "Paso no descrito"
-                })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                steps: this.normalizeSteps(
+                  tc.steps ?? tc.stepByStep ?? tc.step_by_step ?? tc.pasoAPaso ?? tc.pasos ?? tc.procedure
+                ),
                 isExpanded: existingExpansionStates.get(tc.title) || (index === 0)
               };
               return detailedTc;

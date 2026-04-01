@@ -36,31 +36,49 @@ PROCEDE A GENERAR TU RESPUESTA PARA LA SECCIÓN "${sectionName}":
   // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
   DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
-QA Senior - Genera casos de prueba CONCISOS aplicando "${technique}".
+Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA ALTA y sin ruido.
 
-HU: ${description}
-CA: ${acceptanceCriteria}
+HU:
+${description}
 
-**PROCESO:**
-1. Analiza CADA criterio de aceptación
-2. Aplica "${technique}" para identificar escenarios clave
-3. Crea casos que cubran Happy Path, Excepciones y Bordes
-4. Mantén 2-4 pasos por caso (máximo)
+CA:
+${acceptanceCriteria}
 
-**REGLAS CRÍTICAS:**
-- Título: Frase descriptiva SIN IDs técnicos (TC_001, etc)
-- Pasos: Acciones concretas, NUNCA vacíos
-- Resultados: Qué sucede tras ejecutar, NUNCA vacío
-- Cobertura: TODOS los CA deben estar cubiertos
+REGLAS DE COBERTURA (obligatorias):
+1) Analiza cada criterio de aceptación (CA) y clasifícalo por complejidad (baja/media/alta).
+2) Define cantidad de casos con regla híbrida:
+   - Baja: 3-5 casos
+   - Media: 5-8 casos
+   - Alta: 8-12 casos
+  - Límite superior absoluto: 10 casos
+3) Cada CA debe estar cubierto al menos por 1 caso.
+4) Incluye Happy Path, negativos relevantes y bordes reales.
+5) No generes escenarios cosméticos o redundantes.
 
-**SALIDA JSON:**
+REGLAS DE CALIDAD:
+- Título claro SIN IDs técnicos (TC_001, etc).
+- 2-5 pasos por caso (6 solo si es crítico por negocio/regla).
+- Pasos accionables y concretos (sin texto vacío).
+- Resultado esperado verificable y específico.
+- Deduplica: si dos casos prueban lo mismo, conserva el más representativo.
+
+OPTIMIZACIÓN DE TOKENS:
+- Sé conciso: evita explicaciones narrativas.
+- Usa textos breves: title <= 90 chars, preconditions <= 180 chars, expectedResults <= 180 chars.
+
+FORMATO DE SALIDA:
+- Responde SOLO JSON válido, sin markdown, sin comentarios, sin texto extra.
+- Verifica internamente que TODOS los CA tengan cobertura antes de responder.
+- Usa exactamente esta estructura:
 {
-  "scope": "Alcance: qué se prueba y qué no",
+  "scope": "Alcance breve de lo cubierto",
   "testCases": [
     {
       "title": "Descripción clara del escenario",
       "preconditions": "Condiciones previas necesarias",
-      "steps": [{"numero_paso": 1, "accion": "Acción específica"}],
+      "steps": [
+        {"numero_paso": 1, "accion": "Acción específica"}
+      ],
       "expectedResults": "Resultado esperado concreto"
     }
   ]
@@ -69,32 +87,47 @@ CA: ${acceptanceCriteria}
 
   // Refinamiento directo (sin CoT)
   DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
-QA Senior - REFINA casos aplicando "${technique}". Mantén CONCISIÓN (2-4 pasos) y CALIDAD.
+Actúa como QA Senior. Refina casos existentes aplicando "${technique}" con mejor cobertura y menos ruido.
 
-Requisitos Originales: ${originalRequirements}
-Casos Actuales: ${currentCases}
-Solicitud Usuario: "${userRequest}"
+Requisitos Originales:
+${originalRequirements}
 
-**PROCESO:**
-1. Analiza qué solicita el usuario
-2. Aplica "${technique}" según corresponda
-3. Respeta trabajo manual del usuario (datos específicos, pasos personalizados)
-4. Mejora claridad y completitud
+Casos Actuales:
+${currentCases}
 
-**REGLAS CRÍTICAS:**
-- Mantén 2-4 pasos por caso (máximo)
-- Títulos SIN IDs técnicos (TC_001, etc)
-- NUNCA dejes pasos o resultados vacíos
-- Si usuario agregó datos específicos, CONSÉRVALES
-- Aplica técnica solicitada sin perder contexto
+Solicitud Usuario:
+"${userRequest}"
 
-**SALIDA JSON:**
+REGLAS DE REFINAMIENTO (obligatorias):
+1) Conserva datos manuales del usuario (valores específicos, pasos personalizados), salvo contradicción con requisitos.
+2) Elimina redundantes: fusiona casos semánticamente equivalentes.
+3) Corrige huecos de cobertura: cada CA debe quedar cubierto por al menos 1 caso.
+4) Si la solicitud pide ampliar, añade solo escenarios de alto valor.
+5) Si la solicitud pide simplificar, reduce cantidad sin perder cobertura mínima.
+
+REGLAS DE CALIDAD:
+- Títulos claros SIN IDs técnicos.
+- 2-5 pasos por caso (6 solo si es crítico).
+- Pasos/resultado nunca vacíos.
+- expectedResults verificable y concreto.
+- Ordena casos de mayor a menor riesgo funcional.
+
+OPTIMIZACIÓN DE TOKENS:
+- Sé directo y compacto.
+- title <= 90 chars, preconditions <= 180 chars, expectedResults <= 180 chars.
+
+FORMATO DE SALIDA:
+- Responde SOLO JSON válido, sin markdown, sin comentarios, sin texto adicional.
+- Verifica internamente cobertura completa de CA antes de responder.
+- Usa exactamente esta estructura:
 {
   "testCases": [
     {
       "title": "Descripción clara del escenario",
       "preconditions": "Condiciones previas necesarias",
-      "steps": [{"numero_paso": 1, "accion": "Acción específica"}],
+      "steps": [
+        {"numero_paso": 1, "accion": "Acción específica"}
+      ],
       "expectedResults": "Resultado esperado concreto"
     }
   ]

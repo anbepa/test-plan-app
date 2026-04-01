@@ -71,8 +71,8 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
-            max_tokens: 1500 // Reducido para respuestas concisas (vs 6,200 en CoT)
+            temperature: 0.3,
+            max_tokens: 2200
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -108,8 +108,8 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
-            max_tokens: 1500
+            temperature: 0.3,
+            max_tokens: 2200
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
