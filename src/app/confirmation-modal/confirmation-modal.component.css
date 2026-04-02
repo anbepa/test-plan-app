@@ -46,10 +46,6 @@
     letter-spacing: -0.01em;
 }
 
-.text-danger {
-    color: #ff3b30;
-}
-
 .close-button {
     background: transparent;
     border: none;
@@ -121,14 +117,6 @@
     cursor: pointer;
     transition: all 0.2s;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.btn-danger {
-    background-color: #ff3b30;
-}
-
-.btn-danger:hover {
-    background-color: #d73328;
 }
 
 .btn-primary {

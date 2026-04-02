@@ -8,6 +8,7 @@ import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
+import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -22,13 +23,14 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
 export class TestCaseGeneratorComponent implements OnInit {
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
+  @Input() initialCellName: string = '';
   @Input() accumulatedHUsCount: number = 0;
   @Output() huGenerated = new EventEmitter<OriginalHUData>();
   @Output() huSaved = new EventEmitter<OriginalHUData>();
@@ -61,6 +63,10 @@ export class TestCaseGeneratorComponent implements OnInit {
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
+  isCancelModalOpen: boolean = false;
+  cancelModalTitle: string = 'Cancelar generación';
+  cancelModalMessage: string = '¿Deseas guardar esta HU antes de cancelar? Si no guardas, se perderán los casos de prueba generados.';
+
   @ViewChild('huForm') huFormDirective!: NgForm;
 
   private readonly macTemplateId = '1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
@@ -77,6 +83,7 @@ export class TestCaseGeneratorComponent implements OnInit {
   ngOnInit(): void {
     this.currentGenerationMode = this.initialGenerationMode;
     this.currentSprint = this.initialSprint;
+    this.cellName = this.initialCellName;
     this.resetToInitialForm();
   }
 
@@ -105,6 +112,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     setTimeout(() => {
       if (this.huFormDirective?.form) {
         this.huFormDirective.form.patchValue({
+          cellName: this.cellName,
           currentSprint: this.currentSprint,
           currentSelectedTechnique: this.currentSelectedTechnique,
           currentHuId: '',
@@ -490,31 +498,25 @@ export class TestCaseGeneratorComponent implements OnInit {
       this.generatedHUData.detailedTestCases &&
       this.generatedHUData.detailedTestCases.length > 0 &&
       !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
-
-      const confirmMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar?\n\n` +
-        `⚠️ IMPORTANTE: Si cancelas sin guardar, se perderán todos los casos de prueba generados.\n\n` +
-        `💾 "Guardar HU" = Guardado temporal (solo navegador)\n` +
-        `🗄️ "Confirmar y Añadir al Plan" = Guardado permanente (base de datos)\n\n` +
-        `• Clic en OK = Guardar HU temporalmente y cancelar\n` +
-        `• Clic en Cancelar = Descartar HU completamente`;
-
-      if (confirm(confirmMessage)) {
-        // Guardar la HU antes de cancelar
-        console.log('💾 Usuario eligió GUARDAR la HU antes de cancelar');
-        this.saveCurrentHU();
-        // No llamamos a resetToInitialForm aquí porque saveCurrentHU ya lo hace
-        this.generationCancelled.emit();
-      } else {
-        // Descartar la HU
-        console.log('🗑️ Usuario eligió DESCARTAR la HU');
-        this.resetToInitialForm();
-        this.generationCancelled.emit();
-      }
+      this.cancelModalMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar? Si no guardas, se perderán los casos de prueba generados.`;
+      this.isCancelModalOpen = true;
     } else {
       // No hay datos que guardar, cancelar directamente
       this.resetToInitialForm();
       this.generationCancelled.emit();
     }
+  }
+
+  confirmSaveOnCancel(): void {
+    this.saveCurrentHU();
+    this.generationCancelled.emit();
+    this.isCancelModalOpen = false;
+  }
+
+  discardOnCancel(): void {
+    this.resetToInitialForm();
+    this.generationCancelled.emit();
+    this.isCancelModalOpen = false;
   }
 
   addTestCaseStep(testCase: UIDetailedTestCase): void {

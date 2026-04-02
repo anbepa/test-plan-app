@@ -267,3 +267,14 @@
 
   <!-- Modal de Guardado -->
 </div>
+
+<app-confirmation-modal
+  [isOpen]="isCancelModalOpen"
+  [title]="cancelModalTitle"
+  [message]="cancelModalMessage"
+  confirmText="Guardar HU"
+  cancelText="Descartar"
+  type="warning"
+  (confirm)="confirmSaveOnCancel()"
+  (cancel)="discardOnCancel()">
+</app-confirmation-modal>
