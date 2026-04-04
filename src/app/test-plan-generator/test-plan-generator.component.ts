@@ -85,6 +85,10 @@ export class TestPlanGeneratorComponent {
   loadingFromStorage: boolean = false;
 
   showSuccessModal: boolean = false;
+  existingTestPlanId: string | null = null;
+  isAppendMode: boolean = false;
+  generatorInitialSprint: string = '';
+  generatorInitialCellName: string = '';
 
   constructor(
     private aiService: AiUnifiedService,
@@ -99,8 +103,76 @@ export class TestPlanGeneratorComponent {
   ) { }
 
   ngOnInit(): void {
-    this.checkForStoredData();
+    this.loadNavigationContext();
+    if (!this.isAppendMode) {
+      this.checkForStoredData();
+    }
     this.selectInitialMode('text');
+  }
+
+  goBackToDetail(): void {
+    this.goToPlanDetail();
+  }
+
+  goToPlansList(): void {
+    this.router.navigate(['/viewer']);
+  }
+
+  goToPlanDetail(): void {
+    if (this.existingTestPlanId) {
+      this.router.navigate(['/viewer'], { queryParams: { id: this.existingTestPlanId } });
+      return;
+    }
+
+    this.router.navigate(['/viewer']);
+  }
+
+  goToCurrentPage(): void {
+    if (!this.isAppendMode) {
+      this.router.navigate(['/generator']);
+      return;
+    }
+
+    this.router.navigate(['/generator'], {
+      state: {
+        appendToTestPlanId: this.existingTestPlanId,
+        testPlanTitle: this.testPlanTitle,
+        repositoryLink: this.repositoryLink,
+        outOfScopeContent: this.outOfScopeContent,
+        strategyContent: this.strategyContent,
+        limitationsContent: this.limitationsContent,
+        assumptionsContent: this.assumptionsContent,
+        teamContent: this.teamContent,
+        cellName: this.cellName,
+        huList: this.huList,
+        initialSprint: this.generatorInitialSprint
+      }
+    });
+  }
+
+  private loadNavigationContext(): void {
+    const navigation = this.router.getCurrentNavigation();
+    const state = navigation?.extras?.state || history.state;
+
+    if (!state?.['appendToTestPlanId']) {
+      return;
+    }
+
+    this.isAppendMode = true;
+    this.existingTestPlanId = state['appendToTestPlanId'];
+    this.testPlanTitle = state['testPlanTitle'] || this.testPlanTitle;
+    this.repositoryLink = state['repositoryLink'] || this.repositoryLink;
+    this.outOfScopeContent = state['outOfScopeContent'] || this.outOfScopeContent;
+    this.strategyContent = state['strategyContent'] || this.strategyContent;
+    this.limitationsContent = state['limitationsContent'] || this.limitationsContent;
+    this.assumptionsContent = state['assumptionsContent'] || this.assumptionsContent;
+    this.teamContent = state['teamContent'] || this.teamContent;
+    this.cellName = state['cellName'] || this.cellName;
+    this.generatorInitialCellName = this.cellName;
+    this.huList = Array.isArray(state['huList']) ? state['huList'] : [];
+    this.generatorInitialSprint = state['initialSprint'] || this.huList[this.huList.length - 1]?.sprint || '';
+    this.savedUserStoryIds = this.huList.map(hu => hu.id).filter(Boolean);
+    this.updatePreview();
   }
 
   showConfirm(title: string, message: string, callback: () => void): void {
@@ -295,16 +367,20 @@ export class TestPlanGeneratorComponent {
   }
 
   async onHuGeneratedFromChild(huData: HUData) {
-    console.log('[PARENT] Recibiendo HU para añadir al plan:', huData.title);
-    console.log('[PARENT] HUs en lista antes de agregar:', this.huList.length);
+    const hasCurrentHu = !!huData?.id && !!huData?.originalInput;
 
-    this.huList.push(huData);
+    if (hasCurrentHu) {
+      console.log('[PARENT] Recibiendo HU para añadir al plan:', huData.title);
+      console.log('[PARENT] HUs en lista antes de agregar:', this.huList.length);
+      this.huList.push(huData);
+      console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
+    }
 
-    console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
     console.log('[PARENT] Iniciando guardado en base de datos...');
 
-    // IMPORTANTE: Actualizar el título del plan antes de guardar
-    this.updateTestPlanTitle();
+    if (!this.isAppendMode || !this.testPlanTitle) {
+      this.updateTestPlanTitle();
+    }
 
     this.updatePreview();
     this.saveCurrentState();
@@ -314,9 +390,11 @@ export class TestPlanGeneratorComponent {
       const loadingToastId = this.toastService.loading('Guardando plan de pruebas en la base de datos...');
 
       try {
-        console.log('💾 Guardando plan completo en BD con', this.huList.length, 'HU(s)');
+        console.log('💾 Persistiendo plan con', this.huList.length, 'HU(s)');
 
-        const testPlanId = await this.saveTestPlanToDatabase();
+        const testPlanId = this.isAppendMode && this.existingTestPlanId
+          ? await this.saveExistingTestPlanToDatabase()
+          : await this.saveTestPlanToDatabase();
 
         if (testPlanId) {
           console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
@@ -329,9 +407,13 @@ export class TestPlanGeneratorComponent {
             duration: 4500
           });
 
-          // Redirigir al home después de 2 segundos
+          // Redirigir a la vista correspondiente después de 2 segundos
           setTimeout(() => {
-            this.router.navigate(['/']);
+            if (this.isAppendMode && this.existingTestPlanId) {
+              this.router.navigate(['/viewer'], { queryParams: { id: this.existingTestPlanId } });
+            } else {
+              this.router.navigate(['/viewer'], { queryParams: { id: testPlanId } });
+            }
           }, 2000);
         } else {
           throw new Error('No se recibió ID del plan guardado');
@@ -379,7 +461,9 @@ export class TestPlanGeneratorComponent {
     this.savedUserStoryIds.push(huData.id);
 
     // Actualizar título y preview
-    this.updateTestPlanTitle();
+    if (!this.isAppendMode || !this.testPlanTitle) {
+      this.updateTestPlanTitle();
+    }
     this.updatePreview();
     this.saveCurrentState(); // Guardar en localStorage
 
@@ -394,11 +478,47 @@ export class TestPlanGeneratorComponent {
   }
 
   onGenerationCancelledFromChild() {
+    if (this.isAppendMode && this.existingTestPlanId) {
+      this.router.navigate(['/viewer'], { queryParams: { id: this.existingTestPlanId } });
+      return;
+    }
     this.resetActiveGeneratorsAndGoToSelection();
   }
 
   onCellNameChanged(cellName: string) {
     this.cellName = cellName;
+    this.generatorInitialCellName = cellName;
+  }
+
+  private async saveExistingTestPlanToDatabase(): Promise<string | null> {
+    if (!this.existingTestPlanId) {
+      throw new Error('No se encontró el ID del plan de pruebas a actualizar');
+    }
+
+    const baseTestPlanData = this.mapper.createDbTestPlan(
+      this.testPlanTitle,
+      this.cellName,
+      this.repositoryLink,
+      this.outOfScopeContent,
+      this.strategyContent,
+      this.limitationsContent,
+      this.assumptionsContent,
+      this.teamContent
+    );
+    const { id: _ignoredId, ...testPlanData } = baseTestPlanData;
+
+    const dbUserStories = this.mapper.mapHUListToDbUserStories(
+      this.huList,
+      this.existingTestPlanId
+    );
+
+    await this.databaseService.smartUpdateTestPlan(
+      this.existingTestPlanId,
+      testPlanData,
+      dbUserStories
+    );
+
+    return this.existingTestPlanId;
   }
 
   resetToInitialSelection(): void {
@@ -595,6 +715,21 @@ export class TestPlanGeneratorComponent {
 
   public trackHuById = (i: number, hu: HUData): string => hu.id;
 
+  private compactStaticSectionContent(content: string): string {
+    if (!content) return '';
+
+    const lines = content
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => line.replace(/^[-•\d.)\s]+/, '').trim())
+      .slice(0, 4)
+      .map(line => line.slice(0, 110));
+
+    const compact = lines.join('\n');
+    return compact.slice(0, 420).trim();
+  }
+
 
 
   public getHuSummaryForStaticAI(): string {
@@ -626,11 +761,7 @@ export class TestPlanGeneratorComponent {
       .subscribe({
         next: (aiResponse: string) => {
           if (aiResponse?.trim()) {
-            const isPlaceholder =
-              (section === 'outOfScope' && currentContent.trim().toLowerCase().startsWith('no se probarán')) ||
-              (section === 'limitations' && currentContent.trim().toLowerCase().startsWith('no tener los permisos')) ||
-              currentContent.trim() === '';
-            const newContent = isPlaceholder ? aiResponse.trim() : currentContent + '\n\n' + aiResponse.trim();
+            const newContent = this.compactStaticSectionContent(aiResponse);
             switch (section) {
               case 'repositoryLink': this.repositoryLink = newContent; break;
               case 'outOfScope': this.outOfScopeContent = newContent; break;

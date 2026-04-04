@@ -23,7 +23,14 @@ export class SupabaseClientService {
         // Inicializar cliente de Supabase con environment.ts
         this.supabase = createClient(
             environment.supabaseUrl,
-            environment.supabaseKey
+            environment.supabaseKey,
+            {
+                auth: {
+                    persistSession: true,
+                    autoRefreshToken: true,
+                    detectSessionInUrl: true
+                }
+            }
         );
 
         console.log('✅ SupabaseClientService inicializado con environment.ts');

@@ -18,13 +18,12 @@ export class TestPlanMapperService {
         testPlanId: string
     ): DbUserStoryWithRelations[] {
         return huList.map((hu, index) => ({
-            id: crypto.randomUUID(),
+            id: hu.dbUuid || crypto.randomUUID(),
             custom_id: hu.id,
             title: hu.title || `Historia ${index + 1}`,
             sprint: hu.sprint || '',
             description: hu.originalInput.description || '',
             acceptance_criteria: hu.originalInput.acceptanceCriteria || '',
-            generation_mode: hu.originalInput.generationMode,
             generated_scope: hu.generatedScope || '',
             generated_test_case_titles: hu.generatedTestCaseTitles || '',
             refinement_technique: hu.refinementTechnique || undefined,
@@ -35,7 +34,7 @@ export class TestPlanMapperService {
             updated_at: new Date().toISOString(),
 
             test_cases: (hu.detailedTestCases || []).map((tc, tcIndex) => ({
-                id: crypto.randomUUID(),
+                id: tc.dbId || crypto.randomUUID(),
                 user_story_id: '',
                 title: tc.title || `Caso ${tcIndex + 1}`,
                 preconditions: tc.preconditions || '',
@@ -45,16 +44,14 @@ export class TestPlanMapperService {
                 updated_at: new Date().toISOString(),
 
                 test_case_steps: (tc.steps || []).map((step, stepIndex) => ({
-                    id: crypto.randomUUID(),
+                    id: step.dbId || crypto.randomUUID(),
                     test_case_id: '',
                     step_number: step.numero_paso || stepIndex + 1,
                     action: step.accion || '',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }))
-            })),
-
-            images: []
+            }))
         }));
     }
 
@@ -110,16 +107,37 @@ export class TestPlanMapperService {
             return "No hay Historias de Usuario definidas aún.";
         }
 
-        let summary = huList.map(hu => {
-            let huDesc = `ID ${hu.id} (${hu.title}): Modo "${hu.originalInput.generationMode}".`;
-            if (hu.originalInput.generationMode === 'text' && hu.originalInput.description) {
-                huDesc += ` Descripción: ${hu.originalInput.description.substring(0, 70)}...`;
-            }
-            return `- ${huDesc}`;
-        }).join('\n');
+        const summary = huList.map((hu, index) => {
+            const description = (hu.originalInput.description || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 240);
 
-        return summary.length > 1500
-            ? summary.substring(0, 1500) + "\n... (resumen truncado para no exceder límites de prompt)"
+            const acceptanceCriteria = (hu.originalInput.acceptanceCriteria || '')
+                .split(/\n|\r|•|- /)
+                .map(line => line.trim())
+                .filter(Boolean)
+                .slice(0, 6)
+                .map((line, i) => `CA${i + 1}: ${line.slice(0, 150)}`)
+                .join(' | ');
+
+            const testCaseTitles = (hu.detailedTestCases || [])
+                .map(tc => tc.title?.trim())
+                .filter(Boolean)
+                .slice(0, 8)
+                .join(' | ');
+
+            return [
+                `HU ${index + 1}/${huList.length}: ${hu.id} | ${hu.title}`,
+                `Sprint: ${hu.sprint || 'N/A'} | Técnica: ${hu.originalInput.selectedTechnique || hu.refinementTechnique || 'N/A'}`,
+                `Descripción: ${description || 'N/A'}`,
+                `Criterios: ${acceptanceCriteria || 'N/A'}`,
+                `Escenarios (${hu.detailedTestCases?.length || 0}): ${testCaseTitles || 'Sin escenarios detallados'}`
+            ].join('\n');
+        }).join('\n\n');
+
+        return summary.length > 6000
+            ? summary.substring(0, 6000) + "\n... (contexto truncado para no exceder límites de prompt)"
             : summary;
     }
 
@@ -130,6 +148,7 @@ export class TestPlanMapperService {
         if (!testPlan.user_stories) return [];
 
         return testPlan.user_stories.map((us: any) => ({
+            dbUuid: us.id,
             id: us.custom_id || us.id,
             title: us.title,
             sprint: us.sprint,
@@ -142,11 +161,13 @@ export class TestPlanMapperService {
             generatedScope: us.generated_scope,
             generatedTestCaseTitles: us.generated_test_case_titles,
             refinementTechnique: us.refinement_technique,
-            refinement_context: us.refinement_context,
+            refinementContext: us.refinement_context,
             detailedTestCases: (us.test_cases || []).map((tc: any) => ({
+                dbId: tc.id,
                 title: tc.title,
                 preconditions: tc.preconditions,
                 steps: (tc.test_case_steps || []).map((step: any) => ({
+                    dbId: step.id,
                     numero_paso: step.step_number,
                     accion: step.action
                 })),

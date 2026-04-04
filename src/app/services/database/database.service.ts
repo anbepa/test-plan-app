@@ -7,7 +7,7 @@ import type {
   DbUserStory,
   DbTestCase,
   DbTestCaseStep,
-  DbImage,
+  DbRiskStrategy,
   DbTestPlanWithRelations,
   DbUserStoryWithRelations,
   DbTestCaseWithRelations
@@ -20,7 +20,7 @@ export type {
   DbUserStory,
   DbTestCase,
   DbTestCaseStep,
-  DbImage,
+  DbRiskStrategy,
   DbTestPlanWithRelations,
   DbUserStoryWithRelations,
   DbTestCaseWithRelations
@@ -222,13 +222,6 @@ export class DatabaseService {
           *,
           user_stories (
             *,
-            images (
-              id,
-              user_story_id,
-              image_base64,
-              position,
-              created_at
-            ),
             test_cases (
               *,
               test_case_steps (
@@ -302,13 +295,6 @@ export class DatabaseService {
           *,
           user_stories (
             *,
-            images (
-              id,
-              user_story_id,
-              image_base64,
-              position,
-              created_at
-            ),
             test_cases (
               *,
               test_case_steps (
@@ -357,6 +343,50 @@ export class DatabaseService {
 
     } catch (error) {
       console.error('❌ Error:', error);
+      return false;
+    }
+  }
+
+  async getRiskStrategyByTestPlanId(testPlanId: string): Promise<DbRiskStrategy | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('test_plan_risk_strategies')
+        .select('*')
+        .eq('test_plan_id', testPlanId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('❌ Error al obtener riesgo del plan:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Error en getRiskStrategyByTestPlanId:', error);
+      return null;
+    }
+  }
+
+  async upsertRiskStrategy(testPlanId: string, riskData: any): Promise<boolean> {
+    try {
+      const payload = {
+        test_plan_id: testPlanId,
+        risk_data: riskData,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await this.supabase
+        .from('test_plan_risk_strategies')
+        .upsert(payload, { onConflict: 'test_plan_id' });
+
+      if (error) {
+        console.error('❌ Error al guardar riesgo del plan:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Error en upsertRiskStrategy:', error);
       return false;
     }
   }

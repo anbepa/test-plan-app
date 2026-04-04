@@ -1,122 +1,163 @@
 :host {
-    --primary: #2563EB;
-    --primary-hover: #1D4ED8;
-    --bg: #f7f7f8;
-    --surface: #FFFFFF;
-    --border: #E5E7EB;
-    --text: #111827;
-    --text-secondary: #6B7280;
-    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    --radius-lg: 0.75rem;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     display: block;
-    min-height: 100vh;
-    background: var(--bg);
+    background: var(--bg-color, #f7f7f8);
 }
 
 .preview-page-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
 }
 
-.preview-header {
-    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
-    border-radius: 16px;
-    padding: 1.25rem 1.5rem;
-    margin: 1.5rem 1.5rem 0 1.5rem;
-    box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.05),
-        0 0 0 1px rgba(0, 0, 0, 0.02);
-    border: 1px solid rgba(229, 231, 235, 0.8);
+/* ── Barra superior (mismo estilo que general-sections) ── */
+.page-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 1.5rem;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    position: sticky;
+    top: 0;
     z-index: 10;
+    flex-shrink: 0;
 }
 
-.header-content h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #111827;
-    margin: 0 0 0.5rem 0;
-    letter-spacing: -0.02em;
-    line-height: 1.3;
-}
-
-.header-content p {
-    font-size: 0.875rem;
-    color: #6b7280;
-    margin: 0;
-    font-weight: 500;
-}
-
-.header-actions {
+.breadcrumb-row {
     display: flex;
-    gap: 0.75rem;
-}
-
-.button-secondary,
-.button-primary {
-    display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-lg);
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+}
+
+.breadcrumb-button {
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    transition: color 0.15s;
+}
+
+.breadcrumb-button:hover {
+    color: #111827;
+}
+
+.breadcrumb-separator {
+    color: #d1d5db;
+    font-size: 1rem;
+}
+
+.breadcrumb-link {
+    color: #6b7280;
+}
+
+.breadcrumb-current {
+    color: #111827;
+    font-weight: 600;
+}
+
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.45rem 1.1rem;
+    border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.18s ease;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    color: #3b82f6;
+    white-space: nowrap;
 }
 
-.button-secondary {
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
+.btn-action:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #2563eb;
 }
 
-.button-secondary:hover {
-    background: var(--bg);
-    border-color: var(--primary);
+.btn-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
-.button-primary {
-    background: var(--primary);
-    color: white;
-    border: none;
-}
-
-.button-primary:hover {
-    background: var(--primary-hover);
-}
-
-.button-secondary svg,
-.button-primary svg {
+.btn-action svg {
     width: 1rem;
     height: 1rem;
+    flex-shrink: 0;
+}
+
+/* Sobrescribir btn-primary del word-exporter para que coincida con el estilo ghost */
+::ng-deep .topbar-actions .btn-primary {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    color: #3b82f6;
+    padding: 0.45rem 1.1rem;
+    min-height: unset;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.5rem;
+    box-shadow: none;
+    transition: all 0.18s ease;
+}
+
+::ng-deep .topbar-actions .btn-primary:hover:not(:disabled) {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #2563eb;
+    transform: none;
+    box-shadow: none;
+}
+
+::ng-deep .topbar-actions .btn-primary:disabled {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    color: #3b82f6;
+    opacity: 0.45;
+    transform: none;
+    box-shadow: none;
 }
 
 .preview-content-wrapper {
     flex: 1;
-    overflow-y: auto;
-    padding: 2rem;
+    padding: 1.5rem;
     display: flex;
     justify-content: center;
     background: #f0f0f2;
-    /* Un poco más oscuro que bg para resaltar el papel */
+    min-height: 0;
+}
+
+.document-preview {
+    width: 100%;
+    max-width: 850px;
+    display: flex;
+    flex-direction: column;
 }
 
 .paper-sheet {
     background: white;
     width: 100%;
-    max-width: 850px;
-    /* Ancho A4 aprox */
-    min-height: 1000px;
-    padding: 3rem;
-    /* Márgenes de impresión */
-    box-shadow: var(--shadow-md);
+    padding: 2.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     border-radius: 2px;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 /* Estilos internos del documento (copiados del viewer) */
@@ -166,8 +207,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 100%;
+    padding: 4rem 1rem;
     gap: 1rem;
+    width: 100%;
 }
 
 .spinner {
@@ -186,5 +228,62 @@
 
     100% {
         transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 768px) {
+    .page-topbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem;
+    }
+
+    .topbar-actions {
+        width: 100%;
+    }
+
+    .btn-action {
+        flex: 1;
+    }
+
+    .preview-content-wrapper {
+        padding: 0.75rem;
+    }
+
+    .paper-sheet {
+        padding: 1.25rem;
+    }
+
+    ::ng-deep .paper-sheet h1 {
+        font-size: 1.4rem;
+    }
+
+    ::ng-deep .paper-sheet h2 {
+        font-size: 1.15rem;
+    }
+
+    ::ng-deep .paper-sheet h3 {
+        font-size: 1rem;
+    }
+
+    ::ng-deep .paper-sheet p,
+    ::ng-deep .paper-sheet li {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .btn-action {
+        width: 100%;
+        flex: unset;
+    }
+
+    .preview-content-wrapper {
+        padding: 0.5rem;
+    }
+
+    .paper-sheet {
+        padding: 1rem;
     }
 }

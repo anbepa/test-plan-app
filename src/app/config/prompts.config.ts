@@ -15,27 +15,96 @@ ${acceptanceCriteria}
 `,
 
   STATIC_SECTION_ENHANCEMENT: (sectionName: string, existingContent: string, huSummary: string): string => `
-Eres un asistente de QA experto. Tu tarea es MEJORAR y EXPANDIR una sección específica de un plan de pruebas.
-**Sección a Mejorar:** "${sectionName}"
-**Contenido Existente (si lo hay, podría estar vacío o ser un placeholder):**
+Actúa como QA Lead Senior.
+Debes generar una versión FINAL de la sección "${sectionName}" de un plan de pruebas.
+
+CONTENIDO ACTUAL (solo referencia, no lo conserves):
 ${existingContent}
-**Resumen de Historias de Usuario/Flujos en el Plan (para contexto):**
+
+CONTEXTO CONSOLIDADO DE HUs Y ESCENARIOS (fuente obligatoria):
 ${huSummary}
-**INSTRUCCIONES:**
-1.  **ANALIZA EL CONTEXTO:** Considera el resumen de HUs/Flujos para que tu contribución sea relevante.
-2.  **MEJORA Y EXPANDE:** Si el contenido existente es un placeholder (ej: "No se probarán...", "No tener los permisos...") o está vacío, genera contenido nuevo y relevante para la sección "${sectionName}" basado en el contexto general. Si ya hay contenido, añade 2-3 puntos o ideas adicionales que lo complementen, sin repetir lo existente.
-3.  **FORMATO:** Responde ÚNICAMENTE con el texto adicional o mejorado para la sección. No uses encabezados, títulos de sección, ni introducciones/despedidas. Si añades múltiples puntos, usa saltos de línea entre ellos.
-4.  **CONCISIÓN Y RELEVANCIA:** Sé conciso y asegúrate de que tus adiciones sean relevantes para un plan de pruebas y la sección "${sectionName}".
-5.  **NO REPITAS:** Si el contenido existente ya es bueno y completo para el contexto, y no puedes añadir nada valioso, responde con una cadena vacía.
-**EJEMPLO DE RESPUESTA (si se añaden dos puntos a "Limitaciones")**:
-Se cuenta con un ambiente de pruebas con datos limitados.
-La funcionalidad X depende de un sistema externo no disponible para pruebas exhaustivas.
-PROCEDE A GENERAR TU RESPUESTA PARA LA SECCIÓN "${sectionName}":
+
+OBJETIVO:
+- REEMPLAZAR por completo el contenido actual de la sección "${sectionName}".
+- Basarte en TODAS las HUs y escenarios relevantes del contexto consolidado.
+- Si hay N HUs, la sección debe reflejar cobertura para esas N HUs (sin listar todo literalmente).
+
+REGLAS ESTRICTAS DE CALIDAD:
+1) Incluye solo información crítica y accionable para ejecución de pruebas.
+2) Prioriza riesgos funcionales, dependencias, datos de prueba y restricciones reales.
+3) No agregues texto genérico, relleno, frases vacías o recomendaciones obvias.
+4) No inventes sistemas, flujos o dependencias no mencionadas en el contexto.
+5) Si falta contexto para un punto, NO lo incluyas.
+
+OPTIMIZACIÓN DE TOKENS:
+- Máximo 4 líneas.
+- Cada línea <= 110 caracteres aprox.
+- Frases directas, sin narrativas largas ni explicaciones.
+- Evita repeticiones semánticas.
+
+REGLA DE BREVEDAD (OBLIGATORIA):
+- Si una idea no es crítica para ejecución/riesgo, elimínala.
+- No superes 420 caracteres totales.
+
+FORMATO DE SALIDA OBLIGATORIO:
+- Devuelve SOLO el texto final de la sección (sin encabezados, sin markdown, sin bullets numerados, sin explicación extra).
+- Usa saltos de línea simples entre ideas.
+- No devuelvas JSON.
+
+AHORA GENERA la sección final para "${sectionName}".
+`,
+
+  RISK_STRATEGY_PROMPT: (huSummary: string, availableScenarios: string[]): string => `
+Actúa como QA Lead Senior especializado en gestión de riesgos de pruebas.
+
+CONTEXTO CONSOLIDADO (HUs, criterios y escenarios):
+${huSummary}
+
+ESCENARIOS DISPONIBLES PARA PLAN DE MITIGACIÓN (usa solo estos textos):
+${availableScenarios.length > 0 ? availableScenarios.map((s, i) => `${i + 1}. ${s}`).join('\n') : 'Sin escenarios explícitos'}
+
+OBJETIVO:
+- Generar un item de "Riesgos Para la Estrategia de Pruebas" basado estrictamente en el contexto.
+- "probabilidadDe" debe describir el EVENTO de riesgo.
+- "puedeOcurrir" debe describir la CAUSA.
+- "loQuePodriaOcasionar" debe describir la CONSECUENCIA.
+
+CLASIFICACIÓN DEL RIESGO:
+- impactLevel: entero entre 1 y 5
+  1=Ninguno, 2=Bajo, 3=Moderado, 4=Alto, 5=Crítico
+- probabilityLevel: uno de [25, 50, 75, 100]
+  25=Poca posibilidad de ocurrir
+  50=Puede ocurrir
+  75=Gran posibilidad de ocurrir
+  100=Ocurrido (Issue)
+
+PLAN DE MITIGACIÓN:
+- positiveScenarios: mínimo 2 escenarios positivos de cobertura.
+- alternateScenarios: mínimo 1 escenario alterno de cobertura.
+- Prioriza escenarios que existan en la lista disponible.
+
+REGLAS:
+1) No inventes funcionalidades fuera del contexto.
+2) Sé concreto y accionable.
+3) Textos cortos, claros y sin relleno.
+4) Si faltan escenarios disponibles, genera propuestas coherentes con HU/CA.
+
+FORMATO DE SALIDA (OBLIGATORIO):
+Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
+{
+  "probabilidadDe": "Evento",
+  "puedeOcurrir": "Causa",
+  "loQuePodriaOcasionar": "Consecuencia",
+  "impactLevel": 1,
+  "probabilityLevel": 25,
+  "positiveScenarios": ["Escenario positivo 1", "Escenario positivo 2"],
+  "alternateScenarios": ["Escenario alterno 1"]
+}
 `,
 
   // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
-  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
+  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, context?: string): string => `
 Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA ALTA y sin ruido.
 
 HU:
@@ -44,6 +113,7 @@ ${description}
 CA:
 ${acceptanceCriteria}
 
+${context ? `Contexto Adicional del Analista:\n"${context}"\nConsidera este contexto para orientar o priorizar los escenarios.\n` : ''}
 REGLAS DE COBERTURA (obligatorias):
 1) Analiza cada criterio de aceptación (CA) y clasifícalo por complejidad (baja/media/alta).
 2) Define cantidad de casos con regla híbrida:

@@ -1,10 +1,10 @@
 <div class="static-plan-sections-container">
-    <div class="section-header">
+    <div class="section-header" *ngIf="!showOnlyRisk">
         <h2>Secciones Generales del Plan</h2>
     </div>
 
     <!-- Repositorio -->
-    <details class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
         <summary class="plan-section-summary">
             Repositorio Pruebas VSTS
         </summary>
@@ -25,7 +25,7 @@
     </details>
 
     <!-- Fuera del Alcance -->
-    <details class="plan-section-details static-block" [open]="editingOutOfScope || isOutOfScopeDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingOutOfScope || isOutOfScopeDetailsOpen">
         <summary class="plan-section-summary">
             Fuera del Alcance
             <span class="summary-indicators">
@@ -55,7 +55,7 @@
     </details>
 
     <!-- Estrategia -->
-    <details class="plan-section-details static-block" [open]="editingStrategy || isStrategyDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingStrategy || isStrategyDetailsOpen">
         <summary class="plan-section-summary">
             Estrategia
             <span class="summary-indicators">
@@ -84,7 +84,7 @@
     </details>
 
     <!-- Limitaciones -->
-    <details class="plan-section-details static-block" [open]="editingLimitations || isLimitationsDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingLimitations || isLimitationsDetailsOpen">
         <summary class="plan-section-summary">
             Limitaciones
             <span class="summary-indicators">
@@ -114,7 +114,7 @@
     </details>
 
     <!-- Supuestos -->
-    <details class="plan-section-details static-block" [open]="editingAssumptions || isAssumptionsDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingAssumptions || isAssumptionsDetailsOpen">
         <summary class="plan-section-summary">
             Supuestos
             <span class="summary-indicators">
@@ -144,7 +144,7 @@
     </details>
 
     <!-- Equipo -->
-    <details class="plan-section-details static-block" [open]="editingTeam || isTeamDetailsOpen">
+    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingTeam || isTeamDetailsOpen">
         <summary class="plan-section-summary">
             Equipo de Trabajo
         </summary>
@@ -158,6 +158,148 @@
             <div class="actions">
                 <button (click)="toggleStaticEdit('team')" class="button-secondary">
                     {{ editingTeam ? 'Guardar' : 'Editar' }}
+                </button>
+            </div>
+        </div>
+    </details>
+
+    <!-- Riesgos Para la Estrategia de Pruebas -->
+    <details class="plan-section-details static-block" [open]="isRiskDetailsOpen">
+        <summary class="plan-section-summary">
+            Riesgos Para la Estrategia de Pruebas
+            <span class="summary-indicators">
+                <span *ngIf="loadingRiskAI" class="spinner-small"></span>
+                <span *ngIf="errorRiskAI" class="error-status-icon" [title]="errorRiskAI">⚠️</span>
+            </span>
+        </summary>
+
+        <div class="plan-section-content risk-section-content">
+            <h3 class="risk-subtitle">DESCRIPCIÓN DEL RIESGO</h3>
+            <div class="risk-grid-single">
+                <div class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Probabilidad de: <span class="required">*</span></label>
+                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.probabilidadDe, 'probabilidadDe')"
+                            [disabled]="!localRiskData.probabilidadDe.trim()">
+                            {{ copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <input class="field-control" type="text" [(ngModel)]="localRiskData.probabilidadDe"
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Evento" />
+                </div>
+
+                <div class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Puede ocurrir: <span class="required">*</span></label>
+                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.puedeOcurrir, 'puedeOcurrir')"
+                            [disabled]="!localRiskData.puedeOcurrir.trim()">
+                            {{ copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <input class="field-control" type="text" [(ngModel)]="localRiskData.puedeOcurrir"
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Causa" />
+                </div>
+
+                <div class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Lo que podría ocasionar: <span class="required">*</span></label>
+                        <button type="button" class="copy-field-btn"
+                            (click)="copyRiskField(localRiskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
+                            [disabled]="!localRiskData.loQuePodriaOcasionar.trim()">
+                            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <input class="field-control" type="text" [(ngModel)]="localRiskData.loQuePodriaOcasionar"
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Consecuencia" />
+                </div>
+            </div>
+
+            <h3 class="risk-subtitle">CLASIFICACIÓN DEL RIESGO</h3>
+            <div class="risk-grid-two">
+                <div class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Impacto <span class="required">*</span></label>
+                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.impacto, 'impacto')"
+                            [disabled]="!localRiskData.impacto.trim()">
+                            {{ copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <select class="field-control" [(ngModel)]="localRiskData.impacto" (ngModelChange)="onRiskFieldChange()">
+                        <option value="">Seleccione una opción</option>
+                        <option *ngFor="let impact of impactOptions" [value]="impact">{{ impact }}</option>
+                    </select>
+                </div>
+
+                <div class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Probabilidad <span class="required">*</span></label>
+                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.probabilidad, 'probabilidad')"
+                            [disabled]="!localRiskData.probabilidad.trim()">
+                            {{ copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <select class="field-control" [(ngModel)]="localRiskData.probabilidad" (ngModelChange)="onRiskFieldChange()">
+                        <option value="">Seleccione una opción</option>
+                        <option *ngFor="let probability of probabilityOptions" [value]="probability">{{ probability }}</option>
+                    </select>
+                </div>
+            </div>
+
+            <h3 class="risk-subtitle">PLAN DE MITIGACIÓN</h3>
+            <div class="risk-scenarios-block">
+                <h4>Escenarios Positivos (mínimo 2)</h4>
+                <div *ngFor="let scenario of localRiskData.positiveScenarios; let i = index" class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Escenario positivo {{ i + 1 }} con el que cubres el riesgo:</label>
+                        <button type="button" class="copy-field-btn"
+                            (click)="copyRiskField(localRiskData.positiveScenarios[i], 'positive-' + i)"
+                            [disabled]="!localRiskData.positiveScenarios[i].trim()">
+                            {{ copiedFieldKey === 'positive-' + i ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <div class="scenario-row">
+                        <select class="field-control" [(ngModel)]="localRiskData.positiveScenarios[i]" (ngModelChange)="onRiskFieldChange()">
+                            <option value="">Seleccione un escenario</option>
+                            <option *ngFor="let option of getScenarioOptions(localRiskData.positiveScenarios, i)" [value]="option">{{ option }}</option>
+                        </select>
+                        <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.positiveScenarios.length > 2"
+                            (click)="removePositiveScenario(i)">−</button>
+                    </div>
+                </div>
+                <button type="button" class="button-link-add" (click)="addPositiveScenario()">+ Agregar</button>
+            </div>
+
+            <div class="risk-scenarios-block">
+                <h4>Escenarios Alternos (mínimo 1)</h4>
+                <div *ngFor="let scenario of localRiskData.alternateScenarios; let i = index" class="risk-group">
+                    <div class="field-label-row">
+                        <label class="field-label">Escenario alterno {{ i + 1 }} con el que cubres el riesgo:</label>
+                        <button type="button" class="copy-field-btn"
+                            (click)="copyRiskField(localRiskData.alternateScenarios[i], 'alternate-' + i)"
+                            [disabled]="!localRiskData.alternateScenarios[i].trim()">
+                            {{ copiedFieldKey === 'alternate-' + i ? 'Copiado' : 'Copiar' }}
+                        </button>
+                    </div>
+                    <div class="scenario-row">
+                        <select class="field-control" [(ngModel)]="localRiskData.alternateScenarios[i]" (ngModelChange)="onRiskFieldChange()">
+                            <option value="">Seleccione un escenario</option>
+                            <option *ngFor="let option of getScenarioOptions(localRiskData.alternateScenarios, i)" [value]="option">{{ option }}</option>
+                        </select>
+                        <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.alternateScenarios.length > 1"
+                            (click)="removeAlternateScenario(i)">−</button>
+                    </div>
+                </div>
+                <button type="button" class="button-link-add" (click)="addAlternateScenario()">+ Agregar</button>
+            </div>
+
+            <div class="actions">
+                <button class="button-secondary" (click)="requestRiskGeneration()" [disabled]="loadingRiskAI">
+                    <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
+                    Genera con IA
+                </button>
+                <button class="button-generate" (click)="requestRiskRegeneration()" [disabled]="loadingRiskAI">
+                    <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
+                    Regenerar con IA
                 </button>
             </div>
         </div>

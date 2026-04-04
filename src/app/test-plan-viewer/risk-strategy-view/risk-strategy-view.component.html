@@ -1,0 +1,161 @@
+<div class="risk-page">
+  <!-- TOPBAR sticky -->
+  <div class="page-topbar">
+    <div class="breadcrumb-row">
+      <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Riesgos del Plan</button>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-action" [disabled]="isSaving" (click)="save()">
+        <span *ngIf="isSaving" class="spinner-inline"></span>
+        {{ isSaving ? 'Guardando...' : 'Guardar' }}
+      </button>
+      <button class="btn-action btn-ai" [disabled]="loadingAI" (click)="generateWithAI()">
+        <span *ngIf="loadingAI" class="spinner-inline spinner-purple"></span>
+        {{ loadingAI ? 'Generando...' : 'Generar con IA' }}
+      </button>
+      <span *ngIf="errorAI" class="error-inline">⚠️ {{ errorAI }}</span>
+    </div>
+  </div>
+
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Cargando riesgos...</p>
+  </div>
+
+  <div *ngIf="!isLoading" class="risk-card">
+
+    <!-- ── DESCRIPCIÓN DEL RIESGO ── -->
+    <h3 class="risk-subtitle">DESCRIPCIÓN DEL RIESGO</h3>
+    <div class="risk-grid risk-grid-3">
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <label>Probabilidad de: <span class="req">*</span></label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.probabilidadDe, 'probabilidadDe')"
+            [disabled]="!riskData.probabilidadDe.trim()">
+            {{ copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <input type="text" [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input" />
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <label>Puede ocurrir: <span class="req">*</span></label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.puedeOcurrir, 'puedeOcurrir')"
+            [disabled]="!riskData.puedeOcurrir.trim()">
+            {{ copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <input type="text" [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input" />
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <label>Lo que podría ocasionar: <span class="req">*</span></label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
+            [disabled]="!riskData.loQuePodriaOcasionar.trim()">
+            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <input type="text" [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input" />
+      </div>
+
+    </div>
+
+    <!-- ── CLASIFICACIÓN DEL RIESGO ── -->
+    <h3 class="risk-subtitle">CLASIFICACIÓN DEL RIESGO</h3>
+    <div class="risk-grid risk-grid-2">
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <label>Impacto <span class="req">*</span></label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.impacto, 'impacto')"
+            [disabled]="!riskData.impacto.trim()">
+            {{ copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <select [(ngModel)]="riskData.impacto" class="field-input">
+          <option value="">Seleccione una opción</option>
+          <option *ngFor="let opt of impactOptions" [value]="opt">{{ opt }}</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <label>Probabilidad <span class="req">*</span></label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.probabilidad, 'probabilidad')"
+            [disabled]="!riskData.probabilidad.trim()">
+            {{ copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <select [(ngModel)]="riskData.probabilidad" class="field-input">
+          <option value="">Seleccione una opción</option>
+          <option *ngFor="let opt of probabilityOptions" [value]="opt">{{ opt }}</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- ── PLAN DE MITIGACIÓN ── -->
+    <h3 class="risk-subtitle">PLAN DE MITIGACIÓN</h3>
+
+    <div class="scenarios-block">
+      <h4>Escenarios Positivos (mínimo 2)</h4>
+      <div *ngFor="let sc of riskData.positiveScenarios; let i = index" class="field-group">
+        <div class="field-label-row">
+          <label>Escenario positivo {{ i + 1 }} con el que cubres el riesgo:</label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.positiveScenarios[i], 'pos-' + i)"
+            [disabled]="!riskData.positiveScenarios[i].trim()">
+            {{ copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <div class="scenario-row">
+          <select [(ngModel)]="riskData.positiveScenarios[i]" class="field-input">
+            <option value="">Seleccione un escenario</option>
+            <option *ngFor="let opt of getScenarioOptions(riskData.positiveScenarios, i)" [value]="opt">{{ opt }}</option>
+          </select>
+          <button type="button" class="btn btn-icon btn-secondary"
+            *ngIf="riskData.positiveScenarios.length > 2"
+            (click)="removePositiveScenario(i)">−</button>
+        </div>
+      </div>
+      <button type="button" class="btn-link-add" (click)="addPositiveScenario()">+ Agregar</button>
+    </div>
+
+    <div class="scenarios-block">
+      <h4>Escenarios Alternos (mínimo 1)</h4>
+      <div *ngFor="let sc of riskData.alternateScenarios; let i = index" class="field-group">
+        <div class="field-label-row">
+          <label>Escenario alterno {{ i + 1 }} con el que cubres el riesgo:</label>
+          <button type="button" class="copy-btn"
+            (click)="copyField(riskData.alternateScenarios[i], 'alt-' + i)"
+            [disabled]="!riskData.alternateScenarios[i].trim()">
+            {{ copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar' }}
+          </button>
+        </div>
+        <div class="scenario-row">
+          <select [(ngModel)]="riskData.alternateScenarios[i]" class="field-input">
+            <option value="">Seleccione un escenario</option>
+            <option *ngFor="let opt of getScenarioOptions(riskData.alternateScenarios, i)" [value]="opt">{{ opt }}</option>
+          </select>
+          <button type="button" class="btn btn-icon btn-secondary"
+            *ngIf="riskData.alternateScenarios.length > 1"
+            (click)="removeAlternateScenario(i)">−</button>
+        </div>
+      </div>
+      <button type="button" class="btn-link-add" (click)="addAlternateScenario()">+ Agregar</button>
+    </div>
+
+  </div>
+</div>

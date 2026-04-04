@@ -1,9 +1,9 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database/database.service';
-import { GeminiService } from '../services/ai/gemini.service';
+import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { HUData, DetailedTestCase } from '../models/hu-data.model';
 import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
@@ -13,12 +13,12 @@ import { TestPlanMapperService } from '../services/database/test-plan-mapper.ser
 import { ExportService } from '../services/export/export.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 
-import { GeneralSectionsComponent, StaticSectionName } from './components/general-sections/general-sections.component';
+import { StaticSectionName, RiskStrategyData } from './components/general-sections/general-sections.component';
 
 @Component({
   selector: 'app-test-plan-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, ExcelMatrixExporterComponent, GeneralSectionsComponent, ConfirmationModalComponent],
+  imports: [CommonModule, FormsModule, RouterLink, ExcelMatrixExporterComponent, ConfirmationModalComponent],
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })
@@ -36,6 +36,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   searchQuery: string = '';
   selectedSprintFilter: string = 'all';
   selectedCellFilter: string = 'all';
+  selectedPlanIds: string[] = [];
   savingToDatabase: boolean = false;
 
   currentPage: number = 1;
@@ -57,11 +58,17 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   loadingLimitationsAI: boolean = false;
   loadingAssumptionsAI: boolean = false;
   loadingTeamAI: boolean = false;
+  loadingRiskAI: boolean = false;
 
   // Modal de confirmación
   isDeleteModalOpen: boolean = false;
   testPlanToDelete: Partial<DbTestPlanWithRelations> | null = null;
+  testPlansToDelete: Partial<DbTestPlanWithRelations>[] = [];
   deleteModalMessage: string = '';
+  isDeleteHuModalOpen: boolean = false;
+  huToDelete: HUData | null = null;
+  husToDelete: HUData[] = [];
+  deleteHuModalMessage: string = '';
 
   errorRepositoryLinkAI: string | null = null;
   errorOutOfScopeAI: string | null = null;
@@ -69,19 +76,32 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   errorLimitationsAI: string | null = null;
   errorAssumptionsAI: string | null = null;
   errorTeamAI: string | null = null;
+  errorRiskAI: string | null = null;
+
+  riskScenarioOptions: string[] = [];
+  riskStrategyData: RiskStrategyData = this.createDefaultRiskStrategyData();
 
   huList: HUData[] = [];
+  paginatedHuList: HUData[] = [];
+  huCurrentPage: number = 1;
+  huItemsPerPage: number = 5;
+  huTotalPages: number = 1;
+  selectedHuIds: string[] = [];
+  huActionsMenuOpenId: string | null = null;
 
   private autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private autoSavePromise: Promise<void> | null = null;
   private autoSaveQueued = false;
+  private riskSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private riskSavePromise: Promise<void> | null = null;
+  private riskSaveQueued = false;
 
   private metadataChanged = false;
   private structureChanged = false;
 
   constructor(
     private databaseService: DatabaseService,
-    private geminiService: GeminiService,
+    private aiService: AiUnifiedService,
     private router: Router,
     private route: ActivatedRoute,
     private mapper: TestPlanMapperService,
@@ -109,10 +129,16 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       clearTimeout(this.autoSaveTimer);
       this.autoSaveTimer = null;
     }
+    if (this.riskSaveTimer) {
+      clearTimeout(this.riskSaveTimer);
+      this.riskSaveTimer = null;
+    }
   }
 
-  async loadTestPlans() {
-    this.isLoading = true;
+  async loadTestPlans(showLoading: boolean = true) {
+    if (showLoading) {
+      this.isLoading = true;
+    }
     this.errorMessage = '';
 
     try {
@@ -129,7 +155,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       console.error('❌ Error cargando test plans:', error);
       this.errorMessage = 'Error al cargar los test plans. Verifica la consola para más detalles.';
     } finally {
-      this.isLoading = false;
+      if (showLoading) {
+        this.isLoading = false;
+      }
     }
   }
 
@@ -162,6 +190,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     }
 
     this.filteredTestPlans = filtered;
+    this.selectedPlanIds = this.selectedPlanIds.filter(id =>
+      this.filteredTestPlans.some(tp => tp.id === id)
+    );
 
     this.currentPage = 1;
     this.updatePagination();
@@ -252,6 +283,93 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
+  getMainSprint(testPlan: Partial<DbTestPlanWithRelations>): string {
+    const sprints = testPlan.user_stories?.map((us: any) => us.sprint).filter(Boolean) || [];
+    const sprintCounts = sprints.reduce((acc: any, sprint: string) => {
+      acc[sprint] = (acc[sprint] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.keys(sprintCounts).length > 0
+      ? Object.keys(sprintCounts).reduce((a, b) => sprintCounts[a] > sprintCounts[b] ? a : b)
+      : 'Sin Sprint';
+  }
+
+  isPlanSelected(testPlan: Partial<DbTestPlanWithRelations>): boolean {
+    if (!testPlan.id) return false;
+    return this.selectedPlanIds.includes(testPlan.id);
+  }
+
+  onPlanSelectionChange(testPlan: Partial<DbTestPlanWithRelations>, checked: boolean): void {
+    if (!testPlan.id) return;
+
+    if (checked) {
+      if (!this.selectedPlanIds.includes(testPlan.id)) {
+        this.selectedPlanIds = [...this.selectedPlanIds, testPlan.id];
+      }
+      return;
+    }
+
+    this.selectedPlanIds = this.selectedPlanIds.filter(id => id !== testPlan.id);
+  }
+
+  areAllVisiblePlansSelected(): boolean {
+    const visibleIds = this.paginatedTestPlans
+      .map(tp => tp.id)
+      .filter((id): id is string => !!id);
+
+    if (visibleIds.length === 0) return false;
+    return visibleIds.every(id => this.selectedPlanIds.includes(id));
+  }
+
+  onToggleSelectAllVisible(checked: boolean): void {
+    const visibleIds = this.paginatedTestPlans
+      .map(tp => tp.id)
+      .filter((id): id is string => !!id);
+
+    if (!checked) {
+      this.selectedPlanIds = this.selectedPlanIds.filter(id => !visibleIds.includes(id));
+      return;
+    }
+
+    const currentSelection = new Set(this.selectedPlanIds);
+    visibleIds.forEach(id => currentSelection.add(id));
+    this.selectedPlanIds = Array.from(currentSelection);
+  }
+
+  getSelectedPlans(): Partial<DbTestPlanWithRelations>[] {
+    return this.filteredTestPlans.filter(tp => !!tp.id && this.selectedPlanIds.includes(tp.id));
+  }
+
+  viewSelectedPlan(): void {
+    const selectedPlans = this.getSelectedPlans();
+    if (selectedPlans.length !== 1) {
+      this.toastService.warning('Selecciona un solo registro para ver detalle');
+      return;
+    }
+
+    this.selectTestPlan(selectedPlans[0]);
+  }
+
+  deleteSelectedPlans(): void {
+    const selectedPlans = this.getSelectedPlans();
+    if (selectedPlans.length === 0) {
+      this.toastService.warning('Selecciona al menos un registro para eliminar');
+      return;
+    }
+
+    if (selectedPlans.length === 1) {
+      this.deleteTestPlan(selectedPlans[0]);
+      return;
+    }
+
+    this.testPlansToDelete = selectedPlans;
+    this.testPlanToDelete = null;
+    this.deleteModalMessage = `¿Estás seguro de eliminar ${selectedPlans.length} test plans?\n\nEsta acción no se puede deshacer.`;
+    this.isDeleteModalOpen = true;
+    this.cdr.detectChanges();
+  }
+
   // Agrupar test plans por sprint
   getGroupedTestPlans(): { sprint: string; plans: Partial<DbTestPlanWithRelations>[] }[] {
     const grouped = new Map<string, Partial<DbTestPlanWithRelations>[]>();
@@ -321,6 +439,10 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
       // Convert user stories to HUData
       this.convertDbTestPlanToHUList(fullTestPlan);
+      this.riskStrategyData = this.createDefaultRiskStrategyData();
+      this.errorRiskAI = null;
+      this.loadingRiskAI = false;
+      await this.loadRiskStrategyFromDatabase(fullTestPlan.id || '');
 
       // Generate preview
 
@@ -334,18 +456,180 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   convertDbTestPlanToHUList(testPlan: DbTestPlanWithRelations) {
     this.huList = this.mapper.mapDbTestPlanToHUList(testPlan);
+    this.huCurrentPage = 1;
+    this.updateHuPagination();
+    this.selectedHuIds = [];
+    this.riskScenarioOptions = this.buildScenarioOptionsForRisk();
   }
 
   backToList() {
     this.selectedTestPlan = null;
     this.huList = [];
+    this.paginatedHuList = [];
+    this.huCurrentPage = 1;
+    this.huTotalPages = 1;
+    this.selectedHuIds = [];
+    this.riskScenarioOptions = [];
+    this.riskStrategyData = this.createDefaultRiskStrategyData();
 
+    if (this.riskSaveTimer) {
+      clearTimeout(this.riskSaveTimer);
+      this.riskSaveTimer = null;
+    }
+
+  }
+
+  goToCurrentDetail(): void {
+    if (!this.selectedTestPlan?.id) return;
+
+    this.router.navigate(['/viewer'], {
+      queryParams: { id: this.selectedTestPlan.id }
+    });
   }
 
   toggleHUExpansion(targetHu: HUData): void {
     const shouldExpand = !targetHu.isExpanded;
     this.huList.forEach(hu => hu.isExpanded = false);
     targetHu.isExpanded = shouldExpand;
+  }
+
+  getHuTechnique(hu: HUData): string {
+    return hu.originalInput?.selectedTechnique || 'N/A';
+  }
+
+  isHuSelected(hu: HUData): boolean {
+    return this.selectedHuIds.includes(hu.id);
+  }
+
+  onHuSelectionChange(hu: HUData, checked: boolean): void {
+    if (checked) {
+      if (!this.selectedHuIds.includes(hu.id)) {
+        this.selectedHuIds = [...this.selectedHuIds, hu.id];
+      }
+      return;
+    }
+
+    this.selectedHuIds = this.selectedHuIds.filter(id => id !== hu.id);
+  }
+
+  areAllVisibleHusSelected(): boolean {
+    const visibleIds = this.paginatedHuList.map(hu => hu.id);
+    if (visibleIds.length === 0) return false;
+    return visibleIds.every(id => this.selectedHuIds.includes(id));
+  }
+
+  onToggleSelectAllVisibleHus(checked: boolean): void {
+    const visibleIds = this.paginatedHuList.map(hu => hu.id);
+
+    if (!checked) {
+      this.selectedHuIds = this.selectedHuIds.filter(id => !visibleIds.includes(id));
+      return;
+    }
+
+    const currentSelection = new Set(this.selectedHuIds);
+    visibleIds.forEach(id => currentSelection.add(id));
+    this.selectedHuIds = Array.from(currentSelection);
+  }
+
+  getSelectedHus(): HUData[] {
+    return this.huList.filter(hu => this.selectedHuIds.includes(hu.id));
+  }
+
+  canDeleteSelectedHu(): boolean {
+    return this.selectedHuIds.length > 0;
+  }
+
+  canViewSelectedScenarios(): boolean {
+    return this.selectedHuIds.length === 1;
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.huActionsMenuOpenId = null;
+  }
+
+  isHuActionsMenuOpen(huId: string): boolean {
+    return this.huActionsMenuOpenId === huId;
+  }
+
+  toggleHuActionsMenu(huId: string, event: Event): void {
+    event.stopPropagation();
+    this.huActionsMenuOpenId = this.huActionsMenuOpenId === huId ? null : huId;
+  }
+
+  openHUScenarios(hu: HUData, event?: Event): void {
+    event?.stopPropagation();
+    this.huActionsMenuOpenId = null;
+
+    if (!this.selectedTestPlan?.id) {
+      this.toastService.warning('No hay un plan de pruebas seleccionado.');
+      return;
+    }
+
+    this.router.navigate(['/viewer/hu-scenarios'], {
+      state: {
+        hu,
+        testPlanId: this.selectedTestPlan.id,
+        testPlanTitle: this.testPlanTitle || ''
+      }
+    });
+  }
+
+  showSelectedHUScenarios(): void {
+    const selectedHus = this.getSelectedHus();
+    if (selectedHus.length !== 1) {
+      this.toastService.warning('Selecciona una HU para ver escenarios de prueba');
+      return;
+    }
+
+    this.router.navigate(['/viewer/hu-scenarios'], {
+      state: {
+        hu: selectedHus[0],
+        testPlanId: this.selectedTestPlan?.id || '',
+        testPlanTitle: this.testPlanTitle || ''
+      }
+    });
+  }
+
+  openGeneralSectionsView(): void {
+    if (!this.selectedTestPlan?.id) {
+      this.toastService.warning('No hay un plan de pruebas seleccionado.');
+      return;
+    }
+
+    this.router.navigate(['/viewer/general-sections', this.selectedTestPlan.id], {
+      state: {
+        testPlanTitle: this.testPlanTitle || ''
+      }
+    });
+  }
+
+  openRiskStrategyView(): void {
+    if (!this.selectedTestPlan?.id) {
+      this.toastService.warning('No hay un plan de pruebas seleccionado.');
+      return;
+    }
+
+    this.router.navigate(['/viewer/risk-strategy', this.selectedTestPlan.id], {
+      state: {
+        testPlanTitle: this.testPlanTitle || ''
+      }
+    });
+  }
+
+  requestDeleteSelectedHU(): void {
+    const selectedHus = this.getSelectedHus();
+    if (selectedHus.length === 0) {
+      this.toastService.warning('Selecciona al menos una HU para borrar');
+      return;
+    }
+
+    this.husToDelete = [...selectedHus];
+    this.huToDelete = selectedHus[0] || null;
+    this.deleteHuModalMessage = selectedHus.length === 1
+      ? `¿Deseas borrar la HU "${selectedHus[0].id}: ${selectedHus[0].title}"?\n\nEsta acción eliminará también sus casos y pasos.`
+      : `¿Deseas borrar ${selectedHus.length} HUs seleccionadas?\n\nEsta acción eliminará también sus casos y pasos.`;
+    this.isDeleteHuModalOpen = true;
   }
 
   formatDate(dateString: string | undefined): string {
@@ -405,6 +689,125 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.router.navigate(['/preview', this.selectedTestPlan.id]);
   }
 
+  addNewHU(): void {
+    if (!this.selectedTestPlan?.id) {
+      this.toastService.warning('No hay un plan de pruebas seleccionado.');
+      return;
+    }
+
+    this.router.navigate(['/generator'], {
+      state: {
+        appendToTestPlanId: this.selectedTestPlan.id,
+        testPlanTitle: this.testPlanTitle,
+        repositoryLink: this.repositoryLink,
+        outOfScopeContent: this.outOfScopeContent,
+        strategyContent: this.strategyContent,
+        limitationsContent: this.limitationsContent,
+        assumptionsContent: this.assumptionsContent,
+        teamContent: this.teamContent,
+        cellName: this.selectedTestPlan.cell_name || '',
+        initialSprint: this.huList[this.huList.length - 1]?.sprint || '',
+        huList: this.huList
+      }
+    });
+  }
+
+  async deleteHU(hu: HUData, event: Event): Promise<void> {
+    event.stopPropagation();
+
+    if (!this.selectedTestPlan?.id) {
+      this.toastService.warning('No hay un plan de pruebas seleccionado.');
+      return;
+    }
+
+    this.huToDelete = hu;
+    this.husToDelete = [hu];
+    this.deleteHuModalMessage = `¿Deseas borrar la HU "${hu.id}: ${hu.title}"?\n\nEsta acción eliminará también sus casos y pasos.`;
+    this.isDeleteHuModalOpen = true;
+  }
+
+  async onConfirmDeleteHU(): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
+    }
+
+    const husToDelete = this.husToDelete.length > 0
+      ? [...this.husToDelete]
+      : (this.huToDelete ? [this.huToDelete] : []);
+
+    if (husToDelete.length === 0) {
+      return;
+    }
+
+    this.isDeleteHuModalOpen = false;
+    this.huToDelete = null;
+    this.husToDelete = [];
+
+    const previousHuList = [...this.huList];
+    const previousSelectedHuIds = [...this.selectedHuIds];
+    const previousUserStories = this.selectedTestPlan.user_stories
+      ? [...this.selectedTestPlan.user_stories]
+      : undefined;
+    const huIdsToDelete = new Set(husToDelete.map(hu => hu.id));
+
+    this.huList = this.huList.filter(hu => !huIdsToDelete.has(hu.id));
+    this.updateHuPagination();
+    this.selectedHuIds = this.selectedHuIds.filter(id => !huIdsToDelete.has(id));
+
+    if (this.selectedTestPlan.user_stories) {
+      this.selectedTestPlan.user_stories = this.selectedTestPlan.user_stories.filter(us => {
+        return !husToDelete.some(removedHu => {
+          const sameDbId = removedHu.dbUuid && us.id === removedHu.dbUuid;
+          const sameCustomId = us.custom_id && us.custom_id === removedHu.id;
+          return sameDbId || sameCustomId;
+        });
+      });
+    }
+
+    this.structureChanged = true;
+    this.cdr.detectChanges();
+
+    const loadingToastId = this.toastService.loading(
+      husToDelete.length === 1
+        ? 'Borrando HU y sincronizando cambios...'
+        : 'Borrando HUs y sincronizando cambios...'
+    );
+    try {
+      await this.autoSaveToDatabase(true);
+      this.toastService.update(loadingToastId, {
+        type: 'success',
+        message: husToDelete.length === 1
+          ? `HU "${husToDelete[0].id}" borrada correctamente`
+          : `${husToDelete.length} HUs borradas correctamente`,
+        duration: 4000
+      });
+    } catch (error) {
+      this.huList = previousHuList;
+      this.updateHuPagination();
+      this.selectedHuIds = previousSelectedHuIds;
+      if (this.selectedTestPlan) {
+        this.selectedTestPlan.user_stories = previousUserStories;
+      }
+      this.structureChanged = true;
+      this.cdr.detectChanges();
+
+      this.toastService.update(loadingToastId, {
+        type: 'error',
+        message: husToDelete.length === 1
+          ? 'No se pudo borrar la HU en base de datos'
+          : 'No se pudieron borrar las HUs en base de datos',
+        duration: 5000
+      });
+      console.error('❌ Error al borrar HU:', error);
+    }
+  }
+
+  onCancelDeleteHU(): void {
+    this.isDeleteHuModalOpen = false;
+    this.huToDelete = null;
+    this.husToDelete = [];
+  }
+
   // === EDICIÓN DE SECCIONES ESTÁTICAS ===
 
   handleSectionChange(event: { section: StaticSectionName, content: string }): void {
@@ -432,6 +835,56 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.autoSaveToDatabase();
 
     this.cdr.detectChanges();
+  }
+
+  handleRiskDataChange(riskData: RiskStrategyData): void {
+    this.riskStrategyData = {
+      ...riskData,
+      positiveScenarios: [...riskData.positiveScenarios],
+      alternateScenarios: [...riskData.alternateScenarios]
+    };
+    void this.autoSaveRiskStrategy().catch(error => {
+      console.warn('⚠️ No se pudo auto-guardar el riesgo:', error);
+    });
+    this.cdr.detectChanges();
+  }
+
+  generateRiskStrategyWithAI(): void {
+    if (!this.selectedTestPlan || this.huList.length === 0) {
+      this.riskStrategyData = this.createDefaultRiskStrategyData();
+      this.riskScenarioOptions = [];
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const huSummary = this.mapper.getHuSummaryForAI(this.huList);
+    this.riskScenarioOptions = this.buildScenarioOptionsForRisk();
+
+    this.loadingRiskAI = true;
+    this.errorRiskAI = null;
+    this.cdr.detectChanges();
+
+    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions)
+      .pipe(
+        tap((response: any) => {
+          this.riskStrategyData = this.mapRiskAiResponse(response);
+          void this.autoSaveRiskStrategy(true).catch(error => {
+            console.warn('⚠️ No se pudo guardar el riesgo generado por IA:', error);
+          });
+          this.toastService.success('Riesgo para estrategia de pruebas generado con IA');
+        }),
+        catchError(err => {
+          const errorMsg = err?.message || 'Error desconocido al generar riesgo con IA';
+          this.errorRiskAI = errorMsg;
+          this.toastService.error(`No se pudo generar el riesgo: ${errorMsg}`);
+          return of(null);
+        }),
+        finalize(() => {
+          this.loadingRiskAI = false;
+          this.cdr.detectChanges();
+        })
+      )
+      .subscribe();
   }
 
   regenerateStaticSectionWithAI(section: StaticSectionName): void {
@@ -463,10 +916,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const existingContent = existingContentMap[section] || '';
     const sectionName = sectionNameMap[section];
 
-    // Crear resumen de HUs para contexto
-    const huSummary = this.huList.map((hu, idx) =>
-      `HU ${idx + 1} (${hu.id}): ${hu.title} - Técnica: ${hu.originalInput.selectedTechnique || 'N/A'}`
-    ).join('\n');
+    // Crear contexto consolidado de HUs + escenarios para IA
+    const huSummary = this.mapper.getHuSummaryForAI(this.huList);
 
     // Mapeo de propiedades de loading y error
     const loadingMap: Record<StaticSectionName, string> = {
@@ -492,8 +943,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     (this as any)[errorMap[section]] = null;
     this.cdr.detectChanges();
 
-    // Llamar al servicio de Gemini
-    this.geminiService.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary)
+    this.aiService.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary)
       .pipe(
         tap(enhancedContent => {
           if (!enhancedContent || enhancedContent.trim() === '') {
@@ -501,10 +951,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
             return;
           }
 
-          // Añadir el contenido mejorado al existente
-          const newContent = existingContent
-            ? `${existingContent}\n\n${enhancedContent}`
-            : enhancedContent;
+          // Reemplazar por completo el contenido de la sección con salida compacta
+          const newContent = this.compactStaticSectionContent(enhancedContent);
 
           // Actualizar el contenido de la sección
           switch (section) {
@@ -763,12 +1211,21 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     try {
       await this.autoSaveToDatabase(true);
+      let riskSaveWarning = false;
+      try {
+        await this.autoSaveRiskStrategy(true);
+      } catch (riskError) {
+        riskSaveWarning = true;
+        console.warn('⚠️ El plan se guardó, pero el riesgo no se pudo persistir:', riskError);
+      }
 
       // Actualizar el toast de loading a success con el título del plan
       const planTitle = this.testPlanTitle || 'Test Plan';
       this.toastService.update(loadingToastId, {
         type: 'success',
-        message: `✅ "${planTitle}" guardado exitosamente`,
+        message: riskSaveWarning
+          ? `✅ "${planTitle}" guardado. Riesgos pendientes de persistir en BD`
+          : `✅ "${planTitle}" guardado exitosamente`,
         duration: 4500
       });
     } catch (error) {
@@ -788,31 +1245,76 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   // === ELIMINAR TEST PLAN ===
 
+  onDeleteButtonPointerDown(event: PointerEvent, testPlan: Partial<DbTestPlanWithRelations>): void {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    this.deleteTestPlan(testPlan);
+  }
+
   deleteTestPlan(testPlan: Partial<DbTestPlanWithRelations>) {
+    this.testPlansToDelete = [testPlan];
     this.testPlanToDelete = testPlan;
     this.deleteModalMessage = `¿Estás seguro de eliminar "${testPlan.title}"?\n\nEsta acción no se puede deshacer.`;
     this.isDeleteModalOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  onCancelDeleteTestPlan(): void {
+    this.isDeleteModalOpen = false;
+    this.testPlanToDelete = null;
+    this.testPlansToDelete = [];
   }
 
   async onConfirmDelete() {
-    if (!this.testPlanToDelete || !this.testPlanToDelete.id) return;
+    const plansToDelete = this.testPlansToDelete.length > 0
+      ? [...this.testPlansToDelete]
+      : (this.testPlanToDelete ? [this.testPlanToDelete] : []);
 
-    const testPlanId = this.testPlanToDelete.id;
-    this.isDeleteModalOpen = false; // Cerrar modal inmediatamente
+    if (plansToDelete.length === 0) return;
+
+    this.isDeleteModalOpen = false;
     this.testPlanToDelete = null;
+    this.testPlansToDelete = [];
 
-    const loadingToastId = this.toastService.loading('Eliminando test plan...');
-    this.isLoading = true;
+    const loadingToastId = this.toastService.loading(
+      plansToDelete.length === 1 ? 'Eliminando test plan...' : `Eliminando ${plansToDelete.length} test plans...`
+    );
 
     try {
-      const success = await this.databaseService.deleteTestPlan(testPlanId);
+      let deletedCount = 0;
+      const deletedIds: string[] = [];
+
+      for (const plan of plansToDelete) {
+        if (!plan.id) continue;
+
+        const success = await this.databaseService.deleteTestPlan(plan.id);
+        if (success) {
+          deletedCount++;
+          deletedIds.push(plan.id);
+        }
+      }
 
       this.toastService.dismiss(loadingToastId);
 
-      if (success) {
-        this.toastService.success('Test plan eliminado exitosamente');
-        await this.loadTestPlans();
-        if (this.selectedTestPlan?.id === testPlanId) {
+      if (deletedCount > 0) {
+        if (deletedCount === plansToDelete.length) {
+          this.toastService.success(
+            deletedCount === 1
+              ? 'Test plan eliminado exitosamente'
+              : `${deletedCount} test plans eliminados exitosamente`
+          );
+        } else {
+          this.toastService.warning(
+            `Se eliminaron ${deletedCount} de ${plansToDelete.length} test plans`
+          );
+        }
+
+        await this.loadTestPlans(false);
+
+        this.selectedPlanIds = this.selectedPlanIds.filter(id => !deletedIds.includes(id));
+
+        if (this.selectedTestPlan?.id && deletedIds.includes(this.selectedTestPlan.id)) {
           this.selectedTestPlan = null;
         }
       } else {
@@ -822,12 +1324,282 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       console.error('❌ Error:', error);
       this.toastService.dismiss(loadingToastId);
       this.toastService.error('Error al eliminar el test plan');
-    } finally {
-      this.isLoading = false;
     }
   }
 
   trackHuById(index: number, hu: HUData): string {
     return hu.id;
+  }
+
+  updateHuPagination(): void {
+    this.huTotalPages = Math.ceil(this.huList.length / this.huItemsPerPage);
+
+    if (this.huCurrentPage > this.huTotalPages && this.huTotalPages > 0) {
+      this.huCurrentPage = this.huTotalPages;
+    }
+
+    if (this.huTotalPages === 0) {
+      this.huCurrentPage = 1;
+      this.paginatedHuList = [];
+      return;
+    }
+
+    const startIndex = (this.huCurrentPage - 1) * this.huItemsPerPage;
+    const endIndex = startIndex + this.huItemsPerPage;
+    this.paginatedHuList = this.huList.slice(startIndex, endIndex);
+  }
+
+  goToHuPage(page: number): void {
+    if (page >= 1 && page <= this.huTotalPages) {
+      this.huCurrentPage = page;
+      this.updateHuPagination();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  nextHuPage(): void {
+    this.goToHuPage(this.huCurrentPage + 1);
+  }
+
+  previousHuPage(): void {
+    this.goToHuPage(this.huCurrentPage - 1);
+  }
+
+  getHuPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxPagesToShow = 5;
+
+    if (this.huTotalPages <= maxPagesToShow) {
+      for (let i = 1; i <= this.huTotalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (this.huCurrentPage <= 3) {
+        pages.push(1, 2, 3, 4, -1, this.huTotalPages);
+      } else if (this.huCurrentPage >= this.huTotalPages - 2) {
+        pages.push(1, -1, this.huTotalPages - 3, this.huTotalPages - 2, this.huTotalPages - 1, this.huTotalPages);
+      } else {
+        pages.push(1, -1, this.huCurrentPage - 1, this.huCurrentPage, this.huCurrentPage + 1, -1, this.huTotalPages);
+      }
+    }
+
+    return pages;
+  }
+
+  private compactStaticSectionContent(content: string): string {
+    if (!content) return '';
+
+    const lines = content
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => line.replace(/^[-•\d.)\s]+/, '').trim())
+      .slice(0, 4)
+      .map(line => line.slice(0, 110));
+
+    const compact = lines.join('\n');
+    return compact.slice(0, 420).trim();
+  }
+
+  private createDefaultRiskStrategyData(): RiskStrategyData {
+    return {
+      probabilidadDe: '',
+      puedeOcurrir: '',
+      loQuePodriaOcasionar: '',
+      impacto: '',
+      probabilidad: '',
+      positiveScenarios: ['', ''],
+      alternateScenarios: ['']
+    };
+  }
+
+  private buildScenarioOptionsForRisk(): string[] {
+    const scenarios = this.huList
+      .flatMap(hu => {
+        const detailed = (hu.detailedTestCases || [])
+          .map(tc => tc.title?.trim())
+          .filter((title): title is string => Boolean(title));
+
+        if (detailed.length > 0) {
+          return detailed.map(title => `${hu.id} - ${title}`);
+        }
+
+        return (hu.generatedTestCaseTitles || '')
+          .split(/\r?\n|\|/)
+          .map(line => line.trim())
+          .filter(Boolean)
+          .map(title => `${hu.id} - ${title}`);
+      })
+      .filter(Boolean);
+
+    return Array.from(new Set(scenarios)).slice(0, 40);
+  }
+
+  private mapRiskAiResponse(response: any): RiskStrategyData {
+    const impactOption = this.mapImpactFromAi(response?.impactLevel);
+    const probabilityOption = this.mapProbabilityFromAi(response?.probabilityLevel);
+
+    const positiveScenarios = this.normalizeScenarioSelection(response?.positiveScenarios, 2, 2);
+    const alternateScenarios = this.normalizeScenarioSelection(response?.alternateScenarios, 1, 1);
+
+    return {
+      probabilidadDe: (response?.probabilidadDe || '').toString().trim(),
+      puedeOcurrir: (response?.puedeOcurrir || '').toString().trim(),
+      loQuePodriaOcasionar: (response?.loQuePodriaOcasionar || '').toString().trim(),
+      impacto: impactOption,
+      probabilidad: probabilityOption,
+      positiveScenarios,
+      alternateScenarios
+    };
+  }
+
+  private mapImpactFromAi(value: unknown): string {
+    const impactMap: Record<number, string> = {
+      1: '1 - Ninguno',
+      2: '2 - Bajo',
+      3: '3 - Moderado',
+      4: '4 - Alto',
+      5: '5 - Crítico'
+    };
+
+    const numeric = Number(value);
+    return impactMap[numeric] || '';
+  }
+
+  private mapProbabilityFromAi(value: unknown): string {
+    const probabilityMap: Record<number, string> = {
+      25: '25% - Poca posibilidad de ocurrir',
+      50: '50% - Puede ocurrir',
+      75: '75% - Gran posibilidad de ocurrir',
+      100: '100% - Ocurrido (Issue)'
+    };
+
+    const numeric = Number(value);
+    return probabilityMap[numeric] || '';
+  }
+
+  private normalizeScenarioSelection(rawScenarios: unknown, minItems: number, maxItems: number): string[] {
+    const aiScenarios = Array.isArray(rawScenarios)
+      ? rawScenarios.map(item => (item ?? '').toString().trim()).filter(Boolean)
+      : [];
+
+    const normalizedFromOptions = aiScenarios.map(aiScenario => {
+      const exact = this.riskScenarioOptions.find(option => option === aiScenario);
+      if (exact) {
+        return exact;
+      }
+
+      const partial = this.riskScenarioOptions.find(option =>
+        option.toLowerCase().includes(aiScenario.toLowerCase()) ||
+        aiScenario.toLowerCase().includes(option.toLowerCase())
+      );
+
+      return partial || aiScenario;
+    });
+
+    const merged = [...normalizedFromOptions];
+    this.riskScenarioOptions.forEach(option => {
+      if (merged.length >= maxItems) {
+        return;
+      }
+      if (!merged.includes(option)) {
+        merged.push(option);
+      }
+    });
+
+    while (merged.length < minItems) {
+      merged.push('');
+    }
+
+    return merged.slice(0, maxItems);
+  }
+
+  private async loadRiskStrategyFromDatabase(testPlanId: string): Promise<void> {
+    if (!testPlanId) {
+      return;
+    }
+
+    const savedRisk = await this.databaseService.getRiskStrategyByTestPlanId(testPlanId);
+    if (!savedRisk?.risk_data) {
+      return;
+    }
+
+    const riskData = savedRisk.risk_data;
+    this.riskStrategyData = {
+      probabilidadDe: (riskData?.probabilidadDe || '').toString().trim(),
+      puedeOcurrir: (riskData?.puedeOcurrir || '').toString().trim(),
+      loQuePodriaOcasionar: (riskData?.loQuePodriaOcasionar || '').toString().trim(),
+      impacto: (riskData?.impacto || '').toString().trim(),
+      probabilidad: (riskData?.probabilidad || '').toString().trim(),
+      positiveScenarios: Array.isArray(riskData?.positiveScenarios)
+        ? riskData.positiveScenarios.map((item: any) => (item ?? '').toString().trim()).filter((item: string) => item.length > 0)
+        : ['', ''],
+      alternateScenarios: Array.isArray(riskData?.alternateScenarios)
+        ? riskData.alternateScenarios.map((item: any) => (item ?? '').toString().trim()).filter((item: string) => item.length > 0)
+        : ['']
+    };
+
+    while (this.riskStrategyData.positiveScenarios.length < 2) {
+      this.riskStrategyData.positiveScenarios.push('');
+    }
+    while (this.riskStrategyData.alternateScenarios.length < 1) {
+      this.riskStrategyData.alternateScenarios.push('');
+    }
+  }
+
+  private async persistRiskStrategy(): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
+    }
+
+    const success = await this.databaseService.upsertRiskStrategy(this.selectedTestPlan.id, this.riskStrategyData);
+    if (!success) {
+      throw new Error('No se pudo guardar el riesgo en base de datos');
+    }
+  }
+
+  private scheduleRiskSaveProcessing(): Promise<void> {
+    this.riskSaveQueued = true;
+
+    if (this.riskSavePromise) {
+      return this.riskSavePromise;
+    }
+
+    this.riskSavePromise = (async () => {
+      try {
+        do {
+          this.riskSaveQueued = false;
+          await this.persistRiskStrategy();
+        } while (this.riskSaveQueued);
+      } finally {
+        this.riskSavePromise = null;
+        this.riskSaveQueued = false;
+      }
+    })();
+
+    return this.riskSavePromise;
+  }
+
+  async autoSaveRiskStrategy(force: boolean = false): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
+    }
+
+    if (this.riskSaveTimer) {
+      clearTimeout(this.riskSaveTimer);
+      this.riskSaveTimer = null;
+    }
+
+    if (force) {
+      await this.scheduleRiskSaveProcessing();
+      return;
+    }
+
+    this.riskSaveTimer = setTimeout(() => {
+      this.riskSaveTimer = null;
+      this.scheduleRiskSaveProcessing().catch(error => {
+        console.error('⚠️ Error en auto-guardado diferido de riesgo:', error);
+      });
+    }, 800);
   }
 }

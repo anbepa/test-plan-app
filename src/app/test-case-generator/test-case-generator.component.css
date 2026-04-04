@@ -64,10 +64,10 @@
     padding: 32px 40px;
     border: 1px solid #E5E7EB;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
-    margin: 20px auto;
-    width: calc(100% - 40px);
-    max-width: 1200px;
-    /* Limitar ancho máximo para evitar dispersión */
+    margin: 20px 16px;
+    width: auto;
+    max-width: none;
+    box-sizing: border-box;
 }
 
 .form-grid {

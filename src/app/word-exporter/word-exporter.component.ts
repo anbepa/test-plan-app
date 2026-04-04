@@ -1,7 +1,9 @@
 import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, TabStopPosition, TabStopType } from 'docx';
-import { saveAs } from 'file-saver';
+import { Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
 
@@ -34,147 +36,109 @@ export class WordExporterComponent {
     return this.convertInchesToTwip(0.25);
   }
 
-  previewInHtml(): void {
+  private normalizePdfText(value: string | undefined | null): string {
+    return (value ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  private formatStepsForPdf(steps: Array<{ accion: string }> | undefined): string {
+    if (!steps || steps.length === 0) {
+      return 'No hay pasos definidos';
+    }
+
+    return steps
+      .map((step, index) => `${index + 1}. ${this.normalizePdfText(step.accion)}`)
+      .join(' ');
+  }
+
+  downloadScenariosPdf(): void {
     if (!this.testPlanTitle || this.huList.length === 0) {
       this.toastService.warning('No hay información completa para generar los escenarios');
       return;
     }
 
     try {
-      // Generar HTML en formato de tabla de matriz de ejecución
-      let htmlContent = `
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Matriz de Ejecución - ${this.testPlanTitle}</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      font-size: 11pt;
-    }
-    h1 {
-      font-size: 16pt;
-      margin-bottom: 20px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #000;
-      padding: 8px;
-      text-align: left;
-      vertical-align: top;
-    }
-    th {
-      background-color: #f0f0f0;
-      font-weight: bold;
-      text-align: center;
-    }
-    .id-column {
-      width: 8%;
-      text-align: center;
-      font-weight: bold;
-    }
-    .scenario-column {
-      width: 20%;
-    }
-    .preconditions-column {
-      width: 20%;
-    }
-    .steps-column {
-      width: 27%;
-    }
-    .expected-column {
-      width: 25%;
-    }
-    ol {
-      margin: 0;
-      padding-left: 20px;
-    }
-    li {
-      margin-bottom: 4px;
-    }
-  </style>
-</head>
-<body>
-  <h1>Matriz de Ejecución - ${this.testPlanTitle}</h1>
-  
-  <table>
-    <thead>
-      <tr>
-        <th class="id-column">ID Caso</th>
-        <th class="scenario-column">Escenario</th>
-        <th class="preconditions-column">Precondiciones</th>
-        <th class="steps-column">Pasos</th>
-        <th class="expected-column">Resultado Esperado</th>
-      </tr>
-    </thead>
-    <tbody>
-`;
+      const tableRows: string[][] = [];
 
-      // Generar filas de la tabla para cada caso de prueba
       this.huList.forEach(hu => {
         if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
           hu.detailedTestCases.forEach((tc, index) => {
             const idCaso = `${hu.id}_CP${index + 1}`;
 
-            htmlContent += `
-      <tr>
-        <td class="id-column">${idCaso}</td>
-        <td class="scenario-column">${tc.title || ''}</td>
-        <td class="preconditions-column">${tc.preconditions || 'No especificadas'}</td>
-        <td class="steps-column">`;
-
-            // Agregar pasos como lista numerada
-            if (tc.steps && tc.steps.length > 0) {
-              htmlContent += `
-          <ol>
-`;
-              tc.steps.forEach(step => {
-                htmlContent += `            <li>${step.accion}</li>\n`;
-              });
-              htmlContent += `          </ol>`;
-            } else {
-              htmlContent += 'No hay pasos definidos';
-            }
-
-            htmlContent += `
-        </td>
-        <td class="expected-column">${tc.expectedResults || 'No especificados'}</td>
-      </tr>
-`;
+            tableRows.push([
+              idCaso,
+              this.normalizePdfText(tc.title) || 'Sin escenario',
+              this.normalizePdfText(tc.preconditions) || 'No especificadas',
+              this.formatStepsForPdf(tc.steps),
+              this.normalizePdfText(tc.expectedResults) || 'No especificados'
+            ]);
           });
         }
       });
 
-      htmlContent += `
-    </tbody>
-  </table>
-</body>
-</html>
-`;
+      if (tableRows.length === 0) {
+        this.toastService.warning('No se encontraron escenarios para exportar');
+        return;
+      }
 
-      // Descargar el archivo HTML
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const fileName = `Matriz_Ejecucion_${this.testPlanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.html`;
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4'
+      });
 
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.click();
+      const margin = 44;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const contentWidth = pageWidth - (margin * 2);
+      const idWidth = 80;
+      const scenarioWidth = 150;
+      const preconditionsWidth = 170;
+      const stepsWidth = 190;
+      const expectedWidth = Math.max(contentWidth - (idWidth + scenarioWidth + preconditionsWidth + stepsWidth), 130);
 
-      window.URL.revokeObjectURL(url);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(`Matriz de Ejecución - ${this.testPlanTitle}`, margin, margin);
 
-      this.toastService.success('Matriz de ejecución descargada exitosamente');
+      autoTable(doc, {
+        startY: margin + 20,
+        margin: { top: margin, right: margin, bottom: margin, left: margin },
+        head: [['ID Caso', 'Escenario', 'Precondiciones', 'Pasos', 'Resultado Esperado']],
+        body: tableRows,
+        theme: 'grid',
+        styles: {
+          font: 'helvetica',
+          fontSize: 10,
+          cellPadding: 6,
+          overflow: 'linebreak',
+          valign: 'top',
+          textColor: [17, 24, 39],
+          lineColor: [120, 120, 120],
+          lineWidth: 0.5
+        },
+        headStyles: {
+          fillColor: [235, 235, 235],
+          textColor: [17, 24, 39],
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        columnStyles: {
+          0: { cellWidth: idWidth, halign: 'center', fontStyle: 'bold' },
+          1: { cellWidth: scenarioWidth },
+          2: { cellWidth: preconditionsWidth },
+          3: { cellWidth: stepsWidth },
+          4: { cellWidth: expectedWidth }
+        },
+        rowPageBreak: 'avoid',
+        showHead: 'everyPage'
+      });
+
+      const fileName = `Matriz_Ejecucion_${this.testPlanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`;
+      doc.save(fileName);
+
+      this.toastService.success('Matriz de ejecución PDF descargada exitosamente');
     } catch (error) {
-      console.error('Error generando matriz de ejecución:', error);
-      this.toastService.error('Error al generar la matriz de ejecución');
+      console.error('Error generando matriz de ejecución PDF:', error);
+      this.toastService.error('Error al generar la matriz de ejecución PDF');
     }
   }
 
@@ -232,8 +196,8 @@ export class WordExporterComponent {
     }
   }
 
-  private generateWordContent(): Paragraph[] {
-    const content: Paragraph[] = [];
+  private generateWordContent(): (Paragraph | Table)[] {
+    const content: (Paragraph | Table)[] = [];
 
     // === USAR LA MISMA LÓGICA QUE updatePreview() ===
 
@@ -282,17 +246,21 @@ export class WordExporterComponent {
       if (hu.generatedScope) {
         content.push(
           new Paragraph({
-            text: hu.generatedScope,
-            spacing: { after: 240 },
-            indent: { firstLine: this.getAPAIndent() },
+            children: [new TextRun({ text: hu.generatedScope })],
+            spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+            alignment: AlignmentType.LEFT,
+            indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+            style: 'Normal',
           })
         );
       } else {
         content.push(
           new Paragraph({
-            text: "No se generó alcance para esta HU.",
-            spacing: { after: 240 },
-            indent: { firstLine: this.getAPAIndent() },
+            children: [new TextRun({ text: "No se generó alcance para esta HU." })],
+            spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+            alignment: AlignmentType.LEFT,
+            indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+            style: 'Normal',
           })
         );
       }
@@ -308,9 +276,11 @@ export class WordExporterComponent {
     );
     content.push(
       new Paragraph({
-        text: this.outOfScopeContent || 'No especificado',
-        spacing: { after: 240 },
-        indent: { firstLine: this.getAPAIndent() },
+        children: [new TextRun({ text: this.outOfScopeContent || 'No especificado' })],
+        spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+        alignment: AlignmentType.LEFT,
+        indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+        style: 'Normal',
       })
     );
 
@@ -324,9 +294,11 @@ export class WordExporterComponent {
     );
     content.push(
       new Paragraph({
-        text: this.strategyContent || 'No especificada',
-        spacing: { after: 240 },
-        indent: { firstLine: this.getAPAIndent() },
+        children: [new TextRun({ text: this.strategyContent || 'No especificada' })],
+        spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+        alignment: AlignmentType.LEFT,
+        indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+        style: 'Normal',
       })
     );
 
@@ -340,7 +312,7 @@ export class WordExporterComponent {
     );
 
     this.huList.forEach(hu => {
-      // Título HU (H3)
+    // 3. Estrategia - MISMO ORDEN QUE PREVIEW
       content.push(
         new Paragraph({
           text: `ID ${hu.id}: ${hu.title}`,
@@ -381,9 +353,11 @@ export class WordExporterComponent {
     );
     content.push(
       new Paragraph({
-        text: this.limitationsContent || 'No especificadas',
-        spacing: { after: 240 },
-        indent: { firstLine: this.getAPAIndent() },
+        children: [new TextRun({ text: this.limitationsContent || 'No especificadas' })],
+        spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+        alignment: AlignmentType.LEFT,
+        indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+        style: 'Normal',
       })
     );
 
@@ -397,9 +371,11 @@ export class WordExporterComponent {
     );
     content.push(
       new Paragraph({
-        text: this.assumptionsContent || 'No especificados',
-        spacing: { after: 240 },
-        indent: { firstLine: this.getAPAIndent() },
+        children: [new TextRun({ text: this.assumptionsContent || 'No especificados' })],
+        spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
+        alignment: AlignmentType.LEFT,
+        indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
+        style: 'Normal',
       })
     );
 
@@ -411,13 +387,10 @@ export class WordExporterComponent {
         spacing: { after: 240, before: 400 },
       })
     );
-    content.push(
-      new Paragraph({
-        text: this.teamContent || 'No especificado',
-        spacing: { after: 240 },
-        indent: { firstLine: this.getAPAIndent() },
-      })
-    );
+    
+    // Crear tabla para equipo de trabajo
+    const teamTable = this.createTeamTable();
+    content.push(teamTable);
 
     return content;
   } private generateHuContent(): Paragraph[] {
@@ -531,5 +504,118 @@ export class WordExporterComponent {
     });
 
     return paragraphs;
+  }
+
+  private createTeamTable(): Table {
+    // Parsear el contenido del equipo para crear filas
+    const rows: TableRow[] = [];
+    
+    // Encabezado de la tabla
+    rows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: "Rol", bold: true })], alignment: AlignmentType.CENTER })],
+            width: { size: 30, type: WidthType.PERCENTAGE },
+            shading: { fill: 'f0f0f0' },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: "Nombre", bold: true })], alignment: AlignmentType.CENTER })],
+            width: { size: 35, type: WidthType.PERCENTAGE },
+            shading: { fill: 'f0f0f0' },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: "Responsabilidades", bold: true })], alignment: AlignmentType.CENTER })],
+            width: { size: 35, type: WidthType.PERCENTAGE },
+            shading: { fill: 'f0f0f0' },
+          }),
+        ],
+      })
+    );
+
+    // Parsear el contenido del equipo si existe
+    if (this.teamContent && this.teamContent.trim()) {
+      // Separar por líneas y crear filas
+      const lines = this.teamContent.split('\n').filter(line => line.trim());
+      
+      lines.forEach(line => {
+        // Parsear formato: "Rol - Empresa: Nombre" o "Rol – Empresa: Nombre"
+        let rol = '';
+        let nombre = '';
+        
+        // Buscar el separador ":" para dividir rol/empresa de nombre
+        const colonIndex = line.indexOf(':');
+        if (colonIndex !== -1) {
+          rol = line.substring(0, colonIndex).trim();
+          nombre = line.substring(colonIndex + 1).trim();
+        } else {
+          // Si no hay dos puntos, usar toda la línea como rol
+          rol = line.trim();
+          nombre = '';
+        }
+        
+        // Asegurar que el rol no esté vacío
+        if (rol) {
+          rows.push(
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: rol })], 
+                    alignment: AlignmentType.LEFT, 
+                    spacing: { line: 240 },
+                  })],
+                  width: { size: 30, type: WidthType.PERCENTAGE },
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: nombre })], 
+                    alignment: AlignmentType.LEFT, 
+                    spacing: { line: 240 },
+                  })],
+                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: '' })], 
+                    alignment: AlignmentType.LEFT, 
+                    spacing: { line: 240 },
+                  })],
+                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  margins: { top: 100, bottom: 100, left: 100, right: 100 },
+                }),
+              ],
+            })
+          );
+        }
+      });
+    } else {
+      // Fila vacía si no hay contenido
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              children: [new Paragraph({ children: [new TextRun({ text: 'No especificado' })], alignment: AlignmentType.LEFT })],
+              width: { size: 30, type: WidthType.PERCENTAGE },
+            }),
+            new TableCell({
+              children: [new Paragraph({ children: [new TextRun({ text: '' })], alignment: AlignmentType.LEFT })],
+              width: { size: 35, type: WidthType.PERCENTAGE },
+            }),
+            new TableCell({
+              children: [new Paragraph({ children: [new TextRun({ text: '' })], alignment: AlignmentType.LEFT })],
+              width: { size: 35, type: WidthType.PERCENTAGE },
+            }),
+          ],
+        })
+      );
+    }
+
+    return new Table({
+      rows: rows,
+      width: { size: 100, type: WidthType.PERCENTAGE },
+    });
   }
 }

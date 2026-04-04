@@ -64,21 +64,36 @@ export class AiUnifiedService {
     }
 
     /**
+     * Generar item de riesgos para la estrategia de pruebas
+     */
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
+        const service = this.getActiveService();
+
+        if ('generateRiskStrategy' in service) {
+            return (service as any).generateRiskStrategy(huSummary, availableScenarios);
+        }
+
+        console.warn('[AI Unified] El proveedor activo no soporta generateRiskStrategy, usando DeepSeek');
+        return this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios);
+    }
+
+    /**
      * Generar casos de prueba usando el flujo directo del proveedor activo
      */
     public generateTestCasesDirect(
         description: string,
         acceptanceCriteria: string,
-        technique: string
+        technique: string,
+        context?: string
     ): Observable<any> {
         const service = this.getActiveService();
 
         if ('generateTestCasesDirect' in service) {
-            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique);
+            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique, context);
         }
 
         console.warn('[AI Unified] El proveedor activo no soporta generación directa, usando DeepSeek');
-        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique);
+        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique, context);
     }
 
     /**
