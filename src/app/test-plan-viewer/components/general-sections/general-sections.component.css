@@ -343,4 +343,10 @@
     .risk-grid-two {
         grid-template-columns: 1fr;
     }
+
+    .field-control {
+        min-height: 40px;
+        font-size: 0.95rem;
+        padding: 0.55rem 0.75rem;
+    }
 }

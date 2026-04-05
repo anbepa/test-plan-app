@@ -577,6 +577,44 @@ textarea::placeholder {
     min-height: 44px;
   }
 
+  /* Mobile select controls: compact, avoid oversized dropdown look */
+  :where(
+    select,
+    .form-select,
+    .filter-select,
+    .rf-control,
+    .field-input,
+    .field-control,
+    .form-group select
+  ) {
+    font-size: 0.9375rem !important;
+    min-height: 40px;
+    line-height: 1.25;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    max-width: 100%;
+  }
+
+  :where(select option) {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  /* iOS Safari: keep select text >=16px to avoid auto-zoom */
+  @supports (-webkit-touch-callout: none) {
+    :where(select, .form-select, .filter-select, .rf-control, .field-input, .field-control, .form-group select) {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Keep custom dropdown menus within viewport on small screens */
+  :where(.row-actions-menu, .actions-menu) {
+    max-width: min(88vw, 300px);
+    max-height: 42vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
   :where(.table-actions, .table-actions-bar, .action-bar) {
     justify-content: stretch;
   }

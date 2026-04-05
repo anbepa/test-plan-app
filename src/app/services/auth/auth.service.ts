@@ -60,30 +60,68 @@ export class AuthService {
     return !!data.session?.user;
   }
 
-  async signInWithEmail(email: string, password: string): Promise<void> {
-    const normalizedEmail = this.normalizeEmail(email);
-    const validationError = this.validateEmail(normalizedEmail);
-
-    if (validationError) {
-      throw new Error(validationError);
+  /**
+   * Inicia sesión usando nombre de usuario.
+   * Internamente resuelve el email via RPC y usa signInWithPassword de Supabase.
+   * Los mensajes de error son genéricos para evitar enumeración de usuarios.
+   */
+  async signInWithUsername(username: string, password: string): Promise<void> {
+    const usernameError = this.validateUsername(username);
+    if (usernameError) {
+      throw new Error(usernameError);
     }
 
+    // Resolución segura: la función RPC retorna NULL si no existe el usuario,
+    // lo que produce el mismo error de Supabase que una contraseña incorrecta.
+    const { data: emailData, error: rpcError } = await this.supabaseClient.supabase
+      .rpc('get_email_by_username', { p_username: username.trim().toLowerCase() });
+
+    if (rpcError) {
+      throw new Error('No fue posible autenticarte. Intenta de nuevo.');
+    }
+
+    // Si el username no existe, usamos un email ficticio para normalizar el tiempo
+    // de respuesta y no revelar si el usuario existe o no.
+    const resolvedEmail = (emailData as string | null) ?? `${Date.now()}@no-reply.invalid`;
+
     const { error } = await this.supabaseClient.supabase.auth.signInWithPassword({
-      email: normalizedEmail,
+      email: resolvedEmail,
       password
     });
 
     if (error) {
-      throw error;
+      // Mensaje genérico para no revelar si el username existe o la clave es incorrecta
+      throw new Error('Usuario o contraseña incorrectos.');
     }
   }
 
-  async signUpWithEmail(email: string, password: string, fullName?: string): Promise<{ requiresEmailConfirmation: boolean }> {
-    const normalizedEmail = this.normalizeEmail(email);
-    const validationError = this.validateEmail(normalizedEmail);
+  /**
+   * Registra un nuevo usuario con username + email + contraseña.
+   * El username se guarda en user_metadata y el trigger lo persiste en perfiles.
+   */
+  async signUpWithUsername(
+    username: string,
+    email: string,
+    password: string,
+    fullName?: string
+  ): Promise<{ requiresEmailConfirmation: boolean }> {
+    const usernameError = this.validateUsername(username);
+    if (usernameError) throw new Error(usernameError);
 
-    if (validationError) {
-      throw new Error(validationError);
+    const normalizedEmail = this.normalizeEmail(email);
+    const emailError = this.validateEmail(normalizedEmail);
+    if (emailError) throw new Error(emailError);
+
+    // Verificar disponibilidad del username antes de registrar
+    const { data: available, error: availError } = await this.supabaseClient.supabase
+      .rpc('is_username_available', { p_username: username.trim().toLowerCase() });
+
+    if (availError) {
+      throw new Error('Error verificando disponibilidad del nombre de usuario.');
+    }
+
+    if (!available) {
+      throw new Error('El nombre de usuario ya está en uso. Elige otro.');
     }
 
     const { data, error } = await this.supabaseClient.supabase.auth.signUp({
@@ -91,8 +129,9 @@ export class AuthService {
       password,
       options: {
         data: {
-          full_name: fullName ?? '',
-          display_name: fullName ?? ''
+          username: username.trim().toLowerCase(),
+          full_name: fullName ?? username,
+          display_name: fullName ?? username
         }
       }
     });
@@ -101,9 +140,17 @@ export class AuthService {
       throw error;
     }
 
-    return {
-      requiresEmailConfirmation: !data.session
-    };
+    return { requiresEmailConfirmation: !data.session };
+  }
+
+  /** @internal Uso interno: login directo por email (no expuesto en UI) */
+  private async signInWithEmail(email: string, password: string): Promise<void> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const { error } = await this.supabaseClient.supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password
+    });
+    if (error) throw error;
   }
 
   async signOut(): Promise<void> {
@@ -133,6 +180,37 @@ export class AuthService {
 
     const metadata = (user.user_metadata ?? {}) as Record<string, any>;
     return metadata['avatar_url'] || metadata['picture'] || '';
+  }
+
+  /**
+   * Valida el formato de un nombre de usuario (público para uso en UI).
+   * Reglas: 3–20 caracteres, solo letras, números y guión bajo (_).
+   * No puede comenzar ni terminar con guión bajo.
+   */
+  public validateUsername(username: string): string | null {
+    const trimmed = username?.trim() ?? '';
+
+    if (!trimmed) {
+      return 'Ingresa un nombre de usuario.';
+    }
+
+    if (trimmed.length < 3) {
+      return 'El nombre de usuario debe tener al menos 3 caracteres.';
+    }
+
+    if (trimmed.length > 20) {
+      return 'El nombre de usuario no puede superar 20 caracteres.';
+    }
+
+    if (!/^[a-z0-9_]+$/i.test(trimmed)) {
+      return 'Solo se permiten letras, números y guión bajo (_).';
+    }
+
+    if (trimmed.startsWith('_') || trimmed.endsWith('_')) {
+      return 'El nombre de usuario no puede empezar ni terminar con guión bajo.';
+    }
+
+    return null;
   }
 
   validateEmail(email: string): string | null {

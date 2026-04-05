@@ -100,6 +100,106 @@
   padding: 28px;
 }
 
+/* ── Auth Tabs ── */
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(241, 243, 247, 0.9);
+  border: 1px solid rgba(209, 209, 214, 0.6);
+  border-radius: 12px;
+  padding: 4px;
+  margin-top: 14px;
+}
+
+.auth-tabs button {
+  flex: 1;
+  height: 36px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.auth-tabs button.active {
+  background: #fff;
+  color: #1d1d1f;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
+}
+
+.auth-tabs button:not(.active):hover {
+  color: #344054;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Input con prefijo @ ── */
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  border: 1px solid rgba(208, 213, 221, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input-with-prefix:focus-within {
+  border-color: #007aff;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+}
+
+.input-prefix {
+  padding: 0 10px 0 14px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 600;
+  user-select: none;
+  line-height: 1;
+}
+
+.input-with-prefix input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  padding: 0 14px 0 0;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.input-with-prefix input:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ── Hints y opcionales ── */
+.field-hint {
+  font-size: 11.5px;
+  color: #98a2b3;
+  font-weight: 400;
+  margin-top: 3px;
+}
+
+.optional {
+  font-weight: 400;
+  color: #98a2b3;
+  font-size: 11.5px;
+  margin-left: 4px;
+}
+
+/* ── Descripción del formulario ── */
+.auth-description {
+  margin: 6px 0 16px;
+  color: #667085;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
 .auth-card-header {
   margin-bottom: 20px;
 }
@@ -110,13 +210,6 @@
   line-height: 1.1;
   letter-spacing: -0.03em;
   color: #1d1d1f;
-}
-
-.auth-description {
-  margin: 10px 0 0;
-  color: #667085;
-  font-size: 14px;
-  line-height: 1.5;
 }
 
 .auth-form {

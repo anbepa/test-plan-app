@@ -575,6 +575,19 @@ textarea.rf-control {
         gap: 1rem;
     }
 
+    .rf-control {
+        min-height: 40px;
+        font-size: 0.95rem;
+        padding: 0.55rem 0.75rem;
+    }
+
+    .actions-menu {
+        min-width: 140px;
+        max-width: min(86vw, 280px);
+        max-height: 42vh;
+        overflow-y: auto;
+    }
+
     .detailed-test-cases-table th,
     .detailed-test-cases-table td {
         padding: 0.75rem;

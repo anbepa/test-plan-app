@@ -37,19 +37,26 @@ import { AuthService } from '../services/auth/auth.service';
           <div class="auth-card-header">
             <span class="auth-badge">Acceso seguro</span>
             <h2>Iniciar sesión</h2>
-            <p class="auth-description">Usa tu correo corporativo o personal válido para acceder a tu espacio de trabajo.</p>
+            <p class="auth-description">Ingresa tu nombre de usuario y contraseña para acceder a tu espacio de trabajo.</p>
           </div>
 
-          <form class="auth-form" (ngSubmit)="submit()">
+          <form class="auth-form" (ngSubmit)="submitLogin()">
+
             <label>
-              Correo electrónico
-              <input
-                type="email"
-                [(ngModel)]="email"
-                name="email"
-                placeholder="nombre@empresa.com"
-                autocomplete="email"
-                required />
+              Nombre de usuario
+              <div class="input-with-prefix">
+                <span class="input-prefix">&#64;</span>
+                <input
+                  type="text"
+                  [(ngModel)]="username"
+                  name="username"
+                  placeholder="mi_usuario"
+                  autocomplete="username"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  maxlength="20"
+                  required />
+              </div>
             </label>
 
             <label>
@@ -58,14 +65,14 @@ import { AuthService } from '../services/auth/auth.service';
                 type="password"
                 [(ngModel)]="password"
                 name="password"
-                placeholder="********"
+                placeholder="••••••••"
                 minlength="8"
                 autocomplete="current-password"
                 required />
             </label>
 
             <button type="submit" class="primary-btn" [disabled]="loading">
-              {{ loading ? 'Procesando...' : 'Entrar al espacio de trabajo' }}
+              {{ loading ? 'Verificando...' : 'Entrar al espacio de trabajo' }}
             </button>
           </form>
 
@@ -79,11 +86,13 @@ import { AuthService } from '../services/auth/auth.service';
 })
 export class AuthUiComponent {
   private readonly destroyRef = inject(DestroyRef);
-  email = '';
-  password = '';
+
   loading = false;
   errorMessage = '';
   successMessage = '';
+
+  username = '';
+  password = '';
 
   constructor(
     private authService: AuthService,
@@ -99,12 +108,13 @@ export class AuthUiComponent {
       });
   }
 
-  async submit(): Promise<void> {
-    const normalizedEmail = this.email.trim().toLowerCase();
-    const emailValidationError = this.authService.validateEmail(normalizedEmail);
+  async submitLogin(): Promise<void> {
+    this.errorMessage = '';
+    this.successMessage = '';
 
-    if (emailValidationError) {
-      this.errorMessage = emailValidationError;
+    const usernameError = this.authService.validateUsername(this.username);
+    if (usernameError) {
+      this.errorMessage = usernameError;
       return;
     }
 
@@ -114,11 +124,8 @@ export class AuthUiComponent {
     }
 
     this.loading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-
     try {
-      await this.authService.signInWithEmail(normalizedEmail, this.password);
+      await this.authService.signInWithUsername(this.username.trim(), this.password);
       this.markMobileOnboardingPending();
       await this.navigateAfterAuth();
     } catch (error: any) {

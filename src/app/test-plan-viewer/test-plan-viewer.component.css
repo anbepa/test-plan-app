@@ -1652,6 +1652,9 @@ button svg,
   .plans-table .actions-col .row-actions-menu {
     right: 0;
     left: auto;
+    max-width: min(86vw, 280px);
+    max-height: 42vh;
+    overflow-y: auto;
   }
 
   .plans-table .actions-col .row-actions-trigger {
