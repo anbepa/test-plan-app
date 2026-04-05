@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
@@ -27,7 +27,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
-export class TestCaseGeneratorComponent implements OnInit {
+export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
   @Input() initialCellName: string = '';
@@ -69,6 +69,9 @@ export class TestCaseGeneratorComponent implements OnInit {
 
   @ViewChild('huForm') huFormDirective!: NgForm;
 
+  private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
+  private aiProgressIndex = 0;
+
   private readonly macTemplateId = '1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
   private readonly windowsTemplateId = '1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
 
@@ -87,7 +90,78 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.resetToInitialForm();
   }
 
+  ngOnDestroy(): void {
+    this.stopAiProgress();
+  }
+
+  get isAiBusy(): boolean {
+    return this.loadingScope || this.loadingScenarios;
+  }
+
+  get aiProgressTitle(): string {
+    const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
+    if (this.componentState === 'editingForRefinement') {
+      return `Refinando con ${provider}`;
+    }
+    return `Generando con ${provider}`;
+  }
+
+  get aiProgressMessage(): string {
+    const id = this.currentHuId ? `${this.currentHuId} · ` : '';
+    const title = this.currentHuTitle
+      ? (this.currentHuTitle.length > 50 ? this.currentHuTitle.slice(0, 50) + '…' : this.currentHuTitle)
+      : 'Procesando solicitud…';
+    return `${id}${title}`;
+  }
+
+  get aiProgressStep(): string {
+    const shortTech = this.shortTechniqueName(this.currentSelectedTechnique);
+
+    const generationSteps = [
+      'Analizando descripción y criterios de aceptación…',
+      shortTech ? `Generando escenarios · técnica ${shortTech}…` : 'Generando escenarios de prueba…',
+      'Estructurando y validando resultados…'
+    ];
+
+    const refinementSteps = [
+      'Leyendo casos de prueba actuales…',
+      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Reorganizando y validando escenarios…'
+    ];
+
+    const steps = this.componentState === 'editingForRefinement' ? refinementSteps : generationSteps;
+    return steps[this.aiProgressIndex % steps.length];
+  }
+
+  private startAiProgress(): void {
+    this.stopAiProgress();
+    this.aiProgressIndex = 0;
+    this.aiProgressInterval = setInterval(() => {
+      this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
+      this.cdr.markForCheck();
+    }, 1800);
+  }
+
+  private stopAiProgress(): void {
+    if (this.aiProgressInterval) {
+      clearInterval(this.aiProgressInterval);
+      this.aiProgressInterval = null;
+    }
+    this.aiProgressIndex = 0;
+  }
+
+  private shortTechniqueName(technique: string): string {
+    const map: Record<string, string> = {
+      'Equivalent Partitioning': 'Partición Equiv.',
+      'Boundary Value Analysis': 'Val. Límite',
+      'Decision Table Testing': 'Tabla Decisión',
+      'State Transition Testing': 'Trans. Estado'
+    };
+    return map[technique] || '';
+  }
+
   resetToInitialForm(): void {
+    this.stopAiProgress();
     this.componentState = 'initialForm';
     this.formError = null;
     const keptSprint = this.currentSprint || this.initialSprint;
@@ -288,6 +362,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScenarios = true;
       this.errorScenarios = null;
+      this.startAiProgress();
 
       console.log('[GENERATION] Iniciando generación DIRECTA (modo rápido)');
 
@@ -327,10 +402,12 @@ export class TestCaseGeneratorComponent implements OnInit {
           this.loadingScenarios = false;
           this.errorScope = 'Error durante la generación directa.';
           this.errorScenarios = 'Error durante la generación directa.';
+          this.stopAiProgress();
           this.cdr.detectChanges();
         },
         complete: () => {
           this.loadingScenarios = false;
+          this.stopAiProgress();
           this.componentState = 'previewingGenerated';
           this.cdr.detectChanges();
 
@@ -392,6 +469,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.loadingScenarios = true;
     this.cdr.detectChanges();
     this.errorScenarios = null;
+    this.startAiProgress();
 
     // Preparar casos para envío (quitar propiedades UI)
     const casesToRefine = this.generatedHUData.detailedTestCases.map(uiTc => {
@@ -437,11 +515,13 @@ export class TestCaseGeneratorComponent implements OnInit {
       error: (e) => {
         console.error('[REFINEMENT] Error en modo directo:', e);
         this.loadingScenarios = false;
+        this.stopAiProgress();
         this.formError = 'Error durante el refinamiento directo.';
         this.cdr.detectChanges();
       },
       complete: () => {
         this.loadingScenarios = false;
+        this.stopAiProgress();
         this.componentState = 'editingForRefinement';
         this.cdr.detectChanges();
         setTimeout(() => {

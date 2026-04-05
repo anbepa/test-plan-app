@@ -162,6 +162,30 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   applyFilters(): void {
+    const availableSprints = new Set<string>();
+    const availableCells = new Set<string>();
+
+    this.testPlans.forEach(tp => {
+      const normalizedCell = this.normalizeCell(tp.cell_name);
+      if (normalizedCell) {
+        availableCells.add(normalizedCell);
+      }
+      tp.user_stories?.forEach((us: any) => {
+        const normalizedSprint = this.normalizeSprint(us.sprint);
+        if (normalizedSprint) {
+          availableSprints.add(normalizedSprint);
+        }
+      });
+    });
+
+    if (this.selectedSprintFilter !== 'all' && !availableSprints.has(this.normalizeSprint(this.selectedSprintFilter))) {
+      this.selectedSprintFilter = 'all';
+    }
+
+    if (this.selectedCellFilter !== 'all' && !availableCells.has(this.normalizeCell(this.selectedCellFilter))) {
+      this.selectedCellFilter = 'all';
+    }
+
     let filtered = [...this.testPlans];
 
     if (this.searchQuery.trim()) {
@@ -170,22 +194,24 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         tp.title?.toLowerCase().includes(query) ||
         tp.user_stories?.some((us: any) =>
           us.title?.toLowerCase().includes(query) ||
-          us.sprint?.toLowerCase().includes(query)
+          this.normalizeSprint(us.sprint).toLowerCase().includes(query)
         )
       );
     }
 
     if (this.selectedSprintFilter && this.selectedSprintFilter !== 'all') {
+      const normalizedSelectedSprint = this.normalizeSprint(this.selectedSprintFilter);
       filtered = filtered.filter(tp =>
         tp.user_stories?.some((us: any) =>
-          us.sprint === this.selectedSprintFilter
+          this.normalizeSprint(us.sprint) === normalizedSelectedSprint
         )
       );
     }
 
     if (this.selectedCellFilter && this.selectedCellFilter !== 'all') {
+      const normalizedSelectedCell = this.normalizeCell(this.selectedCellFilter);
       filtered = filtered.filter(tp =>
-        tp.cell_name === this.selectedCellFilter
+        this.normalizeCell(tp.cell_name) === normalizedSelectedCell
       );
     }
 
@@ -257,26 +283,38 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.applyFilters();
   }
 
+  private normalizeSprint(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
+  private normalizeCell(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
   getAvailableSprints(): string[] {
     const sprints = new Set<string>();
     this.testPlans.forEach(tp => {
       tp.user_stories?.forEach((us: any) => {
-        if (us.sprint) {
-          sprints.add(us.sprint);
+        const normalizedSprint = this.normalizeSprint(us.sprint);
+        if (normalizedSprint) {
+          sprints.add(normalizedSprint);
         }
       });
     });
-    return Array.from(sprints).sort();
+    return Array.from(sprints).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
   }
 
   getAvailableCells(): string[] {
     const cells = new Set<string>();
     this.testPlans.forEach(tp => {
-      if (tp.cell_name) {
-        cells.add(tp.cell_name);
+      const normalizedCell = this.normalizeCell(tp.cell_name);
+      if (normalizedCell) {
+        cells.add(normalizedCell);
       }
     });
-    return Array.from(cells).sort();
+    return Array.from(cells).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
   }
 
   onCellFilterChange(): void {
@@ -748,21 +786,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const previousUserStories = this.selectedTestPlan.user_stories
       ? [...this.selectedTestPlan.user_stories]
       : undefined;
-    const huIdsToDelete = new Set(husToDelete.map(hu => hu.id));
+    const planId = this.selectedTestPlan.id!;
 
-    this.huList = this.huList.filter(hu => !huIdsToDelete.has(hu.id));
-    this.updateHuPagination();
-    this.selectedHuIds = this.selectedHuIds.filter(id => !huIdsToDelete.has(id));
-
-    if (this.selectedTestPlan.user_stories) {
-      this.selectedTestPlan.user_stories = this.selectedTestPlan.user_stories.filter(us => {
-        return !husToDelete.some(removedHu => {
-          const sameDbId = removedHu.dbUuid && us.id === removedHu.dbUuid;
-          const sameCustomId = us.custom_id && us.custom_id === removedHu.id;
-          return sameDbId || sameCustomId;
-        });
-      });
-    }
+    this.syncDetailViewAfterDelete(husToDelete);
 
     this.structureChanged = true;
     this.cdr.detectChanges();
@@ -774,6 +800,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     );
     try {
       await this.autoSaveToDatabase(true);
+      // Recargar header desde BD para que sprint/contadores sean exactos
+      await this.refreshPlanHeaderInList(planId);
       this.toastService.update(loadingToastId, {
         type: 'success',
         message: husToDelete.length === 1
@@ -788,6 +816,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       if (this.selectedTestPlan) {
         this.selectedTestPlan.user_stories = previousUserStories;
       }
+      // Recargar header para revertir también la vista de lista
+      await this.refreshPlanHeaderInList(planId).catch(() => {});
       this.structureChanged = true;
       this.cdr.detectChanges();
 
@@ -800,6 +830,37 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       });
       console.error('❌ Error al borrar HU:', error);
     }
+  }
+
+  private syncDetailViewAfterDelete(husToDelete: HUData[]): void {
+    const huIdsToDeleteSet = new Set(husToDelete.map(hu => hu.id));
+    this.huList = this.huList.filter(hu => !huIdsToDeleteSet.has(hu.id));
+    this.updateHuPagination();
+    this.selectedHuIds = this.selectedHuIds.filter(id => !huIdsToDeleteSet.has(id));
+
+    if (this.selectedTestPlan?.user_stories) {
+      this.selectedTestPlan.user_stories = this.selectedTestPlan.user_stories.filter(us => {
+        return !husToDelete.some(removedHu => {
+          const sameDbId = removedHu.dbUuid && us.id === removedHu.dbUuid;
+          const sameCustomId = us.custom_id && us.custom_id === removedHu.id;
+          return sameDbId || sameCustomId;
+        });
+      });
+    }
+  }
+
+  private async refreshPlanHeaderInList(planId: string): Promise<void> {
+    try {
+      const freshHeader = await this.databaseService.getTestPlanHeaderById(planId);
+      if (freshHeader) {
+        this.testPlans = this.testPlans.map(tp => tp.id === planId ? freshHeader : tp);
+      }
+    } catch (error) {
+      console.warn('⚠️ No se pudo refrescar header del plan, recargando lista completa:', error);
+      await this.loadTestPlans(false);
+    }
+    this.applyFilters();
+    this.cdr.detectChanges();
   }
 
   onCancelDeleteHU(): void {

@@ -285,6 +285,38 @@ export class DatabaseService {
     }
   }
 
+  async getTestPlanHeaderById(id: string): Promise<DbTestPlan | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('test_plans')
+        .select(`
+          id,
+          title,
+          created_at,
+          updated_at,
+          cell_name,
+          team,
+          repository_link,
+          user_stories(
+            id,
+            sprint,
+            test_cases(
+              id,
+              test_case_steps(id)
+            )
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('❌ Error al obtener header del plan:', error);
+      return null;
+    }
+  }
+
   async getTestPlanById(id: string): Promise<DbTestPlanWithRelations | null> {
     console.log(`📥 Obteniendo test plan ${id}...`);
 

@@ -41,6 +41,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   isDeleteModalOpen: boolean = false;
   deleteModalMessage: string = '';
   private pendingDeleteTestCaseIndex: number | null = null;
+  private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
+  private aiProgressIndex = 0;
 
   readonly cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
   readonly techniqueOptions = [
@@ -86,7 +88,72 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
   }
 
-  ngOnDestroy(): void { }
+  ngOnDestroy(): void {
+    this.stopAiProgress();
+  }
+
+  get isAiBusy(): boolean {
+    return this.isRefining;
+  }
+
+  get aiProgressTitle(): string {
+    const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
+    return this.isContextPage ? `Regenerando con ${provider}` : `Refinando con ${provider}`;
+  }
+
+  get aiProgressMessage(): string {
+    const id = this.editedHuId ? `${this.editedHuId} · ` : '';
+    const title = this.editedTitle
+      ? (this.editedTitle.length > 50 ? this.editedTitle.slice(0, 50) + '…' : this.editedTitle)
+      : 'Procesando solicitud…';
+    return `${id}${title}`;
+  }
+
+  get aiProgressStep(): string {
+    const shortTech = this.shortTechniqueName(this.editedSelectedTechnique);
+
+    const regenerateSteps = [
+      'Analizando contexto y descripción…',
+      shortTech ? `Regenerando escenarios · técnica ${shortTech}…` : 'Regenerando escenarios de prueba…',
+      'Estructurando y validando resultados…'
+    ];
+
+    const refineSteps = [
+      'Leyendo casos de prueba actuales…',
+      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Reorganizando y validando escenarios…'
+    ];
+
+    const steps = this.isContextPage ? regenerateSteps : refineSteps;
+    return steps[this.aiProgressIndex % steps.length];
+  }
+
+  private startAiProgress(): void {
+    this.stopAiProgress();
+    this.aiProgressIndex = 0;
+    this.aiProgressInterval = setInterval(() => {
+      this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
+      this.cdr.markForCheck();
+    }, 1800);
+  }
+
+  private stopAiProgress(): void {
+    if (this.aiProgressInterval) {
+      clearInterval(this.aiProgressInterval);
+      this.aiProgressInterval = null;
+    }
+    this.aiProgressIndex = 0;
+  }
+
+  private shortTechniqueName(technique: string): string {
+    const map: Record<string, string> = {
+      'Equivalent Partitioning': 'Partición Equiv.',
+      'Boundary Value Analysis': 'Val. Límite',
+      'Decision Table Testing': 'Tabla Decisión',
+      'State Transition Testing': 'Trans. Estado'
+    };
+    return map[technique] || '';
+  }
 
   async regenerateWithAI(): Promise<void> {
     if (!this.hu) return;
@@ -109,6 +176,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       this.isRefining = true;
+      this.startAiProgress();
       this.cdr.detectChanges();
 
       this.aiService.generateTestCasesDirect(
@@ -132,17 +200,20 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
           this.toastService.error('Error al regenerar casos con IA');
           this.isLoading = false;
           this.isRefining = false;
+          this.stopAiProgress();
           this.cdr.detectChanges();
         },
         complete: () => {
           this.isLoading = false;
           this.isRefining = false;
+          this.stopAiProgress();
           this.cdr.detectChanges();
         }
       });
     } catch (error) {
       console.error('Error al iniciar regeneración:', error);
       this.toastService.error('Error al iniciar regeneración');
+      this.stopAiProgress();
     }
   }
 
