@@ -56,3 +56,6 @@ Thumbs.db
 
 # Específicamente para .env.local si solo usas ese
  .env.local
+
+# SQL scripts should not be committed
+*.sql
