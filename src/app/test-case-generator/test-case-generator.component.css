@@ -570,24 +570,23 @@ textarea.form-control {
 
 /* Ajuste de acciones finales */
 .final-actions-group {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
     gap: 16px;
     align-items: center;
     justify-content: center;
-    /* Centrar botones */
-    flex-wrap: wrap;
     margin: 2rem auto 0;
-    max-width: 800px;
+    max-width: 980px;
 }
 
 .final-actions-group .button-save-individual,
 .final-actions-group .button-primary {
-    flex: 1;
-    min-width: 250px;
+    width: 100%;
+    min-height: 52px;
     white-space: nowrap;
 }
 
-.button-icon {
+.btn-action-icon {
     width: 20px;
     height: 20px;
 }
@@ -596,6 +595,7 @@ textarea.form-control {
 .hu-counter-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     background-color: #EFF6FF;
     color: #2563EB;
@@ -603,10 +603,21 @@ textarea.form-control {
     border-radius: 20px;
     font-size: 0.875rem;
     font-weight: 500;
-    /* margin-right: auto; ELIMINADO para permitir centrado */
+    grid-column: 1 / -1;
 }
 
 .badge-icon {
     width: 16px;
     height: 16px;
+}
+
+@media (max-width: 768px) {
+    .final-actions-group {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+    }
+
+    .hu-counter-badge {
+        justify-self: center;
+    }
 }

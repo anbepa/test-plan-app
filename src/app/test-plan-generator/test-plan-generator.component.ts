@@ -482,7 +482,10 @@ export class TestPlanGeneratorComponent {
       this.router.navigate(['/viewer'], { queryParams: { id: this.existingTestPlanId } });
       return;
     }
-    this.resetActiveGeneratorsAndGoToSelection();
+
+    // En este flujo solo existe modo 'text'. Si ocultamos el generador,
+    // la pantalla puede quedar vacía. Reiniciamos mostrando de nuevo el formulario.
+    this.selectInitialMode('text');
   }
 
   onCellNameChanged(cellName: string) {

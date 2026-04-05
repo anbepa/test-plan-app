@@ -210,3 +210,13 @@
     (confirm)="onConfirmDeleteTestCase()"
     (cancel)="onCancelDeleteTestCase()">
 </app-confirmation-modal>
+
+<app-confirmation-modal
+    [isOpen]="isAiBusy"
+    mode="progress"
+    [allowBackdropClose]="false"
+    [title]="aiProgressTitle"
+    [message]="aiProgressMessage"
+    [progressStep]="aiProgressStep"
+    progressHint="">
+</app-confirmation-modal>
