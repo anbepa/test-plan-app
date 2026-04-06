@@ -273,7 +273,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let hu of paginatedHuList; trackBy: trackHuById" [class.row-selected]="isHuSelected(hu)">
+                <tr *ngFor="let hu of paginatedHuList; let i = index; trackBy: trackHuById" [class.row-selected]="isHuSelected(hu)">
                   <td class="check-col" data-label="Seleccionar">
                     <input type="checkbox" [checked]="isHuSelected(hu)"
                       (change)="onHuSelectionChange(hu, $any($event.target).checked)">
@@ -284,10 +284,13 @@
                   <td class="actions-col" data-label="Acciones">
                     <div class="row-actions" (click)="$event.stopPropagation()">
                       <button type="button" class="row-actions-trigger" aria-label="Abrir acciones de la HU"
-                        (click)="toggleHuActionsMenu(hu.id, $event)">
+                        (click)="toggleHuActionsMenu(hu, i, $event)">
                         ⋮
                       </button>
-                      <div class="row-actions-menu" *ngIf="isHuActionsMenuOpen(hu.id)">
+                      <button type="button" class="row-actions-direct" (click)="openHUScenarios(hu, $event)">
+                        Ver escenarios de prueba
+                      </button>
+                      <div class="row-actions-menu" *ngIf="isHuActionsMenuOpen(hu, i)">
                         <button type="button" class="row-actions-item" (click)="openHUScenarios(hu, $event)">
                           Ver escenarios de prueba
                         </button>

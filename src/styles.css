@@ -615,11 +615,23 @@ textarea::placeholder {
     overscroll-behavior: contain;
   }
 
-  :where(.table-actions, .table-actions-bar, .action-bar) {
-    justify-content: stretch;
+  /* Barras de acciones compactas globales en móvil */
+  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) {
+    display: flex;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    gap: 0.45rem;
+    padding-bottom: 0.2rem;
+    scrollbar-width: thin;
+    justify-content: flex-start !important;
+    align-items: center !important;
   }
 
-  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions) :where(
+  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) :where(
     button,
     .btn,
     .btn-primary,
@@ -633,10 +645,91 @@ textarea::placeholder {
     .button-primary-action,
     .button-secondary-action,
     .btn-action,
-    .btn-ai,
-    .breadcrumb-button
+    .btn-ai
   ) {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    min-height: 36px !important;
+    padding: 0.38rem 0.72rem !important;
+    font-size: 0.84rem !important;
+    border-radius: 10px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Refuerzo global: evita botones de ancho completo dentro de barras de acciones */
+  :where(.topbar-actions, .actions, .header-actions, .hu-table-actions, .table-actions, .table-actions-bar, .action-bar)
+    > :where(.btn-action, .button-secondary, .button-primary, .button-danger, .button-edit, .btn-primary, .btn-secondary, .btn-ai, .button-primary-action, .button-secondary-action) {
+    width: auto !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Breadcrumbs compactos globales en móvil */
+  :where(.breadcrumb-row, .breadcrumb-nav) {
     width: 100%;
+    display: flex;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    gap: 0.35rem;
+    padding-bottom: 0.2rem;
+    scrollbar-width: thin;
+  }
+
+  :where(.breadcrumb-row, .breadcrumb-nav) :where(.breadcrumb-button) {
+    width: auto !important;
+    min-height: 32px !important;
+    padding: 0.35rem 0.65rem !important;
+    font-size: 0.84rem !important;
+    border-radius: 10px !important;
+    flex: 0 0 auto;
+  }
+
+  :where(.breadcrumb-row, .breadcrumb-nav) :where(.breadcrumb-separator) {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 480px) {
+  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) {
+    gap: 0.35rem;
+  }
+
+  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) :where(
+    button,
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-generate,
+    .button-primary,
+    .button-secondary,
+    .button-generate,
+    .button-edit,
+    .button-danger,
+    .button-primary-action,
+    .button-secondary-action,
+    .btn-action,
+    .btn-ai
+  ) {
+    min-height: 34px !important;
+    padding: 0.32rem 0.62rem !important;
+    font-size: 0.8rem !important;
+    border-radius: 9px !important;
+    white-space: nowrap !important;
+  }
+
+  :where(.breadcrumb-row, .breadcrumb-nav) {
+    gap: 0.3rem;
+  }
+
+  :where(.breadcrumb-row, .breadcrumb-nav) :where(.breadcrumb-button) {
+    min-height: 30px !important;
+    padding: 0.28rem 0.55rem !important;
+    font-size: 0.8rem !important;
+    border-radius: 9px !important;
   }
 }
 

@@ -586,13 +586,18 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.huActionsMenuOpenId = null;
   }
 
-  isHuActionsMenuOpen(huId: string): boolean {
-    return this.huActionsMenuOpenId === huId;
+  private getHuMenuKey(hu: HUData, index: number): string {
+    return hu.dbUuid || `${hu.id}-${index}`;
   }
 
-  toggleHuActionsMenu(huId: string, event: Event): void {
+  isHuActionsMenuOpen(hu: HUData, index: number): boolean {
+    return this.huActionsMenuOpenId === this.getHuMenuKey(hu, index);
+  }
+
+  toggleHuActionsMenu(hu: HUData, index: number, event: Event): void {
     event.stopPropagation();
-    this.huActionsMenuOpenId = this.huActionsMenuOpenId === huId ? null : huId;
+    const menuKey = this.getHuMenuKey(hu, index);
+    this.huActionsMenuOpenId = this.huActionsMenuOpenId === menuKey ? null : menuKey;
   }
 
   openHUScenarios(hu: HUData, event?: Event): void {
@@ -1389,7 +1394,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   trackHuById(index: number, hu: HUData): string {
-    return hu.id;
+    return hu.dbUuid || `${hu.id}-${index}`;
   }
 
   updateHuPagination(): void {

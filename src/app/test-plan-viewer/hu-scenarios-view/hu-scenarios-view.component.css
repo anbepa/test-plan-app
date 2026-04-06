@@ -187,20 +187,101 @@
     border-radius: 0.875rem;
   }
 
-  .detailed-test-cases-table th,
-  .detailed-test-cases-table td {
-    padding: 0.75rem;
-    font-size: 0.8125rem;
+  .detailed-test-cases-table-container {
+    overflow: visible;
+    border: none;
+    background: transparent;
+  }
+
+  .detailed-test-cases-table {
+    min-width: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .detailed-test-cases-table thead {
+    display: none;
+  }
+
+  .detailed-test-cases-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .detailed-test-cases-table tbody tr {
+    display: block;
+    border: 1px solid #dbe2ef;
+    border-radius: 0.95rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    padding: 0.45rem 0.75rem;
+  }
+
+  .detailed-test-cases-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(112px, 40%) minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.7rem 0.2rem;
+    border-bottom: 1px solid #eef2f7;
+    text-align: left;
+    font-size: 0.84rem;
+    white-space: normal;
+  }
+
+  .detailed-test-cases-table tbody td:last-child {
+    border-bottom: none;
+  }
+
+  .detailed-test-cases-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: #475569;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .detailed-test-cases-table tbody td > * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    justify-self: start;
+    text-align: left;
+  }
+
+  .detailed-test-cases-table tbody td ul {
+    margin: 0;
+    padding-left: 1rem;
+    text-align: left;
+  }
+
+  .table-pre {
+    text-align: left;
+  }
+
+  .detailed-test-cases-table tbody td[data-label="ID Caso"] {
+    font-weight: 600;
   }
 
   .actions {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.15rem;
   }
 
   .button-edit,
   .button-secondary {
-    width: 100%;
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 }
 

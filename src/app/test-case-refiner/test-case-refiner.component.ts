@@ -8,6 +8,7 @@ import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations } from '../models/database.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-test-case-refiner',
@@ -22,7 +23,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   isContextPage: boolean = false;
   isLoading: boolean = false;
   isRefining: boolean = false;
-  isLoadingDb: boolean = false;
+  isLoadingDb: boolean = true;
 
   editedHuId: string = '';
   editedTitle: string = '';
@@ -179,41 +180,43 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.startAiProgress();
       this.cdr.detectChanges();
 
-      this.aiService.generateTestCasesDirect(
+      const result: any = await firstValueFrom(this.aiService.generateTestCasesDirect(
         this.editedDescription,
         this.editedAcceptanceCriteria,
         this.editedSelectedTechnique,
         this.editedContext || undefined
-      ).subscribe({
-        next: (result: any) => {
-          if (result?.testCases && this.hu) {
-            this.hu.detailedTestCases = result.testCases;
-            this.toastService.success(`${result.testCases.length} casos regenerados con éxito`);
+      ));
 
-            if (this.isContextPage) {
-              this.goToScenariosTable();
-            }
-          }
-        },
-        error: (error) => {
-          console.error('Error al regenerar casos:', error);
-          this.toastService.error('Error al regenerar casos con IA');
-          this.isLoading = false;
-          this.isRefining = false;
-          this.stopAiProgress();
-          this.cdr.detectChanges();
-        },
-        complete: () => {
-          this.isLoading = false;
-          this.isRefining = false;
-          this.stopAiProgress();
-          this.cdr.detectChanges();
+      if (!result?.testCases || !this.hu) {
+        this.toastService.error('La IA no devolvió escenarios válidos');
+        return;
+      }
+
+      // Reemplazar en memoria los escenarios anteriores por los nuevos
+      this.hu.detailedTestCases = result.testCases;
+
+      // En modo contexto, persistir inmediatamente para que no reaparezcan escenarios antiguos al recargar
+      if (this.isContextPage) {
+        const saved = await this.saveData();
+        if (!saved) {
+          this.toastService.error('No se pudo guardar la regeneración en base de datos');
+          return;
         }
-      });
+      }
+
+      this.toastService.success(`${result.testCases.length} casos regenerados con éxito`);
+
+      if (this.isContextPage) {
+        this.goToRefinerPage();
+      }
     } catch (error) {
       console.error('Error al iniciar regeneración:', error);
       this.toastService.error('Error al iniciar regeneración');
+    } finally {
+      this.isLoading = false;
+      this.isRefining = false;
       this.stopAiProgress();
+      this.cdr.detectChanges();
     }
   }
 
@@ -275,6 +278,17 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     });
   }
 
+  goToRefinerPage(): void {
+    if (!this.hu) return;
+
+    this.router.navigate(['/refiner'], {
+      state: {
+        hu: this.hu,
+        testPlanId: this.testPlanId
+      }
+    });
+  }
+
   isEditingTestCase(index: number): boolean {
     return this.editingTestCaseIndex === index;
   }
@@ -313,8 +327,10 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.editingBackup = this.cloneTestCase(this.hu.detailedTestCases[index]);
   }
 
-  saveEditTestCase(index: number): void {
+  async saveEditTestCase(index: number): Promise<void> {
     if (!this.hu?.detailedTestCases || !this.hu.detailedTestCases[index]) return;
+
+    const snapshotBeforeSave = this.hu.detailedTestCases.map(tc => this.cloneTestCase(tc));
 
     const testCase = this.hu.detailedTestCases[index];
     testCase.steps = (testCase.steps || [])
@@ -342,7 +358,20 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.openActionsMenuIndex = null;
     this.editingBackup = null;
     this.isCreatingNewCase = false;
-    this.toastService.success('Caso actualizado');
+
+    // Refresca de inmediato en UI
+    this.cdr.detectChanges();
+
+    const saved = await this.saveData();
+    if (saved) {
+      this.toastService.success('Caso actualizado y guardado en base de datos');
+      return;
+    }
+
+    // Rollback local si falla persistencia
+    this.hu.detailedTestCases = snapshotBeforeSave;
+    this.cdr.detectChanges();
+    this.toastService.error('No se pudo guardar la edición en base de datos. Se restauró la versión anterior.');
   }
 
   cancelEditTestCase(index: number): void {
@@ -389,7 +418,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.isDeleteModalOpen = true;
   }
 
-  onConfirmDeleteTestCase(): void {
+  async onConfirmDeleteTestCase(): Promise<void> {
     if (!this.hu?.detailedTestCases || this.pendingDeleteTestCaseIndex === null) {
       this.onCancelDeleteTestCase();
       return;
@@ -401,15 +430,32 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const deletedCase = this.cloneTestCase(this.hu.detailedTestCases[index]);
     this.hu.detailedTestCases.splice(index, 1);
+
+    // Refresca de inmediato la vista (eliminación en línea)
+    this.cdr.detectChanges();
+
     if (this.editingTestCaseIndex === index) {
       this.editingTestCaseIndex = null;
       this.editingBackup = null;
       this.isCreatingNewCase = false;
+    } else if (this.editingTestCaseIndex !== null && this.editingTestCaseIndex > index) {
+      this.editingTestCaseIndex = this.editingTestCaseIndex - 1;
     }
 
-    this.toastService.success('Caso de prueba eliminado');
     this.onCancelDeleteTestCase();
+
+    const saved = await this.saveData();
+    if (saved) {
+      this.toastService.success('Caso de prueba eliminado y guardado en base de datos');
+      return;
+    }
+
+    // Rollback local si falla persistencia
+    this.hu.detailedTestCases.splice(index, 0, deletedCase);
+    this.cdr.detectChanges();
+    this.toastService.error('No se pudo guardar la eliminación en base de datos. Se restauró el caso.');
   }
 
   onCancelDeleteTestCase(): void {
@@ -450,7 +496,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
     try {
       this.isLoading = true;
-      await this.loadUserStoryData();
+      await this.loadUserStoryData(false);
 
       if (!this.userStoryDbId) throw new Error('User story no encontrado');
 
@@ -471,7 +517,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     try {
       this.isLoadingDb = true;
       this.cdr.detectChanges();
-      await Promise.all([this.loadUserStoryData(), this.loadCellName()]);
+      await Promise.all([this.loadUserStoryData(true), this.loadCellName()]);
     } catch (error) {
       console.error('Error al inicializar datos del refinador:', error);
     } finally {
@@ -480,7 +526,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadUserStoryData(): Promise<void> {
+  private async loadUserStoryData(syncCasesFromDb: boolean = true): Promise<void> {
     if (!this.hu || !this.testPlanId) return;
 
     let query = this.databaseService.supabase
@@ -548,6 +594,27 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     }
 
     this.existingDbTestCases = this.sortTestCasesByPosition(userStory?.test_cases || []);
+
+    if (syncCasesFromDb && this.hu) {
+      this.hu.detailedTestCases = this.existingDbTestCases.map((dbTc) => {
+        const sortedSteps = (dbTc.test_case_steps || [])
+          .sort((a, b) => (a.step_number ?? 0) - (b.step_number ?? 0));
+
+        return {
+          dbId: dbTc.id,
+          position: dbTc.position ?? undefined,
+          title: dbTc.title || 'Sin título',
+          preconditions: dbTc.preconditions || '',
+          steps: sortedSteps.map((step, stepIdx) => ({
+            dbId: step.id,
+            numero_paso: step.step_number ?? (stepIdx + 1),
+            accion: step.action || ''
+          })),
+          expectedResults: dbTc.expected_results || ''
+        };
+      });
+    }
+
     this.alignLocalTestCasesWithDb();
   }
 

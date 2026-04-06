@@ -4,9 +4,13 @@
             <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
             <span class="breadcrumb-separator">/</span>
             <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
-            <ng-container *ngIf="isContextPage">
+            <ng-container *ngIf="!isContextPage">
                 <span class="breadcrumb-separator">/</span>
                 <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToScenariosTable()">hu-scenarios</button>
+            </ng-container>
+            <ng-container *ngIf="isContextPage">
+                <span class="breadcrumb-separator">/</span>
+                <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToRefinerPage()">Editar / Refinar con IA</button>
             </ng-container>
             <span class="breadcrumb-separator">/</span>
             <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">{{ isContextPage ? 'Regenerar Escenarios con Contexto' : 'Editar / Refinar con IA' }}</button>
@@ -102,94 +106,100 @@
             </div>
         </div>
 
-        <div class="actions table-actions" *ngIf="!isContextPage" style="margin-top:0;margin-bottom:1rem;">
-            <button class="button-secondary" (click)="openContextRegeneratorPage()" [disabled]="isLoading || isRefining">
-                Regenerar Escenarios con contexto
-            </button>
-            <button (click)="addNewTestCase()" [disabled]="isLoading" class="button-secondary">
-                + Agregar Caso
-            </button>
+        <div *ngIf="!isContextPage && isLoadingDb" class="input-loading-state" style="padding: 0.5rem 0 1rem;">
+            <span class="spinner-sm"></span>
+            <span>Cargando casos desde base de datos...</span>
         </div>
 
-        <div class="test-cases-section" *ngIf="!isContextPage && hu.detailedTestCases && hu.detailedTestCases.length > 0">
-            <div class="detailed-test-cases-table-container">
-                <table class="detailed-test-cases-table">
-                    <thead>
-                        <tr>
-                            <th>ID Caso</th>
-                            <th>Escenario de Prueba (Título)</th>
-                            <th>Precondiciones</th>
-                            <th>Paso a Paso</th>
-                            <th>Resultado Esperado</th>
-                            <th style="width: 88px; text-align: center;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <ng-container *ngFor="let tc of hu.detailedTestCases; let i = index">
-                            <tr [class.row-editing]="isEditingTestCase(i)">
-                                <td>{{ hu.id }}_CP{{ i + 1 }}</td>
-                                <td>
-                                    <ng-container *ngIf="isEditingTestCase(i); else readTitle">
-                                        <textarea class="table-field" rows="2" [(ngModel)]="tc.title" [disabled]="isLoading"></textarea>
-                                    </ng-container>
-                                    <ng-template #readTitle>{{ tc.title }}</ng-template>
-                                </td>
-                                <td>
-                                    <ng-container *ngIf="isEditingTestCase(i); else readPreconditions">
-                                        <textarea class="table-field" rows="4" [(ngModel)]="tc.preconditions" [disabled]="isLoading"></textarea>
-                                    </ng-container>
-                                    <ng-template #readPreconditions><pre class="table-pre">{{ tc.preconditions }}</pre></ng-template>
-                                </td>
-                                <td>
-                                    <ng-container *ngIf="isEditingTestCase(i); else readSteps">
-                                        <div class="steps-editor">
-                                            <div class="step-editor-row" *ngFor="let step of tc.steps; let stepIndex = index">
-                                                <span class="step-number">{{ stepIndex + 1 }}.</span>
-                                                <input class="table-field" type="text" [(ngModel)]="step.accion" [disabled]="isLoading" />
-                                                <button class="step-btn danger" (click)="removeStepFromTestCase(i, stepIndex)" [disabled]="isLoading">−</button>
-                                            </div>
-                                            <button class="step-btn" (click)="addStepToTestCase(i)" [disabled]="isLoading">+ Paso</button>
-                                        </div>
-                                    </ng-container>
-                                    <ng-template #readSteps>
-                                        <ul class="steps-readonly">
-                                            <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
-                                        </ul>
-                                    </ng-template>
-                                </td>
-                                <td>
-                                    <ng-container *ngIf="isEditingTestCase(i); else readExpected">
-                                        <textarea class="table-field" rows="4" [(ngModel)]="tc.expectedResults" [disabled]="isLoading"></textarea>
-                                    </ng-container>
-                                    <ng-template #readExpected><pre class="table-pre">{{ tc.expectedResults }}</pre></ng-template>
-                                </td>
-                                <td style="text-align: center;">
-                                    <div class="row-actions" *ngIf="isEditingTestCase(i); else menuActions">
-                                        <button class="action-btn-save" (click)="saveEditTestCase(i)" [disabled]="isLoading">Guardar</button>
-                                        <button class="action-btn-cancel" (click)="cancelEditTestCase(i)" [disabled]="isLoading">Cancelar</button>
-                                    </div>
-                                    <ng-template #menuActions>
-                                        <div class="actions-menu-container">
-                                            <button class="actions-menu-trigger" (click)="toggleActionsMenu(i, $event)" [disabled]="isLoading">⋯</button>
-                                            <div class="actions-menu" *ngIf="isActionsMenuOpen(i)">
-                                                <button class="menu-option" (click)="handleMenuEdit(i, $event)" [disabled]="isLoading">Editar</button>
-                                                <button class="menu-option danger" (click)="handleMenuDelete(i, $event)" [disabled]="isLoading">Eliminar</button>
-                                            </div>
-                                        </div>
-                                    </ng-template>
-                                </td>
-                            </tr>
-                        </ng-container>
-                    </tbody>
-                </table>
+        <ng-container *ngIf="!isContextPage && !isLoadingDb">
+            <div class="actions table-actions" style="margin-top:0;margin-bottom:1rem;">
+                <button class="button-secondary" (click)="openContextRegeneratorPage()" [disabled]="isLoading || isRefining">
+                    Regenerar Escenarios con contexto
+                </button>
+                <button (click)="addNewTestCase()" [disabled]="isLoading" class="button-secondary">
+                    + Agregar Caso
+                </button>
             </div>
 
-        </div>
+            <div class="test-cases-section" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
+                <div class="detailed-test-cases-table-container">
+                    <table class="detailed-test-cases-table">
+                        <thead>
+                            <tr>
+                                <th>ID Caso</th>
+                                <th>Escenario de Prueba (Título)</th>
+                                <th>Precondiciones</th>
+                                <th>Paso a Paso</th>
+                                <th>Resultado Esperado</th>
+                                <th style="width: 88px; text-align: center;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <ng-container *ngFor="let tc of hu.detailedTestCases; let i = index">
+                                <tr [class.row-editing]="isEditingTestCase(i)">
+                                    <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
+                                    <td data-label="Escenario de Prueba (Título)">
+                                        <ng-container *ngIf="isEditingTestCase(i); else readTitle">
+                                            <textarea class="table-field" rows="2" [(ngModel)]="tc.title" [disabled]="isLoading"></textarea>
+                                        </ng-container>
+                                        <ng-template #readTitle>{{ tc.title }}</ng-template>
+                                    </td>
+                                    <td data-label="Precondiciones">
+                                        <ng-container *ngIf="isEditingTestCase(i); else readPreconditions">
+                                            <textarea class="table-field" rows="4" [(ngModel)]="tc.preconditions" [disabled]="isLoading"></textarea>
+                                        </ng-container>
+                                        <ng-template #readPreconditions><pre class="table-pre">{{ tc.preconditions }}</pre></ng-template>
+                                    </td>
+                                    <td data-label="Paso a Paso">
+                                        <ng-container *ngIf="isEditingTestCase(i); else readSteps">
+                                            <div class="steps-editor">
+                                                <div class="step-editor-row" *ngFor="let step of tc.steps; let stepIndex = index">
+                                                    <span class="step-number">{{ stepIndex + 1 }}.</span>
+                                                    <input class="table-field" type="text" [(ngModel)]="step.accion" [disabled]="isLoading" />
+                                                    <button class="step-btn danger" (click)="removeStepFromTestCase(i, stepIndex)" [disabled]="isLoading">−</button>
+                                                </div>
+                                                <button class="step-btn" (click)="addStepToTestCase(i)" [disabled]="isLoading">+ Paso</button>
+                                            </div>
+                                        </ng-container>
+                                        <ng-template #readSteps>
+                                            <ul class="steps-readonly">
+                                                <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                                            </ul>
+                                        </ng-template>
+                                    </td>
+                                    <td data-label="Resultado Esperado">
+                                        <ng-container *ngIf="isEditingTestCase(i); else readExpected">
+                                            <textarea class="table-field" rows="4" [(ngModel)]="tc.expectedResults" [disabled]="isLoading"></textarea>
+                                        </ng-container>
+                                        <ng-template #readExpected><pre class="table-pre">{{ tc.expectedResults }}</pre></ng-template>
+                                    </td>
+                                    <td data-label="Acciones" style="text-align: center;">
+                                        <div class="row-actions" *ngIf="isEditingTestCase(i); else menuActions">
+                                            <button class="action-btn-save" (click)="saveEditTestCase(i)" [disabled]="isLoading">Guardar</button>
+                                            <button class="action-btn-cancel" (click)="cancelEditTestCase(i)" [disabled]="isLoading">Cancelar</button>
+                                        </div>
+                                        <ng-template #menuActions>
+                                            <div class="actions-menu-container">
+                                                <button class="actions-menu-trigger" (click)="toggleActionsMenu(i, $event)" [disabled]="isLoading">⋯</button>
+                                                <div class="actions-menu" *ngIf="isActionsMenuOpen(i)">
+                                                    <button class="menu-option" (click)="handleMenuEdit(i, $event)" [disabled]="isLoading">Editar</button>
+                                                    <button class="menu-option danger" (click)="handleMenuDelete(i, $event)" [disabled]="isLoading">Eliminar</button>
+                                                </div>
+                                            </div>
+                                        </ng-template>
+                                    </td>
+                                </tr>
+                            </ng-container>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-        <div *ngIf="!isContextPage && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="empty-state">
-            <h3>No hay casos de prueba</h3>
-            <p>Usa el botón "Regenerar Escenarios con contexto" para generar escenarios con IA.</p>
-        </div>
+            <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="empty-state">
+                <h3>No hay casos de prueba</h3>
+                <p>Usa el botón "Regenerar Escenarios con contexto" para generar escenarios con IA.</p>
+            </div>
+        </ng-container>
     </div>
 </div>
 

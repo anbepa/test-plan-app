@@ -561,6 +561,37 @@ textarea.rf-control {
         padding: 1rem;
     }
 
+    .refiner-header {
+        margin-bottom: 0.6rem;
+    }
+
+    .breadcrumb-row {
+        width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        gap: 0.35rem;
+        padding-bottom: 0.2rem;
+        font-size: 0.82rem;
+        scrollbar-width: thin;
+    }
+
+    .breadcrumb-button {
+        min-height: 32px !important;
+        padding: 0.35rem 0.65rem !important;
+        font-size: 0.84rem !important;
+        border-radius: 10px !important;
+        flex: 0 0 auto;
+    }
+
+    .breadcrumb-separator {
+        flex: 0 0 auto;
+        font-size: 0.75rem;
+        opacity: 0.7;
+    }
+
     .refiner-content {
         padding: 1rem;
         border-radius: 0.875rem;
@@ -588,25 +619,157 @@ textarea.rf-control {
         overflow-y: auto;
     }
 
-    .detailed-test-cases-table th,
-    .detailed-test-cases-table td {
-        padding: 0.75rem;
-        font-size: 0.8125rem;
+    .detailed-test-cases-table-container {
+        overflow: visible;
+        border: none;
+        background: transparent;
+    }
+
+    .detailed-test-cases-table {
+        min-width: 0;
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .detailed-test-cases-table thead {
+        display: none;
+    }
+
+    .detailed-test-cases-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .detailed-test-cases-table tbody tr {
+        display: block;
+        border: 1px solid #dbe2ef;
+        border-radius: 0.95rem;
+        background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+        padding: 0.45rem 0.75rem;
+    }
+
+    .detailed-test-cases-table tbody tr.row-editing {
+        background: #eff6ff;
+        box-shadow: inset 3px 0 0 #2563eb, 0 8px 22px rgba(15, 23, 42, 0.08);
+    }
+
+    .detailed-test-cases-table tbody td {
+        display: grid;
+        grid-template-columns: minmax(112px, 40%) minmax(0, 1fr);
+        align-items: flex-start;
+        gap: 0.65rem;
+        width: 100%;
+        padding: 0.7rem 0.2rem;
+        border-bottom: 1px solid #eef2f7;
+        text-align: left;
+        font-size: 0.84rem;
+        white-space: normal;
+    }
+
+    .detailed-test-cases-table tbody td:last-child {
+        border-bottom: none;
+    }
+
+    .detailed-test-cases-table tbody td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: #475569;
+        text-align: left;
+        min-width: 0;
+    }
+
+    .detailed-test-cases-table tbody td > * {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        justify-self: start;
+        text-align: left;
+    }
+
+    .detailed-test-cases-table tbody td ul {
+        margin: 0;
+        padding-left: 1rem;
+        text-align: left;
+    }
+
+    .table-pre {
+        text-align: left;
+    }
+
+    .detailed-test-cases-table tbody td[data-label="ID Caso"] {
+        font-weight: 600;
+    }
+
+    .detailed-test-cases-table tbody td[data-label="Acciones"] {
+        align-items: center;
+        min-height: 48px;
+    }
+
+    .detailed-test-cases-table tbody td[data-label="Acciones"]::before {
+        align-self: center;
+    }
+
+    .row-actions {
+        width: auto;
+        margin-left: 0;
+        justify-self: start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 0.45rem;
+    }
+
+    .actions-menu {
+        right: 0;
+        left: auto;
+        max-width: min(88vw, 292px);
+        max-height: 42vh;
+        overflow-y: auto;
+    }
+
+    .step-editor-row {
+        align-items: flex-start;
+    }
+
+    .step-editor-row .table-field {
+        min-height: 38px;
     }
 
     .actions {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        align-items: center;
+        gap: 0.5rem;
+        padding-bottom: 0.15rem;
     }
 
     .button-secondary {
-        width: 100%;
+        width: auto;
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 }
 
 @media (max-width: 480px) {
     .refiner-container {
         padding: 0.75rem;
+    }
+
+    .breadcrumb-row {
+        gap: 0.3rem;
+        font-size: 0.78rem;
+    }
+
+    .breadcrumb-button {
+        min-height: 30px !important;
+        padding: 0.28rem 0.55rem !important;
+        font-size: 0.8rem !important;
+        border-radius: 9px !important;
     }
 
     .refiner-content {

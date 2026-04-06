@@ -627,8 +627,20 @@ export class DatabaseService {
       `);
 
       if (tcsToDeleteIds.length > 0) {
-        await this.supabase.from('test_case_steps').delete().in('test_case_id', tcsToDeleteIds);
-        await this.supabase.from('test_cases').delete().in('id', tcsToDeleteIds);
+        const { error: deleteStepsError } = await this.supabase
+          .from('test_case_steps')
+          .delete()
+          .in('test_case_id', tcsToDeleteIds);
+
+        if (deleteStepsError) throw deleteStepsError;
+
+        const { error: deleteCasesError } = await this.supabase
+          .from('test_cases')
+          .delete()
+          .in('id', tcsToDeleteIds);
+
+        if (deleteCasesError) throw deleteCasesError;
+
         console.log(`🗑️ ${tcsToDeleteIds.length} TCs eliminados`);
       }
 
@@ -691,10 +703,12 @@ export class DatabaseService {
         if (updateError) throw updateError;
 
         const updateIds = tcsToUpdate.map(tc => tc.dbId!);
-        await this.supabase
+        const { error: deleteUpdatedStepsError } = await this.supabase
           .from('test_case_steps')
           .delete()
           .in('test_case_id', updateIds);
+
+        if (deleteUpdatedStepsError) throw deleteUpdatedStepsError;
 
         const newStepsPayload: DbTestCaseStep[] = [];
         tcsToUpdate.forEach(tc => {

@@ -184,7 +184,7 @@ export class AuthService {
 
   /**
    * Valida el formato de un nombre de usuario (público para uso en UI).
-   * Reglas: 3–20 caracteres, solo letras, números y guión bajo (_).
+   * Reglas: 2–20 caracteres, solo letras, números y guión bajo (_).
    * No puede comenzar ni terminar con guión bajo.
    */
   public validateUsername(username: string): string | null {
@@ -194,8 +194,8 @@ export class AuthService {
       return 'Ingresa un nombre de usuario.';
     }
 
-    if (trimmed.length < 3) {
-      return 'El nombre de usuario debe tener al menos 3 caracteres.';
+    if (trimmed.length < 2) {
+      return 'El nombre de usuario debe tener al menos 2 caracteres.';
     }
 
     if (trimmed.length > 20) {

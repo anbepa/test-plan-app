@@ -51,17 +51,17 @@
           </thead>
           <tbody>
             <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
-              <td>{{ hu.id }}_CP{{ i + 1 }}</td>
-              <td>{{ tc.title }}</td>
-              <td>
+              <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
+              <td data-label="Escenario de Prueba (Título)">{{ tc.title }}</td>
+              <td data-label="Precondiciones">
                 <pre class="table-pre">{{ tc.preconditions }}</pre>
               </td>
-              <td>
+              <td data-label="Paso a Paso">
                 <ul style="margin: 0; padding-left: 20px; list-style: decimal;">
                   <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
                 </ul>
               </td>
-              <td>
+              <td data-label="Resultado Esperado">
                 <pre class="table-pre">{{ tc.expectedResults }}</pre>
               </td>
             </tr>

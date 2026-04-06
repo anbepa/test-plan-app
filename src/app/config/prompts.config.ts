@@ -105,7 +105,7 @@ Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
   // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
   DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, context?: string): string => `
-Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA ALTA y sin ruido.
+Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA SUFICIENTE y sin ruido.
 
 HU:
 ${description}
@@ -113,17 +113,23 @@ ${description}
 CA:
 ${acceptanceCriteria}
 
-${context ? `Contexto Adicional del Analista:\n"${context}"\nConsidera este contexto para orientar o priorizar los escenarios.\n` : ''}
+${context ? `CONTEXTO DEL ANALISTA (PRIORIDAD MÁXIMA):\n"${context}"\n\nJERARQUÍA DE DECISIÓN (OBLIGATORIA):\n1) Este CONTEXTO DEL ANALISTA tiene prioridad máxima para seleccionar, enfocar y ordenar los escenarios.\n2) Luego aplica HU + Criterios de Aceptación para asegurar cobertura funcional.\n3) Después aplica la técnica ISTQB para estructurar los casos.\n\nREGLAS DE PRIORIDAD DEL CONTEXTO:\n- Si el contexto pide ajustar, ampliar, reducir o priorizar algo, debes obedecerlo primero.\n- No ignores ni diluyas este contexto con preferencias genéricas.\n- Si hay conflicto entre este contexto y una regla secundaria, prevalece este contexto (siempre que no viole los Criterios de Aceptación).\n` : ''}
 REGLAS DE COBERTURA (obligatorias):
 1) Analiza cada criterio de aceptación (CA) y clasifícalo por complejidad (baja/media/alta).
 2) Define cantidad de casos con regla híbrida:
    - Baja: 3-5 casos
    - Media: 5-8 casos
    - Alta: 8-12 casos
-  - Límite superior absoluto: 10 casos
-3) Cada CA debe estar cubierto al menos por 1 caso.
-4) Incluye Happy Path, negativos relevantes y bordes reales.
-5) No generes escenarios cosméticos o redundantes.
+  - Si el alcance real requiere menos, devuelve menos.
+  - Si el alcance real requiere más, puedes superar 10 casos.
+  - NO uses siempre el máximo: la cantidad final debe justificarse por cobertura efectiva de CA.
+3) Cobertura por criterio: para cada CA distintivo intenta cubrir con enfoque positivo, negativo y alterno.
+4) Si dos o más CA son ambiguos, solapados o muy similares, agrúpalos y cúbrelos con un mismo conjunto mínimo de escenarios.
+5) Cada CA (o grupo equivalente) debe quedar cubierto al menos por 1 caso.
+6) Incluye Happy Path, negativos relevantes, alternos y bordes reales.
+7) No generes escenarios cosméticos o redundantes.
+8) Si un escenario es parecido a otro, conserva solo el más crítico y elimina duplicados.
+9) Antes de responder, valida que no existan casos duplicados ni cobertura artificial inflada.
 
 REGLAS DE CALIDAD:
 - Título claro SIN IDs técnicos (TC_001, etc).
@@ -174,6 +180,12 @@ REGLAS DE REFINAMIENTO (obligatorias):
 3) Corrige huecos de cobertura: cada CA debe quedar cubierto por al menos 1 caso.
 4) Si la solicitud pide ampliar, añade solo escenarios de alto valor.
 5) Si la solicitud pide simplificar, reduce cantidad sin perder cobertura mínima.
+6) Recalcula la cantidad final según cobertura real (no por inercia del número actual).
+7) No mantengas 10 casos por defecto; mantén solo los necesarios para cubrir CA con calidad.
+8) Si falta cobertura, incrementa casos; si sobra solapamiento, reduce casos.
+9) Para cada CA distintivo, procura cobertura en enfoque positivo, negativo y alterno.
+10) Si hay CA ambiguos o muy parecidos, consolídalos y evita generar escenarios repetidos.
+11) Si dos escenarios prueban prácticamente lo mismo, deja solo el más crítico.
 
 REGLAS DE CALIDAD:
 - Títulos claros SIN IDs técnicos.
