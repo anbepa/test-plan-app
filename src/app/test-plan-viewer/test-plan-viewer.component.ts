@@ -1343,52 +1343,81 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.testPlanToDelete = null;
     this.testPlansToDelete = [];
 
+    const targetIds = plansToDelete
+      .map(plan => plan.id)
+      .filter((id): id is string => !!id);
+
+    if (targetIds.length === 0) {
+      this.toastService.error('No se encontró un ID válido para eliminar');
+      return;
+    }
+
+    // Optimistic UI: quitar de la vista en línea mientras se confirma en BD
+    const previousTestPlans = [...this.testPlans];
+    const previousSelectedPlanIds = [...this.selectedPlanIds];
+    const previousSelectedTestPlan = this.selectedTestPlan;
+
+    this.testPlans = this.testPlans.filter(plan => !plan.id || !targetIds.includes(plan.id));
+    this.selectedPlanIds = this.selectedPlanIds.filter(id => !targetIds.includes(id));
+    if (this.selectedTestPlan?.id && targetIds.includes(this.selectedTestPlan.id)) {
+      this.selectedTestPlan = null;
+    }
+    this.applyFilters();
+    this.cdr.detectChanges();
+
     const loadingToastId = this.toastService.loading(
       plansToDelete.length === 1 ? 'Eliminando test plan...' : `Eliminando ${plansToDelete.length} test plans...`
     );
 
     try {
-      let deletedCount = 0;
       const deletedIds: string[] = [];
+      const failedIds: string[] = [];
 
-      for (const plan of plansToDelete) {
-        if (!plan.id) continue;
-
-        const success = await this.databaseService.deleteTestPlan(plan.id);
+      for (const id of targetIds) {
+        const success = await this.databaseService.deleteTestPlan(id);
         if (success) {
-          deletedCount++;
-          deletedIds.push(plan.id);
+          deletedIds.push(id);
+        } else {
+          failedIds.push(id);
         }
       }
 
       this.toastService.dismiss(loadingToastId);
 
-      if (deletedCount > 0) {
-        if (deletedCount === plansToDelete.length) {
-          this.toastService.success(
-            deletedCount === 1
-              ? 'Test plan eliminado exitosamente'
-              : `${deletedCount} test plans eliminados exitosamente`
-          );
-        } else {
-          this.toastService.warning(
-            `Se eliminaron ${deletedCount} de ${plansToDelete.length} test plans`
-          );
-        }
-
-        await this.loadTestPlans(false);
-
-        this.selectedPlanIds = this.selectedPlanIds.filter(id => !deletedIds.includes(id));
-
-        if (this.selectedTestPlan?.id && deletedIds.includes(this.selectedTestPlan.id)) {
-          this.selectedTestPlan = null;
-        }
+      if (failedIds.length === 0) {
+        this.toastService.success(
+          deletedIds.length === 1
+            ? 'Test plan eliminado exitosamente'
+            : `${deletedIds.length} test plans eliminados exitosamente`
+        );
       } else {
-        this.toastService.error('Error al eliminar el test plan');
+        // Rehidratar estado real desde BD para evitar desalineación
+        await this.loadTestPlans(false);
+        this.selectedPlanIds = previousSelectedPlanIds.filter(id => this.testPlans.some(tp => tp.id === id));
+        this.selectedTestPlan = previousSelectedTestPlan?.id
+          ? (targetIds.includes(previousSelectedTestPlan.id) ? null : previousSelectedTestPlan)
+          : previousSelectedTestPlan;
+
+        this.toastService.warning(
+          `Se eliminaron ${deletedIds.length} de ${targetIds.length} test plans. Revisa permisos/políticas en BD.`
+        );
+        return;
       }
+
+      // Refrescar desde BD para reflejar estado persistido y contadores correctos
+      await this.loadTestPlans(false);
+      this.selectedPlanIds = this.selectedPlanIds.filter(id => !deletedIds.includes(id));
     } catch (error) {
       console.error('❌ Error:', error);
       this.toastService.dismiss(loadingToastId);
+
+      // Rollback local ante error inesperado
+      this.testPlans = previousTestPlans;
+      this.selectedPlanIds = previousSelectedPlanIds;
+      this.selectedTestPlan = previousSelectedTestPlan;
+      this.applyFilters();
+      this.cdr.detectChanges();
+
       this.toastService.error('Error al eliminar el test plan');
     }
   }

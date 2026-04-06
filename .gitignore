@@ -54,8 +54,24 @@ Thumbs.db
 !.env.example
 !.env.sample
 
-# Específicamente para .env.local si solo usas ese
- .env.local
+# Angular/local environment overrides (secret-safe)
+src/environments/environment.local.ts
+src/environments/environment.*.local.ts
+
+# Common secret/certificate files
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.mobileprovision
+
+# Token/config files that may contain credentials
+.envrc
+.secrets
+.secrets.*
+.npmrc
 
 # SQL scripts should not be committed
 *.sql

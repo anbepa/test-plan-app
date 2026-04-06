@@ -466,9 +466,22 @@ export class DatabaseService {
       `);
 
       if (toDeleteIds.length > 0) {
-        const { error } = await this.supabase.from('user_stories').delete().in('id', toDeleteIds);
+        const { data: deletedHUs, error } = await this.supabase
+          .from('user_stories')
+          .delete()
+          .in('id', toDeleteIds)
+          .select('id');
+
         if (error) throw error;
-        console.log(`🗑️ ${toDeleteIds.length} HUs eliminadas`);
+
+        const deletedCount = deletedHUs?.length ?? 0;
+        if (deletedCount !== toDeleteIds.length) {
+          throw new Error(
+            `No se pudieron eliminar todas las HUs en BD. Esperadas: ${toDeleteIds.length}, eliminadas: ${deletedCount}`
+          );
+        }
+
+        console.log(`🗑️ ${deletedCount} HUs eliminadas`);
       }
 
       if (toInsert.length > 0) {
@@ -634,14 +647,22 @@ export class DatabaseService {
 
         if (deleteStepsError) throw deleteStepsError;
 
-        const { error: deleteCasesError } = await this.supabase
+        const { data: deletedCases, error: deleteCasesError } = await this.supabase
           .from('test_cases')
           .delete()
-          .in('id', tcsToDeleteIds);
+          .in('id', tcsToDeleteIds)
+          .select('id');
 
         if (deleteCasesError) throw deleteCasesError;
 
-        console.log(`🗑️ ${tcsToDeleteIds.length} TCs eliminados`);
+        const deletedCount = deletedCases?.length ?? 0;
+        if (deletedCount !== tcsToDeleteIds.length) {
+          throw new Error(
+            `No se pudieron eliminar todos los TCs en BD. Esperados: ${tcsToDeleteIds.length}, eliminados: ${deletedCount}`
+          );
+        }
+
+        console.log(`🗑️ ${deletedCount} TCs eliminados`);
       }
 
       if (tcsToInsert.length > 0) {
@@ -781,17 +802,23 @@ export class DatabaseService {
     console.log(`🗑️ Eliminando test plan ${id}...`);
 
     try {
-      const { error } = await this.supabase
+      const { data: deletedPlans, error } = await this.supabase
         .from('test_plans')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select('id');
 
       if (error) {
         console.error('❌ Error al eliminar:', error);
         throw error;
       }
 
-      console.log('✅ Test plan eliminado');
+      const deletedCount = deletedPlans?.length ?? 0;
+      if (deletedCount === 0) {
+        throw new Error(`No se eliminó el test plan ${id}. Verifica políticas RLS/permisos.`);
+      }
+
+      console.log(`✅ Test plan eliminado (${deletedCount})`);
       return true;
 
     } catch (error) {
