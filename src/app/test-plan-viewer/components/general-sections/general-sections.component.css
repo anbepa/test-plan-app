@@ -219,3 +219,134 @@
     font-size: 1rem;
     cursor: help;
 }
+
+.risk-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.risk-subtitle {
+    margin: 1rem 0 0.25rem;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.risk-grid-single,
+.risk-grid-two {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.risk-grid-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.risk-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.field-label {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.copy-field-btn {
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    color: #6b7280;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.copy-field-btn:hover:not(:disabled) {
+    border-color: #9ca3af;
+    color: #374151;
+}
+
+.copy-field-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.required {
+    color: #dc2626;
+}
+
+.field-control {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid #9ca3af;
+    border-radius: 0.875rem;
+    font-size: 0.95rem;
+    background: #fff;
+    color: var(--text);
+}
+
+.field-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.risk-scenarios-block {
+    margin-top: 0.5rem;
+}
+
+.risk-scenarios-block h4 {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+}
+
+.scenario-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.button-icon {
+    min-width: 2.25rem;
+    justify-content: center;
+    padding: 0.625rem;
+}
+
+.button-link-add {
+    margin-top: 0.5rem;
+    border: none;
+    background: transparent;
+    color: #15803d;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+}
+
+.button-link-add:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+    .risk-grid-two {
+        grid-template-columns: 1fr;
+    }
+
+    .field-control {
+        min-height: 40px;
+        font-size: 0.95rem;
+        padding: 0.55rem 0.75rem;
+    }
+}

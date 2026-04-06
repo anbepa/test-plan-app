@@ -1,6 +1,57 @@
 /* test-plan-generator - Estilos específicos del componente */
 /* Los estilos compartidos están en src/styles/shared-components.css */
 
+:host {
+    display: block;
+    width: 100%;
+    max-width: none;
+}
+
+.container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.subpage-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem 0.5rem;
+    color: #4b5563;
+    font-size: 0.95rem;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-button {
+    border: none;
+    background: transparent;
+    color: #4b5563;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+}
+
+.breadcrumb-button:hover {
+    color: var(--text-primary);
+}
+
+.breadcrumb-separator {
+    color: #9ca3af;
+}
+
+.breadcrumb-link,
+.breadcrumb-current {
+    color: #4b5563;
+}
+
+.breadcrumb-current {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 /* === NAVEGACIÓN POR PESTAÑAS === */
 .tabs-navigation {
     display: flex;

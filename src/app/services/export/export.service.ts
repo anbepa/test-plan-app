@@ -1,6 +1,17 @@
 import { Injectable } from '@angular/core';
 import { HUData } from '../../models/hu-data.model';
 import { saveAs } from 'file-saver';
+import {
+    AlignmentType,
+    Document,
+    Packer,
+    Paragraph,
+    Table,
+    TableCell,
+    TableRow,
+    TextRun,
+    WidthType
+} from 'docx';
 
 /**
  * Servicio para exportar datos en diferentes formatos
@@ -9,6 +20,9 @@ import { saveAs } from 'file-saver';
     providedIn: 'root'
 })
 export class ExportService {
+
+    private readonly CUSTOM_PAGE_SIZE_TWIP = 31675; // 55.8 cm
+    private readonly EVIDENCE_PLACEHOLDER = 'Imagen de la evidencias';
 
     /**
      * Exporta una HU como matriz de ejecución en formato CSV
@@ -50,6 +64,100 @@ export class ExportService {
             new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }),
             filename
         );
+    }
+
+    /**
+     * Exporta una HU como matriz de evidencias en formato DOXC
+     * Reglas:
+     * - Página personalizada: 55.8cm x 55.8cm
+     * - 1 página por test case
+     * - Título por página: "N. <escenario>"
+     * - Tabla de 2 columnas con tantas filas como pasos
+     *   - Columna 1: número de paso
+     *   - Columna 2: espacio de evidencias
+     */
+    async exportToDOXC(hu: HUData): Promise<void> {
+        if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        const children: Array<Paragraph | Table> = [];
+
+        hu.detailedTestCases.forEach((testCase, index) => {
+            const scenarioNumber = index + 1;
+            const scenarioTitle = testCase.title?.trim()
+                ? `${scenarioNumber}. ${testCase.title.trim()}`
+                : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            children.push(new Paragraph({
+                text: scenarioTitle,
+                heading: 'Heading1',
+                pageBreakBefore: index > 0,
+                spacing: { after: 240 }
+            }));
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+
+            const rows = (validSteps.length > 0 ? validSteps : [{ numero_paso: 1, accion: '' }]).map((step, stepIndex) => {
+                const stepNumber = step?.numero_paso ?? (stepIndex + 1);
+                const stepAction = step?.accion?.trim() || `Paso ${stepNumber}`;
+                return new TableRow({
+                    children: [
+                        new TableCell({
+                            width: { size: 25, type: WidthType.PERCENTAGE },
+                            children: [
+                                new Paragraph({
+                                    text: `${stepNumber}. ${stepAction}`,
+                                    alignment: AlignmentType.LEFT
+                                })
+                            ]
+                        }),
+                        new TableCell({
+                            width: { size: 75, type: WidthType.PERCENTAGE },
+                            children: [
+                                new Paragraph({
+                                    alignment: AlignmentType.CENTER,
+                                    spacing: { before: 120, after: 120 },
+                                    children: [
+                                        new TextRun({
+                                            text: this.EVIDENCE_PLACEHOLDER,
+                                            bold: true,
+                                            underline: {}
+                                        })
+                                    ]
+                                }),
+                                new Paragraph('')
+                            ]
+                        })
+                    ]
+                });
+            });
+
+            children.push(new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows
+            }));
+        });
+
+        const doc = new Document({
+            sections: [
+                {
+                    properties: {
+                        page: {
+                            size: {
+                                width: this.CUSTOM_PAGE_SIZE_TWIP,
+                                height: this.CUSTOM_PAGE_SIZE_TWIP
+                            }
+                        }
+                    },
+                    children
+                }
+            ]
+        });
+
+        const blob = await Packer.toBlob(doc);
+        const filename = `Matriz_Evidencias_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.doxc`;
+        saveAs(blob, filename);
     }
 
     /**

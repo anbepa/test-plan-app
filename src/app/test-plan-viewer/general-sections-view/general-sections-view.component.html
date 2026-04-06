@@ -1,0 +1,60 @@
+<div class="general-sections-page">
+  <!-- TOPBAR: breadcrumb + acciones en una sola barra -->
+  <div class="page-topbar">
+    <div class="breadcrumb-row">
+      <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Secciones Generales del Plan</button>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-action" [disabled]="!canEditSelected()" (click)="startEditingSelected()">Editar</button>
+      <button class="btn-action" [disabled]="!canSaveSelected()" (click)="saveSelected()">Guardar</button>
+      <button class="btn-action btn-ai" [disabled]="!canImproveWithAI()" (click)="improveSelectedWithAI()">Mejorar con IA</button>
+    </div>
+  </div>
+
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Cargando secciones generales...</p>
+  </div>
+
+  <div *ngIf="!isLoading" class="table-layout">
+
+    <div class="table-container">
+      <div class="sections-grid">
+        <div *ngFor="let section of sections"
+          class="section-card"
+          [class.active-card]="isSectionSelected(section.key)">
+
+          <div class="card-header">
+            <input type="checkbox" [checked]="isSectionSelected(section.key)"
+              (change)="onSectionSelectionChange(section.key, $any($event.target).checked)" />
+            <span class="card-title">{{ section.title }}</span>
+            <span *ngIf="section.loadingAI" class="card-ai-badge">Mejorando…</span>
+          </div>
+
+          <div class="card-body">
+            <textarea *ngIf="editingSectionKey === section.key"
+              [ngModel]="getSectionDisplayValue(section)"
+              (ngModelChange)="updateEditingBuffer($event)"
+              rows="5"></textarea>
+
+            <pre *ngIf="editingSectionKey !== section.key">{{ getSectionDisplayValue(section) || 'Sin información' }}</pre>
+
+            <div class="cell-status" *ngIf="section.loadingAI || section.errorAI">
+              <span *ngIf="section.loadingAI">Mejorando con IA...</span>
+              <span *ngIf="section.errorAI" class="error-text">{{ section.errorAI }}</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="table-help">
+      Selecciona un único item para habilitar Editar, Guardar o Mejorar con IA.
+    </div>
+  </div>
+</div>

@@ -43,10 +43,25 @@ export class GeminiService {
     const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
     const geminiPayload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 500, temperature: 0.5 }
+      generationConfig: { maxOutputTokens: 180, temperature: 0.2 }
     };
     return this.geminiClient.callGemini('enhanceStaticSection', geminiPayload).pipe(
       map(response => this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim())
+    );
+  }
+
+  public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
+    const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
+    const payload: any = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { maxOutputTokens: 700, temperature: 0.2 }
+    };
+
+    return this.geminiClient.callGemini('generateRiskStrategy', payload).pipe(
+      map(response => {
+        const textContent = this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim();
+        return this.geminiParser.cleanAndParseJSON(textContent);
+      })
     );
   }
 
@@ -56,12 +71,13 @@ export class GeminiService {
   public generateTestCasesDirect(
     description: string,
     acceptanceCriteria: string,
-    technique: string
+    technique: string,
+    context?: string
   ): Observable<any> {
-    const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
+    const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, context);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+      generationConfig: { maxOutputTokens: 2600, temperature: 0.3 }
     };
 
     return this.geminiClient.callGemini('generateTextCases', payload).pipe(
@@ -87,7 +103,7 @@ export class GeminiService {
     const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 2000, temperature: 0.5 }
+      generationConfig: { maxOutputTokens: 2600, temperature: 0.3 }
     };
 
     return this.geminiClient.callGemini('refineDetailedTestCases', payload).pipe(

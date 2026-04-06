@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
@@ -8,6 +8,7 @@ import { catchError, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
+import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -22,13 +23,14 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
-export class TestCaseGeneratorComponent implements OnInit {
+export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
+  @Input() initialCellName: string = '';
   @Input() accumulatedHUsCount: number = 0;
   @Output() huGenerated = new EventEmitter<OriginalHUData>();
   @Output() huSaved = new EventEmitter<OriginalHUData>();
@@ -61,7 +63,14 @@ export class TestCaseGeneratorComponent implements OnInit {
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
+  isCancelModalOpen: boolean = false;
+  cancelModalTitle: string = 'Cancelar generación';
+  cancelModalMessage: string = '¿Deseas guardar esta HU antes de cancelar? Si no guardas, se perderán los casos de prueba generados.';
+
   @ViewChild('huForm') huFormDirective!: NgForm;
+
+  private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
+  private aiProgressIndex = 0;
 
   private readonly macTemplateId = '1FVRJav4D93FeWVq8GqcmYqaVSFBegamT';
   private readonly windowsTemplateId = '1sJ_zIcabBfKmxEgaOWX6_5oq5xol6CkU';
@@ -77,10 +86,82 @@ export class TestCaseGeneratorComponent implements OnInit {
   ngOnInit(): void {
     this.currentGenerationMode = this.initialGenerationMode;
     this.currentSprint = this.initialSprint;
+    this.cellName = this.initialCellName;
     this.resetToInitialForm();
   }
 
+  ngOnDestroy(): void {
+    this.stopAiProgress();
+  }
+
+  get isAiBusy(): boolean {
+    return this.loadingScope || this.loadingScenarios;
+  }
+
+  get aiProgressTitle(): string {
+    const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
+    if (this.componentState === 'editingForRefinement') {
+      return `Refinando con ${provider}`;
+    }
+    return `Generando con ${provider}`;
+  }
+
+  get aiProgressMessage(): string {
+    const id = this.currentHuId ? `${this.currentHuId} · ` : '';
+    const title = this.currentHuTitle
+      ? (this.currentHuTitle.length > 50 ? this.currentHuTitle.slice(0, 50) + '…' : this.currentHuTitle)
+      : 'Procesando solicitud…';
+    return `${id}${title}`;
+  }
+
+  get aiProgressStep(): string {
+    const shortTech = this.shortTechniqueName(this.currentSelectedTechnique);
+
+    const generationSteps = [
+      'Analizando descripción y criterios de aceptación…',
+      shortTech ? `Generando escenarios · técnica ${shortTech}…` : 'Generando escenarios de prueba…',
+      'Estructurando y validando resultados…'
+    ];
+
+    const refinementSteps = [
+      'Leyendo casos de prueba actuales…',
+      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Reorganizando y validando escenarios…'
+    ];
+
+    const steps = this.componentState === 'editingForRefinement' ? refinementSteps : generationSteps;
+    return steps[this.aiProgressIndex % steps.length];
+  }
+
+  private startAiProgress(): void {
+    this.stopAiProgress();
+    this.aiProgressIndex = 0;
+    this.aiProgressInterval = setInterval(() => {
+      this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
+      this.cdr.markForCheck();
+    }, 1800);
+  }
+
+  private stopAiProgress(): void {
+    if (this.aiProgressInterval) {
+      clearInterval(this.aiProgressInterval);
+      this.aiProgressInterval = null;
+    }
+    this.aiProgressIndex = 0;
+  }
+
+  private shortTechniqueName(technique: string): string {
+    const map: Record<string, string> = {
+      'Equivalent Partitioning': 'Partición Equiv.',
+      'Boundary Value Analysis': 'Val. Límite',
+      'Decision Table Testing': 'Tabla Decisión',
+      'State Transition Testing': 'Trans. Estado'
+    };
+    return map[technique] || '';
+  }
+
   resetToInitialForm(): void {
+    this.stopAiProgress();
     this.componentState = 'initialForm';
     this.formError = null;
     const keptSprint = this.currentSprint || this.initialSprint;
@@ -105,6 +186,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     setTimeout(() => {
       if (this.huFormDirective?.form) {
         this.huFormDirective.form.patchValue({
+          cellName: this.cellName,
           currentSprint: this.currentSprint,
           currentSelectedTechnique: this.currentSelectedTechnique,
           currentHuId: '',
@@ -148,6 +230,81 @@ export class TestCaseGeneratorComponent implements OnInit {
         }
       });
     }
+  }
+
+  private normalizeSteps(rawSteps: any): TestCaseStep[] {
+    const normalizeAction = (value: any): string => {
+      if (typeof value === 'string') return value.trim();
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    };
+
+    const fromArray = (stepsArray: any[]): TestCaseStep[] => {
+      const normalized = stepsArray
+        .map((step: any, index: number) => {
+          if (typeof step === 'string') {
+            const cleanText = step.replace(/^\s*\d+[\.)-]?\s*/, '').trim();
+            return {
+              numero_paso: index + 1,
+              accion: cleanText || 'Paso no descrito'
+            };
+          }
+
+          if (step && typeof step === 'object') {
+            const action = normalizeAction(
+              step.accion ?? step.action ?? step.paso ?? step.step ?? step.description ?? step.descripcion
+            );
+            const stepNumber = Number(step.numero_paso ?? step.step_number ?? step.number ?? (index + 1));
+
+            return {
+              numero_paso: Number.isFinite(stepNumber) && stepNumber > 0 ? stepNumber : index + 1,
+              accion: action || 'Paso no descrito'
+            };
+          }
+
+          return {
+            numero_paso: index + 1,
+            accion: 'Paso no descrito'
+          };
+        })
+        .filter((s: TestCaseStep) => !!s.accion && s.accion.trim().length > 0);
+
+      return normalized.map((step, index) => ({
+        numero_paso: index + 1,
+        accion: step.accion
+      }));
+    };
+
+    if (Array.isArray(rawSteps)) {
+      const parsed = fromArray(rawSteps);
+      return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+    }
+
+    if (typeof rawSteps === 'string') {
+      const lines = rawSteps
+        .split(/\r?\n|;+/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      if (lines.length > 0) {
+        return fromArray(lines);
+      }
+    }
+
+    if (rawSteps && typeof rawSteps === 'object') {
+      if (Array.isArray(rawSteps.steps)) {
+        const parsed = fromArray(rawSteps.steps);
+        return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+      }
+
+      const values = Object.values(rawSteps).filter(v => typeof v === 'string' || typeof v === 'object');
+      if (values.length > 0) {
+        const parsed = fromArray(values);
+        return parsed.length > 0 ? parsed : [{ numero_paso: 1, accion: 'Paso no descrito' }];
+      }
+    }
+
+    return [{ numero_paso: 1, accion: 'Paso no descrito' }];
   }
 
   isFormInvalidForGeneration(): boolean {
@@ -205,6 +362,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScenarios = true;
       this.errorScenarios = null;
+      this.startAiProgress();
 
       console.log('[GENERATION] Iniciando generación DIRECTA (modo rápido)');
 
@@ -225,10 +383,9 @@ export class TestCaseGeneratorComponent implements OnInit {
               this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => {
                 const detailedTc: UIDetailedTestCase = {
                   ...tc,
-                  steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                    numero_paso: s.numero_paso || (i + 1),
-                    accion: s.accion || "Paso no descrito"
-                  })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                  steps: this.normalizeSteps(
+                    tc.steps ?? tc.stepByStep ?? tc.step_by_step ?? tc.pasoAPaso ?? tc.pasos ?? tc.procedure
+                  ),
                   isExpanded: index === 0
                 };
                 return detailedTc;
@@ -245,10 +402,12 @@ export class TestCaseGeneratorComponent implements OnInit {
           this.loadingScenarios = false;
           this.errorScope = 'Error durante la generación directa.';
           this.errorScenarios = 'Error durante la generación directa.';
+          this.stopAiProgress();
           this.cdr.detectChanges();
         },
         complete: () => {
           this.loadingScenarios = false;
+          this.stopAiProgress();
           this.componentState = 'previewingGenerated';
           this.cdr.detectChanges();
 
@@ -310,6 +469,7 @@ export class TestCaseGeneratorComponent implements OnInit {
     this.loadingScenarios = true;
     this.cdr.detectChanges();
     this.errorScenarios = null;
+    this.startAiProgress();
 
     // Preparar casos para envío (quitar propiedades UI)
     const casesToRefine = this.generatedHUData.detailedTestCases.map(uiTc => {
@@ -338,10 +498,9 @@ export class TestCaseGeneratorComponent implements OnInit {
             this.generatedHUData.detailedTestCases = refinedCases.map((tc: any, index: number) => {
               const detailedTc: UIDetailedTestCase = {
                 ...tc,
-                steps: Array.isArray(tc.steps) ? tc.steps.map((s: any, i: number) => ({
-                  numero_paso: s.numero_paso || (i + 1),
-                  accion: s.accion || "Paso no descrito"
-                })) : [{ numero_paso: 1, accion: "Pasos en formato incorrecto" }],
+                steps: this.normalizeSteps(
+                  tc.steps ?? tc.stepByStep ?? tc.step_by_step ?? tc.pasoAPaso ?? tc.pasos ?? tc.procedure
+                ),
                 isExpanded: existingExpansionStates.get(tc.title) || (index === 0)
               };
               return detailedTc;
@@ -356,11 +515,13 @@ export class TestCaseGeneratorComponent implements OnInit {
       error: (e) => {
         console.error('[REFINEMENT] Error en modo directo:', e);
         this.loadingScenarios = false;
+        this.stopAiProgress();
         this.formError = 'Error durante el refinamiento directo.';
         this.cdr.detectChanges();
       },
       complete: () => {
         this.loadingScenarios = false;
+        this.stopAiProgress();
         this.componentState = 'editingForRefinement';
         this.cdr.detectChanges();
         setTimeout(() => {
@@ -417,31 +578,25 @@ export class TestCaseGeneratorComponent implements OnInit {
       this.generatedHUData.detailedTestCases &&
       this.generatedHUData.detailedTestCases.length > 0 &&
       !this.generatedHUData.detailedTestCases[0].title.startsWith('Error')) {
-
-      const confirmMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar?\n\n` +
-        `⚠️ IMPORTANTE: Si cancelas sin guardar, se perderán todos los casos de prueba generados.\n\n` +
-        `💾 "Guardar HU" = Guardado temporal (solo navegador)\n` +
-        `🗄️ "Confirmar y Añadir al Plan" = Guardado permanente (base de datos)\n\n` +
-        `• Clic en OK = Guardar HU temporalmente y cancelar\n` +
-        `• Clic en Cancelar = Descartar HU completamente`;
-
-      if (confirm(confirmMessage)) {
-        // Guardar la HU antes de cancelar
-        console.log('💾 Usuario eligió GUARDAR la HU antes de cancelar');
-        this.saveCurrentHU();
-        // No llamamos a resetToInitialForm aquí porque saveCurrentHU ya lo hace
-        this.generationCancelled.emit();
-      } else {
-        // Descartar la HU
-        console.log('🗑️ Usuario eligió DESCARTAR la HU');
-        this.resetToInitialForm();
-        this.generationCancelled.emit();
-      }
+      this.cancelModalMessage = `¿Deseas guardar la HU "${this.generatedHUData.title}" antes de cancelar? Si no guardas, se perderán los casos de prueba generados.`;
+      this.isCancelModalOpen = true;
     } else {
       // No hay datos que guardar, cancelar directamente
       this.resetToInitialForm();
       this.generationCancelled.emit();
     }
+  }
+
+  confirmSaveOnCancel(): void {
+    this.saveCurrentHU();
+    this.generationCancelled.emit();
+    this.isCancelModalOpen = false;
+  }
+
+  discardOnCancel(): void {
+    this.resetToInitialForm();
+    this.generationCancelled.emit();
+    this.isCancelModalOpen = false;
   }
 
   addTestCaseStep(testCase: UIDetailedTestCase): void {

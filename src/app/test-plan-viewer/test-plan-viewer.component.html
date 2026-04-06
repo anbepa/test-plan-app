@@ -101,83 +101,48 @@
       </div>
     </div>
 
-    <!-- Test Plans Grid Agrupados -->
-    <div *ngIf="!isLoading && !errorMessage && paginatedTestPlans.length > 0" class="test-plans-content">
-      <div *ngFor="let group of getGroupedTestPlans(); let isFirst = first" class="sprint-group"
-        [class.active-sprint]="isFirst">
-        <div class="sprint-timeline-line"></div>
-        <div class="sprint-header">
-          <div class="sprint-title">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" *ngIf="isFirst">
-              <path fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h3.25a.75.75 0 00.75-.75v-3.25z"
-                clip-rule="evenodd" />
-            </svg>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" *ngIf="!isFirst">
-              <path fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-13a.75.75 0 00-1.5 0v5c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-3.25V5z"
-                clip-rule="evenodd" />
-            </svg>
-            Sprint {{ group.sprint }}
-          </div>
-          <span class="sprint-badge" [class.badge-blue]="isFirst" [class.badge-gray]="!isFirst">
-            {{ group.plans.length }} {{ group.plans.length === 1 ? 'plan' : 'planes' }}
-          </span>
-        </div>
+    <!-- Tabla de resultados -->
+    <div *ngIf="!isLoading && !errorMessage && paginatedTestPlans.length > 0" class="table-results-wrapper">
+      <div class="table-actions-bar">
+        <button class="button-secondary" [disabled]="selectedPlanIds.length !== 1" (click)="viewSelectedPlan()">
+          Ver detalle
+        </button>
+        <button class="button-danger" [disabled]="selectedPlanIds.length === 0" (click)="deleteSelectedPlans()">
+          Eliminar
+        </button>
+      </div>
 
-        <div class="plans-grid">
-          <div *ngFor="let testPlan of group.plans" class="plan-card" (click)="selectTestPlan(testPlan)">
-            <!-- Card Content -->
-            <div class="card-content">
-              <!-- Título -->
-              <h3 class="card-title" [title]="testPlan.title">{{ testPlan.title }}</h3>
-
-              <!-- Fecha compacta -->
-              <div class="card-date">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd"
-                    d="M5.75 2a.75.75 0 01.75.75V4h7V2.75a.75.75 0 011.5 0V4h.25A2.75 2.75 0 0118 6.75v8.5A2.75 2.75 0 0115.25 18H4.75A2.75 2.75 0 012 15.25v-8.5A2.75 2.75 0 014.75 4H5V2.75A.75.75 0 015.75 2zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75z"
-                    clip-rule="evenodd" />
-                </svg>
-                {{ formatDate(testPlan.created_at) }}
-              </div>
-
-              <!-- Métricas como chips -->
-              <div class="card-metrics">
-                <div class="metric-chip metric-chip-hu">
-                  <span>{{ testPlan.user_stories?.length || 0 }} HUs</span>
-                </div>
-                <div class="metric-chip metric-chip-cases">
-                  <span>{{ getTestCaseCount(testPlan) }} Casos</span>
-                </div>
-                <div class="metric-chip metric-chip-steps">
-                  <span>{{ getTotalStepsCount(testPlan) }} Pasos</span>
-                </div>
-              </div>
-
-              <!-- Acciones compactas -->
-              <div class="card-actions">
-                <button class="action-button action-view" (click)="selectTestPlan(testPlan); $event.stopPropagation()">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-                    <path fill-rule="evenodd"
-                      d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                      clip-rule="evenodd" />
-                  </svg>
-                  Ver detalles
-                </button>
-                <button class="action-button action-delete" (click)="deleteTestPlan(testPlan); $event.stopPropagation()"
-                  title="Eliminar">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd"
-                      d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
-                      clip-rule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="table-container">
+        <table class="plans-table">
+          <thead>
+            <tr>
+              <th class="check-col">
+                <input type="checkbox" [checked]="areAllVisiblePlansSelected()"
+                  (change)="onToggleSelectAllVisible($any($event.target).checked)">
+              </th>
+              <th>Fecha Creación</th>
+              <th>Nombre Test plan</th>
+              <th>Sprint</th>
+              <th>Número de HU</th>
+              <th>Número de casos</th>
+              <th>Número de pasos</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let testPlan of paginatedTestPlans" [class.row-selected]="isPlanSelected(testPlan)">
+              <td class="check-col" data-label="Seleccionar">
+                <input type="checkbox" [checked]="isPlanSelected(testPlan)"
+                  (change)="onPlanSelectionChange(testPlan, $any($event.target).checked)">
+              </td>
+              <td data-label="Fecha Creación">{{ formatDate(testPlan.created_at) }}</td>
+              <td class="plan-title-cell" data-label="Nombre Test plan" [title]="testPlan.title">{{ testPlan.title || 'Sin título' }}</td>
+              <td data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
+              <td data-label="Número de HU">{{ testPlan.user_stories?.length || 0 }}</td>
+              <td data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
+              <td data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -259,39 +224,12 @@
             <span>Lista de Planes</span>
           </button>
           <span class="breadcrumb-separator">/</span>
-          <span class="breadcrumb-current">Detalle del Plan</span>
+          <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentDetail()">Detalle del Plan</button>
         </div>
 
-        <!-- Título principal con descripción -->
+        <!-- Título principal -->
         <div class="header-title-section">
           <h1 class="header-title">{{ testPlanTitle }}</h1>
-          <p class="header-subtitle">
-            {{ huList.length }} {{ huList.length === 1 ? 'Historia de Usuario' : 'Historias de Usuario' }} ·
-            {{ getTestCaseCount(selectedTestPlan) }} Casos de Prueba ·
-            {{ getTotalStepsCount(selectedTestPlan) }} Pasos
-          </p>
-        </div>
-
-        <!-- Botones de acción agrupados -->
-        <div class="header-actions">
-          <button class="button-secondary-action" (click)="openPreview()" [disabled]="huList.length === 0">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-              <path fill-rule="evenodd"
-                d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                clip-rule="evenodd" />
-            </svg>
-            Previsualizar
-          </button>
-          <button class="button-primary-action" (click)="saveToDatabase()" [disabled]="savingToDatabase">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-                clip-rule="evenodd" />
-            </svg>
-            <span *ngIf="!savingToDatabase">Guardar Cambios</span>
-            <span *ngIf="savingToDatabase">Guardando...</span>
-          </button>
         </div>
       </div>
     </div>
@@ -301,123 +239,113 @@
 
       <!-- SECCIÓN 1: HISTORIAS DE USUARIO Y CASOS DE PRUEBA -->
       <section class="results-section" *ngIf="huList.length > 0">
-        <div class="section-header">
-          <h2>
-            Historias de Usuario y Casos de Prueba
-          </h2>
-        </div>
+        <div class="hu-table-wrapper">
+          <div class="hu-table-actions table-actions">
+            <button class="button-secondary" (click)="addNewHU()">
+              Añadir nueva HU
+            </button>
+            <button class="button-secondary" (click)="openPreview()" [disabled]="huList.length === 0">
+              Previsualizar
+            </button>
+            <button class="button-danger" *ngIf="canDeleteSelectedHu()" (click)="requestDeleteSelectedHU()">
+              Borrar HU
+            </button>
+            <button class="button-secondary" (click)="openGeneralSectionsView()">
+              Ver Secciones Generales del Plan
+            </button>
+            <button class="button-secondary" (click)="openRiskStrategyView()">
+              Ver Riesgos del Plan
+            </button>
+          </div>
 
-        <div class="hu-list-container">
-          <div *ngFor="let hu of huList; trackBy: trackHuById" class="hu-card">
-            <div class="hu-header" (click)="toggleHUExpansion(hu)" [class.expanded]="hu.isExpanded">
-              <div class="hu-title-section">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="chevron-icon"
-                  [class.rotate-90]="hu.isExpanded">
+          <div class="table-container hu-table-container">
+            <table class="plans-table hu-table">
+              <thead>
+                <tr>
+                  <th class="check-col">
+                    <input type="checkbox" [checked]="areAllVisibleHusSelected()"
+                      (change)="onToggleSelectAllVisibleHus($any($event.target).checked)">
+                  </th>
+                  <th>Numero HU</th>
+                  <th>Nombre HU</th>
+                  <th>Técnica</th>
+                  <th class="actions-col">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let hu of paginatedHuList; let i = index; trackBy: trackHuById" [class.row-selected]="isHuSelected(hu)">
+                  <td class="check-col" data-label="Seleccionar">
+                    <input type="checkbox" [checked]="isHuSelected(hu)"
+                      (change)="onHuSelectionChange(hu, $any($event.target).checked)">
+                  </td>
+                  <td data-label="Numero HU"><strong>{{ hu.id }}</strong></td>
+                  <td class="hu-name-cell" data-label="Nombre HU">{{ hu.title }}</td>
+                  <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
+                  <td class="actions-col" data-label="Acciones">
+                    <div class="row-actions" (click)="$event.stopPropagation()">
+                      <button type="button" class="row-actions-trigger" aria-label="Abrir acciones de la HU"
+                        (click)="toggleHuActionsMenu(hu, i, $event)">
+                        ⋮
+                      </button>
+                      <button type="button" class="row-actions-direct" (click)="openHUScenarios(hu, $event)">
+                        Ver escenarios de prueba
+                      </button>
+                      <div class="row-actions-menu" *ngIf="isHuActionsMenuOpen(hu, i)">
+                        <button type="button" class="row-actions-item" (click)="openHUScenarios(hu, $event)">
+                          Ver escenarios de prueba
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-container" *ngIf="huList.length > 0">
+            <div class="pagination-info">
+              <p>
+                Mostrando <strong>{{ (huCurrentPage - 1) * huItemsPerPage + 1 }}</strong> -
+                <strong>{{ Math.min(huCurrentPage * huItemsPerPage, huList.length) }}</strong>
+                de <strong>{{ huList.length }}</strong> {{ huList.length === 1 ? 'HU' : 'HUs' }}
+              </p>
+            </div>
+
+            <div class="pagination-controls" *ngIf="huTotalPages > 1">
+              <button class="pagination-button pagination-prev" [disabled]="huCurrentPage === 1" (click)="previousHuPage()"
+                title="Página anterior">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd"
+                    d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z"
+                    clip-rule="evenodd" />
+                </svg>
+              </button>
+
+              <div class="pagination-numbers">
+                <ng-container *ngFor="let page of getHuPageNumbers()">
+                  <button *ngIf="page > 0" class="pagination-number" [class.active]="page === huCurrentPage"
+                    [disabled]="page === huCurrentPage" (click)="goToHuPage(page)">
+                    {{ page }}
+                  </button>
+                  <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
+                </ng-container>
+              </div>
+
+              <button class="pagination-button pagination-next" [disabled]="huCurrentPage === huTotalPages"
+                (click)="nextHuPage()" title="Página siguiente">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd"
                     d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
                     clip-rule="evenodd" />
                 </svg>
-                <h3>{{ hu.id }}: {{ hu.title }}</h3>
-              </div>
-              <div class="hu-meta">
-                <span class="sprint-badge">Sprint: {{ hu.sprint }}</span>
-                <span *ngIf="hu.originalInput.selectedTechnique" class="mode-indicator"
-                  [title]="'Técnica: ' + hu.originalInput.selectedTechnique">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="mode-icon">
-                    <path fill-rule="evenodd"
-                      d="M15.988 3.012A2.25 2.25 0 0013.75 2H6.25a2.25 2.25 0 00-2.238 2.012L4 16.25A2.25 2.25 0 006.25 18h7.5A2.25 2.25 0 0016 15.75l.012-12.738zM6 4.25a.75.75 0 01.75-.75h6.5a.75.75 0 010 1.5h-6.5a.75.75 0 01-.75-.75zm-.75 3.5a.75.75 0 000 1.5h7.5a.75.75 0 000-1.5h-7.5z"
-                      clip-rule="evenodd" />
-                  </svg>
-                  {{ hu.originalInput.selectedTechnique }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Contenido de la HU (Colapsable) -->
-            <div class="hu-content" *ngIf="hu.isExpanded">
-              <!-- Alcance (si existe) -->
-              <div class="plan-section-block" *ngIf="hu.generatedScope && hu.generatedScope.trim()">
-                <h4 class="section-subtitle">Alcance Generado</h4>
-                <div class="plan-section-content">
-                  <div class="generated-text">{{ hu.generatedScope }}</div>
-                </div>
-              </div>
-
-              <!-- Lista de Casos de Prueba Colapsables -->
-              <!-- Lista de Casos de Prueba (Tabla) -->
-              <div class="test-cases-section" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
-                <h4 class="section-subtitle">
-                  Casos de Prueba ({{ hu.detailedTestCases.length }})
-                </h4>
-
-                <!-- TABLA DE VISTA PREVIA -->
-                <div class="detailed-test-cases-table-container">
-                  <table class="detailed-test-cases-table">
-                    <thead>
-                      <tr>
-                        <th>ID Caso</th>
-                        <th>Escenario de Prueba (Título)</th>
-                        <th>Precondiciones</th>
-                        <th>Paso a Paso</th>
-                        <th>Resultado Esperado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
-                        <td>{{ hu.id }}_CP{{ i + 1 }}</td>
-                        <td>{{ tc.title }}</td>
-                        <td>
-                          <pre class="table-pre">{{ tc.preconditions }}</pre>
-                        </td>
-                        <td>
-                          <ul style="margin: 0; padding-left: 20px; list-style: decimal;">
-                            <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
-                          </ul>
-                        </td>
-                        <td>
-                          <pre class="table-pre">{{ tc.expectedResults }}</pre>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <!-- Botones de Acción -->
-                <div class="actions">
-                  <button (click)="toggleEdit(hu, 'testCases')" class="button-edit">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
-                      style="width: 1em; height: 1em; margin-right: 6px;">
-                      <path
-                        d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-                    </svg>
-                    Editar / Refinar con IA
-                  </button>
-                  <button (click)="exportExecutionMatrix(hu)" class="button-secondary">
-                    Exportar Matriz (.csv)
-                  </button>
-                  <button (click)="exportExecutionMatrixToExcel(hu)" class="button-secondary">
-                    Exportar Matriz (.xlsx)
-                  </button>
-                </div>
-              </div>
+              </button>
             </div>
           </div>
+
         </div>
       </section>
 
-      <!-- SECCIÓN 2: CONFIGURACIÓN DEL PLAN (Secciones Generales) -->
-      <!-- SECCIÓN 2: CONFIGURACIÓN DEL PLAN (Secciones Generales) -->
-      <app-general-sections *ngIf="huList.length > 0" [repositoryLink]="repositoryLink"
-        [outOfScopeContent]="outOfScopeContent" [strategyContent]="strategyContent"
-        [limitationsContent]="limitationsContent" [assumptionsContent]="assumptionsContent" [teamContent]="teamContent"
-        [loadingRepositoryLinkAI]="loadingRepositoryLinkAI" [loadingOutOfScopeAI]="loadingOutOfScopeAI"
-        [loadingStrategyAI]="loadingStrategyAI" [loadingLimitationsAI]="loadingLimitationsAI"
-        [loadingAssumptionsAI]="loadingAssumptionsAI" [loadingTeamAI]="loadingTeamAI"
-        [errorRepositoryLinkAI]="errorRepositoryLinkAI" [errorOutOfScopeAI]="errorOutOfScopeAI"
-        [errorStrategyAI]="errorStrategyAI" [errorLimitationsAI]="errorLimitationsAI"
-        [errorAssumptionsAI]="errorAssumptionsAI" [errorTeamAI]="errorTeamAI"
-        (contentChange)="handleSectionChange($event)" (regenerateAI)="regenerateStaticSectionWithAI($event)">
-      </app-general-sections>
+
     </div>
 
     <!-- Componente oculto para exportar matriz -->
@@ -428,6 +356,10 @@
 <!-- Modal de Confirmación de Eliminación -->
 <app-confirmation-modal [isOpen]="isDeleteModalOpen" title="Eliminar Test Plan" [message]="deleteModalMessage"
   confirmText="Eliminar" cancelText="Cancelar" type="danger" (confirm)="onConfirmDelete()"
-  (cancel)="isDeleteModalOpen = false">
+  (cancel)="onCancelDeleteTestPlan()">
 </app-confirmation-modal>
-```
+
+<app-confirmation-modal [isOpen]="isDeleteHuModalOpen" title="Eliminar Historia de Usuario"
+  [message]="deleteHuModalMessage" confirmText="Eliminar" cancelText="Cancelar" type="danger"
+  (confirm)="onConfirmDeleteHU()" (cancel)="onCancelDeleteHU()">
+</app-confirmation-modal>

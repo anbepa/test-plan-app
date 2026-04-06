@@ -168,37 +168,113 @@ export class TestPlanPreviewComponent implements OnInit {
         this.previewHtmlContent = html;
     }
 
-    copyToClipboard(): void {
+        private buildPlainTextFromPreviewHtml(): string {
+                return this.previewHtmlContent
+                        .replace(/<h1[^>]*>(.*?)<\/h1>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
+                        .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
+                        .replace(/<h3[^>]*>(.*?)<\/h3>/gi, (match, title) => `\n\n${title}\n\n`)
+                        .replace(/<li[^>]*>(.*?)<\/li>/gi, ' • $1\n')
+                        .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+                        .replace(/<br\s*\/?>/gi, '\n')
+                        .replace(/<[^>]+>/g, '')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/\n{3,}/g, '\n\n')
+                        .trim();
+        }
+
+        private buildApaClipboardHtml(): string {
+                const safeContent = this.previewHtmlContent || '';
+
+                return `
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 12pt;
+            line-height: 2;
+            margin: 1in;
+            color: #000;
+        }
+        h1, h2, h3 {
+            font-weight: bold;
+            margin: 0 0 12pt 0;
+            page-break-after: avoid;
+        }
+        h1 { font-size: 16pt; }
+        h2 { font-size: 14pt; }
+        h3 { font-size: 12pt; }
+        p {
+            margin: 0 0 12pt 0;
+            text-align: left;
+        }
+        ul, ol {
+            margin: 0 0 12pt 24pt;
+            padding: 0;
+        }
+        li {
+            margin: 0 0 6pt 0;
+        }
+    </style>
+</head>
+<body>
+${safeContent}
+</body>
+</html>`;
+        }
+
+        async copyToClipboard(): Promise<void> {
         if (!this.previewHtmlContent) return;
 
-        let textContent = this.previewHtmlContent
-            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
-            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
-            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, (match, title) => `\n\n${title}\n\n`)
-            .replace(/<li[^>]*>(.*?)<\/li>/gi, ' • $1\n')
-            .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, '')
-            .replace(/&nbsp;/g, ' ')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
+                const textContent = this.buildPlainTextFromPreviewHtml();
+                const htmlContent = this.buildApaClipboardHtml();
 
-        navigator.clipboard.writeText(textContent).then(() => {
-            this.toastService.success('Texto copiado al portapapeles.');
-        }).catch(err => {
+                try {
+                        const ClipboardItemCtor = (window as any).ClipboardItem;
+
+                        if (navigator.clipboard?.write && ClipboardItemCtor) {
+                                const item = new ClipboardItemCtor({
+                                        'text/html': new Blob([htmlContent], { type: 'text/html' }),
+                                        'text/plain': new Blob([textContent], { type: 'text/plain' })
+                                });
+
+                                await navigator.clipboard.write([item]);
+                                this.toastService.success('Contenido copiado con formato.');
+                                return;
+                        }
+
+                        await navigator.clipboard.writeText(textContent);
+                        this.toastService.success('Texto copiado al portapapeles.');
+                } catch (err) {
             console.error('Error al copiar:', err);
             this.toastService.error('Error al copiar al portapapeles.');
-        });
+                }
     }
 
     goBack(): void {
-        // Navegar de vuelta al viewer, manteniendo el plan seleccionado
+        this.goToPlanDetail();
+    }
+
+    goToPlansList(): void {
+        this.router.navigate(['/viewer']);
+    }
+
+    goToPlanDetail(): void {
         if (this.testPlanId) {
             this.router.navigate(['/viewer'], {
                 queryParams: { id: this.testPlanId }
             });
-        } else {
-            this.router.navigate(['/viewer']);
+            return;
         }
+
+        this.router.navigate(['/viewer']);
+    }
+
+    goToCurrentPage(): void {
+        if (!this.testPlanId) return;
+
+        this.router.navigate(['/preview', this.testPlanId]);
     }
 }

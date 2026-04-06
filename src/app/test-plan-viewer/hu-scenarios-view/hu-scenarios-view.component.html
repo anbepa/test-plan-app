@@ -1,0 +1,83 @@
+<div class="scenarios-page">
+  <div class="scenarios-header">
+    <div class="breadcrumb-row">
+      <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Ver escenarios de prueba</button>
+    </div>
+  </div>
+
+  <div *ngIf="hu; else emptyState" class="scenarios-content">
+    <div class="context-block">
+      <p><strong>HU:</strong> {{ hu.id }} - {{ hu.title }}</p>
+    </div>
+
+    <div class="plan-section-block" *ngIf="hu.generatedScope && hu.generatedScope.trim()">
+      <h4 class="section-subtitle">Alcance Generado</h4>
+      <div class="plan-section-content">
+        <div class="generated-text">{{ hu.generatedScope }}</div>
+      </div>
+    </div>
+
+    <div class="test-cases-section" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
+      <h4 class="section-subtitle">
+        Casos de Prueba ({{ hu.detailedTestCases.length }})
+      </h4>
+
+      <div class="actions table-actions">
+        <button (click)="editHuScenarios()" class="button-edit">
+          Editar / Refinar con IA
+        </button>
+        <button (click)="exportExecutionMatrixToDOXC()" class="button-secondary">
+          Exportar Matriz (.doxc)
+        </button>
+        <button (click)="exportExecutionMatrixToExcel()" class="button-secondary">
+          Exportar Matriz (.xlsx)
+        </button>
+      </div>
+
+      <div class="detailed-test-cases-table-container">
+        <table class="detailed-test-cases-table">
+          <thead>
+            <tr>
+              <th>ID Caso</th>
+              <th>Escenario de Prueba (Título)</th>
+              <th>Precondiciones</th>
+              <th>Paso a Paso</th>
+              <th>Resultado Esperado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let tc of hu.detailedTestCases; let i = index">
+              <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
+              <td data-label="Escenario de Prueba (Título)">{{ tc.title }}</td>
+              <td data-label="Precondiciones">
+                <pre class="table-pre">{{ tc.preconditions }}</pre>
+              </td>
+              <td data-label="Paso a Paso">
+                <ul style="margin: 0; padding-left: 20px; list-style: decimal;">
+                  <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                </ul>
+              </td>
+              <td data-label="Resultado Esperado">
+                <pre class="table-pre">{{ tc.expectedResults }}</pre>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <ng-template #emptyState>
+    <div class="empty-state">
+      <h3>No hay datos para mostrar</h3>
+      <p>Regresa a la tabla de HU y selecciona una HU para ver sus escenarios.</p>
+      <button class="button-secondary" (click)="goBackToHuTable()">Regresar</button>
+    </div>
+  </ng-template>
+
+  <app-excel-matrix-exporter #matrixExporter></app-excel-matrix-exporter>
+</div>

@@ -36,9 +36,15 @@
 .welcome-content {
   max-width: 680px;
   text-align: center;
-  padding: 2rem 3rem;
+  padding: 2.5rem 3rem;
   position: relative;
   z-index: 1;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(209, 209, 214, 0.75);
+  border-radius: 24px;
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 
 .welcome-icon {
@@ -97,42 +103,61 @@
   display: flex;
   justify-content: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .btn-primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.875rem 2rem;
-  background: #0071e3;
+  min-height: 44px;
+  padding: 0.875rem 1.5rem;
+  background: #2563eb;
   color: white;
   border: none;
-  border-radius: 980px;
-  font-size: 1.0625rem;
-  font-weight: 500;
+  border-radius: 14px;
+  font-size: 0.9375rem;
+  font-weight: 600;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 
-    0 2px 8px rgba(0, 113, 227, 0.15),
-    0 4px 16px rgba(0, 113, 227, 0.1);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   text-decoration: none;
 }
 
 .btn-primary:hover {
-  background: #0077ed;
+  background: #1d4ed8;
   transform: translateY(-1px);
-  box-shadow: 
-    0 4px 12px rgba(0, 113, 227, 0.2),
-    0 8px 20px rgba(0, 113, 227, 0.15);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 
 .btn-primary:active {
   transform: translateY(0);
-  box-shadow: 
-    0 1px 4px rgba(0, 113, 227, 0.2),
-    0 2px 8px rgba(0, 113, 227, 0.1);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.875rem 1.5rem;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  transform: translateY(-1px);
 }
 
 .btn-primary svg {
@@ -179,8 +204,13 @@
   }
 
   .btn-primary {
-    padding: 0.75rem 1.75rem;
-    font-size: 1rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9375rem;
+  }
+
+  .btn-secondary {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -209,6 +239,11 @@
   }
 
   .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-secondary {
     width: 100%;
     justify-content: center;
   }

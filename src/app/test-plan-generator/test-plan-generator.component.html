@@ -1,7 +1,18 @@
 <div class="container">
+  <div class="subpage-breadcrumb" *ngIf="isAppendMode">
+    <button type="button" class="breadcrumb-button" (click)="goToPlansList()">
+      ← Lista de Planes
+    </button>
+    <span class="breadcrumb-separator">/</span>
+    <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+    <span class="breadcrumb-separator">/</span>
+    <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Añadir nueva HU</button>
+  </div>
+
   <!-- Componente de Generación -->
   <app-test-case-generator *ngIf="showTestCaseGenerator" [initialGenerationMode]="currentGenerationMode!"
-    [initialSprint]="''" [accumulatedHUsCount]="huList.length" (huSaved)="onHuSavedFromChild($event)"
+    [initialSprint]="generatorInitialSprint" [initialCellName]="generatorInitialCellName"
+    [accumulatedHUsCount]="huList.length" (huSaved)="onHuSavedFromChild($event)"
     (huGenerated)="onHuGeneratedFromChild($event)" (generationCancelled)="onGenerationCancelledFromChild()"
     (cellNameChanged)="onCellNameChanged($event)">
   </app-test-case-generator>
@@ -18,7 +29,7 @@
       </div>
       <h3>¡Creación Exitosa!</h3>
       <p>La Historia de Usuario ha sido guardada exitosamente.</p>
-      <p class="redirect-message">Redirigiendo a "Ver Test Plans"...</p>
+      <p class="redirect-message">Redirigiendo a "Ver planes de prueba"...</p>
       <div class="spinner-container">
         <div class="spinner"></div>
       </div>

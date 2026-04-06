@@ -1,21 +1,31 @@
-<div class="modal-overlay" *ngIf="isOpen" (click)="onCancel()">
+<div class="modal-overlay" *ngIf="isOpen" (click)="onOverlayClick()">
     <div class="modal-container" (click)="$event.stopPropagation()">
         <div class="modal-header">
-            <h3 class="modal-title" [class.text-danger]="type === 'danger'">{{ title }}</h3>
-            <button class="close-button" (click)="onCancel()">
+            <h3 class="modal-title">{{ title }}</h3>
+            <button class="close-button" *ngIf="!isProgressMode" (click)="onCancel()">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body" *ngIf="!isProgressMode">
             <p>{{ message }}</p>
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-body progress-body" *ngIf="isProgressMode">
+            <div class="progress-spinner" aria-hidden="true"></div>
+            <p class="progress-message" *ngIf="message?.trim()">{{ message }}</p>
+            <p class="progress-step" *ngIf="progressStep?.trim()">{{ progressStep }}</p>
+            <div class="progress-track" *ngIf="showProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso en curso">
+                <span class="progress-indeterminate"></span>
+            </div>
+            <p class="progress-hint" *ngIf="progressHint?.trim()">{{ progressHint }}</p>
+        </div>
+
+        <div class="modal-footer" *ngIf="!isProgressMode">
             <button class="btn-cancel" (click)="onCancel()">{{ cancelText }}</button>
-            <button class="btn-confirm" [class.btn-danger]="type === 'danger'" [class.btn-primary]="type !== 'danger'"
+            <button class="btn-confirm btn-primary"
                 (click)="onConfirm()">
                 {{ confirmText }}
             </button>

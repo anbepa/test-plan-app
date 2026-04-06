@@ -17,6 +17,6 @@ export const environment = {
   features: {
     useDatabase: true,
     enableRealtime: false,
-    enableAuth: false
+    enableAuth: true
   }
 };

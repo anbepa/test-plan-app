@@ -1,9 +1,9 @@
 <div class="word-exporter">
-  <button class="preview-btn" (click)="previewInHtml()" title="Descargar escenarios de prueba en formato HTML">
+  <button class="btn-primary word-exporter-btn" (click)="downloadScenariosPdf()" title="Descargar escenarios de prueba en formato PDF">
     <i class="fas fa-download"></i>
-    <span>Descargar escenarios</span>
+    <span>Descargar escenarios PDF</span>
   </button>
-  <button class="download-word-btn" (click)="exportToWord()" [disabled]="isExporting"
+  <button class="btn-primary word-exporter-btn" (click)="exportToWord()" [disabled]="isExporting"
     title="Descargar Plan de Pruebas en formato Word con normas APA">
     <i class="fas fa-file-word" [class.spinning]="isExporting"></i>
     <span>{{ isExporting ? 'Generando...' : 'Descargar DOCX' }}</span>

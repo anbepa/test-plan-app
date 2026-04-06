@@ -49,12 +49,29 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
-            max_tokens: 500
+            temperature: 0.2,
+            max_tokens: 180
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
             map(response => this.getContentFromResponse(response).trim())
+        );
+    }
+
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
+        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
+        const payload: DeepSeekRequest = {
+            model: this.MODEL,
+            messages: [{ role: 'user', content: promptText }],
+            temperature: 0.2,
+            max_tokens: 700
+        };
+
+        return this.deepSeekClient.callDeepSeek('generateRiskStrategy', payload).pipe(
+            map(response => {
+                const textContent = this.getContentFromResponse(response).trim();
+                return this.parserService.cleanAndParseJSON(textContent);
+            })
         );
     }
 
@@ -65,14 +82,15 @@ export class DeepSeekService {
     public generateTestCasesDirect(
         description: string,
         acceptanceCriteria: string,
-        technique: string
+        technique: string,
+        context?: string
     ): Observable<any> {
-        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
+        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, context);
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
-            max_tokens: 1500 // Reducido para respuestas concisas (vs 6,200 en CoT)
+            temperature: 0.3,
+            max_tokens: 2200
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -108,8 +126,8 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
-            max_tokens: 1500
+            temperature: 0.3,
+            max_tokens: 2200
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');

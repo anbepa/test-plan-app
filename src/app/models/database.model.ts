@@ -35,14 +35,6 @@ export interface DbUserStory {
   updated_at?: string;
 }
 
-export interface DbImage {
-  id?: string;
-  user_story_id: string;
-  image_base64: string;
-  position?: number;
-  created_at?: string;
-}
-
 export interface DbTestCase {
   id?: string;
   user_story_id: string;
@@ -62,6 +54,14 @@ export interface DbTestCaseStep {
   created_at?: string;
 }
 
+export interface DbRiskStrategy {
+  id?: string;
+  test_plan_id: string;
+  risk_data: any;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Interfaces para consultas con joins
 export interface DbTestPlanWithRelations extends DbTestPlan {
   user_stories?: DbUserStoryWithRelations[];
@@ -69,7 +69,6 @@ export interface DbTestPlanWithRelations extends DbTestPlan {
 
 export interface DbUserStoryWithRelations extends DbUserStory {
   test_cases?: DbTestCaseWithRelations[];
-  images?: DbImage[];
 }
 
 export interface DbTestCaseWithRelations extends DbTestCase {
