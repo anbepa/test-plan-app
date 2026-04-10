@@ -44,6 +44,21 @@ export class DatabaseService {
     return this.supabaseClient.isReady();
   }
 
+  private async getCurrentUserIdOrThrow(): Promise<string> {
+    const { data, error } = await this.supabase.auth.getUser();
+
+    if (error) {
+      throw new Error(`No se pudo obtener usuario autenticado: ${error.message}`);
+    }
+
+    const userId = data.user?.id;
+    if (!userId) {
+      throw new Error('No hay usuario autenticado para ejecutar esta operación.');
+    }
+
+    return userId;
+  }
+
   async saveCompleteTestPlan(
     testPlan: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
@@ -211,6 +226,7 @@ export class DatabaseService {
 
   async getAllTestPlansWithRelations(page: number = 1, pageSize: number = 10): Promise<{ data: DbTestPlanWithRelations[], count: number }> {
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       console.log(`🔍 Obteniendo test plans desde Supabase (Página ${page}, Tamaño ${pageSize})...`);
 
       const from = (page - 1) * pageSize;
@@ -234,6 +250,7 @@ export class DatabaseService {
             )
           )
         `, { count: 'exact' })
+        .eq('user_id', currentUserId)
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -253,6 +270,7 @@ export class DatabaseService {
 
   async getTestPlanHeaders(): Promise<DbTestPlan[]> {
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       console.log('🔍 Obteniendo headers de test plans...');
       const { data, error } = await this.supabase
         .from('test_plans')
@@ -273,6 +291,7 @@ export class DatabaseService {
             )
           )
         `)
+        .eq('user_id', currentUserId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -287,6 +306,7 @@ export class DatabaseService {
 
   async getTestPlanHeaderById(id: string): Promise<DbTestPlan | null> {
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       const { data, error } = await this.supabase
         .from('test_plans')
         .select(`
@@ -307,6 +327,7 @@ export class DatabaseService {
           )
         `)
         .eq('id', id)
+        .eq('user_id', currentUserId)
         .single();
 
       if (error) throw error;
@@ -321,6 +342,7 @@ export class DatabaseService {
     console.log(`📥 Obteniendo test plan ${id}...`);
 
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       const { data, error } = await this.supabase
         .from('test_plans')
         .select(`
@@ -340,6 +362,7 @@ export class DatabaseService {
           )
         `)
         .eq('id', id)
+        .eq('user_id', currentUserId)
         .single();
 
       if (error) {
@@ -360,10 +383,12 @@ export class DatabaseService {
     console.log(`📝 Actualizando test plan ${id}...`);
 
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       const { error } = await this.supabase
         .from('test_plans')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', currentUserId);
 
       if (error) {
         console.error('❌ Error al actualizar:', error);
@@ -802,10 +827,12 @@ export class DatabaseService {
     console.log(`🗑️ Eliminando test plan ${id}...`);
 
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       const { data: deletedPlans, error } = await this.supabase
         .from('test_plans')
         .delete()
         .eq('id', id)
+        .eq('user_id', currentUserId)
         .select('id');
 
       if (error) {
@@ -833,10 +860,11 @@ export class DatabaseService {
     testCases: number;
   }> {
     try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
       const [plansResult, storiesResult, casesResult] = await Promise.all([
-        this.supabase.from('test_plans').select('id', { count: 'exact', head: true }),
-        this.supabase.from('user_stories').select('id', { count: 'exact', head: true }),
-        this.supabase.from('test_cases').select('id', { count: 'exact', head: true })
+        this.supabase.from('test_plans').select('id', { count: 'exact', head: true }).eq('user_id', currentUserId),
+        this.supabase.from('user_stories').select('id', { count: 'exact', head: true }).eq('user_id', currentUserId),
+        this.supabase.from('test_cases').select('id', { count: 'exact', head: true }).eq('user_id', currentUserId)
       ]);
 
       return {
