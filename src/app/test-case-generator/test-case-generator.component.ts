@@ -244,9 +244,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         .map((step: any, index: number) => {
           if (typeof step === 'string') {
             const cleanText = step.replace(/^\s*\d+[\.)-]?\s*/, '').trim();
+            if (!cleanText) return null;
             return {
               numero_paso: index + 1,
-              accion: cleanText || 'Paso no descrito'
+              accion: cleanText
             };
           }
 
@@ -254,20 +255,18 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
             const action = normalizeAction(
               step.accion ?? step.action ?? step.paso ?? step.step ?? step.description ?? step.descripcion
             );
+            if (!action) return null;
             const stepNumber = Number(step.numero_paso ?? step.step_number ?? step.number ?? (index + 1));
 
             return {
               numero_paso: Number.isFinite(stepNumber) && stepNumber > 0 ? stepNumber : index + 1,
-              accion: action || 'Paso no descrito'
+              accion: action
             };
           }
 
-          return {
-            numero_paso: index + 1,
-            accion: 'Paso no descrito'
-          };
+          return null;
         })
-        .filter((s: TestCaseStep) => !!s.accion && s.accion.trim().length > 0);
+        .filter((s: TestCaseStep | null): s is TestCaseStep => !!s && !!s.accion && s.accion.trim().length > 0);
 
       return normalized.map((step, index) => ({
         numero_paso: index + 1,

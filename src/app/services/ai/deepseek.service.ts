@@ -90,7 +90,7 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 2200
+            max_tokens: 3800
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -127,7 +127,7 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 2200
+            max_tokens: 3800
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
