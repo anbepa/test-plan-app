@@ -79,17 +79,17 @@ export class HuScenariosViewComponent implements OnInit {
     });
   }
 
-  async exportExecutionMatrixToDOXC(): Promise<void> {
+  async exportExecutionMatrixToDOCX(): Promise<void> {
     if (!this.hu?.detailedTestCases || this.hu.detailedTestCases.length === 0) {
       this.toastService.warning('No hay casos de prueba válidos para exportar');
       return;
     }
 
     try {
-      await this.exportService.exportToDOXC(this.hu);
-      this.toastService.success('Matriz (.doxc) exportada exitosamente');
+      await this.exportService.exportToDOCX(this.hu);
+      this.toastService.success('Matriz (.docx) exportada exitosamente');
     } catch (error) {
-      this.toastService.error('Error al exportar la matriz (.doxc)');
+      this.toastService.error('Error al exportar la matriz (.docx)');
     }
   }
 

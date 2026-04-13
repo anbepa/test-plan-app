@@ -67,7 +67,7 @@ export class ExportService {
     }
 
     /**
-     * Exporta una HU como matriz de evidencias en formato DOXC
+     * Exporta una HU como matriz de evidencias en formato DOCX
      * Reglas:
      * - Página personalizada: 55.8cm x 55.8cm
      * - 1 página por test case
@@ -76,7 +76,7 @@ export class ExportService {
      *   - Columna 1: número de paso
      *   - Columna 2: espacio de evidencias
      */
-    async exportToDOXC(hu: HUData): Promise<void> {
+    async exportToDOCX(hu: HUData): Promise<void> {
         if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
             throw new Error('No hay casos de prueba para exportar');
         }
@@ -98,7 +98,7 @@ export class ExportService {
 
             const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
 
-            const rows = (validSteps.length > 0 ? validSteps : [{ numero_paso: 1, accion: '' }]).map((step, stepIndex) => {
+            const stepRows = (validSteps.length > 0 ? validSteps : [{ numero_paso: 1, accion: '' }]).map((step, stepIndex) => {
                 const stepNumber = step?.numero_paso ?? (stepIndex + 1);
                 const stepAction = step?.accion?.trim() || `Paso ${stepNumber}`;
                 return new TableRow({
@@ -133,6 +133,43 @@ export class ExportService {
                 });
             });
 
+            const headerRow = new TableRow({
+                children: [
+                    new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({
+                                        text: 'Paso a paso',
+                                        bold: true,
+                                        underline: {}
+                                    })
+                                ]
+                            })
+                        ]
+                    }),
+                    new TableCell({
+                        width: { size: 75, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({
+                                        text: 'Evidencias',
+                                        bold: true,
+                                        underline: {}
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+
+            const rows = [headerRow, ...stepRows];
+
             children.push(new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows
@@ -156,7 +193,7 @@ export class ExportService {
         });
 
         const blob = await Packer.toBlob(doc);
-        const filename = `Matriz_Evidencias_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.doxc`;
+        const filename = `Matriz_Evidencias_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.docx`;
         saveAs(blob, filename);
     }
 

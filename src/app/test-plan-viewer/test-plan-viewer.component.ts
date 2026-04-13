@@ -1063,17 +1063,17 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   // === EXPORTACIÓN ===
 
-  async exportExecutionMatrixToDOXC(hu: HUData): Promise<void> {
+  async exportExecutionMatrixToDOCX(hu: HUData): Promise<void> {
     if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
       this.toastService.warning('No hay casos de prueba válidos para exportar');
       return;
     }
 
     try {
-      await this.exportService.exportToDOXC(hu);
-      this.toastService.success('Matriz (.doxc) exportada exitosamente');
+      await this.exportService.exportToDOCX(hu);
+      this.toastService.success('Matriz (.docx) exportada exitosamente');
     } catch (error) {
-      this.toastService.error('Error al exportar la matriz (.doxc)');
+      this.toastService.error('Error al exportar la matriz (.docx)');
     }
   }
 
