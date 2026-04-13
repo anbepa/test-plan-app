@@ -52,9 +52,13 @@ export class GeminiParserService {
         }
 
         // Texto candidato desde el inicio encontrado
-        const jsonCandidate = jsonText.substring(startIndex);
+        let jsonCandidate = jsonText.substring(startIndex);
 
-        // 3. Intentar parsear usando la lógica de extracción original (por si hay texto al final)
+        // 3. LIMPIEZA IMPORTANTE: Escapar saltos de línea REALES dentro del JSON
+        // Pero SOLO dentro de strings (entre comillas)
+        jsonCandidate = this.escapeNewlinesInStrings(jsonCandidate);
+
+        // 4. Intentar parsear usando la lógica de extracción original (por si hay texto al final)
         const lastBrace = jsonCandidate.lastIndexOf('}');
         const lastBracket = jsonCandidate.lastIndexOf(']');
         let endIndex = -1;
@@ -70,9 +74,7 @@ export class GeminiParserService {
         if (endIndex !== -1 && endIndex > 0) {
             const extracted = jsonCandidate.substring(0, endIndex + 1);
             try {
-                // Limpieza básica de saltos de línea en strings antes de parsear
-                const cleanExtracted = extracted.replace(/\\n/g, '\\n');
-                const parsed = JSON.parse(cleanExtracted);
+                const parsed = JSON.parse(extracted);
                 console.log('[cleanAndParseJSON] ✅ JSON extraído y parseado exitosamente');
                 return parsed;
             } catch (e) {
@@ -80,8 +82,8 @@ export class GeminiParserService {
             }
         }
 
-        // 4. Si falló la extracción limpia, intentar con el candidato completo y reparación
-        let textToParse = jsonCandidate.replace(/\\n/g, '\\n');
+        // 5. Si falló la extracción limpia, intentar con el candidato completo y reparación
+        let textToParse = jsonCandidate;
 
         try {
             const parsed = JSON.parse(textToParse);
@@ -90,6 +92,7 @@ export class GeminiParserService {
         } catch (e: any) {
             console.warn('[cleanAndParseJSON] ⚠️ Error parseando JSON completo, intentando reparar...');
             console.warn('[cleanAndParseJSON] Error original:', e.message);
+            console.warn('[cleanAndParseJSON] Posición aproximada del error:', e.message.match(/position (\d+)/)?.[1] || 'desconocida');
 
             // INTENTO DE REPARACIÓN: Detectar JSON truncado
             try {
@@ -101,9 +104,69 @@ export class GeminiParserService {
                 console.error('[cleanAndParseJSON] ❌ No se pudo reparar el JSON');
                 console.error('[cleanAndParseJSON] Error de reparación:', repairError.message);
                 console.error('[cleanAndParseJSON] Texto (primeros 1000 chars):', textToParse.substring(0, 1000));
+                console.error('[cleanAndParseJSON] Texto alrededor de la posición del error:', this.getTextContext(textToParse, e.message));
                 throw new Error(`Error parseando JSON: ${e.message}. El JSON parece estar truncado o malformado.`);
             }
         }
+    }
+
+    /**
+     * Escapa saltos de línea reales SOLO dentro de strings JSON
+     */
+    private escapeNewlinesInStrings(jsonText: string): string {
+        let result = '';
+        let inString = false;
+        let escapeNext = false;
+
+        for (let i = 0; i < jsonText.length; i++) {
+            const char = jsonText[i];
+            const nextChar = i + 1 < jsonText.length ? jsonText[i + 1] : '';
+
+            if (escapeNext) {
+                result += char;
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                result += char;
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = !inString;
+                result += char;
+                continue;
+            }
+
+            // Si estamos dentro de un string y encontramos un salto de línea real, escaparlo
+            if (inString && (char === '\n' || char === '\r')) {
+                if (char === '\r' && nextChar === '\n') {
+                    result += '\\n';
+                    i++; // Saltar el \n siguiente
+                } else if (char === '\n' || char === '\r') {
+                    result += '\\n';
+                }
+                continue;
+            }
+
+            result += char;
+        }
+
+        return result;
+    }
+
+    /**
+     * Obtiene contexto alrededor de la posición del error
+     */
+    private getTextContext(text: string, errorMessage: string): string {
+        const match = errorMessage.match(/position (\d+)/);
+        if (!match) return '';
+        const pos = parseInt(match[1]);
+        const start = Math.max(0, pos - 50);
+        const end = Math.min(text.length, pos + 50);
+        return `...${text.substring(start, end)}...`;
     }
 
     /**
