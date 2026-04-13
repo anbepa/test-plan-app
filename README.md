@@ -2,6 +2,10 @@
 
 Aplicación para generar y refinar escenarios/casos de prueba con IA.
 
+## Actualización reciente
+
+- 2026-04-13: ajuste menor de documentación en la rama `feature/13-implementarEjecucionPlan`.
+
 ## Requisitos mínimos
 
 - Node.js 18+
