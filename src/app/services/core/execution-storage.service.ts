@@ -110,6 +110,13 @@ export class ExecutionStorageService {
   }
 
   /**
+   * Obtiene una imagen por ID
+   */
+  async getImage(imageId: string): Promise<ImageEvidence | null> {
+    return await this.idbService.get(this.STORE_IMAGES, imageId);
+  }
+
+  /**
    * Obtiene todas las imágenes guardadas
    */
   async getAllImages(): Promise<ImageEvidence[]> {
@@ -129,6 +136,17 @@ export class ExecutionStorageService {
    */
   async deleteImage(imageId: string): Promise<void> {
     await this.idbService.delete(this.STORE_IMAGES, imageId);
+  }
+
+  /**
+   * Limpia evidencias de una lista de IDs que ya no son válidos
+   */
+  async cleanupOrphanedImages(evidenceIds: string[]): Promise<void> {
+    if (!evidenceIds || evidenceIds.length === 0) return;
+
+    for (const id of evidenceIds) {
+      await this.deleteImage(id);
+    }
   }
 
   /**

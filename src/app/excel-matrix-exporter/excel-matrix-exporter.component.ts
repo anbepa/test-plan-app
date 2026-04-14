@@ -385,7 +385,9 @@ export class ExcelMatrixExporterComponent {
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
       // Generar archivo y descargarlo
-      const fileName = `Matriz_Ejecucion_${hu.id}_${new Date().getTime()}.xlsx`;
+      // Limpiar caracteres no permitidos en el nombre de archivo
+      const rawFileName = `Matriz - ${hu.title}.xlsx`;
+      const fileName = rawFileName.replace(/[\\/:*?"<>|]/g, '-').trim();
       XLSX.writeFile(workbook, fileName);
 
       console.log(`✅ Archivo Excel generado: ${fileName}`);
