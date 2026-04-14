@@ -30,8 +30,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   activeStepIndex = 0;
   selectedImage: ImageEvidence | null = null;
   showImageEditor = false;
+  showImageViewer = false;
   showDeleteModal = false;
   editingImageId: string | null = null;
+  previewImage: ImageEvidence | null = null;
   pendingImageBase64: string = '';
   pendingOriginalBase64: string = '';
   pendingImageNaturalWidth: number = 1280;
@@ -89,10 +91,12 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
       this.normalizeActiveSelection();
 
+      // IMPORTANT: Hydrate FIRST, then reconcile and subscribe.
+      // This way, reconciliation sees the full image data (base64) instead of empty placeholders.
+      await this.hydrateExecutionEvidence();
+
       this.applyLatestHuSnapshot();
       this.subscribeToHuUpdates();
-
-      await this.hydrateExecutionEvidence();
 
       this.persistExecutionContext();
 
@@ -307,6 +311,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.editingImageId = image.id;
   }
 
+  openImageViewer(image: ImageEvidence): void {
+    this.previewImage = image;
+    this.showImageViewer = true;
+  }
+
   async onImageSaved(data: { base64: string, stateJson: string }): Promise<void> {
     if (!this.currentStep || !this.execution) return;
 
@@ -397,27 +406,32 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     for (const testCase of this.execution.testCases) {
       for (const step of testCase.steps) {
-        const stepImages = await this.storageService.getStepImages(step.stepId);
+        // En lugar de buscar por stepId (que puede cambiar), buscamos cada imagen por su propio ID estable
         const currentEvidences = Array.isArray(step.evidences) ? step.evidences : [];
+        const hydratedEvidences: ImageEvidence[] = [];
 
-        if (!stepImages.length && currentEvidences.length) {
-          step.evidences = currentEvidences;
-          continue;
+        for (const evidence of currentEvidences) {
+          if (evidence.id) {
+            const dbImage = await this.storageService.getImage(evidence.id);
+            if (dbImage) {
+              hydratedEvidences.push({
+                ...evidence,
+                base64Data: dbImage.base64Data,
+                originalBase64: dbImage.originalBase64 || dbImage.base64Data,
+                editorStateJson: dbImage.editorStateJson
+              });
+            } else {
+              // Si no está en DB por alguna razón, conservar lo que tenemos
+              hydratedEvidences.push(evidence);
+            }
+          }
         }
 
-        const merged = new Map<string, ImageEvidence>();
-        [...currentEvidences, ...stepImages].forEach((evidence) => {
-          if (evidence?.id) {
-            merged.set(evidence.id, evidence);
-          }
-        });
-
-        step.evidences = Array.from(merged.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        step.evidences = hydratedEvidences;
       }
     }
 
-    await this.syncExecutionImagesToStorage();
-    await this.storageService.saveExecution(this.execution);
+    await this.autoSaveExecutionState();
   }
 
   private async syncExecutionImagesToStorage(): Promise<void> {
@@ -508,7 +522,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
 
     this.execution.huTitle = updatedHu.title;
-    this.execution.testCases = this.reconcileExecutionWithHu(
+    this.execution.testCases = await this.reconcileExecutionWithHu(
       this.execution.testCases,
       updatedHu.detailedTestCases
     );
@@ -524,25 +538,44 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  private reconcileExecutionWithHu(
+  private async reconcileExecutionWithHu(
     currentCases: TestCaseExecution[],
     updatedCases: DetailedTestCase[]
-  ): TestCaseExecution[] {
-    return (updatedCases || []).map((tc, tcIndex) => {
-      const currentTc = currentCases?.[tcIndex];
+  ): Promise<TestCaseExecution[]> {
+    const evidenceIdsToKeep = new Set<string>();
+
+    // Primero, construir los nuevos casos reconciliados
+    const reconciledCases: TestCaseExecution[] = (updatedCases || []).map((tc, tcIndex) => {
+      // Intentar buscar el caso de prueba actual por título para mayor estabilidad si hay reordenamientos
+      let currentTc = currentCases.find(c => c.title.trim() === tc.title.trim());
+
+      // Si no hay coincidencia por título (ej: se editó el título), usar el índice como fallback
+      if (!currentTc) {
+        currentTc = currentCases[tcIndex];
+      }
+
       const currentSteps = currentTc?.steps || [];
 
       const reconciledSteps: ExecutionStep[] = (tc.steps || []).map((step, stepIndex) => {
         const matchedStep = this.matchStep(currentSteps, step.accion, stepIndex);
 
-        return {
+        const stepResult: ExecutionStep = {
           stepId: matchedStep?.stepId || `${tc.title.replace(/\s+/g, '_')}_step_${stepIndex}`,
           numero_paso: step.numero_paso,
           accion: step.accion,
           status: matchedStep?.status || 'pending',
           notes: matchedStep?.notes || '',
-          evidences: matchedStep?.evidences || []
+          evidences: matchedStep?.evidences || [],
+          evidenceColumns: matchedStep?.evidenceColumns,
+          evidenceRows: matchedStep?.evidenceRows
         };
+
+        // Track evidence IDs that we are keeping
+        if (stepResult.evidences) {
+          stepResult.evidences.forEach(ev => evidenceIdsToKeep.add(ev.id));
+        }
+
+        return stepResult;
       });
 
       return {
@@ -557,15 +590,50 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         status: currentTc?.status || 'pending'
       };
     });
+
+    // Ahora, identificar evidencias huérfanas
+    const orphanedEvidenceIds: string[] = [];
+    currentCases.forEach(tc => {
+      tc.steps.forEach(step => {
+        if (step.evidences) {
+          step.evidences.forEach(ev => {
+            if (!evidenceIdsToKeep.has(ev.id)) {
+              orphanedEvidenceIds.push(ev.id);
+            }
+          });
+        }
+      });
+    });
+
+    // Limpiar evidencias huérfanas en segundo plano si hay alguna
+    if (orphanedEvidenceIds.length > 0) {
+      console.log(`🧹 Reconciliador detectó ${orphanedEvidenceIds.length} evidencias huérfanas a eliminar:`, orphanedEvidenceIds);
+      void this.storageService.cleanupOrphanedImages(orphanedEvidenceIds).catch(err => {
+        console.error('❌ Error limpiando evidencias huérfanas:', err);
+      });
+    }
+
+    return reconciledCases;
   }
 
   private matchStep(currentSteps: ExecutionStep[], action: string, stepIndex: number): ExecutionStep | null {
-    if (!currentSteps?.length) return null;
+    if (!currentSteps || currentSteps.length === 0) return null;
 
     const normalize = (value: string) => (value || '').trim().toLowerCase();
-    const byAction = currentSteps.find((step) => normalize(step.accion) === normalize(action));
+    const targetAction = normalize(action);
+
+    // 1. Coincidencia exacta por acción
+    const byAction = currentSteps.find((step) => normalize(step.accion) === targetAction);
     if (byAction) return byAction;
 
+    // 2. Coincidencia difusa (si la acción contiene la otra o es muy similar)
+    const fuzzyMatch = currentSteps.find(step => {
+      const stepAction = normalize(step.accion);
+      return stepAction.includes(targetAction) || targetAction.includes(stepAction);
+    });
+    if (fuzzyMatch) return fuzzyMatch;
+
+    // 3. Fallback por índice si es razonable
     return currentSteps[stepIndex] || null;
   }
 

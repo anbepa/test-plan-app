@@ -14,7 +14,11 @@ import {
     TextRun,
     WidthType,
     ImageRun,
-    TableLayoutType
+    TableLayoutType,
+    InternalHyperlink,
+    HeadingLevel,
+    BookmarkStart,
+    BookmarkEnd
 } from 'docx';
 
 /**
@@ -65,7 +69,7 @@ export class ExportService {
             ...csvRows.map(row => row.join(','))
         ].join('\r\n');
 
-        const filename = `MatrizEjecucion_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.csv`;
+        const filename = this.escapeFilename(`${hu.id}_Matriz.csv`);
         saveAs(
             new Blob(["\uFEFF" + csvFullContent], { type: 'text/csv;charset=utf-8;' }),
             filename
@@ -89,16 +93,88 @@ export class ExportService {
 
         const children: Array<Paragraph | Table> = [];
 
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS (Normas APA) ---
+        children.push(new Paragraph({
+            text: `Nombre de hu: ${hu.title}`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        children.push(new Paragraph({
+            text: "Matriz de Escenarios de Prueba",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        const scenariosHeader = new TableRow({
+            children: [
+                new TableCell({
+                    width: { size: 10, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
+                }),
+                new TableCell({
+                    width: { size: 90, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
+                })
+            ]
+        });
+
+        const scenariosRows = hu.detailedTestCases.map((tc, idx) => {
+            const scenarioId = `Scenario_${idx + 1}`;
+            return new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ text: `${idx + 1}`, alignment: AlignmentType.CENTER })]
+                    }),
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new InternalHyperlink({
+                                        children: [
+                                            new TextRun({
+                                                text: tc.title || `Escenario ${idx + 1}`,
+                                                color: "2E74B5",
+                                                bold: true
+                                            })
+                                        ],
+                                        anchor: scenarioId
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+        });
+
+        children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [scenariosHeader, ...scenariosRows]
+        }));
+
+        // --- CONTENIDO DE ESCENARIOS ---
         hu.detailedTestCases.forEach((testCase, index) => {
             const scenarioNumber = index + 1;
+            const scenarioId = `Scenario_${scenarioNumber}`;
             const scenarioTitle = testCase.title?.trim()
                 ? `${scenarioNumber}. ${testCase.title.trim()}`
                 : `${scenarioNumber}. Escenario ${scenarioNumber}`;
 
             children.push(new Paragraph({
-                text: scenarioTitle,
-                heading: 'Heading1',
-                pageBreakBefore: index > 0,
+                children: [
+                    new BookmarkStart(scenarioId, index),
+                    new TextRun({
+                        text: scenarioTitle,
+                        color: "2E74B5",
+                        bold: true
+                    }),
+                    new BookmarkEnd(index)
+                ],
+                heading: HeadingLevel.HEADING_1,
+                pageBreakBefore: true,
                 spacing: { after: 240 }
             }));
 
@@ -199,7 +275,7 @@ export class ExportService {
         });
 
         const blob = await Packer.toBlob(doc);
-        const filename = `Matriz_Evidencias_${this.escapeFilename(hu.id)}_${new Date().toISOString().split('T')[0]}.docx`;
+        const filename = this.escapeFilename(`Matriz - ${hu.title}.docx`);
         saveAs(blob, filename);
     }
 
@@ -220,17 +296,89 @@ export class ExportService {
 
         const children: Array<Paragraph | Table> = [];
 
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS (Normas APA) ---
+        children.push(new Paragraph({
+            text: `Nombre de hu: ${hu?.title || execution.huTitle}`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        children.push(new Paragraph({
+            text: "Reporte de Ejecución de Pruebas",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        const scenariosHeader = new TableRow({
+            children: [
+                new TableCell({
+                    width: { size: 10, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
+                }),
+                new TableCell({
+                    width: { size: 90, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
+                })
+            ]
+        });
+
+        const scenariosRows = execution.testCases.map((tc, idx) => {
+            const scenarioId = `Exec_Scenario_${idx + 1}`;
+            return new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ text: `${idx + 1}`, alignment: AlignmentType.CENTER })]
+                    }),
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new InternalHyperlink({
+                                        children: [
+                                            new TextRun({
+                                                text: tc.title || `Escenario ${idx + 1}`,
+                                                color: "2E74B5",
+                                                bold: true
+                                            })
+                                        ],
+                                        anchor: scenarioId
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+        });
+
+        children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [scenariosHeader, ...scenariosRows]
+        }));
+
+        // --- CONTENIDO DE ESCENARIOS ---
         for (let index = 0; index < execution.testCases.length; index++) {
             const testCase = execution.testCases[index];
             const scenarioNumber = index + 1;
+            const scenarioId = `Exec_Scenario_${scenarioNumber}`;
             const scenarioTitle = testCase.title?.trim()
                 ? `${scenarioNumber}. ${testCase.title.trim()}`
                 : `${scenarioNumber}. Escenario ${scenarioNumber}`;
 
             children.push(new Paragraph({
-                text: scenarioTitle,
-                heading: 'Heading1',
-                pageBreakBefore: index > 0,
+                children: [
+                    new BookmarkStart(scenarioId, index),
+                    new TextRun({
+                        text: scenarioTitle,
+                        color: "2E74B5",
+                        bold: true
+                    }),
+                    new BookmarkEnd(index)
+                ],
+                heading: HeadingLevel.HEADING_1,
+                pageBreakBefore: true,
                 spacing: { after: 240 }
             }));
 
@@ -324,7 +472,7 @@ export class ExportService {
         });
 
         const blob = await Packer.toBlob(doc);
-        const filename = this.escapeFilename(`${hu?.id || 'HU'}_Ejecucion_${Date.now()}.docx`);
+        const filename = this.escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.docx`);
         saveAs(blob, filename);
     }
 
@@ -516,7 +664,8 @@ export class ExportService {
      * Escapa un nombre de archivo
      */
     private escapeFilename(filename: string): string {
-        return filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+        // Reemplazar caracteres no permitidos en sistemas de archivos por guiones o espacios
+        return filename.replace(/[\\/:*?"<>|]/g, '-').trim();
     }
 
     /**

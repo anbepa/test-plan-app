@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 declare const fabric: any;
 
-type ToolName = 'pen' | 'circle' | 'line' | 'rectangle' | 'arrow' | 'text' | 'eraser';
+type ToolName = 'pen' | 'circle' | 'line' | 'rectangle' | 'arrow' | 'text' | 'eraser' | 'highlighter';
 
 interface DrawingTool {
   name: ToolName;
@@ -40,6 +40,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
 
   drawingTools: DrawingTool[] = [
     { name: 'pen', label: 'Bolígrafo' },
+    { name: 'highlighter', label: 'Resaltador' },
     { name: 'line', label: 'Línea' },
     { name: 'arrow', label: 'Flecha' },
     { name: 'circle', label: 'Círculo' },
@@ -75,9 +76,20 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
 
   ngDoCheck() {
     if (this.canvas && this.canvas.freeDrawingBrush) {
-      this.canvas.freeDrawingBrush.color = this.strokeColor;
-      this.canvas.freeDrawingBrush.width = this.strokeWidth;
+      this.canvas.freeDrawingBrush.color = this.selectedTool === 'highlighter'
+        ? this.hexToRgba(this.strokeColor, 0.4)
+        : this.strokeColor;
+      this.canvas.freeDrawingBrush.width = this.selectedTool === 'highlighter'
+        ? this.strokeWidth * 4 // Más grueso para el resaltador
+        : this.strokeWidth;
     }
+  }
+
+  private hexToRgba(hex: string, opacity: number): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   }
 
   onColorChange() {
@@ -178,11 +190,15 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   private setupTool() {
-    this.canvas.isDrawingMode = (this.selectedTool === 'pen');
+    this.canvas.isDrawingMode = (this.selectedTool === 'pen' || this.selectedTool === 'highlighter');
     if (this.canvas.isDrawingMode) {
       this.canvas.freeDrawingBrush = new fabric.PencilBrush(this.canvas);
-      this.canvas.freeDrawingBrush.color = this.strokeColor;
-      this.canvas.freeDrawingBrush.width = this.strokeWidth;
+      this.canvas.freeDrawingBrush.color = this.selectedTool === 'highlighter'
+        ? this.hexToRgba(this.strokeColor, 0.4)
+        : this.strokeColor;
+      this.canvas.freeDrawingBrush.width = this.selectedTool === 'highlighter'
+        ? this.strokeWidth * 4
+        : this.strokeWidth;
     }
 
     if (this.selectedTool === 'eraser') {
@@ -203,7 +219,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
 
   private setupEvents(): void {
     this.canvas.on('mouse:down', (o: any) => {
-      if (this.selectedTool === 'eraser' || this.selectedTool === 'pen') return;
+      if (this.selectedTool === 'eraser' || this.selectedTool === 'pen' || this.selectedTool === 'highlighter') return;
 
       const pointer = this.canvas.getPointer(o.e);
       this.origX = pointer.x;

@@ -381,7 +381,7 @@
 .hu-name-cell {
   min-width: 380px;
   max-width: 640px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.3;
 }
 
@@ -1655,7 +1655,7 @@ button svg,
     min-width: 0;
   }
 
-  .plans-table tbody td > * {
+  .plans-table tbody td>* {
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -1734,7 +1734,7 @@ button svg,
     text-align: left;
   }
 
-  .plans-table.hu-table tbody td > * {
+  .plans-table.hu-table tbody td>* {
     justify-self: start;
     text-align: left;
   }
@@ -1743,7 +1743,7 @@ button svg,
     align-items: center;
   }
 
-  .plans-table.hu-table tbody td[data-label="Seleccionar"] > * {
+  .plans-table.hu-table tbody td[data-label="Seleccionar"]>* {
     justify-self: end;
   }
 
@@ -1751,7 +1751,7 @@ button svg,
     align-items: center;
   }
 
-  .plans-table.hu-table tbody td[data-label="Acciones"] > * {
+  .plans-table.hu-table tbody td[data-label="Acciones"]>* {
     justify-self: start;
   }
 
@@ -1914,6 +1914,7 @@ button svg,
   justify-content: flex-start;
   margin-bottom: 1rem;
 }
+
 /* === ESTILOS DEL PAGINADOR === */
 .pagination-container {
   display: flex;

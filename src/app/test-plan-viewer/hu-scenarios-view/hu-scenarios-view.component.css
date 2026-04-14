@@ -146,15 +146,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.78rem 1.45rem;
-  border-radius: 24px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.825rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  border: 2px solid color-mix(in srgb, var(--primary-color, #007AFF) 30%, #ffffff);
-  gap: 0.5rem;
-  min-height: 50px;
+  border: 1px solid color-mix(in srgb, var(--primary-color, #007AFF) 30%, #ffffff);
+  gap: 0.4rem;
+  min-height: 38px;
   white-space: nowrap;
   width: auto;
 }
@@ -266,7 +266,7 @@
     min-width: 0;
   }
 
-  .detailed-test-cases-table tbody td > * {
+  .detailed-test-cases-table tbody td>* {
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;

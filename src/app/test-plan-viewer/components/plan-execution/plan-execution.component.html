@@ -120,6 +120,7 @@
                   <ng-container *ngIf="currentStep.evidences[i]; let ev">
                     <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageEditor(ev)" />
                     <div class="ev-thumb-actions">
+                      <button (click)="openImageViewer(ev)" title="Ver tamaño real">👁️</button>
                       <button (click)="openImageEditor(ev)" title="Editar">✏️</button>
                       <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                     </div>
@@ -133,6 +134,7 @@
                 <div class="ev-thumb" *ngFor="let ev of currentStep.evidences">
                   <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageEditor(ev)" />
                   <div class="ev-thumb-actions">
+                    <button (click)="openImageViewer(ev)" title="Ver tamaño real">👁️</button>
                     <button (click)="openImageEditor(ev)" title="Editar">✏️</button>
                     <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                   </div>
@@ -184,6 +186,19 @@
       </div>
       <app-image-editor [imageBase64]="pendingImageBase64" [clearBase64]="pendingOriginalBase64 || pendingImageBase64"
         [editorStateJson]="selectedImage?.editorStateJson" (imageSaved)="onImageSaved($event)"></app-image-editor>
+    </div>
+  </div>
+
+  <!-- Image Viewer Modal (Readonly) -->
+  <div *ngIf="showImageViewer" class="modal-backdrop" (click)="showImageViewer = false">
+    <div class="modal-box viewer-modal" (click)="$event.stopPropagation()">
+      <div class="modal-top">
+        <span>Vista previa de evidencia</span>
+        <button class="modal-close" (click)="showImageViewer = false">✕</button>
+      </div>
+      <div class="viewer-body">
+        <img *ngIf="previewImage" [src]="previewImage.base64Data" class="full-size-preview" alt="Vista previa" />
+      </div>
     </div>
   </div>
 
