@@ -1,8 +1,10 @@
 import { Injectable } from '@angular/core';
-import { HUData, PlanExecution } from '../../models/hu-data.model';
+import { HUData, PlanExecution, ImageEvidence } from '../../models/hu-data.model';
+import { ExecutionStorageService } from '../core/execution-storage.service';
 import { saveAs } from 'file-saver';
 import {
     AlignmentType,
+    BorderStyle,
     Document,
     Packer,
     Paragraph,
@@ -11,7 +13,8 @@ import {
     TableRow,
     TextRun,
     WidthType,
-    ImageRun
+    ImageRun,
+    TableLayoutType
 } from 'docx';
 
 /**
@@ -24,6 +27,8 @@ export class ExportService {
 
     private readonly CUSTOM_PAGE_SIZE_TWIP = 31675; // 55.8 cm
     private readonly EVIDENCE_PLACEHOLDER = 'Imagen de la evidencias';
+
+    constructor(private storageService: ExecutionStorageService) { }
 
     /**
      * Exporta una HU como matriz de ejecución en formato CSV
@@ -208,16 +213,20 @@ export class ExportService {
             throw new Error('No hay casos de prueba para exportar');
         }
 
-        const huId = hu?.id || execution.huId;
+        // Obtener todas las imágenes reales (con base64) para esta ejecución
+        const allImages = await this.storageService.getAllImages();
+        const imageMap = new Map<string, ImageEvidence>();
+        allImages.forEach(img => imageMap.set(img.id, img));
+
         const children: Array<Paragraph | Table> = [];
 
-        execution.testCases.forEach((testCase, index) => {
+        for (let index = 0; index < execution.testCases.length; index++) {
+            const testCase = execution.testCases[index];
             const scenarioNumber = index + 1;
             const scenarioTitle = testCase.title?.trim()
                 ? `${scenarioNumber}. ${testCase.title.trim()}`
                 : `${scenarioNumber}. Escenario ${scenarioNumber}`;
 
-            // Mismo encabezado que exportToDOCX
             children.push(new Paragraph({
                 text: scenarioTitle,
                 heading: 'Heading1',
@@ -230,13 +239,22 @@ export class ExportService {
                 ? validSteps
                 : [{ numero_paso: 1, accion: '', status: 'pending' as const, stepId: '', evidences: [], notes: '' }];
 
-            const stepRows = stepsToRender.map((step, stepIndex) => {
+            const stepRows = stepsToRender.flatMap((step, stepIndex) => {
                 const stepNumber = step.numero_paso ?? (stepIndex + 1);
                 const stepAction = step.accion?.trim() || `Paso ${stepNumber}`;
 
-                return new TableRow({
+                const cols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                const rows = Math.max(1, Number((step as any).evidenceRows) || 1);
+                const isGrid = cols > 1 || rows > 1;
+
+                // Re-hidratar evidencias con base64 para este paso
+                const hydratedEvidences = (step.evidences || []).map(ev => {
+                    const realImg = imageMap.get(ev.id);
+                    return realImg ? { ...ev, base64Data: realImg.base64Data } : ev;
+                });
+
+                const mainRow = new TableRow({
                     children: [
-                        // Columna 1 (25%): paso a paso — idéntica a exportToDOCX
                         new TableCell({
                             width: { size: 25, type: WidthType.PERCENTAGE },
                             children: [
@@ -246,13 +264,15 @@ export class ExportService {
                                 })
                             ]
                         }),
-                        // Columna 2 (75%): imágenes de evidencia
                         new TableCell({
                             width: { size: 75, type: WidthType.PERCENTAGE },
-                            children: this.buildEvidenceCellContent(step.evidences, step.notes)
+                            margins: isGrid ? { top: 0, bottom: 0, left: 0, right: 0 } : undefined,
+                            children: this.buildEvidenceGrid(hydratedEvidences, cols, rows, step.notes)
                         })
                     ]
                 });
+
+                return [mainRow];
             });
 
             // Encabezado de tabla — idéntico a exportToDOCX
@@ -287,50 +307,114 @@ export class ExportService {
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows: [headerRow, ...stepRows]
             }));
-        });
+        }
 
-        // Misma configuración de página que exportToDOCX (55.8cm × 55.8cm)
         const doc = new Document({
-            sections: [
-                {
-                    properties: {
-                        page: {
-                            size: {
-                                width: this.CUSTOM_PAGE_SIZE_TWIP,
-                                height: this.CUSTOM_PAGE_SIZE_TWIP
-                            }
-                        }
+            sections: [{
+                properties: {
+                    page: {
+                        size: {
+                            width: this.CUSTOM_PAGE_SIZE_TWIP,
+                            height: this.CUSTOM_PAGE_SIZE_TWIP,
+                        },
                     },
-                    children
-                }
-            ]
+                },
+                children: children,
+            }],
         });
 
         const blob = await Packer.toBlob(doc);
-        const filename = `Ejecucion_${this.escapeFilename(huId)}_${new Date().toISOString().split('T')[0]}.docx`;
+        const filename = this.escapeFilename(`${hu?.id || 'HU'}_Ejecucion_${Date.now()}.docx`);
         saveAs(blob, filename);
     }
 
     /**
-     * Construye el contenido de la celda de evidencias.
-     * Si hay imágenes, las incrusta; si no, muestra el placeholder igual que exportToDOCX.
+     * Construye un grid anidado (tabla) para las evidencias si el usuario ha configurado cols > 1 o rows > 1
      */
-    private buildEvidenceCellContent(evidences: any[], notes?: string): Paragraph[] {
+    private buildEvidenceGrid(evidences: any[], cols: number = 1, rows: number = 1, notes?: string): Array<Paragraph | Table> {
+        if (!evidences || evidences.length === 0) {
+            return this.buildEvidenceCellContent(evidences, notes);
+        }
+
+        const validCols = Math.max(1, cols || 1);
+        const validRows = Math.max(1, rows || 1);
+
+        if (validCols === 1 && validRows === 1) {
+            return this.buildEvidenceCellContent(evidences, notes);
+        }
+
+        const paragraphs: Array<Paragraph | Table> = [];
+        const tableRows: TableRow[] = [];
+        let evIndex = 0;
+
+        for (let r = 0; r < validRows; r++) {
+            const tableCells: TableCell[] = [];
+            for (let c = 0; c < validCols; c++) {
+                const cellEvidences = (evIndex < evidences.length) ? [evidences[evIndex]] : [];
+                tableCells.push(new TableCell({
+                    width: { size: 100 / validCols, type: WidthType.PERCENTAGE },
+                    children: this.buildEvidenceCellContent(cellEvidences, undefined, true, validCols)
+                }));
+                evIndex++;
+            }
+            tableRows.push(new TableRow({ children: tableCells }));
+        }
+
+        paragraphs.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.FIXED,
+            borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "auto" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "auto" }
+            },
+            rows: tableRows
+        }));
+
+        if (notes?.trim()) {
+            paragraphs.push(new Paragraph({
+                spacing: { before: 60, after: 60 },
+                children: [
+                    new TextRun({ text: 'Nota: ', bold: true }),
+                    new TextRun({ text: notes, italics: true })
+                ]
+            }));
+        }
+
+        return paragraphs;
+    }
+
+    /**
+     * Construye el contenido de la celda de evidencias.
+     * Si hay imágenes, las incrusta; si no, muestra el placeholder.
+     */
+    private buildEvidenceCellContent(evidences: any[], notes?: string, isNestedCell: boolean = false, cols: number = 1): Paragraph[] {
         const paragraphs: Paragraph[] = [];
 
         if (!evidences || evidences.length === 0) {
-            paragraphs.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 120, after: 120 },
-                children: [
-                    new TextRun({
-                        text: this.EVIDENCE_PLACEHOLDER,
-                        bold: true,
-                        underline: {}
-                    })
-                ]
-            }));
-            paragraphs.push(new Paragraph(''));
+            if (isNestedCell) {
+                // Dejar espacio vacío, pero con un size o spacing para que la celda mantenga forma visible
+                return [new Paragraph({
+                    text: ' ',
+                    spacing: { before: 200, after: 200 }
+                })];
+            } else {
+                paragraphs.push(new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 120, after: 120 },
+                    children: [
+                        new TextRun({
+                            text: this.EVIDENCE_PLACEHOLDER,
+                            bold: true,
+                            underline: {}
+                        })
+                    ]
+                }));
+                paragraphs.push(new Paragraph(''));
+            }
         } else {
             evidences.forEach((evidence) => {
                 try {
@@ -356,8 +440,8 @@ export class ExportService {
                     const dims = this.scaleImageDimensions(
                         evidence.naturalWidth || 1280,
                         evidence.naturalHeight || 720,
-                        900,
-                        675
+                        isNestedCell ? Math.max(100, 900 / cols) : 900,
+                        isNestedCell ? 450 : 675
                     );
 
                     paragraphs.push(new Paragraph({

@@ -39,6 +39,8 @@ export interface ExecutionStep {
   accion: string;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
   notes?: string;
+  evidenceColumns?: number;
+  evidenceRows?: number;
   evidences: ImageEvidence[];
 }
 
