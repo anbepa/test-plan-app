@@ -63,8 +63,8 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.2,
-            max_tokens: 700
+            temperature: 0.6,
+            max_tokens: 900
         };
 
         return this.deepSeekClient.callDeepSeek('generateRiskStrategy', payload).pipe(

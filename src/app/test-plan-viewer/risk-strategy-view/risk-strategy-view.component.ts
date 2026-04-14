@@ -241,10 +241,34 @@ export class RiskStrategyViewComponent implements OnInit {
 
     const normScenarios = (raw: any[], min: number) => {
       const arr = (Array.isArray(raw) ? raw : []).map(s => (s ?? '').toString().trim()).filter(Boolean);
-      const resolved = arr.map(s =>
-        this.riskScenarioOptions.find(o => o === s || o.toLowerCase().includes(s.toLowerCase())) || s
-      );
-      while (resolved.length < min) resolved.push('');
+      const resolved: string[] = [];
+
+      for (const s of arr) {
+        const sLow = s.toLowerCase();
+        // 1) Coincidencia exacta o la opción contiene el texto de la IA o al revés
+        const match = this.riskScenarioOptions.find(o =>
+          o === s ||
+          o.toLowerCase().includes(sLow) ||
+          sLow.includes(o.toLowerCase())
+        );
+
+        if (match) {
+          resolved.push(match);
+        } else {
+          // 2) Fallback: primer escenario disponible aún no seleccionado
+          const alreadyPicked = resolved.map(v => v.trim()).filter(Boolean);
+          const fallback = this.riskScenarioOptions.find(o => !alreadyPicked.includes(o.trim()));
+          resolved.push(fallback ?? '');
+        }
+      }
+
+      // Rellenar hasta el mínimo requerido con opciones disponibles
+      while (resolved.length < min) {
+        const alreadyPicked = resolved.map(v => v.trim()).filter(Boolean);
+        const next = this.riskScenarioOptions.find(o => !alreadyPicked.includes(o.trim())) ?? '';
+        resolved.push(next);
+      }
+
       return resolved;
     };
 
