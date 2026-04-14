@@ -34,6 +34,12 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
+    path: 'viewer/execute-plan',
+    loadComponent: () => import('./test-plan-viewer/components/plan-execution/plan-execution.component').then(m => m.PlanExecutionComponent),
+    title: 'Ejecutar Plan de Pruebas',
+    canActivate: [authGuard]
+  },
+  {
     path: 'viewer/general-sections/:id',
     loadComponent: () => import('./test-plan-viewer/general-sections-view/general-sections-view.component').then(m => m.GeneralSectionsViewComponent),
     title: 'Secciones Generales del Plan',

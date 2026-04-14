@@ -9,6 +9,7 @@ import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations } from '../models/database.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { firstValueFrom } from 'rxjs';
+import { HuSyncService } from '../services/core/hu-sync.service';
 
 @Component({
   selector: 'app-test-case-refiner',
@@ -63,7 +64,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     private databaseService: DatabaseService,
     private aiService: AiUnifiedService,
     private toastService: ToastService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private huSyncService: HuSyncService
   ) { }
 
   ngOnInit(): void {
@@ -194,6 +196,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
       // Reemplazar en memoria los escenarios anteriores por los nuevos
       this.hu.detailedTestCases = result.testCases;
+      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
 
       // En modo contexto, persistir inmediatamente para que no reaparezcan escenarios antiguos al recargar
       if (this.isContextPage) {
@@ -349,11 +352,6 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     testCase.preconditions = (testCase.preconditions || '').trim();
     testCase.expectedResults = (testCase.expectedResults || '').trim();
 
-    if (this.isCreatingNewCase) {
-      const [newCase] = this.hu.detailedTestCases.splice(index, 1);
-      this.hu.detailedTestCases.push(newCase);
-    }
-
     this.editingTestCaseIndex = null;
     this.openActionsMenuIndex = null;
     this.editingBackup = null;
@@ -498,10 +496,13 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       await this.loadUserStoryData(false);
 
+      this.normalizeDetailedTestCasesForPersistence();
+
       if (!this.userStoryDbId) throw new Error('User story no encontrado');
 
       await this.updateUserStoryMetadata(this.userStoryDbId);
       await this.syncTestCasesWithDatabase(this.userStoryDbId);
+      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
 
       this.isLoading = false;
       return true;
@@ -511,6 +512,28 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.isLoading = false;
       return false;
     }
+  }
+
+  private normalizeDetailedTestCasesForPersistence(): void {
+    if (!this.hu?.detailedTestCases) return;
+
+    this.hu.detailedTestCases = this.hu.detailedTestCases.map((tc, tcIndex) => {
+      const normalizedSteps = (tc.steps || [])
+        .map((step, stepIndex) => ({
+          ...step,
+          numero_paso: stepIndex + 1,
+          accion: (step.accion || '').trim() || `Paso ${stepIndex + 1}`
+        }));
+
+      return {
+        ...tc,
+        title: (tc.title || '').trim() || `Caso de prueba ${tcIndex + 1}`,
+        preconditions: (tc.preconditions || '').trim(),
+        expectedResults: (tc.expectedResults || '').trim(),
+        position: tcIndex + 1,
+        steps: normalizedSteps
+      };
+    });
   }
 
   private async initializeData(): Promise<void> {

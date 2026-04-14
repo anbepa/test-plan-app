@@ -1,0 +1,157 @@
+<div class="exec-page">
+
+  <!-- Header -->
+  <div class="exec-header">
+    <div class="exec-header-inner">
+      <div class="breadcrumb-row">
+        <button type="button" class="breadcrumb-button" (click)="goBack()">← Volver</button>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-current">Ejecutar Plan</span>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="execution; else noExecution" class="exec-body">
+
+    <!-- Title bar -->
+    <div class="exec-titlebar">
+      <div class="exec-title-left">
+        <h2 class="exec-title">{{ execution.huTitle }}</h2>
+      </div>
+      <div class="exec-title-right">
+        <ng-container *ngIf="stats">
+          <div class="stat-pill">
+            <span class="stat-pill-label">Pasos</span>
+            <span class="stat-pill-value">{{ stats.completedSteps }}/{{ stats.totalSteps }}</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Evidencias</span>
+            <span class="stat-pill-value">{{ stats.totalImages }}</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" [style.width.%]="stats.completionPercentage"></div>
+          </div>
+          <div class="tb-divider"></div>
+        </ng-container>
+        <div class="tb-actions">
+          <button (click)="exportToDOCX()" class="btn-export">Descargar .docx</button>
+          <button (click)="newExecution()" class="btn-tb-sec">Nueva</button>
+          <button (click)="deleteExecution()" class="btn-tb-danger" title="Eliminar ejecución">Eliminar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layout -->
+    <div class="exec-layout">
+
+      <!-- Sidebar: cases -->
+      <aside class="exec-sidebar">
+        <p class="sidebar-label">Casos de Prueba</p>
+        <div class="cases-list">
+          <button *ngFor="let tc of execution.testCases; let i = index" (click)="selectTestCase(i)" class="case-item"
+            [class.active]="activeTestCaseIndex === i">
+            <span class="case-index">{{ i + 1 }}</span>
+            <span class="case-name">{{ tc.title }}</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main: steps + detail -->
+      <main class="exec-main" *ngIf="currentTestCase">
+
+        <!-- Steps strip -->
+        <div class="steps-strip">
+          <button *ngFor="let step of currentTestCase.steps; let i = index" (click)="selectStep(i)" class="step-chip"
+            [class.active]="activeStepIndex === i" [class.done]="step.status === 'completed'"
+            [class.fail]="step.status === 'failed'" [class.progress]="step.status === 'in-progress'">
+            <span class="chip-num">{{ step.numero_paso }}</span>
+            <span class="chip-img" *ngIf="step.evidences.length > 0">📎{{ step.evidences.length }}</span>
+          </button>
+        </div>
+
+        <!-- Step detail card -->
+        <div class="step-card" *ngIf="currentStep">
+
+          <!-- Step top row -->
+          <div class="step-card-header">
+            <div class="step-card-title">
+              <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
+              <p class="step-text">{{ currentStep.accion }}</p>
+            </div>
+            <div class="step-status-row">
+              <select class="status-select" [ngClass]="'st-' + currentStep.status" [ngModel]="currentStep.status"
+                (ngModelChange)="updateStepStatus($event)">
+                <option value="pending">Pendiente</option>
+                <option value="in-progress">En progreso</option>
+                <option value="completed">Completado</option>
+                <option value="failed">Falló</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Evidences -->
+          <div class="evidence-zone">
+            <div class="evidence-zone-header">
+              <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ currentStep.evidences.length
+                  }}</span></span>
+              <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
+              <button (click)="triggerFileInput()" class="btn-upload">+ Subir imagen</button>
+              <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
+            </div>
+
+            <!-- Gallery -->
+            <div class="ev-gallery" *ngIf="currentStep.evidences.length > 0; else noEv">
+              <div class="ev-thumb" *ngFor="let ev of currentStep.evidences">
+                <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageEditor(ev)" />
+                <div class="ev-thumb-actions">
+                  <button (click)="openImageEditor(ev)" title="Editar">✏️</button>
+                  <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                </div>
+              </div>
+            </div>
+            <ng-template #noEv>
+              <div class="ev-empty">Sin evidencias para este paso</div>
+            </ng-template>
+          </div>
+
+          <!-- Navigation -->
+          <div class="step-nav">
+            <button (click)="previousStep()" class="btn-nav-arrow"
+              [disabled]="activeTestCaseIndex === 0 && activeStepIndex === 0">← Anterior</button>
+            <button (click)="saveExecution()" class="btn-save">Guardar</button>
+            <button (click)="nextStep()" class="btn-nav-arrow">Siguiente →</button>
+          </div>
+        </div>
+
+      </main>
+    </div>
+
+  </div>
+
+  <!-- No Execution -->
+  <ng-template #noExecution>
+    <div class="empty-state">
+      <p>No hay ejecución en progreso</p>
+      <button (click)="goBack()" class="btn-save">Volver</button>
+    </div>
+  </ng-template>
+
+  <!-- Confirmation Modal para eliminar -->
+  <app-confirmation-modal [isOpen]="showDeleteModal" title="Eliminar ejecución"
+    message="¿Estás seguro de que deseas eliminar esta ejecución?" type="danger" confirmText="Aceptar"
+    cancelText="Cancelar" (confirm)="confirmDeleteExecution()" (cancel)="showDeleteModal = false">
+  </app-confirmation-modal>
+
+  <!-- Image Editor Modal -->
+  <div *ngIf="showImageEditor" class="modal-backdrop" (click)="showImageEditor = false">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <div class="modal-top">
+        <span>{{ editingImageId ? 'Editar imagen' : 'Nueva imagen' }}</span>
+        <button class="modal-close" (click)="showImageEditor = false">✕</button>
+      </div>
+      <app-image-editor [imageBase64]="pendingImageBase64" [clearBase64]="pendingOriginalBase64 || pendingImageBase64"
+        [editorStateJson]="selectedImage?.editorStateJson" (imageSaved)="onImageSaved($event)"></app-image-editor>
+    </div>
+  </div>
+
+</div>

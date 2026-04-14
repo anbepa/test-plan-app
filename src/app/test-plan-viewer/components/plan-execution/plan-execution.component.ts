@@ -1,0 +1,682 @@
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { ImageEditorComponent } from '../image-editor/image-editor.component';
+import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
+import { HUData, PlanExecution, ImageEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
+import { ExecutionStorageService } from '../../../services/core/execution-storage.service';
+import { ToastService } from '../../../services/core/toast.service';
+import { ExportService } from '../../../services/export/export.service';
+import { HuSyncService } from '../../../services/core/hu-sync.service';
+import { Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-plan-execution',
+  standalone: true,
+  imports: [CommonModule, FormsModule, ImageEditorComponent, ConfirmationModalComponent],
+  templateUrl: './plan-execution.component.html',
+  styleUrls: ['./plan-execution.component.css']
+})
+export class PlanExecutionComponent implements OnInit, OnDestroy {
+  @ViewChild('fileInput') fileInput!: ElementRef;
+  private readonly EXEC_CONTEXT_KEY = 'execute_plan_context_v2';
+
+  hu: HUData | null = null;
+  testPlanId: string = '';
+  testPlanTitle: string = '';
+  execution: PlanExecution | null = null;
+  activeTestCaseIndex = 0;
+  activeStepIndex = 0;
+  selectedImage: ImageEvidence | null = null;
+  showImageEditor = false;
+  showDeleteModal = false;
+  editingImageId: string | null = null;
+  pendingImageBase64: string = '';
+  pendingOriginalBase64: string = '';
+  pendingImageNaturalWidth: number = 1280;
+  pendingImageNaturalHeight: number = 720;
+  private huSyncSubscription: Subscription | null = null;
+
+  stats: any = null;
+
+  constructor(
+    private router: Router,
+    private storageService: ExecutionStorageService,
+    private toastService: ToastService,
+    private exportService: ExportService,
+    private huSyncService: HuSyncService
+  ) { }
+
+  ngOnInit(): void {
+    const state = this.router.getCurrentNavigation()?.extras.state || history.state;
+    const restoredContext = this.restoreExecutionContext();
+
+    if (state?.hu || restoredContext) {
+      if (state?.hu) {
+        this.hu = state.hu as HUData;
+        this.testPlanId = state.testPlanId || '';
+        this.testPlanTitle = state.testPlanTitle || '';
+      } else if (restoredContext) {
+        this.testPlanId = restoredContext.testPlanId;
+        this.testPlanTitle = restoredContext.testPlanTitle;
+      }
+
+      // Verificar si hay una ejecución existente
+      const existingExecutions = this.storageService
+        .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''))
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      const preferredExecution = restoredContext?.executionId
+        ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
+        : null;
+
+      if (existingExecutions.length > 0) {
+        this.execution = preferredExecution || existingExecutions[0];
+
+        if (!this.hu) {
+          this.hu = this.buildHuFromExecution(this.execution);
+        }
+      } else {
+        // Crear nueva ejecución
+        this.createNewExecution();
+      }
+
+      if (restoredContext) {
+        this.activeTestCaseIndex = restoredContext.activeTestCaseIndex;
+        this.activeStepIndex = restoredContext.activeStepIndex;
+      }
+      this.normalizeActiveSelection();
+
+      this.applyLatestHuSnapshot();
+      this.subscribeToHuUpdates();
+
+      this.hydrateExecutionEvidence();
+
+      this.persistExecutionContext();
+
+      this.updateStats();
+    } else {
+      this.toastService.warning('No se encontró la HU seleccionada');
+      this.goBack();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.huSyncSubscription?.unsubscribe();
+  }
+
+  private createNewExecution(): void {
+    if (!this.hu?.detailedTestCases) return;
+
+    this.execution = this.storageService.createPlanExecution(
+      this.hu.id,
+      this.hu.title,
+      this.hu.detailedTestCases
+    );
+    this.storageService.saveExecution(this.execution);
+  }
+
+  get currentTestCase() {
+    return this.execution?.testCases[this.activeTestCaseIndex];
+  }
+
+  get currentStep() {
+    return this.currentTestCase?.steps[this.activeStepIndex];
+  }
+
+  selectTestCase(index: number): void {
+    if (index >= 0 && index < (this.execution?.testCases.length || 0)) {
+      this.activeTestCaseIndex = index;
+      this.activeStepIndex = 0;
+      this.editingImageId = null;
+      this.showImageEditor = false;
+      this.persistExecutionContext();
+    }
+  }
+
+  selectStep(index: number): void {
+    if (index >= 0 && index < (this.currentTestCase?.steps.length || 0)) {
+      this.activeStepIndex = index;
+      this.editingImageId = null;
+      this.showImageEditor = false;
+      this.persistExecutionContext();
+    }
+  }
+
+  updateStepStatus(status: 'pending' | 'in-progress' | 'completed' | 'failed'): void {
+    if (!this.execution || !this.currentTestCase || !this.currentStep) return;
+
+    this.storageService.updateStepStatus(
+      this.execution.id,
+      this.currentTestCase.testCaseId,
+      this.currentStep.stepId,
+      status
+    );
+
+    this.currentStep.status = status;
+    this.autoSaveExecutionState();
+    this.updateStats();
+  }
+
+  nextStep(): void {
+    if (!this.currentTestCase) return;
+
+    if (this.activeStepIndex < this.currentTestCase.steps.length - 1) {
+      this.selectStep(this.activeStepIndex + 1);
+    } else if (this.activeTestCaseIndex < (this.execution?.testCases.length || 0) - 1) {
+      this.selectTestCase(this.activeTestCaseIndex + 1);
+    } else {
+      this.toastService.success('¡Has completado todos los pasos!');
+    }
+  }
+
+  previousStep(): void {
+    if (this.activeStepIndex > 0) {
+      this.selectStep(this.activeStepIndex - 1);
+    } else if (this.activeTestCaseIndex > 0) {
+      this.selectTestCase(this.activeTestCaseIndex - 1);
+      const newTestCase = this.execution?.testCases[this.activeTestCaseIndex];
+      if (newTestCase) {
+        this.activeStepIndex = newTestCase.steps.length - 1;
+      }
+    }
+  }
+
+  triggerFileInput(): void {
+    this.fileInput.nativeElement.click();
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
+
+    if (files && files.length > 0) {
+      const file = files[0];
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string;
+        this.addEvidenceAndOpenEditor(base64, 'archivo');
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    // Limpiar input
+    input.value = '';
+  }
+
+  async pasteImageFromClipboard(): Promise<void> {
+    try {
+      if (!navigator?.clipboard?.read) {
+        this.toastService.warning('Tu navegador no soporta pegar imágenes desde portapapeles');
+        return;
+      }
+
+      const clipboardItems = await navigator.clipboard.read();
+
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type: string) => type.startsWith('image/'));
+        if (!imageType) continue;
+
+        const blob = await item.getType(imageType);
+        const base64 = await this.blobToDataURL(blob);
+        this.addEvidenceAndOpenEditor(base64, 'portapapeles');
+        return;
+      }
+
+      this.toastService.warning('No se encontró ninguna imagen en el portapapeles');
+    } catch (error) {
+      this.toastService.error('No se pudo leer el portapapeles. Verifica permisos del navegador');
+    }
+  }
+
+  private blobToDataURL(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('No se pudo convertir la imagen'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  private addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): void {
+    if (!this.currentStep || !this.execution) {
+      this.toastService.warning('No hay un paso activo para guardar la evidencia');
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const evidenceId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newImage: ImageEvidence = {
+        id: evidenceId,
+        stepId: this.currentStep!.stepId,
+        fileName: `evidencia_${Date.now()}.png`,
+        base64Data: base64,
+        originalBase64: base64,
+        naturalWidth: img.naturalWidth,
+        naturalHeight: img.naturalHeight,
+        timestamp: Date.now()
+      };
+
+      this.currentStep!.evidences.push(newImage);
+      this.storageService.saveImage(newImage);
+      this.autoSaveExecutionState();
+
+      this.pendingImageBase64 = base64;
+      this.pendingOriginalBase64 = base64;
+      this.pendingImageNaturalWidth = img.naturalWidth;
+      this.pendingImageNaturalHeight = img.naturalHeight;
+      this.selectedImage = newImage;
+      this.editingImageId = evidenceId;
+      this.showImageEditor = true;
+
+      this.updateStats();
+      this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
+    };
+
+    img.onerror = () => {
+      this.toastService.error('No se pudo procesar la imagen');
+    };
+
+    img.src = base64;
+  }
+
+  openImageEditor(image: ImageEvidence): void {
+    this.pendingImageBase64 = image.base64Data;
+    this.pendingOriginalBase64 = image.originalBase64 || image.base64Data;
+    this.selectedImage = image;
+    this.showImageEditor = true;
+    this.editingImageId = image.id;
+  }
+
+  onImageSaved(data: { base64: string, stateJson: string }): void {
+    if (!this.currentStep || !this.execution) return;
+
+    if (this.editingImageId) {
+      // Actualizar imagen existente
+      const imageIndex = this.currentStep.evidences.findIndex((img: ImageEvidence) => img.id === this.editingImageId);
+      if (imageIndex >= 0) {
+        const updatedImage = this.currentStep.evidences[imageIndex];
+        updatedImage.base64Data = data.base64;
+        updatedImage.originalBase64 = updatedImage.originalBase64 || this.pendingOriginalBase64 || updatedImage.base64Data;
+        updatedImage.editorStateJson = data.stateJson;
+        updatedImage.timestamp = Date.now();
+        this.storageService.saveImage(updatedImage);
+      }
+    } else {
+      // Crear nueva imagen
+      const newImage: ImageEvidence = {
+        id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        stepId: this.currentStep.stepId,
+        fileName: `evidencia_${Date.now()}.png`,
+        base64Data: data.base64,
+        originalBase64: this.pendingImageBase64,
+        editorStateJson: data.stateJson,
+        naturalWidth: this.pendingImageNaturalWidth,
+        naturalHeight: this.pendingImageNaturalHeight,
+        timestamp: Date.now()
+      };
+      this.currentStep.evidences.push(newImage);
+      this.storageService.saveImage(newImage);
+    }
+
+    this.execution.updatedAt = Date.now();
+    this.autoSaveExecutionState();
+
+    this.showImageEditor = false;
+    this.editingImageId = null;
+    this.selectedImage = null;
+    this.toastService.success('Imagen guardada exitosamente');
+    this.updateStats();
+  }
+
+  deleteImage(imageId: string): void {
+    if (!this.currentStep) return;
+
+    const index = this.currentStep.evidences.findIndex((img: ImageEvidence) => img.id === imageId);
+    if (index >= 0) {
+      this.currentStep.evidences.splice(index, 1);
+      this.storageService.deleteImage(imageId);
+
+      if (this.execution) {
+        this.autoSaveExecutionState();
+      }
+
+      this.toastService.success('Imagen eliminada');
+      this.updateStats();
+    }
+  }
+
+  async exportToDOCX(): Promise<void> {
+    if (!this.execution) return;
+
+    try {
+      await this.exportService.exportExecutionToDOCX(this.execution, this.hu);
+      this.toastService.success('Ejecución exportada a DOCX exitosamente');
+    } catch (error) {
+      this.toastService.error('Error al exportar la ejecución');
+    }
+  }
+
+  saveExecution(): void {
+    if (!this.execution) return;
+
+    this.autoSaveExecutionState();
+    this.toastService.success('Ejecución guardada');
+  }
+
+  private autoSaveExecutionState(): void {
+    if (!this.execution) return;
+
+    this.syncExecutionImagesToStorage();
+    this.execution.updatedAt = Date.now();
+    this.storageService.saveExecution(this.execution);
+    this.persistExecutionContext();
+  }
+
+  private hydrateExecutionEvidence(): void {
+    if (!this.execution) return;
+
+    this.execution.testCases.forEach((testCase) => {
+      testCase.steps.forEach((step) => {
+        const stepImages = this.storageService.getStepImages(step.stepId);
+        const currentEvidences = Array.isArray(step.evidences) ? step.evidences : [];
+
+        if (!stepImages.length && currentEvidences.length) {
+          step.evidences = currentEvidences;
+          return;
+        }
+
+        const merged = new Map<string, ImageEvidence>();
+        [...currentEvidences, ...stepImages].forEach((evidence) => {
+          if (evidence?.id) {
+            merged.set(evidence.id, evidence);
+          }
+        });
+
+        step.evidences = Array.from(merged.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      });
+    });
+
+    this.syncExecutionImagesToStorage();
+    this.storageService.saveExecution(this.execution);
+  }
+
+  private syncExecutionImagesToStorage(): void {
+    if (!this.execution) return;
+
+    this.execution.testCases.forEach((testCase) => {
+      testCase.steps.forEach((step) => {
+        (step.evidences || []).forEach((evidence) => {
+          this.storageService.saveImage(evidence);
+        });
+      });
+    });
+  }
+
+  newExecution(): void {
+    if (!this.hu?.detailedTestCases) return;
+
+    this.execution = this.storageService.createPlanExecution(
+      this.hu.id,
+      this.hu.title,
+      this.hu.detailedTestCases
+    );
+    this.storageService.saveExecution(this.execution);
+
+    this.activeTestCaseIndex = 0;
+    this.activeStepIndex = 0;
+    this.persistExecutionContext();
+    this.updateStats();
+    this.toastService.success('Nueva ejecución iniciada');
+  }
+
+  loadExecution(executionId: string): void {
+    const loaded = this.storageService.getExecution(executionId);
+    if (loaded) {
+      this.execution = loaded;
+      this.activeTestCaseIndex = 0;
+      this.activeStepIndex = 0;
+      this.persistExecutionContext();
+      this.updateStats();
+      this.toastService.success('Ejecución cargada');
+    }
+  }
+
+  deleteExecution(): void {
+    if (!this.execution) return;
+    this.showDeleteModal = true;
+  }
+
+  confirmDeleteExecution(): void {
+    if (!this.execution) return;
+
+    this.storageService.deleteExecution(this.execution.id);
+    this.toastService.success('Ejecución eliminada');
+    this.showDeleteModal = false;
+    this.newExecution();
+  }
+
+  private updateStats(): void {
+    if (!this.execution) return;
+    this.stats = this.storageService.getExecutionStats(this.execution.id);
+  }
+
+  private applyLatestHuSnapshot(): void {
+    if (!this.hu?.id) return;
+
+    const latestHu = this.huSyncService.getLatestHu(this.hu.id);
+    if (!latestHu) return;
+
+    this.applyHuChanges(latestHu, false);
+  }
+
+  private subscribeToHuUpdates(): void {
+    if (!this.hu?.id) return;
+
+    this.huSyncSubscription?.unsubscribe();
+    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe((updatedHu) => {
+      this.applyHuChanges(updatedHu, true);
+    });
+  }
+
+  private applyHuChanges(updatedHu: HUData, notify: boolean): void {
+    this.hu = updatedHu;
+
+    if (!updatedHu.detailedTestCases || !this.execution) {
+      return;
+    }
+
+    this.execution.huTitle = updatedHu.title;
+    this.execution.testCases = this.reconcileExecutionWithHu(
+      this.execution.testCases,
+      updatedHu.detailedTestCases
+    );
+
+    this.execution.updatedAt = Date.now();
+    this.storageService.saveExecution(this.execution);
+    this.persistExecutionContext();
+    this.normalizeActiveSelection();
+    this.updateStats();
+
+    if (notify) {
+      this.toastService.info('Ejecución actualizada en línea con los cambios de Editar/Refinar IA');
+    }
+  }
+
+  private reconcileExecutionWithHu(
+    currentCases: TestCaseExecution[],
+    updatedCases: DetailedTestCase[]
+  ): TestCaseExecution[] {
+    return (updatedCases || []).map((tc, tcIndex) => {
+      const currentTc = currentCases?.[tcIndex];
+      const currentSteps = currentTc?.steps || [];
+
+      const reconciledSteps: ExecutionStep[] = (tc.steps || []).map((step, stepIndex) => {
+        const matchedStep = this.matchStep(currentSteps, step.accion, stepIndex);
+
+        return {
+          stepId: matchedStep?.stepId || `${tc.title.replace(/\s+/g, '_')}_step_${stepIndex}`,
+          numero_paso: step.numero_paso,
+          accion: step.accion,
+          status: matchedStep?.status || 'pending',
+          notes: matchedStep?.notes || '',
+          evidences: matchedStep?.evidences || []
+        };
+      });
+
+      return {
+        testCaseId: currentTc?.testCaseId || `tc_${tcIndex}`,
+        title: tc.title,
+        preconditions: tc.preconditions,
+        steps: reconciledSteps,
+        expectedResults: tc.expectedResults,
+        startedAt: currentTc?.startedAt,
+        completedAt: currentTc?.completedAt,
+        notes: currentTc?.notes,
+        status: currentTc?.status || 'pending'
+      };
+    });
+  }
+
+  private matchStep(currentSteps: ExecutionStep[], action: string, stepIndex: number): ExecutionStep | null {
+    if (!currentSteps?.length) return null;
+
+    const normalize = (value: string) => (value || '').trim().toLowerCase();
+    const byAction = currentSteps.find((step) => normalize(step.accion) === normalize(action));
+    if (byAction) return byAction;
+
+    return currentSteps[stepIndex] || null;
+  }
+
+  private normalizeActiveSelection(): void {
+    if (!this.execution?.testCases?.length) {
+      this.activeTestCaseIndex = 0;
+      this.activeStepIndex = 0;
+      return;
+    }
+
+    if (this.activeTestCaseIndex >= this.execution.testCases.length) {
+      this.activeTestCaseIndex = this.execution.testCases.length - 1;
+    }
+
+    const currentTc = this.execution.testCases[this.activeTestCaseIndex];
+    if (!currentTc?.steps?.length) {
+      this.activeStepIndex = 0;
+      return;
+    }
+
+    if (this.activeStepIndex >= currentTc.steps.length) {
+      this.activeStepIndex = currentTc.steps.length - 1;
+    }
+  }
+
+  goBack(): void {
+    this.persistExecutionContext();
+    this.router.navigate(['/viewer/hu-scenarios'], {
+      state: {
+        hu: this.hu,
+        testPlanId: this.testPlanId,
+        testPlanTitle: this.testPlanTitle
+      }
+    });
+  }
+
+  private persistExecutionContext(): void {
+    const huId = this.hu?.id || this.execution?.huId;
+    if (!huId) return;
+
+    try {
+      localStorage.setItem(this.EXEC_CONTEXT_KEY, JSON.stringify({
+        huId,
+        testPlanId: this.testPlanId,
+        testPlanTitle: this.testPlanTitle,
+        executionId: this.execution?.id || '',
+        activeTestCaseIndex: this.activeTestCaseIndex,
+        activeStepIndex: this.activeStepIndex,
+        updatedAt: Date.now()
+      }));
+    } catch {
+      // no-op
+    }
+  }
+
+  private restoreExecutionContext(): {
+    huId: string;
+    testPlanId: string;
+    testPlanTitle: string;
+    executionId: string;
+    activeTestCaseIndex: number;
+    activeStepIndex: number;
+  } | null {
+    try {
+      const raw = localStorage.getItem(this.EXEC_CONTEXT_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (!parsed?.huId) return null;
+
+      return {
+        huId: parsed.huId,
+        testPlanId: parsed.testPlanId || '',
+        testPlanTitle: parsed.testPlanTitle || '',
+        executionId: parsed.executionId || '',
+        activeTestCaseIndex: Number.isFinite(parsed.activeTestCaseIndex) ? parsed.activeTestCaseIndex : 0,
+        activeStepIndex: Number.isFinite(parsed.activeStepIndex) ? parsed.activeStepIndex : 0
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private buildHuFromExecution(execution: PlanExecution): HUData {
+    return {
+      id: execution.huId,
+      title: execution.huTitle,
+      sprint: '',
+      originalInput: {
+        generationMode: 'text',
+        description: '',
+        acceptanceCriteria: ''
+      },
+      detailedTestCases: (execution.testCases || []).map((tc) => ({
+        title: tc.title,
+        preconditions: tc.preconditions,
+        steps: (tc.steps || []).map((step) => ({
+          numero_paso: step.numero_paso,
+          accion: step.accion
+        })),
+        expectedResults: tc.expectedResults
+      }))
+    };
+  }
+
+  getStatusClass(status: string): string {
+    switch (status) {
+      case 'completed':
+        return 'status-completed';
+      case 'in-progress':
+        return 'status-in-progress';
+      case 'failed':
+        return 'status-failed';
+      default:
+        return 'status-pending';
+    }
+  }
+
+  getStatusLabel(status: string): string {
+    switch (status) {
+      case 'completed':
+        return '✓ Completado';
+      case 'in-progress':
+        return '⟳ En Progreso';
+      case 'failed':
+        return '✕ Falló';
+      default:
+        return '◯ Pendiente';
+    }
+  }
+}

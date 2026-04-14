@@ -1,10 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { ExcelMatrixExporterComponent } from '../../excel-matrix-exporter/excel-matrix-exporter.component';
 import { HUData } from '../../models/hu-data.model';
 import { ToastService } from '../../services/core/toast.service';
 import { ExportService } from '../../services/export/export.service';
+import { HuSyncService } from '../../services/core/hu-sync.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-hu-scenarios-view',
@@ -13,17 +15,19 @@ import { ExportService } from '../../services/export/export.service';
   templateUrl: './hu-scenarios-view.component.html',
   styleUrls: ['./hu-scenarios-view.component.css']
 })
-export class HuScenariosViewComponent implements OnInit {
+export class HuScenariosViewComponent implements OnInit, OnDestroy {
   @ViewChild('matrixExporter') matrixExporter!: ExcelMatrixExporterComponent;
 
   hu: HUData | null = null;
   testPlanId: string = '';
   testPlanTitle: string = '';
+  private huSyncSubscription: Subscription | null = null;
 
   constructor(
     private router: Router,
     private toastService: ToastService,
-    private exportService: ExportService
+    private exportService: ExportService,
+    private huSyncService: HuSyncService
   ) { }
 
   ngOnInit(): void {
@@ -33,10 +37,19 @@ export class HuScenariosViewComponent implements OnInit {
       this.hu = state.hu as HUData;
       this.testPlanId = state.testPlanId || '';
       this.testPlanTitle = state.testPlanTitle || '';
+      const latestHu = this.huSyncService.getLatestHu(this.hu.id);
+      if (latestHu) {
+        this.hu = latestHu;
+      }
+      this.subscribeToHuUpdates();
       return;
     }
 
     this.toastService.warning('No se encontró la HU seleccionada para mostrar escenarios');
+  }
+
+  ngOnDestroy(): void {
+    this.huSyncSubscription?.unsubscribe();
   }
 
   goToPlansList(): void {
@@ -76,6 +89,32 @@ export class HuScenariosViewComponent implements OnInit {
         hu: this.hu,
         testPlanId: this.testPlanId
       }
+    });
+  }
+
+  executeTestPlan(): void {
+    if (!this.hu) return;
+
+    const latestHu = this.huSyncService.getLatestHu(this.hu.id);
+    if (latestHu) {
+      this.hu = latestHu;
+    }
+
+    this.router.navigate(['/viewer/execute-plan'], {
+      state: {
+        hu: this.hu,
+        testPlanId: this.testPlanId,
+        testPlanTitle: this.testPlanTitle
+      }
+    });
+  }
+
+  private subscribeToHuUpdates(): void {
+    if (!this.hu?.id) return;
+
+    this.huSyncSubscription?.unsubscribe();
+    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe((updatedHu) => {
+      this.hu = updatedHu;
     });
   }
 
