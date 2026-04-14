@@ -48,7 +48,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private huSyncService: HuSyncService
   ) { }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     const state = this.router.getCurrentNavigation()?.extras.state || history.state;
     const restoredContext = this.restoreExecutionContext();
 
@@ -63,9 +63,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
 
       // Verificar si hay una ejecución existente
-      const existingExecutions = this.storageService
-        .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''))
-        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      const allExecutions = await this.storageService
+        .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''));
+
+      const existingExecutions = allExecutions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
       const preferredExecution = restoredContext?.executionId
         ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
@@ -79,7 +80,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         }
       } else {
         // Crear nueva ejecución
-        this.createNewExecution();
+        await this.createNewExecution();
       }
 
       if (restoredContext) {
@@ -91,11 +92,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.applyLatestHuSnapshot();
       this.subscribeToHuUpdates();
 
-      this.hydrateExecutionEvidence();
+      await this.hydrateExecutionEvidence();
 
       this.persistExecutionContext();
 
-      this.updateStats();
+      await this.updateStats();
     } else {
       this.toastService.warning('No se encontró la HU seleccionada');
       this.goBack();
@@ -106,7 +107,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.huSyncSubscription?.unsubscribe();
   }
 
-  private createNewExecution(): void {
+  private async createNewExecution(): Promise<void> {
     if (!this.hu?.detailedTestCases) return;
 
     this.execution = this.storageService.createPlanExecution(
@@ -114,7 +115,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.hu.title,
       this.hu.detailedTestCases
     );
-    this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecution(this.execution);
   }
 
   get currentTestCase() {
@@ -144,10 +145,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  updateStepStatus(status: 'pending' | 'in-progress' | 'completed' | 'failed'): void {
+  async updateStepStatus(status: 'pending' | 'in-progress' | 'completed' | 'failed'): Promise<void> {
     if (!this.execution || !this.currentTestCase || !this.currentStep) return;
 
-    this.storageService.updateStepStatus(
+    await this.storageService.updateStepStatus(
       this.execution.id,
       this.currentTestCase.testCaseId,
       this.currentStep.stepId,
@@ -155,8 +156,22 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     );
 
     this.currentStep.status = status;
-    this.autoSaveExecutionState();
-    this.updateStats();
+    await this.autoSaveExecutionState();
+    await this.updateStats();
+  }
+
+  async updateGridConfig(cols: any, rows: any): Promise<void> {
+    if (!this.currentStep) return;
+    this.currentStep.evidenceColumns = Math.min(10, Math.max(1, Number(cols) || 1));
+    this.currentStep.evidenceRows = Math.min(10, Math.max(1, Number(rows) || 1));
+    await this.autoSaveExecutionState();
+  }
+
+  getGridCells(step: ExecutionStep): number[] {
+    const cols = Math.max(1, step.evidenceColumns ?? 1);
+    const rows = Math.max(1, step.evidenceRows ?? 1);
+    const total = cols * rows;
+    return Array.from({ length: total }, (_, i) => i);
   }
 
   nextStep(): void {
@@ -241,14 +256,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     });
   }
 
-  private addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): void {
+  private async addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): Promise<void> {
     if (!this.currentStep || !this.execution) {
       this.toastService.warning('No hay un paso activo para guardar la evidencia');
       return;
     }
 
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       const evidenceId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const newImage: ImageEvidence = {
         id: evidenceId,
@@ -262,8 +277,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       };
 
       this.currentStep!.evidences.push(newImage);
-      this.storageService.saveImage(newImage);
-      this.autoSaveExecutionState();
+      await this.storageService.saveImage(newImage);
+      await this.autoSaveExecutionState();
 
       this.pendingImageBase64 = base64;
       this.pendingOriginalBase64 = base64;
@@ -273,7 +288,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.editingImageId = evidenceId;
       this.showImageEditor = true;
 
-      this.updateStats();
+      await this.updateStats();
       this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
     };
 
@@ -292,7 +307,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.editingImageId = image.id;
   }
 
-  onImageSaved(data: { base64: string, stateJson: string }): void {
+  async onImageSaved(data: { base64: string, stateJson: string }): Promise<void> {
     if (!this.currentStep || !this.execution) return;
 
     if (this.editingImageId) {
@@ -304,7 +319,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         updatedImage.originalBase64 = updatedImage.originalBase64 || this.pendingOriginalBase64 || updatedImage.base64Data;
         updatedImage.editorStateJson = data.stateJson;
         updatedImage.timestamp = Date.now();
-        this.storageService.saveImage(updatedImage);
+        await this.storageService.saveImage(updatedImage);
       }
     } else {
       // Crear nueva imagen
@@ -320,33 +335,33 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         timestamp: Date.now()
       };
       this.currentStep.evidences.push(newImage);
-      this.storageService.saveImage(newImage);
+      await this.storageService.saveImage(newImage);
     }
 
     this.execution.updatedAt = Date.now();
-    this.autoSaveExecutionState();
+    await this.autoSaveExecutionState();
 
     this.showImageEditor = false;
     this.editingImageId = null;
     this.selectedImage = null;
     this.toastService.success('Imagen guardada exitosamente');
-    this.updateStats();
+    await this.updateStats();
   }
 
-  deleteImage(imageId: string): void {
+  async deleteImage(imageId: string): Promise<void> {
     if (!this.currentStep) return;
 
     const index = this.currentStep.evidences.findIndex((img: ImageEvidence) => img.id === imageId);
     if (index >= 0) {
       this.currentStep.evidences.splice(index, 1);
-      this.storageService.deleteImage(imageId);
+      await this.storageService.deleteImage(imageId);
 
       if (this.execution) {
-        this.autoSaveExecutionState();
+        await this.autoSaveExecutionState();
       }
 
       this.toastService.success('Imagen eliminada');
-      this.updateStats();
+      await this.updateStats();
     }
   }
 
@@ -361,33 +376,33 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  saveExecution(): void {
+  async saveExecution(): Promise<void> {
     if (!this.execution) return;
 
-    this.autoSaveExecutionState();
+    await this.autoSaveExecutionState();
     this.toastService.success('Ejecución guardada');
   }
 
-  private autoSaveExecutionState(): void {
+  private async autoSaveExecutionState(): Promise<void> {
     if (!this.execution) return;
 
-    this.syncExecutionImagesToStorage();
+    await this.syncExecutionImagesToStorage();
     this.execution.updatedAt = Date.now();
-    this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecution(this.execution);
     this.persistExecutionContext();
   }
 
-  private hydrateExecutionEvidence(): void {
+  private async hydrateExecutionEvidence(): Promise<void> {
     if (!this.execution) return;
 
-    this.execution.testCases.forEach((testCase) => {
-      testCase.steps.forEach((step) => {
-        const stepImages = this.storageService.getStepImages(step.stepId);
+    for (const testCase of this.execution.testCases) {
+      for (const step of testCase.steps) {
+        const stepImages = await this.storageService.getStepImages(step.stepId);
         const currentEvidences = Array.isArray(step.evidences) ? step.evidences : [];
 
         if (!stepImages.length && currentEvidences.length) {
           step.evidences = currentEvidences;
-          return;
+          continue;
         }
 
         const merged = new Map<string, ImageEvidence>();
@@ -398,26 +413,26 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         });
 
         step.evidences = Array.from(merged.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      });
-    });
+      }
+    }
 
-    this.syncExecutionImagesToStorage();
-    this.storageService.saveExecution(this.execution);
+    await this.syncExecutionImagesToStorage();
+    await this.storageService.saveExecution(this.execution);
   }
 
-  private syncExecutionImagesToStorage(): void {
+  private async syncExecutionImagesToStorage(): Promise<void> {
     if (!this.execution) return;
 
-    this.execution.testCases.forEach((testCase) => {
-      testCase.steps.forEach((step) => {
-        (step.evidences || []).forEach((evidence) => {
-          this.storageService.saveImage(evidence);
-        });
-      });
-    });
+    for (const testCase of this.execution.testCases) {
+      for (const step of testCase.steps) {
+        for (const evidence of (step.evidences || [])) {
+          await this.storageService.saveImage(evidence);
+        }
+      }
+    }
   }
 
-  newExecution(): void {
+  async startFreshExecution(): Promise<void> {
     if (!this.hu?.detailedTestCases) return;
 
     this.execution = this.storageService.createPlanExecution(
@@ -425,23 +440,23 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.hu.title,
       this.hu.detailedTestCases
     );
-    this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecution(this.execution);
 
     this.activeTestCaseIndex = 0;
     this.activeStepIndex = 0;
     this.persistExecutionContext();
-    this.updateStats();
+    await this.updateStats();
     this.toastService.success('Nueva ejecución iniciada');
   }
 
-  loadExecution(executionId: string): void {
-    const loaded = this.storageService.getExecution(executionId);
+  async loadExecution(executionId: string): Promise<void> {
+    const loaded = await this.storageService.getExecution(executionId);
     if (loaded) {
       this.execution = loaded;
       this.activeTestCaseIndex = 0;
       this.activeStepIndex = 0;
       this.persistExecutionContext();
-      this.updateStats();
+      await this.updateStats();
       this.toastService.success('Ejecución cargada');
     }
   }
@@ -451,39 +466,41 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.showDeleteModal = true;
   }
 
-  confirmDeleteExecution(): void {
+  async confirmDeleteExecution(): Promise<void> {
     if (!this.execution) return;
 
-    this.storageService.deleteExecution(this.execution.id);
-    this.toastService.success('Ejecución eliminada');
+    await this.storageService.deleteExecution(this.execution.id);
+    this.execution = null;
+    this.stats = null;
+    sessionStorage.removeItem(this.EXEC_CONTEXT_KEY);
     this.showDeleteModal = false;
-    this.newExecution();
+    this.toastService.success('Ejecución eliminada al 100%');
   }
 
-  private updateStats(): void {
+  private async updateStats(): Promise<void> {
     if (!this.execution) return;
-    this.stats = this.storageService.getExecutionStats(this.execution.id);
+    this.stats = await this.storageService.getExecutionStats(this.execution.id);
   }
 
-  private applyLatestHuSnapshot(): void {
+  private async applyLatestHuSnapshot(): Promise<void> {
     if (!this.hu?.id) return;
 
     const latestHu = this.huSyncService.getLatestHu(this.hu.id);
     if (!latestHu) return;
 
-    this.applyHuChanges(latestHu, false);
+    await this.applyHuChanges(latestHu, false);
   }
 
   private subscribeToHuUpdates(): void {
     if (!this.hu?.id) return;
 
     this.huSyncSubscription?.unsubscribe();
-    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe((updatedHu) => {
-      this.applyHuChanges(updatedHu, true);
+    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe(async (updatedHu) => {
+      await this.applyHuChanges(updatedHu, true);
     });
   }
 
-  private applyHuChanges(updatedHu: HUData, notify: boolean): void {
+  private async applyHuChanges(updatedHu: HUData, notify: boolean): Promise<void> {
     this.hu = updatedHu;
 
     if (!updatedHu.detailedTestCases || !this.execution) {
@@ -497,10 +514,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     );
 
     this.execution.updatedAt = Date.now();
-    this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecution(this.execution);
     this.persistExecutionContext();
     this.normalizeActiveSelection();
-    this.updateStats();
+    await this.updateStats();
 
     if (notify) {
       this.toastService.info('Ejecución actualizada en línea con los cambios de Editar/Refinar IA');
