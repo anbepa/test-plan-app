@@ -20,6 +20,50 @@ export interface DetailedTestCase {
 // --- Tipo para el Modo de Generación ---
 export type GenerationMode = 'text';
 
+// --- Interfaces para Ejecución del Plan ---
+export interface ImageEvidence {
+  id: string;
+  stepId: string;
+  fileName: string;
+  base64Data: string;
+  originalBase64: string;
+  editorStateJson?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  timestamp: number;
+}
+
+export interface ExecutionStep {
+  stepId: string;
+  numero_paso: number;
+  accion: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  notes?: string;
+  evidences: ImageEvidence[];
+}
+
+export interface TestCaseExecution {
+  testCaseId: string;
+  title: string;
+  preconditions: string;
+  steps: ExecutionStep[];
+  expectedResults: string;
+  startedAt?: number;
+  completedAt?: number;
+  notes?: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+}
+
+export interface PlanExecution {
+  id: string;
+  huId: string;
+  huTitle: string;
+  testCases: TestCaseExecution[];
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+}
+
 // --- Interfaz Principal HUData ---
 export interface HUData {
   id: string;

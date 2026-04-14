@@ -17,13 +17,17 @@ export class AuthService {
   private readonly sessionSubject = new BehaviorSubject<Session | null>(null);
   private readonly userSubject = new BehaviorSubject<User | null>(null);
   private readonly loadingSubject = new BehaviorSubject<boolean>(true);
+  private sessionReadInFlight: Promise<Session | null> | null = null;
 
   readonly session$ = this.sessionSubject.asObservable();
   readonly user$ = this.userSubject.asObservable();
   readonly loading$ = this.loadingSubject.asObservable();
 
   constructor(private supabaseClient: SupabaseClientService) {
-    this.initialize();
+    this.initialize().catch((error) => {
+      console.error('Error inicializando autenticación:', error);
+      this.loadingSubject.next(false);
+    });
     this.supabaseClient.supabase.auth.onAuthStateChange((_event, session) => {
       this.sessionSubject.next(session);
       this.userSubject.next(session?.user ?? null);
@@ -48,16 +52,10 @@ export class AuthService {
       return true;
     }
 
-    const { data, error } = await this.supabaseClient.supabase.auth.getSession();
-
-    if (error) {
-      console.error('Error validando sesión:', error);
-      return false;
-    }
-
-    this.sessionSubject.next(data.session);
-    this.userSubject.next(data.session?.user ?? null);
-    return !!data.session?.user;
+    const session = await this.readSessionSafely('validando sesión');
+    this.sessionSubject.next(session);
+    this.userSubject.next(session?.user ?? null);
+    return !!session?.user;
   }
 
   /**
@@ -269,16 +267,34 @@ export class AuthService {
   }
 
   private async initialize(): Promise<void> {
-    const { data, error } = await this.supabaseClient.supabase.auth.getSession();
+    const session = await this.readSessionSafely('obteniendo sesión inicial');
+    this.sessionSubject.next(session);
+    this.userSubject.next(session?.user ?? null);
+    this.loadingSubject.next(false);
+  }
 
-    if (error) {
-      console.error('Error obteniendo sesión inicial:', error);
-      this.loadingSubject.next(false);
-      return;
+  private async readSessionSafely(context: string): Promise<Session | null> {
+    if (this.sessionReadInFlight) {
+      return this.sessionReadInFlight;
     }
 
-    this.sessionSubject.next(data.session);
-    this.userSubject.next(data.session?.user ?? null);
-    this.loadingSubject.next(false);
+    this.sessionReadInFlight = (async () => {
+      try {
+        const result = await this.supabaseClient.supabase.auth.getSession();
+        if (result.error) {
+          console.error(`Error ${context}:`, result.error);
+          return null;
+        }
+
+        return result.data?.session ?? null;
+      } catch (caughtError) {
+        console.error(`Error ${context} (excepción):`, caughtError);
+        return null;
+      } finally {
+        this.sessionReadInFlight = null;
+      }
+    })();
+
+    return this.sessionReadInFlight;
   }
 }

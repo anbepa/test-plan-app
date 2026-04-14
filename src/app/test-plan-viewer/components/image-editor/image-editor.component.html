@@ -1,0 +1,66 @@
+<div class="image-editor-container">
+  <div class="editor-toolbar" [class.collapsed]="!showToolbar">
+    <div class="toolbar-header">
+      <h4>Editor de Imágenes</h4>
+      <button class="toggle-btn" (click)="toggleToolbar()" title="Mostrar/Ocultar herramientas">
+        {{ showToolbar ? '▼' : '▶' }}
+      </button>
+    </div>
+
+    <div class="toolbar-content" *ngIf="showToolbar">
+      <div class="tools-section">
+        <label class="section-label">Herramientas:</label>
+        <div class="tools-grid">
+          <button *ngFor="let tool of drawingTools" (click)="selectTool(tool.name)"
+            [class.active]="selectedTool === tool.name" class="tool-btn" [title]="tool.label">
+            {{ tool.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="color-section">
+        <label class="section-label">Color:</label>
+        <div class="color-picker-group">
+          <input type="color" [(ngModel)]="strokeColor" class="color-picker" [disabled]="selectedTool === 'eraser'" />
+          <span class="color-value">{{ strokeColor }}</span>
+        </div>
+      </div>
+
+      <div class="size-section">
+        <label class="section-label">Tamaño:</label>
+        <div class="size-controls">
+          <input type="range" min="1" max="20" [(ngModel)]="strokeWidth" class="size-slider"
+            [disabled]="selectedTool === 'eraser'" />
+          <span class="size-value">{{ strokeWidth }}px</span>
+        </div>
+      </div>
+
+      <div class="zoom-section">
+        <label class="section-label">Zoom:</label>
+        <div class="zoom-controls">
+          <button (click)="setZoom(currentZoom - 0.2)" class="zoom-btn">-</button>
+          <span class="zoom-value">{{ (currentZoom * 100).toFixed(0) }}%</span>
+          <button (click)="setZoom(currentZoom + 0.2)" class="zoom-btn">+</button>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button (click)="clearCanvas()" class="btn-clear">
+          Limpiar
+        </button>
+        <button (click)="saveCanvas()" class="btn-save">
+          Guardar
+        </button>
+        <button (click)="downloadImage()" class="btn-download">
+          Descargar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="canvas-container" #canvasContainer>
+    <div class="canvas-wrapper">
+      <canvas id="fabricCanvas" class="drawing-canvas"></canvas>
+    </div>
+  </div>
+</div>
