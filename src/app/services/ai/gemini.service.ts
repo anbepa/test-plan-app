@@ -54,7 +54,7 @@ export class GeminiService {
     const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 700, temperature: 0.2 }
+      generationConfig: { maxOutputTokens: 900, temperature: 0.6 }
     };
 
     return this.geminiClient.callGemini('generateRiskStrategy', payload).pipe(

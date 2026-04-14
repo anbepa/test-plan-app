@@ -57,17 +57,23 @@ AHORA GENERA la sección final para "${sectionName}".
   RISK_STRATEGY_PROMPT: (huSummary: string, availableScenarios: string[]): string => `
 Actúa como QA Lead Senior especializado en gestión de riesgos de pruebas.
 
-CONTEXTO CONSOLIDADO (HUs, criterios y escenarios):
+CONTEXTO CONSOLIDADO (TODAS las HUs del plan, criterios y escenarios):
 ${huSummary}
 
 ESCENARIOS DISPONIBLES PARA PLAN DE MITIGACIÓN (usa solo estos textos):
 ${availableScenarios.length > 0 ? availableScenarios.map((s, i) => `${i + 1}. ${s}`).join('\n') : 'Sin escenarios explícitos'}
 
+INSTRUCCIONES DE ANÁLISIS (OBLIGATORIAS):
+1) Analiza TODAS y cada una de las HUs listadas en el contexto, sin omitir ninguna.
+2) Identifica el riesgo MÁS CRÍTICO del conjunto completo, considerando todas las HUs.
+3) El riesgo elegido debe variar en cada ejecución: si el riesgo principal ya es conocido, selecciona el SIGUIENTE más relevante o un ángulo de riesgo distinto (funcional, de integración, de datos, de rendimiento, etc.).
+4) La variación entre llamadas es OBLIGATORIA: "loQuePodriaOcasionar" debe reflejar una consecuencia de negocio DIFERENTE y ESPECÍFICA cada vez.
+
 OBJETIVO:
 - Generar un item de "Riesgos Para la Estrategia de Pruebas" basado estrictamente en el contexto.
-- "probabilidadDe" debe describir el EVENTO de riesgo.
-- "puedeOcurrir" debe describir la CAUSA.
-- "loQuePodriaOcasionar" debe describir la CONSECUENCIA.
+- "probabilidadDe": el EVENTO de riesgo (qué podría fallar).
+- "puedeOcurrir": la CAUSA (por qué podría ocurrir).
+- "loQuePodriaOcasionar": la CONSECUENCIA de negocio (impacto real y diferenciado si ocurre).
 
 CLASIFICACIÓN DEL RIESGO:
 - impactLevel: entero entre 1 y 5
@@ -79,22 +85,22 @@ CLASIFICACIÓN DEL RIESGO:
   100=Ocurrido (Issue)
 
 PLAN DE MITIGACIÓN:
-- positiveScenarios: mínimo 2 escenarios positivos de cobertura.
+- positiveScenarios: mínimo 2 escenarios positivos relacionados con el riesgo identificado.
 - alternateScenarios: mínimo 1 escenario alterno de cobertura.
 - Prioriza escenarios que existan en la lista disponible.
 
 REGLAS:
-1) No inventes funcionalidades fuera del contexto.
-2) Sé concreto y accionable.
+1) No inventes funcionalidades fuera del contexto de las HUs.
+2) Sé concreto y accionable. El campo "loQuePodriaOcasionar" debe ser específico y diferente en cada generación.
 3) Textos cortos, claros y sin relleno.
-4) Si faltan escenarios disponibles, genera propuestas coherentes con HU/CA.
+4) Si faltan escenarios disponibles, genera propuestas coherentes con las HU/CA.
 
 FORMATO DE SALIDA (OBLIGATORIO):
 Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
 {
-  "probabilidadDe": "Evento",
-  "puedeOcurrir": "Causa",
-  "loQuePodriaOcasionar": "Consecuencia",
+  "probabilidadDe": "Evento de riesgo específico",
+  "puedeOcurrir": "Causa raíz",
+  "loQuePodriaOcasionar": "Consecuencia de negocio concreta y diferenciada",
   "impactLevel": 1,
   "probabilityLevel": 25,
   "positiveScenarios": ["Escenario positivo 1", "Escenario positivo 2"],
@@ -102,9 +108,9 @@ Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
 }
 `,
 
-// --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
+  // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
-DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, context?: string): string => `
+  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, context?: string): string => `
 Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA SUFICIENTE y sin ruido.
 
 HU:
@@ -206,8 +212,8 @@ FORMATO DE SALIDA:
 }
 `,
 
-// Refinamiento directo (sin CoT)
-DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
+  // Refinamiento directo (sin CoT)
+  DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
 Actúa como QA Senior. Refina casos existentes aplicando "${technique}" con mejor cobertura y menos ruido.
 
 Requisitos Originales:

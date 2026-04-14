@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, ViewChild, ElementRef, AfterViewInit, HostListener, DoCheck } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ViewChild, ElementRef, AfterViewInit, HostListener, DoCheck, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 declare const fabric: any;
@@ -17,7 +17,7 @@ interface DrawingTool {
   templateUrl: './image-editor.component.html',
   styleUrls: ['./image-editor.component.css']
 })
-export class ImageEditorComponent implements AfterViewInit, DoCheck {
+export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   @Input() imageBase64: string = '';
   @Input() clearBase64: string = '';
   @Input() editorStateJson?: string;
@@ -37,7 +37,6 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck {
   selectedTool: ToolName = 'pen';
   strokeColor = '#FF0000';
   strokeWidth = 3;
-  showToolbar = true;
 
   drawingTools: DrawingTool[] = [
     { name: 'pen', label: 'Bolígrafo' },
@@ -68,11 +67,43 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck {
     }
   }
 
+  ngOnDestroy(): void {
+    if (this.canvas) {
+      this.canvas.dispose();
+    }
+  }
+
   ngDoCheck() {
     if (this.canvas && this.canvas.freeDrawingBrush) {
       this.canvas.freeDrawingBrush.color = this.strokeColor;
       this.canvas.freeDrawingBrush.width = this.strokeWidth;
     }
+  }
+
+  onColorChange() {
+    if (this.selectedTool !== 'eraser' || !this.canvas) return;
+    const objs = this.canvas.getActiveObjects();
+    objs.forEach((obj: any) => {
+      if (obj.type === 'i-text') {
+        obj.set({ fill: this.strokeColor });
+      } else {
+        obj.set({ stroke: this.strokeColor });
+      }
+    });
+    if (objs.length) this.canvas.renderAll();
+  }
+
+  onSizeChange() {
+    if (this.selectedTool !== 'eraser' || !this.canvas) return;
+    const objs = this.canvas.getActiveObjects();
+    objs.forEach((obj: any) => {
+      if (obj.type !== 'i-text') {
+        obj.set({ strokeWidth: this.strokeWidth });
+      } else {
+        obj.set({ fontSize: Math.max(14, this.strokeWidth * 6) });
+      }
+    });
+    if (objs.length) this.canvas.renderAll();
   }
 
   private loadImage(base64: string): void {
@@ -339,9 +370,5 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck {
     link.href = this.canvas.toDataURL({ format: 'png', quality: 1, multiplier: 1 / this.currentZoom });
     link.download = `evidencia_${Date.now()}.png`;
     link.click();
-  }
-
-  toggleToolbar(): void {
-    this.showToolbar = !this.showToolbar;
   }
 }
