@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { PlanExecution, TestCaseExecution, ExecutionStep, ImageEvidence } from '../../models/hu-data.model';
+import { PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
 import { IndexedDbService } from './indexed-db.service';
 
 @Injectable({
@@ -29,7 +29,7 @@ export class ExecutionStorageService {
       }
 
       if (oldImages) {
-        const images: ImageEvidence[] = JSON.parse(oldImages);
+        const images: AssetEvidence[] = JSON.parse(oldImages);
         for (const img of images) {
           await this.idbService.put(this.STORE_IMAGES, img);
         }
@@ -104,7 +104,7 @@ export class ExecutionStorageService {
   /**
    * Guarda una imagen de evidencia
    */
-  async saveImage(image: ImageEvidence): Promise<void> {
+  async saveImage(image: AssetEvidence): Promise<void> {
     const normalizedImage = this.normalizeImageForStorage(image);
     await this.idbService.put(this.STORE_IMAGES, normalizedImage);
   }
@@ -112,21 +112,21 @@ export class ExecutionStorageService {
   /**
    * Obtiene una imagen por ID
    */
-  async getImage(imageId: string): Promise<ImageEvidence | null> {
+  async getImage(imageId: string): Promise<AssetEvidence | null> {
     return await this.idbService.get(this.STORE_IMAGES, imageId);
   }
 
   /**
    * Obtiene todas las imágenes guardadas
    */
-  async getAllImages(): Promise<ImageEvidence[]> {
+  async getAllImages(): Promise<AssetEvidence[]> {
     return await this.idbService.getAll(this.STORE_IMAGES);
   }
 
   /**
    * Obtiene imágenes de un paso específico
    */
-  async getStepImages(stepId: string): Promise<ImageEvidence[]> {
+  async getStepImages(stepId: string): Promise<AssetEvidence[]> {
     const images = await this.getAllImages();
     return images.filter(img => img.stepId === stepId);
   }
@@ -250,6 +250,7 @@ export class ExecutionStorageService {
           evidences: (step.evidences || []).map((evidence) => ({
             id: evidence.id,
             stepId: evidence.stepId,
+            type: evidence.type || 'image',
             fileName: evidence.fileName,
             timestamp: evidence.timestamp,
             naturalWidth: evidence.naturalWidth,
@@ -262,7 +263,7 @@ export class ExecutionStorageService {
     };
   }
 
-  private normalizeImageForStorage(image: ImageEvidence): ImageEvidence {
+  private normalizeImageForStorage(image: AssetEvidence): AssetEvidence {
     return {
       ...image,
       originalBase64: ''

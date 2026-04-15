@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HUData, PlanExecution, ImageEvidence } from '../../models/hu-data.model';
+import { HUData, PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../core/execution-storage.service';
 import { saveAs } from 'file-saver';
 import {
@@ -18,7 +18,8 @@ import {
     InternalHyperlink,
     HeadingLevel,
     BookmarkStart,
-    BookmarkEnd
+    BookmarkEnd,
+    ShadingType
 } from 'docx';
 
 /**
@@ -291,7 +292,7 @@ export class ExportService {
 
         // Obtener todas las imágenes reales (con base64) para esta ejecución
         const allImages = await this.storageService.getAllImages();
-        const imageMap = new Map<string, ImageEvidence>();
+        const imageMap = new Map<string, AssetEvidence>();
         allImages.forEach(img => imageMap.set(img.id, img));
 
         const children: Array<Paragraph | Table> = [];
@@ -501,7 +502,7 @@ export class ExportService {
                 const cellEvidences = (evIndex < evidences.length) ? [evidences[evIndex]] : [];
                 tableCells.push(new TableCell({
                     width: { size: 100 / validCols, type: WidthType.PERCENTAGE },
-                    children: this.buildEvidenceCellContent(cellEvidences, undefined, true, validCols)
+                    children: this.buildEvidenceCellContent(cellEvidences, undefined, true, validCols) as any
                 }));
                 evIndex++;
             }
@@ -539,8 +540,8 @@ export class ExportService {
      * Construye el contenido de la celda de evidencias.
      * Si hay imágenes, las incrusta; si no, muestra el placeholder.
      */
-    private buildEvidenceCellContent(evidences: any[], notes?: string, isNestedCell: boolean = false, cols: number = 1): Paragraph[] {
-        const paragraphs: Paragraph[] = [];
+    private buildEvidenceCellContent(evidences: any[], notes?: string, isNestedCell: boolean = false, cols: number = 1): (Paragraph | Table)[] {
+        const paragraphs: (Paragraph | Table)[] = [];
 
         if (!evidences || evidences.length === 0) {
             if (isNestedCell) {
@@ -566,7 +567,13 @@ export class ExportService {
         } else {
             evidences.forEach((evidence) => {
                 try {
+                    if (evidence.type === 'csv' && evidence.tabularData) {
+                        paragraphs.push(...this.buildTabularDataParagraphs(evidence));
+                        return;
+                    }
+
                     const dataUrl: string = evidence.base64Data;
+                    if (!dataUrl) return;
 
                     // Extraer mime type y datos base64 del data URL
                     const mimeMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -604,19 +611,18 @@ export class ExportService {
                         ]
                     }));
                 } catch (err) {
-                    console.error('Error al incrustar imagen en DOCX:', err);
+                    console.error('Error al incrustar evidencia en DOCX:', err);
                     paragraphs.push(new Paragraph({
                         alignment: AlignmentType.CENTER,
                         spacing: { before: 120, after: 120 },
                         children: [
                             new TextRun({
-                                text: this.EVIDENCE_PLACEHOLDER,
+                                text: `[Error al cargar ${evidence.type === 'csv' ? 'datos' : 'imagen'}]`,
                                 bold: true,
-                                underline: {}
+                                color: "FF0000"
                             })
                         ]
                     }));
-                    paragraphs.push(new Paragraph(''));
                 }
             });
         }
@@ -632,6 +638,61 @@ export class ExportService {
         }
 
         return paragraphs;
+    }
+
+    /**
+     * Crea una tabla de Word a partir de AssetEvidence de tipo CSV.
+     */
+    private buildTabularDataParagraphs(evidence: AssetEvidence): (Paragraph | Table)[] {
+        if (!evidence.tabularData || evidence.tabularData.length === 0) return [];
+
+        const hasHeader = evidence.csvConfig?.hasHeader ?? true;
+        const rows: TableRow[] = [];
+
+        evidence.tabularData.forEach((row, rIndex) => {
+            const rowColor = (evidence.rowColors && evidence.rowColors[rIndex] && evidence.rowColors[rIndex] !== 'transparent')
+                ? evidence.rowColors[rIndex].replace('#', '')
+                : undefined;
+
+            const cells: TableCell[] = row.map((cell) => {
+                const fill = rowColor || ((hasHeader && rIndex === 0) ? "F1F5F9" : undefined);
+
+                return new TableCell({
+                    shading: fill ? { fill: fill.toUpperCase(), type: ShadingType.CLEAR } : undefined,
+                    children: [
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: String(cell || ''),
+                                    bold: (hasHeader && rIndex === 0),
+                                    size: 16 // 8pt aprox
+                                })
+                            ],
+                            alignment: AlignmentType.CENTER
+                        })
+                    ]
+                });
+            });
+            rows.push(new TableRow({ children: cells }));
+        });
+
+        const wordTable = new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: rows,
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" }
+            }
+        });
+
+        return [
+            wordTable,
+            new Paragraph('') // Espaciador
+        ];
     }
 
     /**

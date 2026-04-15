@@ -1,0 +1,64 @@
+<div class="editor-shell">
+    <div class="editor-header">
+        <!-- Título redundante eliminado; se usa el del modal -->
+        <div></div>
+
+        <div class="header-actions">
+            <button class="btn-cancel" (click)="onCancel()">Cancelar</button>
+            <button class="btn-save" (click)="onSave()">Guardar Todo</button>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="tool-group">
+            <span class="group-label">RESALTAR FILA</span>
+            <div class="color-swatches">
+                <button *ngFor="let c of highlightColors" class="swatch-btn" [style.background]="c.value"
+                    [class.active]="selectedColor === c.value" [title]="c.name" (click)="selectedColor = c.value">
+                </button>
+            </div>
+            <small class="tool-hint">Haz clic en la franja izquierda para pintar la fila</small>
+        </div>
+
+        <div class="tool-gap"></div>
+
+        <div class="tool-group">
+            <label class="check-label">
+                <input type="checkbox" [(ngModel)]="hasHeader"> Encabezado
+            </label>
+        </div>
+    </div>
+
+    <div class="editor-viewport" #tableScrollContainer (scroll)="onTableScroll()">
+        <!-- Ghost element that defines the total scrollable height -->
+        <div class="scroll-height-ghost" [style.height.px]="localData.length * ROW_HEIGHT">
+
+            <!-- Table window that follows the scroll position -->
+            <div class="table-window" [style.transform]="'translateY(' + topSpacerHeight + 'px)'">
+                <table>
+                    <tbody>
+                        <tr *ngFor="let row of virtualRows; trackBy: trackByFn"
+                            [class.is-header-row]="hasHeader && row.index === 0"
+                            [style.background-color]="localRowColors[row.index]">
+
+                            <td class="paint-strip" (click)="applyColorToRow(row.index)"
+                                [title]="'Pintar fila ' + (row.index + 1)">
+                            </td>
+
+                            <td *ngFor="let cell of row.data; let c = index; trackBy: trackByFn">
+                                <input type="text" [(ngModel)]="localData[row.index][c]" class="cell-editor-input" />
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="loading-overlay" *ngIf="isLoading">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <span>Cargando datos...</span>
+            </div>
+        </div>
+    </div>
+</div>

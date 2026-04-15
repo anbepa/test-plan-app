@@ -1,10 +1,12 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import * as XLSX from 'xlsx';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ImageEditorComponent } from '../image-editor/image-editor.component';
+import { DataEditorComponent } from '../data-editor/data-editor.component';
 import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
-import { HUData, PlanExecution, ImageEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
+import { HUData, PlanExecution, AssetEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
 import { ExecutionStorageService } from '../../../services/core/execution-storage.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
@@ -14,12 +16,13 @@ import { Subscription } from 'rxjs';
 @Component({
   selector: 'app-plan-execution',
   standalone: true,
-  imports: [CommonModule, FormsModule, ImageEditorComponent, ConfirmationModalComponent],
+  imports: [CommonModule, FormsModule, ImageEditorComponent, DataEditorComponent, ConfirmationModalComponent],
   templateUrl: './plan-execution.component.html',
   styleUrls: ['./plan-execution.component.css']
 })
 export class PlanExecutionComponent implements OnInit, OnDestroy {
   @ViewChild('fileInput') fileInput!: ElementRef;
+  @ViewChild('csvInput') csvInput!: ElementRef;
   private readonly EXEC_CONTEXT_KEY = 'execute_plan_context_v2';
 
   hu: HUData | null = null;
@@ -28,16 +31,22 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   execution: PlanExecution | null = null;
   activeTestCaseIndex = 0;
   activeStepIndex = 0;
-  selectedImage: ImageEvidence | null = null;
+  selectedImage: AssetEvidence | null = null;
   showImageEditor = false;
   showImageViewer = false;
+  showDataEditor = false;
   showDeleteModal = false;
+  showUploadMenu = false;
   editingImageId: string | null = null;
-  previewImage: ImageEvidence | null = null;
+  previewImage: AssetEvidence | null = null;
   pendingImageBase64: string = '';
   pendingOriginalBase64: string = '';
+  pendingTabularData: any[][] = [];
+  pendingHasHeader: boolean = true;
+  pendingAssetType: 'image' | 'csv' = 'image';
   pendingImageNaturalWidth: number = 1280;
   pendingImageNaturalHeight: number = 720;
+  isParsingFile = false;
   private huSyncSubscription: Subscription | null = null;
 
   stats: any = null;
@@ -47,7 +56,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private storageService: ExecutionStorageService,
     private toastService: ToastService,
     private exportService: ExportService,
-    private huSyncService: HuSyncService
+    private huSyncService: HuSyncService,
+    private cdr: ChangeDetectorRef
   ) { }
 
   async ngOnInit(): Promise<void> {
@@ -269,10 +279,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const img = new Image();
     img.onload = async () => {
       const evidenceId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const newImage: ImageEvidence = {
+      const newImage: AssetEvidence = {
         id: evidenceId,
         stepId: this.currentStep!.stepId,
         fileName: `evidencia_${Date.now()}.png`,
+        type: 'image',
         base64Data: base64,
         originalBase64: base64,
         naturalWidth: img.naturalWidth,
@@ -303,17 +314,167 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     img.src = base64;
   }
 
-  openImageEditor(image: ImageEvidence): void {
-    this.pendingImageBase64 = image.base64Data;
-    this.pendingOriginalBase64 = image.originalBase64 || image.base64Data;
-    this.selectedImage = image;
-    this.showImageEditor = true;
-    this.editingImageId = image.id;
+  openAssetEditor(asset: AssetEvidence): void {
+    this.selectedImage = asset;
+    this.editingImageId = asset.id;
+
+    if (asset.type === 'image') {
+      this.pendingImageBase64 = asset.base64Data || '';
+      this.pendingOriginalBase64 = asset.originalBase64 || asset.base64Data || '';
+      this.showImageEditor = true;
+    } else if (asset.type === 'csv') {
+      this.pendingTabularData = asset.tabularData || [];
+      this.pendingHasHeader = asset.csvConfig?.hasHeader ?? true;
+      this.showDataEditor = true;
+    }
   }
 
-  openImageViewer(image: ImageEvidence): void {
-    this.previewImage = image;
-    this.showImageViewer = true;
+  openImageViewer(asset: AssetEvidence): void {
+    if (asset.type === 'image') {
+      this.previewImage = asset;
+      this.showImageViewer = true;
+    } else {
+      // Para CSV, el visualizador es el mismo editor en modo lectura o simplemente el editor
+      this.openAssetEditor(asset);
+    }
+  }
+
+  triggerCsvInput(): void {
+    this.csvInput.nativeElement.click();
+  }
+
+  async onCsvSelected(event: any): Promise<void> {
+    const file = event.target.files[0];
+    if (!file || !this.currentStep) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      this.toastService.warning('Por favor selecciona un archivo .csv');
+      return;
+    }
+
+    this.isParsingFile = true;
+    const reader = new FileReader();
+    reader.onload = async (e: any) => {
+      try {
+        const arrayBuffer = e.target.result as ArrayBuffer;
+
+        // Try decoding as UTF-8 first, with fatal: true to catch errors
+        let text: string;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(arrayBuffer);
+        } catch (e) {
+          // If UTF-8 fails, use Windows-1252 (common in Excel/CSV Latin America)
+          text = new TextDecoder('windows-1252').decode(arrayBuffer);
+        }
+
+        const workbook = XLSX.read(text, { type: 'string', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+
+        // Use raw: true to get the numbers, then format them ourselves for consistency
+        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+        // Format numbers and handle dates
+        // Get headers first
+        const headers = json[0] || [];
+
+        // Format numbers and handle dates
+        const formattedData = json.map((row, rIndex) => {
+          if (rIndex === 0) return row; // Header row
+
+          return (row || []).map((cell, cIndex) => {
+            const header = String(headers[cIndex] || '').toLowerCase();
+
+            if (typeof cell === 'number') {
+              // Check if it's a date column but came as a number (Excel serial date)
+              const isDateCol = header.includes('date') || header.includes('_at');
+
+              if (isDateCol && cell > 30000) { // Likely an Excel serial date
+                cell = new Date(Math.round((cell - 25569) * 86400 * 1000));
+              } else {
+                // NO format for account_number, nit, product_id, transactional_id, id_reference
+                const isIdOrCode = header.includes('account') ||
+                  header === 'nit' ||
+                  header.includes('product_id') ||
+                  header.includes('id_reference') ||
+                  header.includes('transactional_id');
+
+                if (isIdOrCode) return String(cell);
+
+                // Format values and generic IDs with commas
+                return cell.toLocaleString('en-US', { maximumFractionDigits: 3 });
+              }
+            }
+
+            if (cell instanceof Date) {
+              // Manually format to avoid UTC shifts
+              const d = cell;
+              const pad = (n: number) => n.toString().padStart(2, '0');
+              const ms = d.getMilliseconds().toString().padStart(3, '0');
+              const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+              const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+              return `${dateStr} ${timeStr}.${ms}`;
+            }
+
+            return cell !== undefined && cell !== null ? String(cell) : '';
+          });
+        });
+
+        const evidenceId = `csv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const newAsset: AssetEvidence = {
+          id: evidenceId,
+          stepId: this.currentStep!.stepId,
+          fileName: file.name,
+          type: 'csv',
+          tabularData: formattedData,
+          csvConfig: { hasHeader: true, delimiter: ',' },
+          timestamp: Date.now()
+        };
+
+        this.currentStep!.evidences.push(newAsset);
+        await this.storageService.saveImage(newAsset);
+        await this.autoSaveExecutionState();
+
+        this.pendingTabularData = formattedData;
+        this.pendingHasHeader = true;
+        this.selectedImage = newAsset;
+        this.editingImageId = evidenceId;
+        this.showDataEditor = true;
+
+        await this.updateStats();
+        this.toastService.success('CSV cargado y listo para editar');
+      } catch (err) {
+        console.error('Error parsing CSV', err);
+        this.toastService.error('Error al procesar el archivo CSV');
+      } finally {
+        this.isParsingFile = false;
+        this.cdr.detectChanges();
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+  }
+
+  async onDataSaved(result: { data: any[][], hasHeader: boolean, rowColors?: string[] }): Promise<void> {
+    if (!this.currentStep || !this.selectedImage) return;
+
+    const assetIndex = this.currentStep.evidences.findIndex(a => a.id === this.selectedImage!.id);
+    if (assetIndex >= 0) {
+      const asset = this.currentStep.evidences[assetIndex];
+      asset.tabularData = result.data;
+      asset.csvConfig = { ...asset.csvConfig, hasHeader: result.hasHeader, delimiter: ',' };
+      asset.rowColors = result.rowColors;
+      asset.timestamp = Date.now();
+      await this.storageService.saveImage(asset);
+
+      this.execution!.updatedAt = Date.now();
+      await this.autoSaveExecutionState();
+
+      this.showDataEditor = false;
+      this.selectedImage = null;
+      this.editingImageId = null;
+      this.toastService.success('Datos y anotaciones guardados correctamente');
+    }
   }
 
   async onImageSaved(data: { base64: string, stateJson: string }): Promise<void> {
@@ -321,7 +482,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     if (this.editingImageId) {
       // Actualizar imagen existente
-      const imageIndex = this.currentStep.evidences.findIndex((img: ImageEvidence) => img.id === this.editingImageId);
+      const imageIndex = this.currentStep.evidences.findIndex((img: AssetEvidence) => img.id === this.editingImageId);
       if (imageIndex >= 0) {
         const updatedImage = this.currentStep.evidences[imageIndex];
         updatedImage.base64Data = data.base64;
@@ -332,10 +493,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
     } else {
       // Crear nueva imagen
-      const newImage: ImageEvidence = {
+      const newImage: AssetEvidence = {
         id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         stepId: this.currentStep.stepId,
         fileName: `evidencia_${Date.now()}.png`,
+        type: 'image',
         base64Data: data.base64,
         originalBase64: this.pendingImageBase64,
         editorStateJson: data.stateJson,
@@ -360,7 +522,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   async deleteImage(imageId: string): Promise<void> {
     if (!this.currentStep) return;
 
-    const index = this.currentStep.evidences.findIndex((img: ImageEvidence) => img.id === imageId);
+    const index = this.currentStep.evidences.findIndex((img: AssetEvidence) => img.id === imageId);
     if (index >= 0) {
       this.currentStep.evidences.splice(index, 1);
       await this.storageService.deleteImage(imageId);
@@ -408,7 +570,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       for (const step of testCase.steps) {
         // En lugar de buscar por stepId (que puede cambiar), buscamos cada imagen por su propio ID estable
         const currentEvidences = Array.isArray(step.evidences) ? step.evidences : [];
-        const hydratedEvidences: ImageEvidence[] = [];
+        const hydratedEvidences: AssetEvidence[] = [];
 
         for (const evidence of currentEvidences) {
           if (evidence.id) {
@@ -416,9 +578,12 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
             if (dbImage) {
               hydratedEvidences.push({
                 ...evidence,
+                type: dbImage.type || 'image', // Retro-compatibilidad
                 base64Data: dbImage.base64Data,
                 originalBase64: dbImage.originalBase64 || dbImage.base64Data,
-                editorStateJson: dbImage.editorStateJson
+                editorStateJson: dbImage.editorStateJson,
+                tabularData: dbImage.tabularData,
+                csvConfig: dbImage.csvConfig
               });
             } else {
               // Si no está en DB por alguna razón, conservar lo que tenemos
@@ -516,6 +681,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   private async applyHuChanges(updatedHu: HUData, notify: boolean): Promise<void> {
     this.hu = updatedHu;
+
+    // Root Fix: If the update has NO test cases but we already have an execution with test cases,
+    // IGNORE the update. This prevents stale/empty sync from clearing your progress.
+    if (!updatedHu.detailedTestCases || updatedHu.detailedTestCases.length === 0) {
+      if (this.execution && this.execution.testCases.length > 0) {
+        return;
+      }
+    }
 
     if (!updatedHu.detailedTestCases || !this.execution) {
       return;
