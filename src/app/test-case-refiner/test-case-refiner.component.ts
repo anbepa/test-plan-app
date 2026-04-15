@@ -196,18 +196,18 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
       // Reemplazar en memoria los escenarios anteriores por los nuevos
       this.hu.detailedTestCases = result.testCases;
-      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
 
-      // En modo contexto, persistir inmediatamente para que no reaparezcan escenarios antiguos al recargar
-      if (this.isContextPage) {
-        const saved = await this.saveData();
-        if (!saved) {
-          this.toastService.error('No se pudo guardar la regeneración en base de datos');
-          return;
-        }
+      // Guardar en BD para persistencia inmediata y evitar pérdida de datos al recargar
+      const saved = await this.saveData();
+      if (!saved) {
+        this.toastService.error('No se pudo guardar la regeneración en base de datos');
+        return;
       }
 
-      this.toastService.success(`${result.testCases.length} casos regenerados con éxito`);
+      // Publicar los cambios en el caché
+      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
+
+      this.toastService.success(`${result.testCases.length} casos regenerados y guardados con éxito`);
 
       if (this.isContextPage) {
         this.goToRefinerPage();
@@ -494,13 +494,23 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
     try {
       this.isLoading = true;
+
+      // Try loading metadata. If not found, we'll try to create it.
       await this.loadUserStoryData(false);
 
       this.normalizeDetailedTestCasesForPersistence();
 
-      if (!this.userStoryDbId) throw new Error('User story no encontrado');
+      // If still no DB ID, it means this HU hasn't been saved to Supabase yet.
+      // We'll create it now.
+      if (!this.userStoryDbId) {
+        await this.createUserStoryInDb();
+      } else {
+        // If it exists, update metadata first
+        await this.updateUserStoryMetadata(this.userStoryDbId);
+      }
 
-      await this.updateUserStoryMetadata(this.userStoryDbId);
+      if (!this.userStoryDbId) throw new Error('No se pudo establecer o crear el User Story en la base de datos');
+
       await this.syncTestCasesWithDatabase(this.userStoryDbId);
       this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
 
@@ -511,6 +521,35 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.toastService.error('Error al guardar los cambios en la base de datos');
       this.isLoading = false;
       return false;
+    }
+  }
+
+  /** Creates the user story in Supabase if it doesn't exist yet. */
+  private async createUserStoryInDb(): Promise<void> {
+    if (!this.hu || !this.testPlanId) return;
+
+    const payload = {
+      test_plan_id: this.testPlanId,
+      custom_id: this.editedHuId || this.hu.id,
+      title: this.editedTitle || this.hu.title,
+      sprint: this.editedSprint || this.hu.sprint || '',
+      description: this.editedDescription || this.hu.originalInput?.description || '',
+      acceptance_criteria: this.editedAcceptanceCriteria || this.hu.originalInput?.acceptanceCriteria || '',
+      generation_mode: this.hu.originalInput?.generationMode || 'text',
+      refinement_technique: this.editedSelectedTechnique || this.hu.refinementTechnique || '',
+      refinement_context: this.editedContext || this.hu.refinementContext || ''
+    };
+
+    const { data, error } = await this.databaseService.supabase
+      .from('user_stories')
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (data) {
+      this.userStoryDbId = data.id;
+      this.hu.dbUuid = data.id;
     }
   }
 
@@ -586,11 +625,28 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       query = query.eq('test_plan_id', this.testPlanId).eq('custom_id', this.hu.id);
     }
 
-    const { data: userStory, error } = await query.limit(1).single();
-    if (error) throw error;
+    let userStory: any = null;
+    try {
+      const { data, error } = await query.limit(1).single();
 
-    this.userStoryDbId = userStory?.id || null;
-    if (this.hu && this.userStoryDbId) this.hu.dbUuid = this.userStoryDbId;
+      if (error) {
+        // If not found, we don't throw, just let userStoryDbId remain null
+        if (error.code === 'PGRST116') {
+          this.userStoryDbId = null;
+          return;
+        }
+        throw error;
+      }
+
+      userStory = data;
+      this.userStoryDbId = userStory?.id || null;
+      if (this.hu && this.userStoryDbId) this.hu.dbUuid = this.userStoryDbId;
+    } catch (err: any) {
+      // Catching any other potential issue
+      if (err.code !== 'PGRST116') {
+        throw err;
+      }
+    }
 
     if (userStory?.custom_id) this.editedHuId = userStory.custom_id;
     if (userStory?.title) this.editedTitle = userStory.title;

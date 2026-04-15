@@ -12,29 +12,30 @@
 }
 
 .toolbar-content {
-  padding: 6px 12px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  background: var(--background-color, #f9fafb);
+  column-gap: 24px;
+  row-gap: 16px;
+  align-items: flex-end;
+  background: var(--background-color, #fff);
   overflow-x: hidden;
   border-bottom: 1px solid var(--border-color, #D1D1D6);
 }
 
 .section-label {
   display: block;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--text-secondary, #6E6E73);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: .5px;
 }
 
 .tools-section {
-  flex: 1 1 460px;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -54,7 +55,7 @@
   background: var(--background-color, #fff);
   border-radius: 12px;
   cursor: pointer;
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--primary-color, #007AFF);
   transition: all var(--transition-base, 250ms ease);
@@ -192,10 +193,11 @@
 
 .action-buttons {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   flex-wrap: wrap;
   align-items: center;
   margin-left: auto;
+  margin-bottom: 2px;
 }
 
 .btn-clear,

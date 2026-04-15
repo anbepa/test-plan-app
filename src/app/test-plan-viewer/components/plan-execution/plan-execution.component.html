@@ -60,6 +60,7 @@
 
         <!-- Steps strip -->
         <div class="steps-strip">
+          <div class="flex-spacer"></div>
           <button *ngFor="let step of currentTestCase.steps; let i = index" (click)="selectStep(i)" class="step-chip"
             [class.active]="activeStepIndex === i" [class.done]="step.status === 'completed'"
             [class.fail]="step.status === 'failed'" [class.progress]="step.status === 'in-progress'">
@@ -73,10 +74,6 @@
 
           <!-- Step top row -->
           <div class="step-card-header">
-            <div class="step-card-title">
-              <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
-              <p class="step-text">{{ currentStep.accion }}</p>
-            </div>
             <div class="step-status-row">
               <select class="status-select" [ngClass]="'st-' + currentStep.status" [ngModel]="currentStep.status"
                 (ngModelChange)="updateStepStatus($event)">
@@ -85,6 +82,10 @@
                 <option value="completed">Completado</option>
                 <option value="failed">Falló</option>
               </select>
+            </div>
+            <div class="step-card-title">
+              <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
+              <p class="step-text">{{ currentStep.accion }}</p>
             </div>
           </div>
 
@@ -105,9 +106,24 @@
                   class="grid-input" />
               </div>
 
+              <div class="upload-dropdown">
+                <button (click)="showUploadMenu = !showUploadMenu" class="btn-upload btn-unified">
+                  + Subir Evidencia
+                  <span class="chevron">▾</span>
+                </button>
+                <div class="upload-menu-backdrop" *ngIf="showUploadMenu" (click)="showUploadMenu = false"></div>
+                <div class="upload-menu" *ngIf="showUploadMenu">
+                  <button (click)="triggerFileInput(); showUploadMenu = false" class="menu-item">
+                    📷 Subir Foto
+                  </button>
+                  <button (click)="triggerCsvInput(); showUploadMenu = false" class="menu-item">
+                    📄 Subir CSV
+                  </button>
+                </div>
+              </div>
               <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
-              <button (click)="triggerFileInput()" class="btn-upload">+ Subir imagen</button>
               <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
+              <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
             </div>
 
             <!-- Gallery -->
@@ -118,10 +134,24 @@
                 [style.grid-template-rows]="'repeat(' + (currentStep.evidenceRows || 1) + ', 1fr)'">
                 <div class="ev-thumb grid-view" *ngFor="let i of getGridCells(currentStep)">
                   <ng-container *ngIf="currentStep.evidences[i]; let ev">
-                    <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageEditor(ev)" />
+                    <ng-container *ngIf="ev.type === 'image'; else csvGridThumb">
+                      <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                    </ng-container>
+                    <ng-template #csvGridThumb>
+                      <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                        <div class="csv-label-minimal">CSV</div>
+                        <div class="csv-peek" *ngIf="ev.tabularData">
+                          <table>
+                            <tr *ngFor="let row of ev.tabularData.slice(0, 5)">
+                              <td *ngFor="let cell of row.slice(0, 4)">{{ cell }}</td>
+                            </tr>
+                          </table>
+                        </div>
+                      </div>
+                    </ng-template>
                     <div class="ev-thumb-actions">
-                      <button (click)="openImageViewer(ev)" title="Ver tamaño real">👁️</button>
-                      <button (click)="openImageEditor(ev)" title="Editar">✏️</button>
+                      <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                      <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
                       <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                     </div>
                   </ng-container>
@@ -132,10 +162,26 @@
             <ng-template #standardGallery>
               <div class="ev-gallery" *ngIf="currentStep.evidences.length > 0; else noEv">
                 <div class="ev-thumb" *ngFor="let ev of currentStep.evidences">
-                  <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageEditor(ev)" />
+                  <!-- Render based on type -->
+                  <ng-container *ngIf="ev.type === 'image'; else csvThumb">
+                    <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                  </ng-container>
+                  <ng-template #csvThumb>
+                    <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                      <div class="csv-icon">📊</div>
+                      <div class="csv-peek" *ngIf="ev.tabularData">
+                        <table>
+                          <tr *ngFor="let row of ev.tabularData.slice(0, 3)">
+                            <td *ngFor="let cell of row.slice(0, 2)">{{ cell }}</td>
+                          </tr>
+                        </table>
+                      </div>
+                    </div>
+                  </ng-template>
+
                   <div class="ev-thumb-actions">
-                    <button (click)="openImageViewer(ev)" title="Ver tamaño real">👁️</button>
-                    <button (click)="openImageEditor(ev)" title="Editar">✏️</button>
+                    <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                    <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
                     <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                   </div>
                 </div>
@@ -202,4 +248,24 @@
     </div>
   </div>
 
+  <!-- Data Editor Modal -->
+  <div *ngIf="showDataEditor" class="modal-backdrop" (click)="showDataEditor = false">
+    <div class="modal-box data-modal" (click)="$event.stopPropagation()">
+      <div class="modal-top">
+        <span>Editor de Datos (Excel)</span>
+        <button class="modal-close" (click)="showDataEditor = false">✕</button>
+      </div>
+      <app-data-editor [data]="pendingTabularData" [hasHeader]="pendingHasHeader" [rowColors]="selectedImage?.rowColors"
+        (save)="onDataSaved($event)" (cancel)="showDataEditor = false">
+      </app-data-editor>
+    </div>
+  </div>
+
+  <!-- Global Loading Overlay -->
+  <div class="global-loading-overlay" *ngIf="isParsingFile">
+    <div class="loading-box">
+      <div class="loading-spinner"></div>
+      <p>Procesando archivo... por favor espera</p>
+    </div>
+  </div>
 </div>

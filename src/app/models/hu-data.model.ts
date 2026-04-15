@@ -21,15 +21,24 @@ export interface DetailedTestCase {
 export type GenerationMode = 'text';
 
 // --- Interfaces para Ejecución del Plan ---
-export interface ImageEvidence {
+export interface AssetEvidence {
   id: string;
   stepId: string;
   fileName: string;
-  base64Data: string;
-  originalBase64: string;
+  type: 'image' | 'csv';
+  // Para imágenes
+  base64Data?: string;
+  originalBase64?: string;
   editorStateJson?: string;
   naturalWidth?: number;
   naturalHeight?: number;
+  // Para CSV/Datos
+  tabularData?: any[][];
+  rowColors?: string[];
+  csvConfig?: {
+    hasHeader: boolean;
+    delimiter: string;
+  };
   timestamp: number;
 }
 
@@ -41,7 +50,7 @@ export interface ExecutionStep {
   notes?: string;
   evidenceColumns?: number;
   evidenceRows?: number;
-  evidences: ImageEvidence[];
+  evidences: AssetEvidence[];
 }
 
 export interface TestCaseExecution {
