@@ -110,7 +110,7 @@ Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
 
   // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
-  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, context?: string): string => `
+  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
 Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA SUFICIENTE y sin ruido.
 
 HU:
@@ -118,8 +118,6 @@ ${description}
 
 CA:
 ${acceptanceCriteria}
-
-${context ? `CONTEXTO DEL ANALISTA (PRIORIDAD MÁXIMA):\n"${context}"\n\nJERARQUÍA DE DECISIÓN (OBLIGATORIA):\n1) Este CONTEXTO DEL ANALISTA tiene prioridad máxima para seleccionar, enfocar y ordenar los escenarios.\n2) Luego aplica HU + Criterios de Aceptación para asegurar cobertura funcional.\n3) Después aplica la técnica ISTQB para estructurar los casos.\n\nREGLAS DE PRIORIDAD DEL CONTEXTO:\n- Si el contexto pide ajustar, ampliar, reducir o priorizar algo, debes obedecerlo primero.\n- No ignores ni diluyas este contexto con preferencias genéricas.\n- Si hay conflicto entre este contexto y una regla secundaria, prevalece este contexto (siempre que no viole los Criterios de Aceptación).\n` : ''}
 
 REGLAS DE TÉCNICA (obligatorias):
 1) Aplica la técnica "${technique}" de forma real, no solo nominal.
@@ -214,16 +212,21 @@ FORMATO DE SALIDA:
 
   // Refinamiento directo (sin CoT)
   DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
-Actúa como QA Senior. Refina casos existentes aplicando "${technique}" con mejor cobertura y menos ruido.
+Solicitud / CONTEXTO DEL ANALISTA:
+"${userRequest}"
+
+JERARQUÍA DE DECISIÓN (OBLIGATORIA Y CRÍTICA):
+1) Este CONTEXTO DEL ANALISTA (userRequest) tiene PRIORIDAD MÁXIMA y ABSOLUTA.
+2) Debes ejecutar las órdenes de este contexto incluso si contradicen los requisitos originales, los casos actuales o las reglas de la técnica "${technique}".
+3) Si el contexto pide eliminar, añadir, simplificar o enfocar de cierta forma, eso es lo primero que debes asegurar.
+4) Tras cumplir el contexto, aplica los Requisitos Originales para asegurar cobertura y la técnica para dar estructura.
+5) No ignores ninguna validación, texto o instrucción específica contenida en el contexto. Sin el cumplimiento del contexto, el refinamiento se considera FALLIDO.
 
 Requisitos Originales:
 ${originalRequirements}
 
 Casos Actuales:
 ${currentCases}
-
-Solicitud Usuario:
-"${userRequest}"
 
 REGLAS DE TÉCNICA (obligatorias):
 1) Aplica la técnica "${technique}" de forma real también durante el refinamiento.
@@ -294,6 +297,47 @@ FORMATO DE SALIDA:
 - El primer carácter de la respuesta debe ser "{" y el último debe ser "}".
 - No uses bloques de código, no uses \`\`\`json, no uses prefijos ni sufijos.
 - Verifica internamente cobertura completa de CA antes de responder.
+- Usa exactamente esta estructura:
+{
+  "testCases": [
+    {
+      "title": "Descripción clara del escenario",
+      "preconditions": "Condiciones previas necesarias",
+      "steps": [
+        {"numero_paso": 1, "accion": "Acción específica"}
+      ],
+      "expectedResults": "Resultado esperado concreto"
+    }
+  ]
+}
+`,
+
+  // --- PROMPT PARA CONTINUACIÓN DE GENERACIÓN TRUNCADA ---
+  CONTINUATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string, alreadyGeneratedTitles: string[]): string => `
+Actúa como QA Senior. Esta es una CONTINUACIÓN de una generación previa que fue truncada.
+
+HU:
+${description}
+
+CA:
+${acceptanceCriteria}
+
+REGLAS DE CONTINUACIÓN:
+TÉCNICA: "${technique}"
+
+TEST CASES YA GENERADOS (NO los repitas):
+${alreadyGeneratedTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+INSTRUCCIONES OBLIGATORIAS:
+1) Ya se generaron ${alreadyGeneratedTitles.length} test cases. Genera SOLO los que falten según los CA.
+2) NO repitas ningún escenario ya generado. Revisa los títulos listados arriba.
+3) Si todos los CA ya están cubiertos, devuelve un JSON con testCases vacío: {"testCases": []}.
+4) Aplica la misma técnica "${technique}" y las mismas reglas de calidad que la generación original.
+5) Mantén el mismo nivel de detalle y formato.
+
+FORMATO DE SALIDA:
+- Responde SOLO JSON válido, sin markdown, sin comentarios, sin texto extra.
+- El primer carácter de la respuesta debe ser "{" y el último debe ser "}".
 - Usa exactamente esta estructura:
 {
   "testCases": [

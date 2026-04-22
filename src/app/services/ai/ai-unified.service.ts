@@ -83,17 +83,35 @@ export class AiUnifiedService {
     public generateTestCasesDirect(
         description: string,
         acceptanceCriteria: string,
-        technique: string,
-        context?: string
+        technique: string
     ): Observable<any> {
         const service = this.getActiveService();
 
         if ('generateTestCasesDirect' in service) {
-            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique, context);
+            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique);
         }
 
         console.warn('[AI Unified] El proveedor activo no soporta generación directa, usando DeepSeek');
-        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique, context);
+        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique);
+    }
+
+    /**
+     * Generación inteligente con continuación automática si la respuesta es truncada.
+     * Usa este método para HUs complejas con muchos escenarios.
+     */
+    public generateTestCasesSmart(
+        description: string,
+        acceptanceCriteria: string,
+        technique: string
+    ): Observable<any> {
+        const service = this.getActiveService();
+
+        if ('generateTestCasesSmart' in service) {
+            return (service as any).generateTestCasesSmart(description, acceptanceCriteria, technique);
+        }
+
+        console.warn('[AI Unified] El proveedor activo no soporta generación smart, usando DeepSeek');
+        return this.deepSeekService.generateTestCasesSmart(description, acceptanceCriteria, technique);
     }
 
     /**

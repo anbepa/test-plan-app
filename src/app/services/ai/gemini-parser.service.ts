@@ -1,6 +1,13 @@
 import { Injectable } from '@angular/core';
 import { GeminiTextPart } from './gemini-client.service';
 
+export interface PartialParseResult {
+    parsed: any;
+    wasRepaired: boolean;
+    completedTestCaseCount: number;
+    possiblyTruncated: boolean;
+}
+
 @Injectable({
     providedIn: 'root'
 })
@@ -22,12 +29,23 @@ export class GeminiParserService {
     }
 
     /**
-     * Limpia y parsea una respuesta JSON que puede contener markdown o estar truncada
+     * Limpia y parsea una respuesta JSON que puede contener markdown o estar truncada.
+     * Si el JSON está truncado, intenta extraer los test cases completos que sí llegaron.
      */
     public cleanAndParseJSON(rawText: string): any {
+        const result = this.cleanAndParseJSONWithMeta(rawText);
+        return result.parsed;
+    }
+
+    /**
+     * Versión extendida que devuelve metadatos sobre el parseo
+     * (si fue reparado, cuántos test cases se rescataron, si posiblemente está truncado)
+     */
+    public cleanAndParseJSONWithMeta(rawText: string): PartialParseResult {
         let jsonText = rawText.trim();
 
         console.log('[cleanAndParseJSON] Texto crudo (primeros 500 chars):', jsonText.substring(0, 500));
+        console.log('[cleanAndParseJSON] Longitud total del texto:', jsonText.length);
 
         // 1. Limpiar marcadores de código markdown
         if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
@@ -76,7 +94,13 @@ export class GeminiParserService {
             try {
                 const parsed = JSON.parse(extracted);
                 console.log('[cleanAndParseJSON] ✅ JSON extraído y parseado exitosamente');
-                return parsed;
+                const tcCount = this.countTestCases(parsed);
+                return {
+                    parsed,
+                    wasRepaired: false,
+                    completedTestCaseCount: tcCount,
+                    possiblyTruncated: false
+                };
             } catch (e) {
                 console.warn('[cleanAndParseJSON] ⚠️ Falló el parseo del bloque extraído, intentando con el texto completo/reparación...');
             }
@@ -88,26 +112,157 @@ export class GeminiParserService {
         try {
             const parsed = JSON.parse(textToParse);
             console.log('[cleanAndParseJSON] ✅ JSON completo parseado exitosamente');
-            return parsed;
+            const tcCount = this.countTestCases(parsed);
+            return {
+                parsed,
+                wasRepaired: false,
+                completedTestCaseCount: tcCount,
+                possiblyTruncated: false
+            };
         } catch (e: any) {
             console.warn('[cleanAndParseJSON] ⚠️ Error parseando JSON completo, intentando reparar...');
             console.warn('[cleanAndParseJSON] Error original:', e.message);
             console.warn('[cleanAndParseJSON] Posición aproximada del error:', e.message.match(/position (\d+)/)?.[1] || 'desconocida');
 
-            // INTENTO DE REPARACIÓN: Detectar JSON truncado
+            // ESTRATEGIA DE REPARACIÓN EN CASCADA:
+            // 1. Primero intentar reparación estructural (cerrar brackets)
+            // 2. Si falla, extraer solo los test cases completos del JSON parcial
             try {
                 const repaired = this.repairTruncatedJSON(textToParse);
                 const parsed = JSON.parse(repaired);
                 console.log('[cleanAndParseJSON] ✅ JSON reparado y parseado exitosamente');
-                return parsed;
+                const tcCount = this.countTestCases(parsed);
+                return {
+                    parsed,
+                    wasRepaired: true,
+                    completedTestCaseCount: tcCount,
+                    possiblyTruncated: true
+                };
             } catch (repairError: any) {
-                console.error('[cleanAndParseJSON] ❌ No se pudo reparar el JSON');
-                console.error('[cleanAndParseJSON] Error de reparación:', repairError.message);
+                console.warn('[cleanAndParseJSON] ⚠️ Reparación estándar falló, intentando extracción de test cases parciales...');
+
+                // ESTRATEGIA DE ÚLTIMO RECURSO: Extraer test cases completos con regex
+                try {
+                    const extracted = this.extractCompletedTestCases(textToParse);
+                    if (extracted && extracted.testCases && extracted.testCases.length > 0) {
+                        console.log(`[cleanAndParseJSON] ✅ Extracción parcial exitosa: ${extracted.testCases.length} test cases rescatados`);
+                        return {
+                            parsed: extracted,
+                            wasRepaired: true,
+                            completedTestCaseCount: extracted.testCases.length,
+                            possiblyTruncated: true
+                        };
+                    }
+                } catch (extractError: any) {
+                    console.error('[cleanAndParseJSON] ❌ Extracción parcial también falló:', extractError.message);
+                }
+
+                console.error('[cleanAndParseJSON] ❌ No se pudo reparar ni extraer datos del JSON');
                 console.error('[cleanAndParseJSON] Texto (primeros 1000 chars):', textToParse.substring(0, 1000));
+                console.error('[cleanAndParseJSON] Texto (últimos 500 chars):', textToParse.substring(Math.max(0, textToParse.length - 500)));
                 console.error('[cleanAndParseJSON] Texto alrededor de la posición del error:', this.getTextContext(textToParse, e.message));
                 throw new Error(`Error parseando JSON: ${e.message}. El JSON parece estar truncado o malformado.`);
             }
         }
+    }
+
+    /**
+     * Extrae los test cases completos de un JSON truncado.
+     * Busca objetos completos dentro del array "testCases" usando una máquina de estados.
+     */
+    public extractCompletedTestCases(truncatedJson: string): { scope?: string; testCases: any[] } {
+        const completedTestCases: any[] = [];
+        let scope: string | undefined;
+
+        // Intentar extraer el scope primero
+        const scopeMatch = truncatedJson.match(/"scope"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (scopeMatch) {
+            scope = scopeMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+        }
+
+        // Buscar el inicio del array testCases
+        const testCasesStart = truncatedJson.indexOf('"testCases"');
+        if (testCasesStart === -1) {
+            throw new Error('No se encontró la propiedad "testCases" en el JSON');
+        }
+
+        // Encontrar el '[' que inicia el array
+        const arrayStart = truncatedJson.indexOf('[', testCasesStart);
+        if (arrayStart === -1) {
+            throw new Error('No se encontró el inicio del array testCases');
+        }
+
+        // Extraer cada objeto completo del array usando conteo de llaves
+        let depth = 0;
+        let inString = false;
+        let escapeNext = false;
+        let objectStart = -1;
+
+        for (let i = arrayStart + 1; i < truncatedJson.length; i++) {
+            const char = truncatedJson[i];
+
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (inString) continue;
+
+            if (char === '{') {
+                if (depth === 0) {
+                    objectStart = i;
+                }
+                depth++;
+            } else if (char === '}') {
+                depth--;
+                if (depth === 0 && objectStart !== -1) {
+                    // Encontramos un objeto completo
+                    const objectStr = truncatedJson.substring(objectStart, i + 1);
+                    try {
+                        // Escapar newlines dentro de strings antes de parsear
+                        const cleanedObjectStr = this.escapeNewlinesInStrings(objectStr);
+                        const testCase = JSON.parse(cleanedObjectStr);
+                        // Validar que tenga la estructura mínima esperada
+                        if (testCase.title && (testCase.steps || testCase.expectedResults)) {
+                            completedTestCases.push(testCase);
+                        }
+                    } catch (parseErr) {
+                        console.warn('[extractCompletedTestCases] ⚠️ Objeto encontrado pero no parseable, saltando:', parseErr);
+                    }
+                    objectStart = -1;
+                }
+            } else if (char === ']' && depth === 0) {
+                // Fin del array testCases
+                break;
+            }
+        }
+
+        console.log(`[extractCompletedTestCases] Extraídos ${completedTestCases.length} test cases completos`);
+
+        return {
+            scope: scope || 'Alcance no disponible (respuesta truncada)',
+            testCases: completedTestCases
+        };
+    }
+
+    /**
+     * Cuenta la cantidad de test cases en un objeto parseado
+     */
+    private countTestCases(parsed: any): number {
+        if (!parsed) return 0;
+        if (Array.isArray(parsed.testCases)) return parsed.testCases.length;
+        if (Array.isArray(parsed)) return parsed.length;
+        return 0;
     }
 
     /**
@@ -263,18 +418,86 @@ export class GeminiParserService {
         // Eliminar comas finales si existen (trailing commas)
         finalRepaired = finalRepaired.replace(/,\s*$/, '');
 
+        // Eliminar el último elemento incompleto del array si estamos dentro de testCases
+        // Esto es clave: si el JSON se cortó a mitad de un test case, necesitamos
+        // remover ese test case incompleto antes de cerrar el array
+        if (closingStack.length >= 2) {
+            // Buscar hacia atrás el último objeto completo de testCases
+            const lastCompleteObject = this.findLastCompleteObjectEnd(finalRepaired);
+            if (lastCompleteObject > 0) {
+                finalRepaired = finalRepaired.substring(0, lastCompleteObject + 1);
+                // Limpiar trailing comma
+                finalRepaired = finalRepaired.replace(/,\s*$/, '');
+            }
+        }
+
         // Si termina en ':', significa que se cortó esperando un valor (pero no dentro de un string)
         if (finalRepaired.trim().endsWith(':')) {
             finalRepaired += ' null';
         }
 
         // Cerrar estructuras pendientes en orden inverso (LIFO)
-        while (closingStack.length > 0) {
-            finalRepaired += closingStack.pop();
+        // Recalcular la pila con el texto reparado
+        const newStack = this.calculateClosingStack(finalRepaired);
+        while (newStack.length > 0) {
+            finalRepaired += newStack.pop();
         }
 
         console.log('[repairTruncatedJSON] JSON reparado (últimos 100 chars):', finalRepaired.substring(Math.max(0, finalRepaired.length - 100)));
 
         return finalRepaired;
+    }
+
+    /**
+     * Busca la posición del cierre '}' del último objeto completo en el texto,
+     * a nivel de profundidad 2+ (dentro de un array dentro de un objeto).
+     */
+    private findLastCompleteObjectEnd(text: string): number {
+        let depth = 0;
+        let inString = false;
+        let escapeNext = false;
+        let lastObjectClose = -1;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+
+            if (escapeNext) { escapeNext = false; continue; }
+            if (char === '\\') { escapeNext = true; continue; }
+            if (char === '"') { inString = !inString; continue; }
+            if (inString) continue;
+
+            if (char === '{') depth++;
+            if (char === '}') {
+                depth--;
+                if (depth >= 1) { // Objeto dentro del root
+                    lastObjectClose = i;
+                }
+            }
+        }
+
+        return lastObjectClose;
+    }
+
+    /**
+     * Calcula la pila de cierres pendientes para un texto JSON
+     */
+    private calculateClosingStack(text: string): string[] {
+        const stack: string[] = [];
+        let inString = false;
+        let escapeNext = false;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+            if (escapeNext) { escapeNext = false; continue; }
+            if (char === '\\') { escapeNext = true; continue; }
+            if (char === '"') { inString = !inString; continue; }
+            if (inString) continue;
+
+            if (char === '{') stack.push('}');
+            if (char === '[') stack.push(']');
+            if (char === '}' || char === ']') stack.pop();
+        }
+
+        return stack;
     }
 }
