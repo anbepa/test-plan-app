@@ -363,9 +363,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.errorScenarios = null;
       this.startAiProgress();
 
-      console.log('[GENERATION] Iniciando generación DIRECTA (modo rápido)');
+      console.log('[GENERATION] Iniciando generación SMART (con continuación automática)');
 
-      this.aiService.generateTestCasesDirect(
+      this.aiService.generateTestCasesSmart(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique

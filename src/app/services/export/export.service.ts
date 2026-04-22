@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HUData, PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
-import { ExecutionStorageService } from '../core/execution-storage.service';
+import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 import { saveAs } from 'file-saver';
 import {
     AlignmentType,

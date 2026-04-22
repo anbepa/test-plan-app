@@ -182,11 +182,10 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.startAiProgress();
       this.cdr.detectChanges();
 
-      const result: any = await firstValueFrom(this.aiService.generateTestCasesDirect(
+      const result: any = await firstValueFrom(this.aiService.generateTestCasesSmart(
         this.editedDescription,
         this.editedAcceptanceCriteria,
-        this.editedSelectedTechnique,
-        this.editedContext || undefined
+        this.editedSelectedTechnique
       ));
 
       if (!result?.testCases || !this.hu) {

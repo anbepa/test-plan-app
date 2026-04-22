@@ -7,7 +7,7 @@ import { ImageEditorComponent } from '../image-editor/image-editor.component';
 import { DataEditorComponent } from '../data-editor/data-editor.component';
 import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
 import { HUData, PlanExecution, AssetEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
-import { ExecutionStorageService } from '../../../services/core/execution-storage.service';
+import { ExecutionStorageService } from '../../../services/database/execution-storage-supabase.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
@@ -86,6 +86,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
       if (existingExecutions.length > 0) {
         this.execution = preferredExecution || existingExecutions[0];
+        this.storageService.setActiveExecutionId(this.execution.id);
 
         if (!this.hu) {
           this.hu = this.buildHuFromExecution(this.execution);
@@ -93,6 +94,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       } else {
         // Crear nueva ejecución
         await this.createNewExecution();
+        if (this.execution) {
+          this.storageService.setActiveExecutionId(this.execution.id);
+        }
       }
 
       if (restoredContext) {
@@ -566,37 +570,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   private async hydrateExecutionEvidence(): Promise<void> {
     if (!this.execution) return;
 
-    for (const testCase of this.execution.testCases) {
-      for (const step of testCase.steps) {
-        // En lugar de buscar por stepId (que puede cambiar), buscamos cada imagen por su propio ID estable
-        const currentEvidences = Array.isArray(step.evidences) ? step.evidences : [];
-        const hydratedEvidences: AssetEvidence[] = [];
-
-        for (const evidence of currentEvidences) {
-          if (evidence.id) {
-            const dbImage = await this.storageService.getImage(evidence.id);
-            if (dbImage) {
-              hydratedEvidences.push({
-                ...evidence,
-                type: dbImage.type || 'image', // Retro-compatibilidad
-                base64Data: dbImage.base64Data,
-                originalBase64: dbImage.originalBase64 || dbImage.base64Data,
-                editorStateJson: dbImage.editorStateJson,
-                tabularData: dbImage.tabularData,
-                csvConfig: dbImage.csvConfig
-              });
-            } else {
-              // Si no está en DB por alguna razón, conservar lo que tenemos
-              hydratedEvidences.push(evidence);
-            }
-          }
-        }
-
-        step.evidences = hydratedEvidences;
-      }
-    }
-
-    await this.autoSaveExecutionState();
+    // Descargar todas las evidencias desde Supabase Storage en paralelo (con throttle)
+    await this.storageService.hydrateAllEvidence(this.execution);
   }
 
   private async syncExecutionImagesToStorage(): Promise<void> {
@@ -619,6 +594,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.hu.title,
       this.hu.detailedTestCases
     );
+    this.storageService.setActiveExecutionId(this.execution.id);
     await this.storageService.saveExecution(this.execution);
 
     this.activeTestCaseIndex = 0;
@@ -632,6 +608,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const loaded = await this.storageService.getExecution(executionId);
     if (loaded) {
       this.execution = loaded;
+      this.storageService.setActiveExecutionId(loaded.id);
       this.activeTestCaseIndex = 0;
       this.activeStepIndex = 0;
       this.persistExecutionContext();
