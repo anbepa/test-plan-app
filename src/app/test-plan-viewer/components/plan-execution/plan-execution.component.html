@@ -74,18 +74,21 @@
 
           <!-- Step top row -->
           <div class="step-card-header">
+            <div class="step-card-title-container">
+              <h3 class="scenario-name-above-step">{{ currentTestCase.title }}</h3>
+              <div class="step-card-title">
+                <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
+                <p class="step-text">{{ currentStep.accion }}</p>
+              </div>
+            </div>
             <div class="step-status-row">
-              <select class="status-select" [ngClass]="'st-' + currentStep.status" [ngModel]="currentStep.status"
+              <select class="status-select status-select-sm" [ngClass]="'st-' + currentStep.status" [ngModel]="currentStep.status"
                 (ngModelChange)="updateStepStatus($event)">
                 <option value="pending">Pendiente</option>
                 <option value="in-progress">En progreso</option>
                 <option value="completed">Completado</option>
                 <option value="failed">Falló</option>
               </select>
-            </div>
-            <div class="step-card-title">
-              <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
-              <p class="step-text">{{ currentStep.accion }}</p>
             </div>
           </div>
 
@@ -190,6 +193,12 @@
                 <div class="ev-empty">Sin evidencias para este paso</div>
               </ng-template>
             </ng-template>
+          </div>
+
+          <!-- Expected Result Area -->
+          <div class="expected-result-section">
+            <div class="expected-result-label">Resultado esperado</div>
+            <p class="expected-result-text">{{ currentTestCase.expectedResults }}</p>
           </div>
 
           <!-- Navigation -->
