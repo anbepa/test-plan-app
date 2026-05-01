@@ -254,7 +254,7 @@
     <div class="detail-content">
 
       <!-- SECCIÓN 1: HISTORIAS DE USUARIO Y CASOS DE PRUEBA -->
-      <section class="results-section" *ngIf="huList.length > 0">
+      <section class="results-section">
         <div class="hu-table-wrapper">
           <div class="hu-table-actions table-actions">
             <button class="button-secondary" (click)="addNewHU()">
@@ -263,15 +263,15 @@
             <button class="button-secondary" (click)="openPreview()" [disabled]="huList.length === 0">
               Previsualizar
             </button>
-            <button class="button-secondary" (click)="openGeneralSectionsView()">
+            <button class="button-secondary" (click)="openGeneralSectionsView()" [disabled]="huList.length === 0">
               Ver secciones generales del plan
             </button>
-            <button class="button-secondary" (click)="openRiskStrategyView()">
+            <button class="button-secondary" (click)="openRiskStrategyView()" [disabled]="huList.length === 0">
               Ver riesgos del plan
             </button>
           </div>
 
-          <div class="table-container hu-table-container">
+          <div class="table-container hu-table-container" *ngIf="huList.length > 0">
             <table class="plans-table hu-table">
               <thead>
                 <tr>
@@ -282,6 +282,7 @@
                   <th>Numero HU</th>
                   <th>Nombre HU</th>
                   <th>Técnica</th>
+                  <th class="col-num">Número de casos</th>
                   <th class="actions-col">Acciones</th>
                 </tr>
               </thead>
@@ -295,6 +296,7 @@
                   <td data-label="Numero HU">{{ hu.id }}</td>
                   <td class="hu-name-cell hu-name-link" data-label="Nombre HU" (click)="openHUScenarios(hu, $event)">{{ hu.title }}</td>
                   <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
+                  <td class="col-num" data-label="Número de casos">{{ hu.detailedTestCases?.length || 0 }}</td>
                   <td class="actions-col" data-label="Acciones">
                     <button type="button" class="row-delete-btn" aria-label="Eliminar HU" title="Eliminar HU"
                       (click)="deleteHU(hu, $event)">
@@ -356,6 +358,17 @@
             </div>
           </div>
 
+          <!-- Empty state when no HUs -->
+          <div *ngIf="huList.length === 0" class="no-hu-state">
+            <div class="empty-hu-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                  d="M12 6v6m0 0v6m0-6h6m0 0h6m-6-6H6m0 0H0" />
+              </svg>
+            </div>
+            <h3>No hay historias de usuario</h3>
+            <p>Comienza haciendo clic en "Añadir nueva hu" para crear la primera</p>
+          </div>
         </div>
       </section>
 

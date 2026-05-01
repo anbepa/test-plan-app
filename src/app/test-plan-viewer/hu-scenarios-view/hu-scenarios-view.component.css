@@ -558,3 +558,23 @@
     padding: 0.75rem;
   }
 }
+
+/* Estado sin casos de prueba */
+.no-test-cases-state {
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: #f9fafb;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 10px;
+  margin-top: 1rem;
+}
+
+.no-tc-message {
+  color: #6b7280;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.no-tc-message strong {
+  color: #374151;
+}

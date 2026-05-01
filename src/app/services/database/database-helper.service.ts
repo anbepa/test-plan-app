@@ -55,20 +55,17 @@ export class DatabaseHelperService {
     }
 
     hasUserStoryChanged(existing: DbUserStoryWithRelations, incoming: DbUserStoryWithRelations): boolean {
+        const norm = (v: any) => (v === null || v === undefined) ? '' : String(v);
         const simplify = (hu: DbUserStoryWithRelations) => ({
-            title: hu.title,
-            sprint: hu.sprint,
-            desc: hu.description,
-            ac: hu.acceptance_criteria,
-            scope: hu.generated_scope,
-            tech: hu.refinement_technique,
-            ctx: hu.refinement_context,
-            tcs: (hu.test_cases || []).map(tc => ({
-                title: tc.title,
-                pre: tc.preconditions,
-                exp: tc.expected_results,
-                steps: (tc.test_case_steps || []).map(s => s.action)
-            }))
+            title: norm(hu.title),
+            sprint: norm(hu.sprint),
+            desc: norm(hu.description),
+            ac: norm(hu.acceptance_criteria),
+            scope: norm(hu.generated_scope),
+            tech: norm(hu.refinement_technique),
+            ctx: norm(hu.refinement_context)
+            // Note: test_cases are intentionally excluded - TCs are managed by the refiner,
+            // NOT by the viewer/generator smartUpdateTestPlan flow.
         });
 
         return JSON.stringify(simplify(existing)) !== JSON.stringify(simplify(incoming));

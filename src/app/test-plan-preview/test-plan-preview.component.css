@@ -112,21 +112,22 @@
 .btn-export-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.9rem;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
+    gap: 0.5rem;
+    padding: 0.78rem 1.45rem;
+    border-radius: 24px;
+    font-size: 0.95rem;
+    font-weight: 700;
     cursor: pointer;
-    background: #1d4ed8;
-    border: 1px solid #1d4ed8;
+    background: var(--primary-color, #007AFF);
+    border: 2px solid var(--primary-color, #007AFF);
     color: #ffffff;
     white-space: nowrap;
-    transition: all 0.18s ease;
+    transition: all 0.2s ease;
+    min-height: 50px;
 }
 .btn-export-trigger:hover {
-    background: #1e40af;
-    border-color: #1e40af;
+    background: color-mix(in srgb, var(--primary-color, #007AFF) 85%, #000000);
+    border-color: color-mix(in srgb, var(--primary-color, #007AFF) 85%, #000000);
 }
 .btn-export-trigger svg {
     width: 15px;

@@ -539,22 +539,12 @@ export class DatabaseService {
 
         if (updateError) throw updateError;
 
-        const updateIds = toUpdate.map(hu => hu.id!);
+        // NOTE: Test cases for updated HUs are intentionally NOT touched here.
+        // TCs are exclusively managed by the refiner via smartUpdateUserStoryTestCases.
+        // Deleting and re-inserting TCs here would break dbId tracking and cause data loss
+        // when the huList is stale (e.g. passed via route state from viewer to generator).
 
-        const { data: tcsToDelete } = await this.supabase
-          .from('test_cases')
-          .select('id')
-          .in('user_story_id', updateIds);
-
-        if (tcsToDelete && tcsToDelete.length > 0) {
-          const tcIds = tcsToDelete.map(tc => tc.id);
-          await this.supabase.from('test_case_steps').delete().in('test_case_id', tcIds);
-          await this.supabase.from('test_cases').delete().in('id', tcIds);
-        }
-
-        await this.persistTestCasesAndSteps(toUpdate);
-
-        console.log(`📝 ${toUpdate.length} HUs actualizadas`);
+        console.log(`📝 ${toUpdate.length} HUs actualizadas (solo metadata, TCs sin tocar)`);
       }
 
       console.log('🎉 Smart Update completado exitosamente!');

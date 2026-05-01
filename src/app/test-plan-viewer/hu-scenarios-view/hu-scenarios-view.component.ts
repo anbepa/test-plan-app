@@ -44,10 +44,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       this.testPlanId = state.testPlanId || '';
       this.testPlanTitle = state.testPlanTitle || '';
 
-      // Tries to get the lastest from memory cache first
+      // Only use cache if the cached HU has the SAME dbUuid as the incoming HU.
+      // This avoids using stale cache from a deleted HU that shared the same custom id.
       const latestHu = this.huSyncService.getLatestHu(this.hu.id);
-      if (latestHu && latestHu.detailedTestCases && latestHu.detailedTestCases.length > 0) {
-        this.hu = latestHu;
+      const sameRecord = latestHu?.dbUuid && this.hu.dbUuid && latestHu.dbUuid === this.hu.dbUuid;
+      if (sameRecord && latestHu!.detailedTestCases && latestHu!.detailedTestCases.length > 0) {
+        this.hu = latestHu!;
       }
 
       // Important: Always sync from DB to ensure persistence
@@ -97,9 +99,43 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const { data, error } = await query.limit(1).single();
+      let { data, error } = await query.limit(1).single();
 
-      if (error || !data) return;
+      // Fallback: if dbUuid is stale (e.g. HU was deleted and recreated), try by testPlanId+customId
+      if ((error || !data) && dbUuid && this.testPlanId && customId) {
+        const fallback = await this.databaseService.supabase
+          .from('user_stories')
+          .select(`
+            id,
+            test_cases (
+              id,
+              title,
+              preconditions,
+              expected_results,
+              position,
+              test_case_steps (
+                id,
+                step_number,
+                action
+              )
+            )
+          `)
+          .eq('test_plan_id', this.testPlanId)
+          .eq('custom_id', customId)
+          .limit(1)
+          .single();
+        data = fallback.data;
+        error = fallback.error;
+      }
+
+      if (error || !data) {
+        // Ensure no stale test cases remain visible
+        if (this.hu) {
+          this.hu = { ...this.hu, detailedTestCases: [] };
+          this.cdr.detectChanges();
+        }
+        return;
+      }
 
       const sortedCases = [...(data.test_cases || [])].sort(
         (a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)
