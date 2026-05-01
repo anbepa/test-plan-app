@@ -42,11 +42,11 @@
             </div>
             <div class="actions">
                 <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary"
-                    [disabled]="loadingOutOfScopeAI">
+                    [disabled]="anyAILoading">
                     {{ editingOutOfScope ? 'Guardar' : 'Editar' }}
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate"
-                    [disabled]="loadingOutOfScopeAI || editingOutOfScope">
+                    [disabled]="anyAILoading || editingOutOfScope">
                     <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span>
                     Mejorar con IA
                 </button>
@@ -71,11 +71,11 @@
                 <textarea [(ngModel)]="tempStrategyContent" rows="8" class="scrollable-content"></textarea>
             </div>
             <div class="actions">
-                <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="loadingStrategyAI">
+                <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="anyAILoading">
                     {{ editingStrategy ? 'Guardar' : 'Editar' }}
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate"
-                    [disabled]="loadingStrategyAI || editingStrategy">
+                    [disabled]="anyAILoading || editingStrategy">
                     <span *ngIf="loadingStrategyAI" class="spinner-inline"></span>
                     Mejorar con IA
                 </button>
@@ -101,11 +101,11 @@
             </div>
             <div class="actions">
                 <button (click)="toggleStaticEdit('limitations')" class="button-secondary"
-                    [disabled]="loadingLimitationsAI">
+                    [disabled]="anyAILoading">
                     {{ editingLimitations ? 'Guardar' : 'Editar' }}
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate"
-                    [disabled]="loadingLimitationsAI || editingLimitations">
+                    [disabled]="anyAILoading || editingLimitations">
                     <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span>
                     Mejorar con IA
                 </button>
@@ -131,11 +131,11 @@
             </div>
             <div class="actions">
                 <button (click)="toggleStaticEdit('assumptions')" class="button-secondary"
-                    [disabled]="loadingAssumptionsAI">
+                    [disabled]="anyAILoading">
                     {{ editingAssumptions ? 'Guardar' : 'Editar' }}
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate"
-                    [disabled]="loadingAssumptionsAI || editingAssumptions">
+                    [disabled]="anyAILoading || editingAssumptions">
                     <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span>
                     Mejorar con IA
                 </button>
@@ -185,7 +185,7 @@
                         </button>
                     </div>
                     <input class="field-control" type="text" [(ngModel)]="localRiskData.probabilidadDe"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Evento" />
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Evento" [disabled]="loadingRiskAI" />
                 </div>
 
                 <div class="risk-group">
@@ -197,7 +197,7 @@
                         </button>
                     </div>
                     <input class="field-control" type="text" [(ngModel)]="localRiskData.puedeOcurrir"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Causa" />
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Causa" [disabled]="loadingRiskAI" />
                 </div>
 
                 <div class="risk-group">
@@ -210,7 +210,7 @@
                         </button>
                     </div>
                     <input class="field-control" type="text" [(ngModel)]="localRiskData.loQuePodriaOcasionar"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Consecuencia" />
+                        (ngModelChange)="onRiskFieldChange()" placeholder="Consecuencia" [disabled]="loadingRiskAI" />
                 </div>
             </div>
 
@@ -224,7 +224,7 @@
                             {{ copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar' }}
                         </button>
                     </div>
-                    <select class="field-control" [(ngModel)]="localRiskData.impacto" (ngModelChange)="onRiskFieldChange()">
+                    <select class="field-control" [(ngModel)]="localRiskData.impacto" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                         <option value="">Seleccione una opción</option>
                         <option *ngFor="let impact of impactOptions" [value]="impact">{{ impact }}</option>
                     </select>
@@ -238,7 +238,7 @@
                             {{ copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar' }}
                         </button>
                     </div>
-                    <select class="field-control" [(ngModel)]="localRiskData.probabilidad" (ngModelChange)="onRiskFieldChange()">
+                    <select class="field-control" [(ngModel)]="localRiskData.probabilidad" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                         <option value="">Seleccione una opción</option>
                         <option *ngFor="let probability of probabilityOptions" [value]="probability">{{ probability }}</option>
                     </select>
@@ -258,15 +258,15 @@
                         </button>
                     </div>
                     <div class="scenario-row">
-                        <select class="field-control" [(ngModel)]="localRiskData.positiveScenarios[i]" (ngModelChange)="onRiskFieldChange()">
+                        <select class="field-control" [(ngModel)]="localRiskData.positiveScenarios[i]" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                             <option value="">Seleccione un escenario</option>
                             <option *ngFor="let option of getScenarioOptions(localRiskData.positiveScenarios, i)" [value]="option">{{ option }}</option>
                         </select>
                         <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.positiveScenarios.length > 2"
-                            (click)="removePositiveScenario(i)">−</button>
+                            (click)="removePositiveScenario(i)" [disabled]="loadingRiskAI">−</button>
                     </div>
                 </div>
-                <button type="button" class="button-link-add" (click)="addPositiveScenario()">+ Agregar</button>
+                <button type="button" class="button-link-add" (click)="addPositiveScenario()" [disabled]="loadingRiskAI">+ Agregar</button>
             </div>
 
             <div class="risk-scenarios-block">
@@ -281,23 +281,23 @@
                         </button>
                     </div>
                     <div class="scenario-row">
-                        <select class="field-control" [(ngModel)]="localRiskData.alternateScenarios[i]" (ngModelChange)="onRiskFieldChange()">
+                        <select class="field-control" [(ngModel)]="localRiskData.alternateScenarios[i]" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                             <option value="">Seleccione un escenario</option>
                             <option *ngFor="let option of getScenarioOptions(localRiskData.alternateScenarios, i)" [value]="option">{{ option }}</option>
                         </select>
                         <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.alternateScenarios.length > 1"
-                            (click)="removeAlternateScenario(i)">−</button>
+                            (click)="removeAlternateScenario(i)" [disabled]="loadingRiskAI">−</button>
                     </div>
                 </div>
-                <button type="button" class="button-link-add" (click)="addAlternateScenario()">+ Agregar</button>
+                <button type="button" class="button-link-add" (click)="addAlternateScenario()" [disabled]="loadingRiskAI">+ Agregar</button>
             </div>
 
             <div class="actions">
-                <button class="button-secondary" (click)="requestRiskGeneration()" [disabled]="loadingRiskAI">
+                <button class="button-secondary" (click)="requestRiskGeneration()" [disabled]="anyAILoading">
                     <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
                     Genera con IA
                 </button>
-                <button class="button-generate" (click)="requestRiskRegeneration()" [disabled]="loadingRiskAI">
+                <button class="button-generate" (click)="requestRiskRegeneration()" [disabled]="anyAILoading">
                     <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
                     Regenerar con IA
                 </button>

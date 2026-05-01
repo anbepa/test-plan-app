@@ -57,7 +57,7 @@ export class GeminiService {
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        maxOutputTokens: 900,
+        maxOutputTokens: 1500,
         temperature: 0.6,
         responseMimeType: 'application/json'
       }

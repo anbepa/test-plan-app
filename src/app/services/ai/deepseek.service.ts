@@ -27,30 +27,39 @@ export class DeepSeekService {
         return response?.choices?.[0]?.message?.content || '';
     }
 
+    // deepseek-reasoner consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
+    // El JSON de risk-strategy tiene ~300-500 tokens de output. Total necesario: ~3000-4000 tokens.
+    private readonly RISK_STRATEGY_MODEL = 'deepseek-chat'; // Usa chat para evitar overhead de razonamiento
+
     private buildRiskStrategyPayload(promptText: string, isRetry = false): DeepSeekRequest {
         const retryInstruction = isRetry
             ? '\n\nIMPORTANTE: Tu respuesta anterior no fue un JSON válido. Devuelve ÚNICAMENTE el objeto JSON completo, iniciando con { y terminando con }, sin texto adicional.'
             : '';
 
         return {
-            model: this.MODEL,
+            model: this.RISK_STRATEGY_MODEL,
             messages: [{ role: 'user', content: `${promptText}${retryInstruction}` }],
             temperature: isRetry ? 0.2 : 0.35,
-            max_tokens: isRetry ? 1800 : 1400,
+            max_tokens: isRetry ? 3000 : 2500,
             response_format: { type: 'json_object' }
         };
     }
 
     private parseRiskStrategyResponse(response: any): any {
         const textContent = this.getContentFromResponse(response).trim();
+        const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
 
         if (!textContent) {
-            const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
             throw new Error(
                 finishReason === 'length'
                     ? 'La IA agotó tokens antes de devolver el JSON completo.'
                     : 'La IA no devolvió contenido JSON en la respuesta.'
             );
+        }
+
+        // Si el JSON fue truncado por límite de tokens, intentar repararlo
+        if (finishReason === 'length') {
+            console.warn('[DeepSeek RiskStrategy] Respuesta truncada (finish_reason=length), intentando reparar JSON...');
         }
 
         return this.parserService.cleanAndParseJSON(textContent);

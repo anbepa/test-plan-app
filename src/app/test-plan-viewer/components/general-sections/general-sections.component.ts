@@ -102,6 +102,12 @@ export class GeneralSectionsComponent implements OnChanges {
         '100% - Ocurrido (Issue)'
     ];
 
+    /** Verdadero si CUALQUIER sección tiene una llamada de IA en curso */
+    get anyAILoading(): boolean {
+        return this.loadingOutOfScopeAI || this.loadingStrategyAI ||
+               this.loadingLimitationsAI || this.loadingAssumptionsAI || this.loadingRiskAI;
+    }
+
     constructor(@Inject(PLATFORM_ID) private platformId: Object) { }
 
     ngOnChanges(changes: SimpleChanges): void {

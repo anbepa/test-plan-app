@@ -491,12 +491,14 @@ textarea.form-control {
     border-radius: 0.5rem;
     margin-bottom: 1.5rem;
     background: white;
+    -webkit-overflow-scrolling: touch;
 }
 
 .detailed-test-cases-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
+    table-layout: auto;
 }
 
 .detailed-test-cases-table th,
@@ -520,8 +522,17 @@ textarea.form-control {
     border-bottom: none;
 }
 
-.detailed-test-cases-table tr:hover td {
-    background-color: #f9fafb;
+.detailed-test-cases-table tbody tr {
+    transition: background-color 250ms ease, box-shadow 250ms ease;
+}
+
+.detailed-test-cases-table tbody tr:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+    box-shadow: inset 3px 0 0 0 #3b82f6;
+}
+
+.detailed-test-cases-table tbody tr:hover td {
+    background-color: transparent;
 }
 
 /* Fix for preformatted text looking like code */
@@ -531,10 +542,41 @@ textarea.form-control {
     /* Use main font, not monospace */
     margin: 0;
     font-size: 0.875rem;
-    line-height: 1.6;
+    line-height: 1.5;
     color: var(--text-primary, #111827);
-    max-width: 400px;
-    /* Prevent extremely wide content */
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+/* Ajuste de ancho para columnas específicas */
+.detailed-test-cases-table th:nth-child(1),
+.detailed-test-cases-table td:nth-child(1) {
+    min-width: 100px;
+    width: 10%;
+}
+
+.detailed-test-cases-table th:nth-child(2),
+.detailed-test-cases-table td:nth-child(2) {
+    min-width: 180px;
+    width: 20%;
+}
+
+.detailed-test-cases-table th:nth-child(3),
+.detailed-test-cases-table td:nth-child(3) {
+    min-width: 150px;
+    width: 18%;
+}
+
+.detailed-test-cases-table th:nth-child(4),
+.detailed-test-cases-table td:nth-child(4) {
+    min-width: 160px;
+    width: 22%;
+}
+
+.detailed-test-cases-table th:nth-child(5),
+.detailed-test-cases-table td:nth-child(5) {
+    min-width: 160px;
+    width: 30%;
 }
 
 /* List styles in table */
@@ -555,7 +597,7 @@ textarea.form-control {
 
 /* Preview table specific styles */
 .preview-table-container {
-    margin-top: 2rem;
+    margin-top: 1rem;
 }
 
 .preview-table-container h4 {
@@ -563,6 +605,58 @@ textarea.form-control {
     font-weight: 600;
     color: #111827;
     margin-bottom: 1rem;
+}
+
+/* Barra de acciones encima de la tabla — estilo consistente con hu-scenarios */
+.preview-top-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.625rem;
+    margin-bottom: 1rem;
+}
+
+.btn-preview-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.78rem 1.45rem;
+    border-radius: 24px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid color-mix(in srgb, var(--primary-color, #007AFF) 30%, #ffffff);
+    gap: 0.5rem;
+    min-height: 50px;
+    white-space: nowrap;
+}
+
+.btn-preview-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-preview-secondary {
+    background: var(--background-color, #fff);
+    color: var(--primary-color, #007AFF);
+}
+
+.btn-preview-secondary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--primary-color, #007AFF) 9%, #ffffff);
+    border-color: var(--primary-color, #007AFF);
+}
+
+.btn-preview-primary {
+    background: var(--primary-color, #007AFF);
+    color: #fff;
+    border-color: var(--primary-color, #007AFF);
+}
+
+.btn-preview-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--primary-color, #007AFF) 85%, #000000);
+    border-color: color-mix(in srgb, var(--primary-color, #007AFF) 85%, #000000);
 }
 
 /* === ESTILOS FALTANTES PARA BOTONES Y ALCANCE === */
@@ -622,30 +716,13 @@ textarea.form-control {
     /* Mantiene saltos de línea pero permite wrapping */
 }
 
-/* Ajuste de acciones finales */
-.final-actions-group {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(260px, 1fr));
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
-    margin: 2rem auto 0;
-    max-width: 980px;
-}
-
-.final-actions-group .button-save-individual,
-.final-actions-group .button-primary {
-    width: 100%;
-    min-height: 52px;
-    white-space: nowrap;
-}
 
 .btn-action-icon {
     width: 20px;
     height: 20px;
 }
 
-/* Badge contador */
+/* Badge contador de HUs guardadas */
 .hu-counter-badge {
     display: inline-flex;
     align-items: center;
@@ -657,7 +734,6 @@ textarea.form-control {
     border-radius: 20px;
     font-size: 0.875rem;
     font-weight: 500;
-    grid-column: 1 / -1;
 }
 
 .badge-icon {
@@ -666,12 +742,12 @@ textarea.form-control {
 }
 
 @media (max-width: 768px) {
-    .final-actions-group {
-        grid-template-columns: 1fr;
-        max-width: 100%;
+    .preview-top-actions {
+        flex-direction: column;
+        align-items: stretch;
     }
-
-    .hu-counter-badge {
-        justify-self: center;
+    .btn-preview-action {
+        width: 100%;
+        justify-content: center;
     }
 }

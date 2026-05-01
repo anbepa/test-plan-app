@@ -93,6 +93,13 @@ export class HuSyncService {
     }
   }
 
+  /** Removes a single HU from the cache (use when a HU is deleted). */
+  invalidateHu(huId: string): void {
+    if (!huId) return;
+    this.latestHuCache.delete(huId);
+    this.saveCacheToLocalStorage();
+  }
+
   getLatestHu(huId: string): HUData | null {
     if (!huId) return null;
     return this.latestHuCache.get(huId) || null;

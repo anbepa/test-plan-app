@@ -27,22 +27,20 @@
       </div>
     </div>
 
-    <div class="test-cases-section" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
-      <h4 class="section-subtitle">
-        Casos de Prueba ({{ hu.detailedTestCases.length }})
-      </h4>
-
+    <div class="test-cases-section">
       <div class="actions table-actions">
         <button (click)="editHuScenarios()" class="button-edit">
           <span class="icon-sparkle"></span>
           Editar / Refinar con IA
         </button>
-        <button (click)="executeTestPlan()" class="button-execute">
+        <button (click)="executeTestPlan()" class="button-execute"
+          [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0">
           ▶ Ejecutar Plan
         </button>
         <div class="export-menu" [class.open]="exportMenuOpen">
           <button type="button" class="button-secondary export-menu-trigger" (click)="toggleExportMenu($event)"
-            [attr.aria-expanded]="exportMenuOpen" aria-haspopup="menu">
+            [attr.aria-expanded]="exportMenuOpen" aria-haspopup="menu"
+            [disabled]="!hu.detailedTestCases || hu.detailedTestCases.length === 0">
             <span>Exportar Matriz</span>
             <span class="export-menu-chevron" [class.rotated]="exportMenuOpen">
               <span class="icon-chevron"></span>
@@ -60,37 +58,48 @@
         </div>
       </div>
 
-      <div class="detailed-test-cases-table-container">
-        <table class="detailed-test-cases-table">
-          <thead>
-            <tr>
-              <th>ID Caso</th>
-              <th>Escenario de Prueba (Título)</th>
-              <th>Precondiciones</th>
-              <th>Paso a Paso</th>
-              <th>Resultado Esperado</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let tc of hu.detailedTestCases; let i = index" [class.row-even]="i % 2 === 1">
-              <td data-label="ID Caso" class="id-col">{{ hu.id }}_CP{{ i + 1 }}</td>
-              <td data-label="Escenario de Prueba (Título)">{{ tc.title }}</td>
-              <td data-label="Precondiciones">
-                <pre class="table-pre">{{ tc.preconditions }}</pre>
-              </td>
-              <td data-label="Paso a Paso">
-                <ol class="step-list">
-                  <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
-                </ol>
-              </td>
-              <td data-label="Resultado Esperado">
-                <ul class="result-list">
-                  <li *ngFor="let line of splitLines(tc.expectedResults)">{{ line }}</li>
-                </ul>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- Sin casos de prueba -->
+      <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="no-test-cases-state">
+        <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar / Refinar con IA</strong> para generarlos.</p>
+      </div>
+
+      <!-- Tabla de casos de prueba -->
+      <div *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
+        <h4 class="section-subtitle">
+          Casos de Prueba ({{ hu.detailedTestCases.length }})
+        </h4>
+        <div class="detailed-test-cases-table-container">
+          <table class="detailed-test-cases-table">
+            <thead>
+              <tr>
+                <th>ID Caso</th>
+                <th>Escenario de Prueba (Título)</th>
+                <th>Precondiciones</th>
+                <th>Paso a Paso</th>
+                <th>Resultado Esperado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let tc of hu.detailedTestCases; let i = index" [class.row-even]="i % 2 === 1">
+                <td data-label="ID Caso" class="id-col">{{ hu.id }}_CP{{ i + 1 }}</td>
+                <td data-label="Escenario de Prueba (Título)">{{ tc.title }}</td>
+                <td data-label="Precondiciones">
+                  <pre class="table-pre">{{ tc.preconditions }}</pre>
+                </td>
+                <td data-label="Paso a Paso">
+                  <ol class="step-list">
+                    <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                  </ol>
+                </td>
+                <td data-label="Resultado Esperado">
+                  <ul class="result-list">
+                    <li *ngFor="let line of splitLines(tc.expectedResults)">{{ line }}</li>
+                  </ul>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

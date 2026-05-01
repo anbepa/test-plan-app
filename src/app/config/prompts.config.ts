@@ -214,6 +214,7 @@ REGLAS DE CALIDAD:
 - No agrupes en el resultado esperado comportamientos no ejecutados o no verificados en los pasos.
 - Cada caso debe validar una intención principal y, como máximo, una validación secundaria estrechamente relacionada.
 - Si un expectedResults menciona más de una validación relevante, los pasos deben ejercitar explícitamente todas esas validaciones.
+- IDIOMA OBLIGATORIO: Todo el contenido generado (title, preconditions, steps, expectedResults) debe estar escrito EXCLUSIVAMENTE en español. Está prohibido usar inglés o cualquier otro idioma.
 
 OPTIMIZACIÓN DE TOKENS:
 - Sé conciso: evita explicaciones narrativas.
@@ -348,6 +349,7 @@ REGLAS DE CALIDAD:
 - No agrupes en el resultado esperado comportamientos no ejecutados o no verificados en los pasos.
 - Cada caso debe validar una intención principal y, como máximo, una validación secundaria estrechamente relacionada.
 - Si un expectedResults menciona más de una validación relevante, los pasos deben ejercitar explícitamente todas esas validaciones.
+- IDIOMA OBLIGATORIO: Todo el contenido generado (title, preconditions, steps, expectedResults) debe estar escrito EXCLUSIVAMENTE en español. Está prohibido usar inglés o cualquier otro idioma.
 
 OPTIMIZACIÓN DE TOKENS:
 - Sé conciso: evita explicaciones narrativas.

@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, ActivatedRoute, RouterLink } from '@angular/router';
+import { Router, ActivatedRoute, RouterLink, NavigationEnd } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database/database.service';
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
@@ -11,7 +11,8 @@ import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-mat
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
 import { ExportService } from '../services/export/export.service';
-import { catchError, finalize, tap, of } from 'rxjs';
+import { HuSyncService } from '../services/core/hu-sync.service';
+import { catchError, finalize, tap, of, filter } from 'rxjs';
 
 import { StaticSectionName, RiskStrategyData } from './components/general-sections/general-sections.component';
 
@@ -106,6 +107,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private mapper: TestPlanMapperService,
     private exportService: ExportService,
+    private huSyncService: HuSyncService,
     private cdr: ChangeDetectorRef,
     private toastService: ToastService
   ) { }
@@ -122,6 +124,23 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Detectar cuando vuelves a esta ruta (ej: después de agregar HU desde generator)
+    // Esto recarga el plan actual para reflejar cambios
+    this.router.events
+      .pipe(
+        filter(event => event instanceof NavigationEnd)
+      )
+      .subscribe(async () => {
+        if (this.selectedTestPlan?.id) {
+          // Pequeño delay para asegurar que el componente ha terminado de renderizar
+          setTimeout(async () => {
+            if (this.selectedTestPlan?.id) {
+              await this.reloadCurrentTestPlan();
+            }
+          }, 100);
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -513,6 +532,29 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.riskScenarioOptions = this.buildScenarioOptionsForRisk();
   }
 
+  /**
+   * Recarga el plan actual desde la base de datos para reflejar cambios recientes
+   * (ej: después de agregar HUs desde el generador)
+   */
+  private async reloadCurrentTestPlan(): Promise<void> {
+    if (!this.selectedTestPlan?.id) {
+      return;
+    }
+
+    try {
+      console.log('🔄 Recargando plan de pruebas:', this.selectedTestPlan.id);
+      const fullTestPlan = await this.databaseService.getTestPlanById(this.selectedTestPlan.id);
+      if (fullTestPlan) {
+        this.selectedTestPlan = fullTestPlan;
+        this.convertDbTestPlanToHUList(fullTestPlan);
+        this.cdr.detectChanges();
+        console.log('✅ Plan recargado correctamente. HUs:', this.huList.length);
+      }
+    } catch (error) {
+      console.error('❌ Error al recargar el plan:', error);
+    }
+  }
+
   backToList() {
     this.selectedTestPlan = null;
     this.huList = [];
@@ -855,6 +897,10 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.huList = this.huList.filter(hu => !huIdsToDeleteSet.has(hu.id));
     this.updateHuPagination();
     this.selectedHuIds = this.selectedHuIds.filter(id => !huIdsToDeleteSet.has(id));
+
+    // Invalidate HuSyncService cache for deleted HUs to avoid stale data appearing
+    // in future HUs that may share the same custom id.
+    husToDelete.forEach(hu => this.huSyncService.invalidateHu(hu.id));
 
     if (this.selectedTestPlan?.user_stories) {
       this.selectedTestPlan.user_stories = this.selectedTestPlan.user_stories.filter(us => {

@@ -182,6 +182,11 @@
                     <table class="detailed-test-cases-table">
                         <thead>
                             <tr>
+                                <th class="check-col">
+                                    <input type="checkbox" [checked]="areAllTestCasesSelected()"
+                                        (change)="onToggleSelectAllTestCases($any($event.target).checked)"
+                                        [disabled]="isLoading || isRefining">
+                                </th>
                                 <th>ID Caso</th>
                                 <th>Escenario de Prueba (Título)</th>
                                 <th>Precondiciones</th>
@@ -192,7 +197,12 @@
                         </thead>
                         <tbody>
                             <ng-container *ngFor="let tc of hu.detailedTestCases; let i = index">
-                                <tr [class.row-editing]="isEditingTestCase(i)">
+                                <tr [class.row-editing]="isEditingTestCase(i)" [class.row-selected]="isTestCaseSelected(i)">
+                                    <td class="check-col" data-label="Seleccionar">
+                                        <input type="checkbox" [checked]="isTestCaseSelected(i)"
+                                            (change)="onTestCaseSelectionChange(i, $any($event.target).checked)"
+                                            [disabled]="isLoading || isRefining">
+                                    </td>
                                     <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
                                     <td data-label="Escenario de Prueba (Título)">
                                         <ng-container *ngIf="isEditingTestCase(i); else readTitle">
@@ -275,6 +285,20 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="bulk-delete-bar" *ngIf="selectedTestCaseIndexes.length > 0">
+                    <span class="bulk-count">
+                        {{ selectedTestCaseIndexes.length }}
+                        {{ selectedTestCaseIndexes.length === 1 ? 'caso seleccionado' : 'casos seleccionados' }}
+                    </span>
+                    <button type="button" class="bulk-delete-btn" (click)="requestDeleteSelectedTestCases()"
+                        [disabled]="isLoading || isRefining">
+                        <span class="icon-trash-white"></span>
+                        Eliminar seleccionados
+                    </button>
+                    <button type="button" class="bulk-cancel-btn" (click)="selectedTestCaseIndexes = []"
+                        [disabled]="isLoading || isRefining">Cancelar</button>
+                </div>
             </div>
 
             <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="empty-state">
@@ -292,7 +316,7 @@
     </div>
 </ng-template>
 
-<app-confirmation-modal [isOpen]="isDeleteModalOpen" title="Eliminar Caso de Prueba" [message]="deleteModalMessage"
+<app-confirmation-modal [isOpen]="isDeleteModalOpen" [title]="deleteModalTitle" [message]="deleteModalMessage"
     confirmText="Eliminar" cancelText="Cancelar" type="danger" (confirm)="onConfirmDeleteTestCase()"
     (cancel)="onCancelDeleteTestCase()">
 </app-confirmation-modal>

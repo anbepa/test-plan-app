@@ -40,8 +40,10 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   private editingBackup: DetailedTestCase | null = null;
   private isCreatingNewCase: boolean = false;
   isDeleteModalOpen: boolean = false;
+  deleteModalTitle: string = 'Eliminar Caso de Prueba';
   deleteModalMessage: string = '';
-  private pendingDeleteTestCaseIndex: number | null = null;
+  selectedTestCaseIndexes: number[] = [];
+  private pendingDeleteTestCaseIndexes: number[] = [];
   private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
   private aiProgressIndex = 0;
   private lastStepAddAt = new Map<number, number>();
@@ -387,6 +389,31 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     return this.openActionsMenuIndex === index;
   }
 
+  isTestCaseSelected(index: number): boolean {
+    return this.selectedTestCaseIndexes.includes(index);
+  }
+
+  areAllTestCasesSelected(): boolean {
+    const total = this.hu?.detailedTestCases?.length || 0;
+    return total > 0 && this.selectedTestCaseIndexes.length === total;
+  }
+
+  onTestCaseSelectionChange(index: number, checked: boolean): void {
+    if (checked) {
+      if (!this.selectedTestCaseIndexes.includes(index)) {
+        this.selectedTestCaseIndexes = [...this.selectedTestCaseIndexes, index].sort((a, b) => a - b);
+      }
+      return;
+    }
+
+    this.selectedTestCaseIndexes = this.selectedTestCaseIndexes.filter(i => i !== index);
+  }
+
+  onToggleSelectAllTestCases(checked: boolean): void {
+    const total = this.hu?.detailedTestCases?.length || 0;
+    this.selectedTestCaseIndexes = checked ? Array.from({ length: total }, (_, index) => index) : [];
+  }
+
   toggleActionsMenu(index: number, event: MouseEvent): void {
     event.stopPropagation();
     this.openActionsMenuIndex = this.openActionsMenuIndex === index ? null : index;
@@ -492,60 +519,89 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.editingTestCaseIndex = 0;
     this.editingBackup = null;
     this.isCreatingNewCase = true;
+    this.selectedTestCaseIndexes = [];
   }
 
   requestDeleteTestCase(index: number): void {
     if (!this.hu?.detailedTestCases || index < 0 || index >= this.hu.detailedTestCases.length) return;
 
     const testCase = this.hu.detailedTestCases[index];
-    this.pendingDeleteTestCaseIndex = index;
+    this.pendingDeleteTestCaseIndexes = [index];
+    this.deleteModalTitle = 'Eliminar Caso de Prueba';
     this.deleteModalMessage = `¿Eliminar el caso "${testCase.title || 'Sin título'}"?`;
     this.isDeleteModalOpen = true;
   }
 
+  requestDeleteSelectedTestCases(): void {
+    if (!this.hu?.detailedTestCases?.length || this.selectedTestCaseIndexes.length === 0) return;
+
+    this.pendingDeleteTestCaseIndexes = [...this.selectedTestCaseIndexes].sort((a, b) => a - b);
+    this.deleteModalTitle = 'Eliminar Casos de Prueba';
+    this.deleteModalMessage = this.pendingDeleteTestCaseIndexes.length === 1
+      ? `¿Eliminar el caso "${this.hu.detailedTestCases[this.pendingDeleteTestCaseIndexes[0]]?.title || 'Sin título'}"?`
+      : `¿Eliminar ${this.pendingDeleteTestCaseIndexes.length} casos de prueba seleccionados?`;
+    this.isDeleteModalOpen = true;
+  }
+
   async onConfirmDeleteTestCase(): Promise<void> {
-    if (!this.hu?.detailedTestCases || this.pendingDeleteTestCaseIndex === null) {
+    if (!this.hu?.detailedTestCases || this.pendingDeleteTestCaseIndexes.length === 0) {
       this.onCancelDeleteTestCase();
       return;
     }
 
-    const index = this.pendingDeleteTestCaseIndex;
-    if (index < 0 || index >= this.hu.detailedTestCases.length) {
+    const indexes = [...this.pendingDeleteTestCaseIndexes]
+      .filter(index => index >= 0 && index < this.hu!.detailedTestCases!.length)
+      .sort((a, b) => b - a);
+
+    if (indexes.length === 0) {
       this.onCancelDeleteTestCase();
       return;
     }
 
-    const deletedCase = this.cloneTestCase(this.hu.detailedTestCases[index]);
-    this.hu.detailedTestCases.splice(index, 1);
+    const snapshotBeforeDelete = this.hu.detailedTestCases.map(tc => this.cloneTestCase(tc));
+    const previousSelectedIndexes = [...this.selectedTestCaseIndexes];
+
+    indexes.forEach(index => {
+      this.hu!.detailedTestCases!.splice(index, 1);
+    });
 
     // Refresca de inmediato la vista (eliminación en línea)
     this.cdr.detectChanges();
 
-    if (this.editingTestCaseIndex === index) {
+    if (this.editingTestCaseIndex !== null && indexes.includes(this.editingTestCaseIndex)) {
       this.editingTestCaseIndex = null;
       this.editingBackup = null;
       this.isCreatingNewCase = false;
-    } else if (this.editingTestCaseIndex !== null && this.editingTestCaseIndex > index) {
-      this.editingTestCaseIndex = this.editingTestCaseIndex - 1;
+    } else if (this.editingTestCaseIndex !== null) {
+      const removedBeforeEditing = indexes.filter(index => index < this.editingTestCaseIndex!).length;
+      this.editingTestCaseIndex = this.editingTestCaseIndex - removedBeforeEditing;
     }
+
+    this.selectedTestCaseIndexes = [];
 
     this.onCancelDeleteTestCase();
 
     const saved = await this.saveData();
     if (saved) {
-      this.toastService.success('Caso de prueba eliminado y guardado en base de datos');
+      this.toastService.success(indexes.length === 1
+        ? 'Caso de prueba eliminado y guardado en base de datos'
+        : `${indexes.length} casos de prueba eliminados y guardados en base de datos`);
       return;
     }
 
     // Rollback local si falla persistencia
-    this.hu.detailedTestCases.splice(index, 0, deletedCase);
+    this.hu.detailedTestCases = snapshotBeforeDelete;
+    this.selectedTestCaseIndexes = previousSelectedIndexes;
     this.cdr.detectChanges();
-    this.toastService.error('No se pudo guardar la eliminación en base de datos. Se restauró el caso.');
+    this.toastService.error(indexes.length === 1
+      ? 'No se pudo guardar la eliminación en base de datos. Se restauró el caso.'
+      : 'No se pudo guardar la eliminación en base de datos. Se restauraron los casos.');
   }
 
   onCancelDeleteTestCase(): void {
     this.isDeleteModalOpen = false;
-    this.pendingDeleteTestCaseIndex = null;
+    this.deleteModalTitle = 'Eliminar Caso de Prueba';
+    this.pendingDeleteTestCaseIndexes = [];
     this.deleteModalMessage = '';
   }
 
@@ -906,6 +962,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     });
 
     await this.databaseService.smartUpdateUserStoryTestCases(userStoryId, this.hu.detailedTestCases);
+    // Reload from DB to sync dbIds on newly inserted test cases
     await this.loadUserStoryData();
   }
 }
