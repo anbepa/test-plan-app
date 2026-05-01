@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { ExcelMatrixExporterComponent } from '../../excel-matrix-exporter/excel-matrix-exporter.component';
 import { HUData, DetailedTestCase } from '../../models/hu-data.model';
@@ -23,6 +23,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   testPlanId: string = '';
   testPlanTitle: string = '';
   isLoadingScenarios: boolean = false;
+  scopeExpanded: boolean = false;
+  exportMenuOpen: boolean = false;
   private huSyncSubscription: Subscription | null = null;
 
   constructor(
@@ -137,6 +139,11 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     this.huSyncSubscription?.unsubscribe();
   }
 
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    this.exportMenuOpen = false;
+  }
+
   goToPlansList(): void {
     this.router.navigate(['/viewer']);
   }
@@ -220,6 +227,23 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleExportMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.exportMenuOpen = !this.exportMenuOpen;
+  }
+
+  async exportMatrix(format: 'docx' | 'xlsx', event?: MouseEvent): Promise<void> {
+    event?.stopPropagation();
+    this.exportMenuOpen = false;
+
+    if (format === 'docx') {
+      await this.exportExecutionMatrixToDOCX();
+      return;
+    }
+
+    this.exportExecutionMatrixToExcel();
+  }
+
   exportExecutionMatrixToExcel(): void {
     if (!this.hu) return;
 
@@ -228,5 +252,10 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     } else {
       this.toastService.error('El componente para exportar no se ha cargado correctamente');
     }
+  }
+
+  splitLines(text: string): string[] {
+    if (!text) return [];
+    return text.split('\n').map(l => l.replace(/^[-•*]\s*/, '').trim()).filter(l => l.length > 0);
   }
 }

@@ -25,7 +25,7 @@ app.post('/api/deepseek-proxy', async (req, res) => {
     const { payload, action } = req.body;
     const apiBody = payload || req.body;
 
-    console.log(`[API] DeepSeek API call received (action: ${action || 'direct'})`);
+    console.log(`[API] DeepSeek API call received (action: ${action || 'direct'}, stream: ${!!apiBody.stream})`);
 
     const url = 'https://api.deepseek.com/chat/completions';
 
@@ -37,6 +37,51 @@ app.post('/api/deepseek-proxy', async (req, res) => {
       },
       body: JSON.stringify(apiBody)
     });
+
+    // Si el cliente pidió streaming, redirigir SSE chunk a chunk sin buffering
+    if (apiBody.stream === true) {
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[ERROR] DeepSeek Stream Error:', JSON.stringify(errorData, null, 2));
+        return res.status(response.status).json(errorData);
+      }
+      console.log(`[STREAM] Iniciando SSE hacia el cliente...`);
+
+      // Escribir headers y forzar flush inmediato
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Transfer-Encoding': 'chunked'
+      });
+      res.flushHeaders();
+
+      // Chunk-by-chunk: cada dato que llega de DeepSeek se reenvía al cliente
+      response.body.on('data', (chunk) => {
+        res.write(chunk);
+        // Forzar flush si el middleware de compresión lo soporta
+        if (typeof res.flush === 'function') res.flush();
+      });
+
+      response.body.on('end', () => {
+        console.log(`[STREAM] SSE completado`);
+        res.end();
+      });
+
+      response.body.on('error', (err) => {
+        console.error('[STREAM ERROR]', err.message);
+        res.end();
+      });
+
+      // Si el cliente se desconecta, cancelar el stream hacia DeepSeek
+      req.on('close', () => {
+        console.log('[STREAM] Cliente desconectado, cancelando stream');
+        response.body.destroy();
+      });
+
+      return;
+    }
 
     const responseData = await response.json();
 

@@ -389,6 +389,19 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.selectTestPlan(selectedPlans[0]);
   }
 
+  viewPlanDirectly(plan: Partial<DbTestPlanWithRelations>): void {
+    this.selectTestPlan(plan);
+  }
+
+  clearSelection(): void {
+    this.selectedPlanIds = [];
+  }
+
+  deleteSinglePlan(plan: Partial<DbTestPlanWithRelations>, event: MouseEvent): void {
+    event.stopPropagation();
+    this.deleteTestPlan(plan);
+  }
+
   deleteSelectedPlans(): void {
     const selectedPlans = this.getSelectedPlans();
     if (selectedPlans.length === 0) {

@@ -2,20 +2,20 @@
   <!-- TOPBAR sticky -->
   <div class="page-topbar">
     <div class="breadcrumb-row">
-      <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
+      <button type="button" class="breadcrumb-button" (click)="goToPlansList()" [disabled]="uiLocked">← Lista de Planes</button>
       <span class="breadcrumb-separator">/</span>
-      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()" [disabled]="uiLocked">Detalle del Plan</button>
       <span class="breadcrumb-separator">/</span>
-      <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Riesgos del Plan</button>
+      <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()" [disabled]="uiLocked">Riesgos del Plan</button>
     </div>
     <div class="topbar-actions">
-      <button class="btn-action" [disabled]="isSaving" (click)="save()">
-        <span *ngIf="isSaving" class="spinner-inline"></span>
-        {{ isSaving ? 'Guardando...' : 'Guardar' }}
-      </button>
-      <button class="btn-action btn-ai" [disabled]="loadingAI" (click)="generateWithAI()">
+      <button class="btn-action btn-ai" [disabled]="uiLocked" (click)="generateWithAI()">
         <span *ngIf="loadingAI" class="spinner-inline spinner-purple"></span>
         {{ loadingAI ? 'Generando...' : 'Generar con IA' }}
+      </button>
+      <button class="btn-action btn-primary" [disabled]="uiLocked" (click)="save()">
+        <span *ngIf="isSaving" class="spinner-inline"></span>
+        {{ isSaving ? 'Guardando...' : 'Guardar' }}
       </button>
       <span *ngIf="errorAI" class="error-inline">⚠️ {{ errorAI }}</span>
     </div>
@@ -27,6 +27,7 @@
   </div>
 
   <div *ngIf="!isLoading" class="risk-card">
+    <fieldset class="risk-form-shell" [disabled]="uiLocked">
 
     <!-- ── DESCRIPCIÓN DEL RIESGO ── -->
     <h3 class="risk-subtitle">DESCRIPCIÓN DEL RIESGO</h3>
@@ -156,6 +157,8 @@
       </div>
       <button type="button" class="btn-link-add" (click)="addAlternateScenario()">+ Agregar</button>
     </div>
+
+    </fieldset>
 
   </div>
 </div>

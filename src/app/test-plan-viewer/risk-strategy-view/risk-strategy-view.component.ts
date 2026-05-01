@@ -43,6 +43,10 @@ export class RiskStrategyViewComponent implements OnInit {
     '100% - Ocurrido (Issue)'
   ];
 
+  get uiLocked(): boolean {
+    return this.loadingAI || this.isSaving;
+  }
+
   constructor(
     private router: Router,
     private route: ActivatedRoute,

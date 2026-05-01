@@ -60,6 +60,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   errorScope: string | null = null;
   errorScenarios: string | null = null;
 
+  /** Tokens de razonamiento (CoT) acumulados durante el stream */
+  streamingReasoning: string = '';
+  /** Tokens de contenido JSON acumulados durante el stream */
+  streamingContent: string = '';
+
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
@@ -119,14 +124,14 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
     const generationSteps = [
       'Analizando descripción y criterios de aceptación…',
-      shortTech ? `Generando escenarios · técnica ${shortTech}…` : 'Generando escenarios de prueba…',
-      'Estructurando y validando resultados…'
+      shortTech ? `Generando escenarios con técnica ${shortTech}…` : 'Generando escenarios de prueba…',
+      'Validando resultados…'
     ];
 
     const refinementSteps = [
       'Leyendo casos de prueba actuales…',
-      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
-      'Reorganizando y validando escenarios…'
+      shortTech ? `Refinando casos con técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Validando escenarios…'
     ];
 
     const steps = this.componentState === 'editingForRefinement' ? refinementSteps : generationSteps;
@@ -357,25 +362,31 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.refinementTechnique = this.currentSelectedTechnique;
     this.cdr.detectChanges();
 
-    // GENERACIÓN DIRECTA (1 llamada, más rápida)
+    // GENERACIÓN EN MODO STREAM (deepseek-reasoner)
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScenarios = true;
       this.errorScenarios = null;
+      this.streamingReasoning = '';
+      this.streamingContent = '';
       this.startAiProgress();
 
-      console.log('[GENERATION] Iniciando generación SMART (con continuación automática)');
+      console.log('[GENERATION] Iniciando generación con STREAMING...');
 
-      this.aiService.generateTestCasesSmart(
+      this.aiService.generateTestCasesSmartStream(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique
       ).subscribe({
-        next: (result: any) => {
-          // Resultado directo sin fases CoT
-          if (result && result.testCases) {
-            console.log('[GENERATION] Directo Completado. Datos:', result);
+        next: (event: any) => {
+          this.streamingReasoning = event.reasoning || '';
+          this.streamingContent = event.content || '';
+          this.cdr.detectChanges();
 
-            if (this.generatedHUData) {
+          if (event.done) {
+            // Parsear el JSON completo una vez terminado el stream
+            const result = this.parseStreamResult(event.content);
+            if (result && result.testCases && this.generatedHUData) {
+              console.log('[GENERATION] Stream completado. Casos generados:', result.testCases.length);
               this.generatedHUData.generatedScope = result.scope || 'Scope no generado';
 
               const rawTestCases = result.testCases || [];
@@ -396,16 +407,20 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
             }
           }
         },
-        error: (e) => {
-          console.error('[GENERATION] Error en modo directo:', e);
+        error: (e: any) => {
+          console.error('[GENERATION] Error en streaming:', e);
           this.loadingScenarios = false;
-          this.errorScope = 'Error durante la generación directa.';
-          this.errorScenarios = 'Error durante la generación directa.';
+          this.streamingReasoning = '';
+          this.streamingContent = '';
+          this.errorScope = 'Error durante la generación.';
+          this.errorScenarios = 'Error durante la generación.';
           this.stopAiProgress();
           this.cdr.detectChanges();
         },
         complete: () => {
           this.loadingScenarios = false;
+          this.streamingReasoning = '';
+          this.streamingContent = '';
           this.stopAiProgress();
           this.componentState = 'previewingGenerated';
           this.cdr.detectChanges();
@@ -416,6 +431,24 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           }, 0);
         }
       });
+    }
+  }
+
+  /** Parsea el contenido JSON del stream final */
+  private parseStreamResult(content: string): any {
+    if (!content) return null;
+    try {
+      // Intentar parsear directamente
+      const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+      return JSON.parse(clean);
+    } catch {
+      // Intentar extraer JSON del contenido si hay texto extra
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { return JSON.parse(match[0]); } catch {}
+      }
+      console.warn('[GENERATION] No se pudo parsear JSON del stream');
+      return null;
     }
   }
 
@@ -464,10 +497,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         });
       }
     });
-    // Refinamiento DIRECTO (1 llamada, más rápido)
+    // Refinamiento en modo STREAM
     this.loadingScenarios = true;
     this.cdr.detectChanges();
     this.errorScenarios = null;
+    this.streamingReasoning = '';
+    this.streamingContent = '';
     this.startAiProgress();
 
     // Preparar casos para envío (quitar propiedades UI)
@@ -476,25 +511,26 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       return originalTc as OriginalDetailedTestCase;
     });
 
-    this.aiService.refineTestCasesDirect(
+    this.aiService.refineTestCasesDirectStream(
       this.generatedHUData.originalInput,
       casesToRefine,
       this.refinementTechnique,
       this.userRefinementContext
     ).subscribe({
-      next: (result: any) => {
-        // Resultado directo sin fases CoT
-        if (result && result.testCases) {
-          let refinedCases = result.testCases;
+      next: (event: any) => {
+        this.streamingReasoning = event.reasoning || '';
+        this.streamingContent = event.content || '';
+        this.cdr.detectChanges();
 
-          if (this.generatedHUData) {
-            // Mantener estado de expansión
+        if (event.done) {
+          const result = this.parseStreamResult(event.content);
+          if (result && result.testCases && this.generatedHUData) {
             const existingExpansionStates = new Map<string, boolean>();
             this.generatedHUData.detailedTestCases.forEach(existingTc => {
               existingExpansionStates.set(existingTc.title, existingTc.isExpanded || false);
             });
 
-            this.generatedHUData.detailedTestCases = refinedCases.map((tc: any, index: number) => {
+            this.generatedHUData.detailedTestCases = result.testCases.map((tc: any, index: number) => {
               const detailedTc: UIDetailedTestCase = {
                 ...tc,
                 steps: this.normalizeSteps(
@@ -506,20 +542,24 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
             });
 
             this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
-              refinedCases.map((tc: any) => tc.title)
+              result.testCases.map((tc: any) => tc.title)
             );
           }
         }
       },
-      error: (e) => {
-        console.error('[REFINEMENT] Error en modo directo:', e);
+      error: (e: any) => {
+        console.error('[REFINEMENT] Error en streaming:', e);
         this.loadingScenarios = false;
+        this.streamingReasoning = '';
+        this.streamingContent = '';
         this.stopAiProgress();
-        this.formError = 'Error durante el refinamiento directo.';
+        this.formError = 'Error durante el refinamiento.';
         this.cdr.detectChanges();
       },
       complete: () => {
         this.loadingScenarios = false;
+        this.streamingReasoning = '';
+        this.streamingContent = '';
         this.stopAiProgress();
         this.componentState = 'editingForRefinement';
         this.cdr.detectChanges();

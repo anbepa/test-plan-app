@@ -69,38 +69,151 @@
     flex-wrap: wrap;
 }
 
-.btn-action {
+/* ── Botón Copiar (icono) ── */
+.btn-copy {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.45rem;
-    padding: 0.45rem 1.1rem;
+    width: 34px;
+    height: 34px;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+}
+.btn-copy svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+    fill: currentColor;
+    pointer-events: none;
+}
+.btn-copy:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    color: #111827;
+}
+.btn-copy-done {
+    background: #f0fdf4 !important;
+    border-color: #86efac !important;
+    color: #16a34a !important;
+}
+
+/* ── Dropdown Exportar ── */
+.export-dropdown {
+    position: relative;
+}
+
+.btn-export-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.9rem;
     border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
+    background: #1d4ed8;
+    border: 1px solid #1d4ed8;
+    color: #ffffff;
+    white-space: nowrap;
     transition: all 0.18s ease;
+}
+.btn-export-trigger:hover {
+    background: #1e40af;
+    border-color: #1e40af;
+}
+.btn-export-trigger svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+.btn-export-trigger .chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+    margin-left: 0.1rem;
+}
+.btn-export-trigger .chevron-open {
+    transform: rotate(180deg);
+}
+
+.export-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
     background: #ffffff;
     border: 1px solid #e5e7eb;
-    color: #3b82f6;
-    white-space: nowrap;
+    border-radius: 0.6rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    min-width: 210px;
+    z-index: 100;
+    overflow: hidden;
+    padding: 0.3rem;
 }
 
-.btn-action:hover:not(:disabled) {
-    background: #eff6ff;
-    border-color: #bfdbfe;
-    color: #2563eb;
+.export-menu-item-wrapper {
+    display: flex;
+    flex-direction: column;
 }
 
-.btn-action:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
+/* Botones del word-exporter dentro del menú dropdown */
+::ng-deep .export-menu app-word-exporter .word-exporter {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
 }
 
-.btn-action svg {
-    width: 1rem;
-    height: 1rem;
-    flex-shrink: 0;
+::ng-deep .export-menu app-word-exporter .btn-primary,
+::ng-deep .export-menu app-word-exporter .word-exporter-btn {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    padding: 0.5rem 0.75rem !important;
+    border-radius: 0.4rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    color: #111827 !important;
+    text-align: left !important;
+    transition: background 0.15s !important;
+    gap: 0.5rem !important;
+    min-height: unset !important;
+    box-shadow: none !important;
+    transform: none !important;
+    margin: 0 !important;
+    justify-content: flex-start !important;
+    letter-spacing: normal !important;
+    line-height: 1.4 !important;
+    white-space: nowrap !important;
+}
+
+::ng-deep .export-menu app-word-exporter .btn-primary:hover,
+::ng-deep .export-menu app-word-exporter .word-exporter-btn:hover {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+::ng-deep .export-menu app-word-exporter .btn-primary:disabled,
+::ng-deep .export-menu app-word-exporter .word-exporter-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+::ng-deep .export-menu app-word-exporter .word-exporter-btn i {
+    font-size: 14px !important;
+    color: #6b7280 !important;
 }
 
 /* Sobrescribir btn-primary del word-exporter para que coincida con el estilo ghost */
@@ -151,11 +264,15 @@
 }
 
 .paper-sheet {
-    background: white;
+    background: #ffffff;
     width: 100%;
-    padding: 2.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border-radius: 2px;
+    padding: 2.5rem 3rem;
+    border-radius: 3px;
+    box-shadow:
+        0 1px 1px rgba(0,0,0,0.06),
+        0 4px 12px rgba(0,0,0,0.10),
+        0 16px 32px rgba(0,0,0,0.07),
+        0 0 0 1px rgba(0,0,0,0.04);
     overflow-wrap: break-word;
     word-break: break-word;
 }

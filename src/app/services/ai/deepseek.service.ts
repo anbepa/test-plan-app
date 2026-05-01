@@ -6,7 +6,7 @@ import {
     DetailedTestCase,
     HUData
 } from '../../models/hu-data.model';
-import { DeepSeekClientService, DeepSeekRequest } from './deepseek-client.service';
+import { DeepSeekClientService, DeepSeekRequest, StreamEvent } from './deepseek-client.service';
 import { GeminiParserService, PartialParseResult } from './gemini-parser.service';
 
 @Injectable({
@@ -16,6 +16,7 @@ export class DeepSeekService {
 
     private readonly MODEL = 'deepseek-reasoner';
     private readonly MAX_CONTINUATIONS = 2; // Máximo de llamadas de continuación
+    private readonly RISK_STRATEGY_MAX_RETRIES = 1;
 
     constructor(
         private deepSeekClient: DeepSeekClientService,
@@ -24,6 +25,54 @@ export class DeepSeekService {
 
     private getContentFromResponse(response: any): string {
         return response?.choices?.[0]?.message?.content || '';
+    }
+
+    private buildRiskStrategyPayload(promptText: string, isRetry = false): DeepSeekRequest {
+        const retryInstruction = isRetry
+            ? '\n\nIMPORTANTE: Tu respuesta anterior no fue un JSON válido. Devuelve ÚNICAMENTE el objeto JSON completo, iniciando con { y terminando con }, sin texto adicional.'
+            : '';
+
+        return {
+            model: this.MODEL,
+            messages: [{ role: 'user', content: `${promptText}${retryInstruction}` }],
+            temperature: isRetry ? 0.2 : 0.35,
+            max_tokens: isRetry ? 1800 : 1400,
+            response_format: { type: 'json_object' }
+        };
+    }
+
+    private parseRiskStrategyResponse(response: any): any {
+        const textContent = this.getContentFromResponse(response).trim();
+
+        if (!textContent) {
+            const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+            throw new Error(
+                finishReason === 'length'
+                    ? 'La IA agotó tokens antes de devolver el JSON completo.'
+                    : 'La IA no devolvió contenido JSON en la respuesta.'
+            );
+        }
+
+        return this.parserService.cleanAndParseJSON(textContent);
+    }
+
+    private retryRiskStrategy(promptText: string, attempt: number): Observable<any> {
+        if (attempt > this.RISK_STRATEGY_MAX_RETRIES) {
+            return of(null).pipe(
+                map(() => {
+                    throw new Error('La IA devolvió una respuesta incompleta o inválida al generar el riesgo.');
+                })
+            );
+        }
+
+        console.warn(`[DeepSeek RiskStrategy] Reintentando generación de JSON (${attempt}/${this.RISK_STRATEGY_MAX_RETRIES})`);
+
+        return this.deepSeekClient.callDeepSeek(
+            'generateRiskStrategy',
+            this.buildRiskStrategyPayload(promptText, true)
+        ).pipe(
+            map(response => this.parseRiskStrategyResponse(response))
+        );
     }
 
     public generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
@@ -51,7 +100,7 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 180
+            max_tokens: 1500  // Aumentado: deepseek-reasoner consume ~500-1000 tokens en reasoning antes de generar content
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
@@ -61,17 +110,18 @@ export class DeepSeekService {
 
     public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
         const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
-        const payload: DeepSeekRequest = {
-            model: this.MODEL,
-            messages: [{ role: 'user', content: promptText }],
-            temperature: 0.6,
-            max_tokens: 900
-        };
 
-        return this.deepSeekClient.callDeepSeek('generateRiskStrategy', payload).pipe(
-            map(response => {
-                const textContent = this.getContentFromResponse(response).trim();
-                return this.parserService.cleanAndParseJSON(textContent);
+        return this.deepSeekClient.callDeepSeek(
+            'generateRiskStrategy',
+            this.buildRiskStrategyPayload(promptText)
+        ).pipe(
+            switchMap(response => {
+                try {
+                    return of(this.parseRiskStrategyResponse(response));
+                } catch (error) {
+                    console.warn('[DeepSeek RiskStrategy] Primera respuesta inválida, intentando una segunda vez...', error);
+                    return this.retryRiskStrategy(promptText, 1);
+                }
             })
         );
     }
@@ -89,7 +139,7 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.3,
+            temperature: 0.5,
             max_tokens: 16000
         };
 
@@ -132,7 +182,7 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.3,
+            temperature: 0.5,
             max_tokens: 16000
         };
 
@@ -187,8 +237,14 @@ export class DeepSeekService {
             return of(accumulatedResult);
         }
 
-        const existingTitles = (accumulatedResult.testCases || []).map((tc: any) => tc.title);
-        const promptText = PROMPTS.CONTINUATION_PROMPT(description, acceptanceCriteria, technique, existingTitles);
+        const currentCasesJson = JSON.stringify(accumulatedResult.testCases || [], null, 2);
+        const userRequest = `Agrega los casos de prueba que faltan para completar la cobertura`;
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(
+            `Descripción: ${description}\nCriterios: ${acceptanceCriteria}`,
+            currentCasesJson,
+            userRequest,
+            technique
+        );
 
         const payload: DeepSeekRequest = {
             model: this.MODEL,
@@ -252,6 +308,10 @@ export class DeepSeekService {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
 
+        console.log('[DeepSeek Direct Refine] 📋 userReanalysisContext recibido:', JSON.stringify(userReanalysisContext));
+        console.log('[DeepSeek Direct Refine] 📋 técnica:', newTechnique);
+        console.log('[DeepSeek Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
+
         const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
         const payload: DeepSeekRequest = {
             model: this.MODEL,
@@ -274,6 +334,54 @@ export class DeepSeekService {
                 return finalJSON;
             })
         );
+    }
+
+    /**
+     * Generación en modo STREAM — emite tokens en tiempo real.
+     * Retorna Observable<StreamEvent> con reasoning y content acumulados.
+     * El último evento tiene done=true y content contiene el JSON completo.
+     */
+    public generateTestCasesSmartStream(
+        description: string,
+        acceptanceCriteria: string,
+        technique: string
+    ): Observable<StreamEvent> {
+        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
+        const payload: DeepSeekRequest = {
+            model: this.MODEL,
+            messages: [{ role: 'user', content: promptText }],
+            temperature: 0.5,
+            max_tokens: 16000,
+            stream: true
+        };
+
+        console.log('[DeepSeek Stream] 🚀 Iniciando generación con streaming...');
+        return this.deepSeekClient.callDeepSeekStream('generateTextCases', payload);
+    }
+
+    /**
+     * Refinamiento en modo STREAM — emite tokens en tiempo real.
+     */
+    public refineTestCasesDirectStream(
+        originalHuInput: HUData['originalInput'],
+        editedTestCases: DetailedTestCase[],
+        newTechnique: string,
+        userReanalysisContext: string
+    ): Observable<StreamEvent> {
+        const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
+        const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
+
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+        const payload: DeepSeekRequest = {
+            model: this.MODEL,
+            messages: [{ role: 'user', content: promptText }],
+            temperature: 0.3,
+            max_tokens: 16000,
+            stream: true
+        };
+
+        console.log('[DeepSeek Stream] 🔄 Iniciando refinamiento con streaming...');
+        return this.deepSeekClient.callDeepSeekStream('refineDetailedTestCases', payload);
     }
 
 }

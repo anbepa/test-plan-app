@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations } from '../services/database/database.service';
@@ -20,6 +20,8 @@ export class TestPlanPreviewComponent implements OnInit {
     previewHtmlContent: string = '';
     isLoading: boolean = true;
     errorMessage: string = '';
+    copiedToClipboard: boolean = false;
+    exportMenuOpen: boolean = false;
 
     constructor(
         private route: ActivatedRoute,
@@ -241,16 +243,37 @@ ${safeContent}
                                 });
 
                                 await navigator.clipboard.write([item]);
-                                this.toastService.success('Contenido copiado con formato.');
-                                return;
+                this.triggerCopied();
+                return;
                         }
 
                         await navigator.clipboard.writeText(textContent);
-                        this.toastService.success('Texto copiado al portapapeles.');
+                        this.triggerCopied();
                 } catch (err) {
             console.error('Error al copiar:', err);
             this.toastService.error('Error al copiar al portapapeles.');
                 }
+    }
+
+    private triggerCopied(): void {
+        this.copiedToClipboard = true;
+        setTimeout(() => { this.copiedToClipboard = false; }, 2000);
+    }
+
+    toggleExportMenu(): void {
+        this.exportMenuOpen = !this.exportMenuOpen;
+    }
+
+    closeExportMenu(): void {
+        this.exportMenuOpen = false;
+    }
+
+    @HostListener('document:click', ['$event'])
+    onDocumentClick(event: MouseEvent): void {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.export-dropdown')) {
+            this.exportMenuOpen = false;
+        }
     }
 
     goBack(): void {

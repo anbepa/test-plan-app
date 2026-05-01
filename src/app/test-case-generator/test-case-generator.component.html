@@ -32,26 +32,54 @@
     <div class="form-grid">
       <!-- Campos para modo 'text' -->
       <ng-container *ngIf="currentGenerationMode === 'text'">
-        <div class="form-group">
-          <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
-          <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
-            placeholder="Ej: HU_1234" class="form-control">
-          <div
-            *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
-            class="validation-error" role="alert">
-            ID de la HU es requerido.
+        <div class="metadata-block full-width">
+          <div class="metadata-grid">
+            <div class="form-group">
+              <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
+              <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
+                placeholder="Ej: HU_1234" class="form-control">
+              <div
+                *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
+                class="validation-error" role="alert">
+                ID de la HU es requerido.
+              </div>
+            </div>
+            <div class="form-group metadata-title-group">
+              <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
+              <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
+                placeholder="Ej: Como usuario, quiero..." class="form-control">
+              <div
+                *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
+                class="validation-error" role="alert">
+                Título de la HU es requerido.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
+              <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
+                required class="form-control">
+                <option value="" disabled selected>Seleccione una célula</option>
+                <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
+              </select>
+              <div
+                *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
+                class="validation-error" role="alert">
+                Nombre de Célula es requerido.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
+              <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
+                placeholder="Ej: Sprint 1" class="form-control">
+              <div
+                *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
+                class="validation-error" role="alert">
+                Sprint es requerido.
+              </div>
+            </div>
           </div>
         </div>
-        <div class="form-group">
-          <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
-          <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
-            placeholder="Ej: Como usuario, quiero..." class="form-control">
-          <div
-            *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
-            class="validation-error" role="alert">
-            Título de la HU es requerido.
-          </div>
-        </div>
+
         <div class="form-group full-width">
           <label for="tcCurrentDescription">Descripción de la HU:<span class="required-indicator">*</span></label>
           <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4"
@@ -75,32 +103,6 @@
           </div>
         </div>
       </ng-container>
-
-      <!-- Campo Nombre Célula -->
-      <div class="form-group">
-        <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
-        <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
-          required class="form-control">
-          <option value="" disabled selected>Seleccione una célula</option>
-          <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
-        </select>
-        <div
-          *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
-          class="validation-error" role="alert">
-          Nombre de Célula es requerido.
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
-        <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
-          placeholder="Ej: Sprint 1" class="form-control">
-        <div
-          *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
-          class="validation-error" role="alert">
-          Sprint es requerido.
-        </div>
-      </div>
 
       <div class="form-group">
         <label for="tcCurrentSelectedTechnique">Técnica ISTQB para escenarios (Inicial):<span
@@ -286,5 +288,7 @@
   [title]="aiProgressTitle"
   [message]="aiProgressMessage"
   [progressStep]="aiProgressStep"
+  [streamingReasoning]="streamingReasoning"
+  [streamingContent]="streamingContent"
   progressHint="">
 </app-confirmation-modal>
