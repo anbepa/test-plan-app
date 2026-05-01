@@ -30,6 +30,14 @@ export class ExecutionStorageService {
   /** Caché en memoria: imageId → AssetEvidence con base64 */
   private imageCache = new Map<string, AssetEvidence>();
 
+  /**
+   * Índice de rutas en Storage: imageId → ruta completa (userId/execId/file.webp)
+   * Se construye UNA sola vez por sesión y evita re-listar carpetas repetidamente.
+   */
+  private storageIndex = new Map<string, string>();
+  private storageIndexBuilt = false;
+  private storageIndexPromise: Promise<void> | null = null;
+
   /** Debounce para saveExecution: executionId → timeoutId */
   private saveDebounceMap = new Map<string, any>();
   private pendingSaves = new Map<string, { execution: PlanExecution, resolve: () => void, reject: (e: any) => void }[]>();
@@ -221,8 +229,100 @@ export class ExecutionStorageService {
       await this.saveImageEvidence(userId, executionId, image);
     }
 
-    // Actualizar caché
+    // Actualizar caché e invalidar índice (la nueva imagen tiene una ruta nueva)
     this.imageCache.set(image.id, { ...image });
+    this.invalidateStorageIndex();
+  }
+
+  /**
+   * Devuelve una imagen ya cacheada en memoria sin hacer petición de red.
+   */
+  getCachedImage(imageId: string): AssetEvidence | null {
+    return this.imageCache.get(imageId) ?? null;
+  }
+
+  /**
+   * Construye el índice imageId→ruta listando el bucket UNA sola vez.
+   * Todas las llamadas posteriores comparten la misma Promise para evitar
+   * peticiones duplicadas si se invoca en paralelo.
+   */
+  async buildStorageIndex(): Promise<void> {
+    if (this.storageIndexBuilt) return;
+    if (this.storageIndexPromise) return this.storageIndexPromise;
+
+    this.storageIndexPromise = (async () => {
+      try {
+        const userId = await this.getCurrentUserId();
+
+        // 1 petición: lista carpetas de ejecución del usuario
+        const { data: execFolders, error } = await this.supabase.storage
+          .from(this.BUCKET)
+          .list(userId, { limit: 200 });
+
+        if (error || !execFolders) return;
+
+        // 1 petición por carpeta (normalmente 1-5 carpetas)
+        const folderListPromises = execFolders
+          .filter(f => f.name)
+          .map(async folder => {
+            const folderPath = `${userId}/${folder.name}`;
+            const { data: files } = await this.supabase.storage
+              .from(this.BUCKET)
+              .list(folderPath, { limit: 1000 });
+
+            if (!files) return;
+            for (const file of files) {
+              if (!file.name || file.name.endsWith('.meta.json')) continue;
+              // Extraer imageId del nombre de archivo (formato: imageId.ext)
+              const dotIdx = file.name.indexOf('.');
+              const imgId = dotIdx > 0 ? file.name.substring(0, dotIdx) : file.name;
+              this.storageIndex.set(imgId, `${folderPath}/${file.name}`);
+            }
+          });
+
+        await Promise.all(folderListPromises);
+        this.storageIndexBuilt = true;
+      } catch (e) {
+        console.warn('buildStorageIndex error:', e);
+      } finally {
+        this.storageIndexPromise = null;
+      }
+    })();
+
+    return this.storageIndexPromise;
+  }
+
+  /**
+   * Invalida el índice (llamar después de subir/eliminar imágenes).
+   */
+  invalidateStorageIndex(): void {
+    this.storageIndex.clear();
+    this.storageIndexBuilt = false;
+  }
+
+  /**
+   * Hidrata SOLO las evidencias de un paso concreto.
+   * Usa el índice para evitar re-listar carpetas.
+   * Ideal para lazy load paso a paso.
+   */
+  async hydrateStepEvidence(stepEvidences: AssetEvidence[]): Promise<AssetEvidence[]> {
+    if (!stepEvidences?.length) return stepEvidences;
+
+    const pending = stepEvidences.filter(ev => ev.id && !this.imageCache.has(ev.id));
+    if (pending.length === 0) {
+      // All cached — just reassign
+      return stepEvidences.map(ev => this.imageCache.get(ev.id) ? { ...ev, ...this.imageCache.get(ev.id)!, stepId: ev.stepId } : ev);
+    }
+
+    // Ensure index is built before downloading
+    await this.buildStorageIndex();
+
+    await Promise.all(pending.map(ev => this.getImage(ev.id).catch(() => {})));
+
+    return stepEvidences.map(ev => {
+      const cached = this.imageCache.get(ev.id);
+      return cached ? { ...ev, ...cached, stepId: ev.stepId } : ev;
+    });
   }
 
   /**
@@ -234,10 +334,13 @@ export class ExecutionStorageService {
       return this.imageCache.get(imageId)!;
     }
 
-    // 2. Buscar en Storage
+    // 2. Resolver ruta desde el índice (evita re-listar carpetas)
+    await this.buildStorageIndex();
+
+    // 3. Buscar en Storage
     try {
       const userId = await this.getCurrentUserId();
-      const filePath = await this.findFileInStorage(userId, imageId);
+      const filePath = this.storageIndex.get(imageId) || await this.findFileInStorage(userId, imageId);
 
       if (!filePath) return null;
 
@@ -314,7 +417,9 @@ export class ExecutionStorageService {
   async deleteImage(imageId: string): Promise<void> {
     try {
       const userId = await this.getCurrentUserId();
-      const filePath = await this.findFileInStorage(userId, imageId);
+      // Use index first to avoid re-listing folders
+      await this.buildStorageIndex();
+      const filePath = this.storageIndex.get(imageId) || await this.findFileInStorage(userId, imageId);
 
       if (filePath) {
         // Borrar imagen + metadata asociada
@@ -330,6 +435,7 @@ export class ExecutionStorageService {
       }
 
       this.imageCache.delete(imageId);
+      this.storageIndex.delete(imageId);
     } catch (err) {
       console.error('Error al eliminar imagen:', err);
     }

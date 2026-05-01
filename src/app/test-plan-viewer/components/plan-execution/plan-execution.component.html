@@ -11,7 +11,16 @@
     </div>
   </div>
 
-  <div *ngIf="execution; else noExecution" class="exec-body">
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading-state">
+    <div class="loading-spinner"></div>
+    <p>Cargando ejecución...</p>
+  </div>
+
+  <!-- Content (show only when NOT loading) -->
+  <ng-container *ngIf="!isLoading">
+    <!-- Execution Body or Empty State -->
+    <div *ngIf="execution; else noExecution" class="exec-body">
 
     <!-- Title bar -->
     <div class="exec-titlebar">
@@ -36,6 +45,9 @@
         <div class="tb-actions">
           <button (click)="exportToDOCX()" class="btn-export">Descargar .docx</button>
           <button (click)="deleteExecution()" class="btn-tb-danger" title="Eliminar ejecución">Eliminar</button>
+          <span *ngIf="isHydratingEvidence" class="hydrating-badge" title="Cargando imágenes en segundo plano...">
+            <span class="hydrating-spinner"></span> Cargando imágenes…
+          </span>
         </div>
       </div>
     </div>
@@ -47,9 +59,9 @@
       <aside class="exec-sidebar">
         <p class="sidebar-label">Casos de Prueba</p>
         <div class="cases-list">
-          <button *ngFor="let tc of execution.testCases; let i = index" (click)="selectTestCase(i)" class="case-item"
+          <button *ngFor="let tc of execution.testCases; let i = index; trackBy: trackByTestCaseId" (click)="selectTestCase(i)" class="case-item"
             [class.active]="activeTestCaseIndex === i">
-            <span class="case-index">{{ i + 1 }}</span>
+            <span class="case-index" [ngClass]="'status-' + getTestCaseStatus(tc)">{{ i + 1 }}</span>
             <span class="case-name">{{ tc.title }}</span>
           </button>
         </div>
@@ -205,7 +217,10 @@
           <div class="step-nav">
             <button (click)="previousStep()" class="btn-nav-arrow"
               [disabled]="activeTestCaseIndex === 0 && activeStepIndex === 0">← Anterior</button>
-            <button (click)="saveExecution()" class="btn-save">Guardar</button>
+            <button (click)="saveExecution()" class="btn-save">
+              Guardar Ejecución
+              <span *ngIf="hasUnsavedChanges" class="unsaved-indicator" title="Cambios sin guardar"></span>
+            </button>
             <button (click)="nextStep()" class="btn-nav-arrow">Siguiente →</button>
           </div>
         </div>
@@ -225,6 +240,7 @@
       </div>
     </div>
   </ng-template>
+  </ng-container>
 
   <!-- Confirmation Modal para eliminar -->
   <app-confirmation-modal [isOpen]="showDeleteModal" title="Eliminar ejecución"
