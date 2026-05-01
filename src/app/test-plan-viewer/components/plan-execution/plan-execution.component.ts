@@ -47,6 +47,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   pendingImageNaturalWidth: number = 1280;
   pendingImageNaturalHeight: number = 720;
   isParsingFile = false;
+  hasUnsavedChanges = false;
+  isLoading = true;
+  isHydratingEvidence = false;
   private huSyncSubscription: Subscription | null = null;
 
   stats: any = null;
@@ -61,10 +64,12 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   ) { }
 
   async ngOnInit(): Promise<void> {
-    const state = this.router.getCurrentNavigation()?.extras.state || history.state;
-    const restoredContext = this.restoreExecutionContext();
+    this.isLoading = true;
+    try {
+      const state = this.router.getCurrentNavigation()?.extras.state || history.state;
+      const restoredContext = this.restoreExecutionContext();
 
-    if (state?.hu || restoredContext) {
+      if (state?.hu || restoredContext) {
       if (state?.hu) {
         this.hu = state.hu as HUData;
         this.testPlanId = state.testPlanId || '';
@@ -105,24 +110,49 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
       this.normalizeActiveSelection();
 
-      // IMPORTANT: Hydrate FIRST, then reconcile and subscribe.
-      // This way, reconciliation sees the full image data (base64) instead of empty placeholders.
-      await this.hydrateExecutionEvidence();
-
       this.applyLatestHuSnapshot();
       this.subscribeToHuUpdates();
 
       this.persistExecutionContext();
 
       await this.updateStats();
+      // Show UI immediately — images load progressively in background
+      this.isLoading = false;
+      this.cdr.markForCheck();
+
+      // Lazy load: build storage index once, then load only current step images
+      this.storageService.buildStorageIndex().then(() => this.hydrateCurrentStep());
     } else {
       this.toastService.warning('No se encontró la HU seleccionada');
       this.goBack();
+    }
+    } catch (error) {
+      console.error('Error en ngOnInit:', error);
+      this.isLoading = false;
+      this.toastService.error('Error al cargar la ejecución');
     }
   }
 
   ngOnDestroy(): void {
     this.huSyncSubscription?.unsubscribe();
+  }
+
+  trackByTestCaseId(index: number, testCase: TestCaseExecution): string {
+    return testCase.testCaseId;
+  }
+
+  isTestCaseFullyCompleted(testCase: TestCaseExecution): boolean {
+    if (!testCase?.steps?.length) return false;
+    return testCase.steps.every(step => step.status === 'completed');
+  }
+
+  getTestCaseStatus(testCase: TestCaseExecution): 'pending' | 'in-progress' | 'completed' | 'failed' {
+    if (!testCase?.steps?.length) return 'pending';
+    const steps = testCase.steps;
+    if (steps.every(s => s.status === 'completed')) return 'completed';
+    if (steps.some(s => s.status === 'failed')) return 'failed';
+    if (steps.some(s => s.status === 'in-progress' || s.status === 'completed')) return 'in-progress';
+    return 'pending';
   }
 
   private async createNewExecution(): Promise<void> {
@@ -151,6 +181,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.editingImageId = null;
       this.showImageEditor = false;
       this.persistExecutionContext();
+      this.hydrateCurrentStep();
     }
   }
 
@@ -160,6 +191,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.editingImageId = null;
       this.showImageEditor = false;
       this.persistExecutionContext();
+      this.hydrateCurrentStep();
     }
   }
 
@@ -174,8 +206,40 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     );
 
     this.currentStep.status = status;
+    this.hasUnsavedChanges = true;
     await this.autoSaveExecutionState();
+    this.hasUnsavedChanges = false;
+    
+    // Auto-mark test case as completed if all steps are completed
+    await this.updateTestCaseStatusIfAllStepsCompleted(this.currentTestCase);
+    
     await this.updateStats();
+    
+    // Force change detection to update the completed class binding
+    this.cdr.markForCheck();
+  }
+
+  private async updateTestCaseStatusIfAllStepsCompleted(testCase: TestCaseExecution): Promise<void> {
+    if (!testCase || !testCase.steps || testCase.steps.length === 0) return;
+    
+    const allStepsCompleted = testCase.steps.every(step => step.status === 'completed');
+    if (allStepsCompleted && testCase.status !== 'completed') {
+      testCase.status = 'completed';
+      testCase.completedAt = Date.now();
+      
+      // Guardar ejecución con el nuevo estado del test case
+      if (this.execution) {
+        this.execution.updatedAt = Date.now();
+        await this.storageService.saveExecution(this.execution);
+      }
+      
+      // Pequeño delay para asegurar que BD actualizó
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Forzar change detection en zona segura
+      this.cdr.markForCheck();
+      this.cdr.detectChanges();
+    }
   }
 
   async updateGridConfig(cols: any, rows: any): Promise<void> {
@@ -192,8 +256,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     return Array.from({ length: total }, (_, i) => i);
   }
 
-  nextStep(): void {
+  async nextStep(): Promise<void> {
     if (!this.currentTestCase) return;
+
+    // Auto-save before moving to next step
+    if (this.hasUnsavedChanges) {
+      await this.autoSaveExecutionState();
+      this.hasUnsavedChanges = false;
+    }
 
     if (this.activeStepIndex < this.currentTestCase.steps.length - 1) {
       this.selectStep(this.activeStepIndex + 1);
@@ -305,7 +375,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.pendingImageNaturalHeight = img.naturalHeight;
       this.selectedImage = newImage;
       this.editingImageId = evidenceId;
-      this.showImageEditor = true;
+      this.showImageEditor = false;
 
       await this.updateStats();
       this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
@@ -519,7 +589,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.showImageEditor = false;
     this.editingImageId = null;
     this.selectedImage = null;
-    this.toastService.success('Imagen guardada exitosamente');
     await this.updateStats();
   }
 
@@ -569,9 +638,36 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   private async hydrateExecutionEvidence(): Promise<void> {
     if (!this.execution) return;
-
-    // Descargar todas las evidencias desde Supabase Storage en paralelo (con throttle)
+    // Kept for export/compatibility — now delegates to full hydration
     await this.storageService.hydrateAllEvidence(this.execution);
+  }
+
+  /**
+   * Lazy load: descarga solo las imágenes del paso activo.
+   * Usa el índice de Storage (buildStorageIndex) para resolver rutas
+   * sin re-listar carpetas. Reemplaza a hydrateEvidenceProgressively.
+   */
+  private hydrateCurrentStep(): void {
+    if (!this.execution) return;
+    const step = this.currentTestCase?.steps[this.activeStepIndex];
+    if (!step?.evidences?.length) return;
+
+    const hasMissingImages = step.evidences.some(
+      ev => ev.id && !this.storageService.getCachedImage(ev.id)
+    );
+    if (!hasMissingImages) return;
+
+    this.isHydratingEvidence = true;
+    this.cdr.markForCheck();
+
+    this.storageService.hydrateStepEvidence(step.evidences).then(hydrated => {
+      step.evidences = hydrated;
+      this.isHydratingEvidence = false;
+      this.cdr.markForCheck();
+    }).catch(() => {
+      this.isHydratingEvidence = false;
+      this.cdr.markForCheck();
+    });
   }
 
   private async syncExecutionImagesToStorage(): Promise<void> {
@@ -682,10 +778,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.persistExecutionContext();
     this.normalizeActiveSelection();
     await this.updateStats();
-
-    if (notify) {
-      this.toastService.info('Ejecución actualizada en línea con los cambios de Editar/Refinar IA');
-    }
   }
 
   private async reconcileExecutionWithHu(
