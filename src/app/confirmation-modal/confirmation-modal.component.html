@@ -16,11 +16,32 @@
         <div class="modal-body progress-body" *ngIf="isProgressMode">
             <div class="progress-spinner" aria-hidden="true"></div>
             <p class="progress-message" *ngIf="message?.trim()">{{ message }}</p>
-            <p class="progress-step" *ngIf="progressStep?.trim()">{{ progressStep }}</p>
-            <div class="progress-track" *ngIf="showProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progreso en curso">
-                <span class="progress-indeterminate"></span>
+            <div class="progress-track" *ngIf="showProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="streamProgressPercent" aria-label="Progreso en curso">
+                <span class="progress-indeterminate" [style.width.%]="streamProgress"></span>
+                <span class="progress-percent" *ngIf="streamingPhase !== 'idle'">{{ streamProgressPercent }}%</span>
             </div>
-            <p class="progress-hint" *ngIf="progressHint?.trim()">{{ progressHint }}</p>
+
+            <!-- Indicador de fase: pensando o generando -->
+            <div class="stream-phase-bar" *ngIf="streamingPhase !== 'idle'">
+                <span class="stream-phase-dot" [class.thinking]="streamingPhase === 'thinking'" [class.generating]="streamingPhase === 'generating'"></span>
+                <span class="stream-phase-text">{{ streamingPhaseLabel }}</span>
+            </div>
+
+            <!-- Vista previa en vivo: títulos de casos detectados -->
+            <div class="stream-cases-preview" *ngIf="streamingCaseTitles.length > 0">
+                <div class="stream-cases-header">
+                    <span class="stream-cases-count">{{ streamingCaseTitles.length }} caso{{ streamingCaseTitles.length !== 1 ? 's' : '' }} identificado{{ streamingCaseTitles.length !== 1 ? 's' : '' }}…</span>
+                </div>
+                <ul class="stream-cases-list">
+                    <li *ngFor="let title of streamingCaseTitles; let i = index" class="stream-case-item">
+                        <span class="stream-case-num">{{ i + 1 }}</span>
+                        <span class="stream-case-title">{{ title }}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Hint estático mientras no hay tokens aún -->
+            <p class="progress-hint" *ngIf="streamingPhase === 'idle' && progressHint?.trim()">{{ progressHint }}</p>
         </div>
 
         <div class="modal-footer" *ngIf="!isProgressMode">

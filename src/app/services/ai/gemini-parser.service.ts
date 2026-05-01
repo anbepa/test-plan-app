@@ -19,13 +19,22 @@ export class GeminiParserService {
      * Extrae el texto de las partes de la respuesta de Gemini
      */
     public getTextFromParts(parts: GeminiTextPart[] | undefined): string {
-        if (parts && parts.length > 0) {
-            const firstPart = parts[0];
-            if (firstPart && 'text' in firstPart) {
-                return firstPart.text;
-            }
+        if (!parts?.length) {
+            return '';
         }
-        return '';
+
+        return parts
+            .map(part => {
+                if (!part || typeof part !== 'object') {
+                    return '';
+                }
+
+                const text = (part as any).text;
+                return typeof text === 'string' ? text : '';
+            })
+            .filter(Boolean)
+            .join('\n')
+            .trim();
     }
 
     /**

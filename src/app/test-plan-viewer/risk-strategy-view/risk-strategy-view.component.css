@@ -46,6 +46,11 @@
   color: #111827;
 }
 
+.breadcrumb-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .breadcrumb-separator {
   color: #d1d5db;
 }
@@ -105,6 +110,18 @@
   color: #6d28d9;
 }
 
+.btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
+}
+
 /* ── Loading ─────────────────────────────────────────────────── */
 .loading-state {
   display: flex;
@@ -153,6 +170,13 @@
   padding: 1.5rem;
   margin: 1.25rem 1.5rem;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.risk-form-shell {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 /* ── Action bar ─────────────────────────────────────────────── */

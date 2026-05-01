@@ -103,14 +103,6 @@
 
     <!-- Tabla de resultados -->
     <div *ngIf="!isLoading && !errorMessage && paginatedTestPlans.length > 0" class="table-results-wrapper">
-      <div class="table-actions-bar">
-        <button class="button-secondary" [disabled]="selectedPlanIds.length !== 1" (click)="viewSelectedPlan()">
-          Ver detalle
-        </button>
-        <button class="button-danger" [disabled]="selectedPlanIds.length === 0" (click)="deleteSelectedPlans()">
-          Eliminar
-        </button>
-      </div>
 
       <div class="table-container">
         <table class="plans-table">
@@ -122,10 +114,11 @@
               </th>
               <th>Fecha Creación</th>
               <th>Nombre Test plan</th>
-              <th>Sprint</th>
-              <th>Número de HU</th>
-              <th>Número de casos</th>
-              <th>Número de pasos</th>
+              <th class="col-num">Sprint</th>
+              <th class="col-num">Número de HU</th>
+              <th class="col-num">Número de casos</th>
+              <th class="col-num">Número de pasos</th>
+              <th class="col-actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -135,16 +128,37 @@
                   (change)="onPlanSelectionChange(testPlan, $any($event.target).checked)">
               </td>
               <td data-label="Fecha Creación">{{ formatDate(testPlan.created_at) }}</td>
-              <td class="plan-title-cell" data-label="Nombre Test plan" [title]="testPlan.title">{{ testPlan.title ||
-                'Sin título' }}</td>
-              <td data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
-              <td data-label="Número de HU">{{ testPlan.user_stories?.length || 0 }}</td>
-              <td data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
-              <td data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
+              <td class="plan-title-cell" data-label="Nombre Test plan" [title]="testPlan.title">
+                <button type="button" class="plan-title-link" (click)="viewPlanDirectly(testPlan)">
+                  {{ testPlan.title || 'Sin título' }}
+                </button>
+              </td>
+              <td class="col-num" data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
+              <td class="col-num" data-label="Número de HU">{{ testPlan.user_stories?.length || 0 }}</td>
+              <td class="col-num" data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
+              <td class="col-num" data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
+              <td class="col-actions">
+                <button type="button" class="row-trash-btn" title="Eliminar plan"
+                  (click)="deleteSinglePlan(testPlan, $event)">
+                  <span class="icon-trash-red"></span>
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Barra flotante de borrado masivo -->
+    <div class="bulk-delete-bar" *ngIf="selectedPlanIds.length > 0">
+      <span class="bulk-count">{{ selectedPlanIds.length }} plan{{ selectedPlanIds.length !== 1 ? 'es' : '' }} seleccionado{{ selectedPlanIds.length !== 1 ? 's' : '' }}</span>
+      <button class="bulk-delete-btn" (click)="deleteSelectedPlans()">
+        <span class="icon-trash-white"></span>
+        Eliminar seleccionados
+      </button>
+      <button class="bulk-cancel-btn" (click)="clearSelection()">
+        Cancelar
+      </button>
     </div>
 
     <!-- Sin resultados de búsqueda -->
@@ -249,9 +263,6 @@
             <button class="button-secondary" (click)="openPreview()" [disabled]="huList.length === 0">
               Previsualizar
             </button>
-            <button class="button-danger" *ngIf="canDeleteSelectedHu()" (click)="requestDeleteSelectedHU()">
-              Borrar hu
-            </button>
             <button class="button-secondary" (click)="openGeneralSectionsView()">
               Ver secciones generales del plan
             </button>
@@ -282,27 +293,27 @@
                       (change)="onHuSelectionChange(hu, $any($event.target).checked)">
                   </td>
                   <td data-label="Numero HU">{{ hu.id }}</td>
-                  <td class="hu-name-cell" data-label="Nombre HU">{{ hu.title }}</td>
+                  <td class="hu-name-cell hu-name-link" data-label="Nombre HU" (click)="openHUScenarios(hu, $event)">{{ hu.title }}</td>
                   <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
                   <td class="actions-col" data-label="Acciones">
-                    <div class="row-actions" (click)="$event.stopPropagation()">
-                      <button type="button" class="row-actions-trigger" aria-label="Abrir acciones de la HU"
-                        (click)="toggleHuActionsMenu(hu, i, $event)">
-                        ⋮
-                      </button>
-                      <button type="button" class="row-actions-direct" (click)="openHUScenarios(hu, $event)">
-                        Ver escenarios de prueba
-                      </button>
-                      <div class="row-actions-menu" *ngIf="isHuActionsMenuOpen(hu, i)">
-                        <button type="button" class="row-actions-item" (click)="openHUScenarios(hu, $event)">
-                          Ver escenarios de prueba
-                        </button>
-                      </div>
-                    </div>
+                    <button type="button" class="row-delete-btn" aria-label="Eliminar HU" title="Eliminar HU"
+                      (click)="deleteHU(hu, $event)">
+                      <span class="icon-trash"></span>
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Floating bulk action bar -->
+          <div class="bulk-delete-bar" *ngIf="selectedHuIds.length > 0">
+            <span class="bulk-count">{{ selectedHuIds.length }} {{ selectedHuIds.length === 1 ? 'HU seleccionada' : 'HUs seleccionadas' }}</span>
+            <button type="button" class="bulk-delete-btn" (click)="requestDeleteSelectedHU()">
+              <span class="icon-trash-white"></span>
+              Eliminar seleccionadas
+            </button>
+            <button type="button" class="bulk-cancel-btn" (click)="selectedHuIds = []">Cancelar</button>
           </div>
 
           <div class="pagination-container" *ngIf="huList.length > 0">

@@ -155,6 +155,38 @@ export default async function handler(
             }
         }
 
+        // Si el cliente pidió streaming, redirigir SSE directamente sin buffer
+        if (apiBody.stream === true) {
+            const url = 'https://api.deepseek.com/chat/completions';
+            console.log('[STREAM] Iniciando SSE desde DeepSeek...');
+            const dsResponse = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(apiBody)
+            });
+
+            if (!dsResponse.ok) {
+                const errData = await dsResponse.json();
+                console.error('[ERROR] DeepSeek Stream Error:', JSON.stringify(errData));
+                return response.status(dsResponse.status).json(errData);
+            }
+
+            response.setHeader('Content-Type', 'text/event-stream');
+            response.setHeader('Cache-Control', 'no-cache');
+            response.setHeader('Connection', 'keep-alive');
+
+            // Pipe el stream de DeepSeek al cliente
+            for await (const chunk of dsResponse.body as any) {
+                response.write(chunk);
+            }
+            response.end();
+            console.log('[STREAM] SSE completado');
+            return;
+        }
+
         const result = await callDeepSeekWithRetry(
             apiKey,
             apiBody

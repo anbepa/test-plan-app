@@ -4,6 +4,7 @@ import { GeminiService } from './gemini.service';
 import { DeepSeekService } from './deepseek.service';
 import { AiProvidersService } from './ai-providers.service';
 import { DetailedTestCase, HUData } from '../../models/hu-data.model';
+import { StreamEvent } from './deepseek-client.service';
 
 /**
  * Servicio unificado que delega las llamadas al proveedor de IA activo
@@ -139,5 +140,34 @@ export class AiUnifiedService {
     public getActiveProviderName(): string {
         const activeProvider = this.providersService.getActiveProvider();
         return activeProvider?.displayName || 'DeepSeek (por defecto)';
+    }
+
+    /**
+     * Generación de casos de prueba en modo STREAM — emite tokens en tiempo real.
+     * Solo soportado por DeepSeek (deepseek-reasoner).
+     */
+    public generateTestCasesSmartStream(
+        description: string,
+        acceptanceCriteria: string,
+        technique: string
+    ): Observable<StreamEvent> {
+        console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
+        return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique);
+    }
+
+    /**
+     * Refinamiento de casos de prueba en modo STREAM — emite tokens en tiempo real.
+     * Solo soportado por DeepSeek (deepseek-reasoner).
+     */
+    public refineTestCasesDirectStream(
+        originalHuInput: HUData['originalInput'],
+        editedTestCases: DetailedTestCase[],
+        newTechnique: string,
+        userReanalysisContext: string
+    ): Observable<StreamEvent> {
+        console.log('[AI Unified Stream] Usando DeepSeek para refinamiento con streaming');
+        return this.deepSeekService.refineTestCasesDirectStream(
+            originalHuInput, editedTestCases, newTechnique, userReanalysisContext
+        );
     }
 }

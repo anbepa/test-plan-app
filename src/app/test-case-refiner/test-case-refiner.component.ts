@@ -8,7 +8,6 @@ import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations } from '../models/database.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
-import { firstValueFrom } from 'rxjs';
 import { HuSyncService } from '../services/core/hu-sync.service';
 
 @Component({
@@ -45,6 +44,12 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   private pendingDeleteTestCaseIndex: number | null = null;
   private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
   private aiProgressIndex = 0;
+  private lastStepAddAt = new Map<number, number>();
+
+  /** Tokens de razonamiento (CoT) acumulados durante el stream */
+  streamingReasoning: string = '';
+  /** Tokens de contenido JSON acumulados durante el stream */
+  streamingContent: string = '';
 
   readonly cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
   readonly techniqueOptions = [
@@ -53,6 +58,40 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     { value: 'Decision Table Testing', label: 'Tabla de Decisión' },
     { value: 'State Transition Testing', label: 'Pruebas de Transición de Estados' }
   ];
+
+  readonly techniqueDescriptions: Record<string, string> = {
+    'Equivalent Partitioning': 'La IA generará casos para cada partición válida e inválida, evitando redundancias.',
+    'Boundary Value Analysis': 'La IA enfocará los casos en los valores límite (mínimo, máximo y sus adyacentes) de cada parámetro.',
+    'Decision Table Testing': 'La IA creará combinaciones de condiciones y acciones para cubrir todas las reglas del negocio.',
+    'State Transition Testing': 'La IA modelará los estados del sistema y las transiciones posibles entre ellos.'
+  };
+
+  readonly contextQuickTags: string[] = [
+    '+ Solo happy path',
+    '+ Casos negativos',
+    '+ Validaciones de frontera',
+    '+ Datos inválidos',
+    '+ Solo 5 escenarios',
+    '+ Flujo alternativo'
+  ];
+
+  inputDataCollapsed: boolean = false;
+
+  get techniqueDescription(): string {
+    return this.editedSelectedTechnique
+      ? (this.techniqueDescriptions[this.editedSelectedTechnique] ?? '')
+      : '';
+  }
+
+  get isFormValid(): boolean {
+    return !!(this.editedTitle?.trim() && this.editedAcceptanceCriteria?.trim() && this.editedCellName?.trim());
+  }
+
+  appendContextTag(tag: string): void {
+    const clean = tag.replace(/^\+\s*/, '');
+    const prefix = this.editedContext?.trim() ? this.editedContext.trimEnd() + '. ' : '';
+    this.editedContext = prefix + clean;
+  }
 
   private userStoryDbId: string | null = null;
   private existingDbTestCases: DbTestCaseWithRelations[] = [];
@@ -176,63 +215,98 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.hu.refinementTechnique = this.editedSelectedTechnique;
     this.hu.refinementContext = this.editedContext;
 
-    try {
-      this.isLoading = true;
-      this.isRefining = true;
-      this.startAiProgress();
-      this.cdr.detectChanges();
+    this.isLoading = true;
+    this.isRefining = true;
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.startAiProgress();
+    this.cdr.detectChanges();
 
-      let result: any;
-
-      // Si estamos en la página de contexto Y hay contexto del analista, usar refinamiento
-      // para que el userRequest/editedContext sea efectivamente enviado a la IA
-      if (this.isContextPage && this.editedContext?.trim()) {
-        result = await firstValueFrom(this.aiService.refineTestCasesDirect(
+    // Elegir stream de refinamiento o de generación según contexto
+    const stream$ = (this.isContextPage && this.editedContext?.trim())
+      ? this.aiService.refineTestCasesDirectStream(
           this.hu!.originalInput,
           this.hu!.detailedTestCases || [],
           this.editedSelectedTechnique,
           this.editedContext.trim()
-        ));
-      } else {
-        // Sin contexto: regeneración completa desde cero
-        result = await firstValueFrom(this.aiService.generateTestCasesSmart(
+        )
+      : this.aiService.generateTestCasesSmartStream(
           this.editedDescription,
           this.editedAcceptanceCriteria,
           this.editedSelectedTechnique
-        ));
+        );
+
+    stream$.subscribe({
+      next: (event: any) => {
+        this.streamingReasoning = event.reasoning || '';
+        this.streamingContent = event.content || '';
+        this.cdr.detectChanges();
+      },
+      error: (error: any) => {
+        console.error('Error al regenerar con streaming:', error);
+        this.toastService.error(error?.userMessage || 'Error al regenerar casos de prueba');
+        this.isLoading = false;
+        this.isRefining = false;
+        this.streamingReasoning = '';
+        this.streamingContent = '';
+        this.stopAiProgress();
+        this.cdr.detectChanges();
+      },
+      complete: async () => {
+        // Parsear JSON del contenido final del stream
+        const result = this.parseStreamResult(this.streamingContent);
+        this.streamingReasoning = '';
+        this.streamingContent = '';
+
+        if (!result?.testCases || !this.hu) {
+          this.toastService.error('La IA no devolvió escenarios válidos');
+          this.isLoading = false;
+          this.isRefining = false;
+          this.stopAiProgress();
+          this.cdr.detectChanges();
+          return;
+        }
+
+        this.hu.detailedTestCases = result.testCases;
+
+        const saved = await this.saveData();
+        if (!saved) {
+          this.toastService.error('No se pudo guardar la regeneración en base de datos');
+          this.isLoading = false;
+          this.isRefining = false;
+          this.stopAiProgress();
+          this.cdr.detectChanges();
+          return;
+        }
+
+        this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
+        this.toastService.success(`${result.testCases.length} casos regenerados y guardados con éxito`);
+
+        this.isLoading = false;
+        this.isRefining = false;
+        this.stopAiProgress();
+        this.cdr.detectChanges();
+
+        if (this.isContextPage) {
+          this.goToRefinerPage();
+        }
       }
+    });
+  }
 
-      if (!result?.testCases || !this.hu) {
-        this.toastService.error('La IA no devolvió escenarios válidos');
-        return;
+  /** Parsea el contenido JSON del stream final */
+  private parseStreamResult(content: string): any {
+    if (!content) return null;
+    try {
+      const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+      return JSON.parse(clean);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { return JSON.parse(match[0]); } catch {}
       }
-
-      // Reemplazar en memoria los escenarios anteriores por los nuevos
-      this.hu.detailedTestCases = result.testCases;
-
-      // Guardar en BD para persistencia inmediata y evitar pérdida de datos al recargar
-      const saved = await this.saveData();
-      if (!saved) {
-        this.toastService.error('No se pudo guardar la regeneración en base de datos');
-        return;
-      }
-
-      // Publicar los cambios en el caché
-      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
-
-      this.toastService.success(`${result.testCases.length} casos regenerados y guardados con éxito`);
-
-      if (this.isContextPage) {
-        this.goToRefinerPage();
-      }
-    } catch (error) {
-      console.error('Error al iniciar regeneración:', error);
-      this.toastService.error('Error al iniciar regeneración');
-    } finally {
-      this.isLoading = false;
-      this.isRefining = false;
-      this.stopAiProgress();
-      this.cdr.detectChanges();
+      console.warn('[REFINER] No se pudo parsear JSON del stream');
+      return null;
     }
   }
 
@@ -479,8 +553,36 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     const testCase = this.hu?.detailedTestCases?.[testCaseIndex];
     if (!testCase) return;
 
+    const now = Date.now();
+    const lastAddAt = this.lastStepAddAt.get(testCaseIndex) ?? 0;
+    if (now - lastAddAt < 250) return;
+    this.lastStepAddAt.set(testCaseIndex, now);
+
     if (!testCase.steps) testCase.steps = [];
+
+    const lastStep = testCase.steps[testCase.steps.length - 1];
+    if (lastStep && !(lastStep.accion || '').trim()) {
+      this.focusLastStepTextarea(testCaseIndex);
+      return;
+    }
+
     testCase.steps.push({ numero_paso: testCase.steps.length + 1, accion: '' });
+
+    this.focusLastStepTextarea(testCaseIndex);
+  }
+
+  private focusLastStepTextarea(testCaseIndex: number): void {
+    setTimeout(() => {
+      const container = document.querySelector(`[data-tc-index="${testCaseIndex}"]`);
+      const textareas = container?.querySelectorAll('.step-textarea');
+      const last = textareas?.[textareas.length - 1] as HTMLTextAreaElement | undefined;
+      last?.focus();
+    }, 30);
+  }
+
+  onStepEnter(event: Event, testCaseIndex: number, _stepIndex: number): void {
+    event.preventDefault();
+    this.addStepToTestCase(testCaseIndex);
   }
 
   removeStepFromTestCase(testCaseIndex: number, stepIndex: number): void {
