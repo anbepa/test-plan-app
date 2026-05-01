@@ -619,7 +619,8 @@ export class DatabaseService {
   }
 
   async smartUpdateUserStoryTestCases(userStoryId: string, testCases: DetailedTestCase[]): Promise<void> {
-    console.log(`🧠 Smart Update TCs para HU ${userStoryId}...`);
+    console.log(`🧠 Smart Update TCs para HU ${userStoryId}. Casos a sincronizar: ${testCases.length}`);
+    console.log(`📋 Detalles de casos entrada:`, testCases.map(tc => ({ title: tc.title, dbId: tc.dbId, steps: tc.steps?.length || 0 })));
 
     if (!userStoryId) {
       console.error('❌ smartUpdateUserStoryTestCases: userStoryId is missing!');
@@ -631,6 +632,8 @@ export class DatabaseService {
         .from('test_cases')
         .select('*, test_case_steps(*)')
         .eq('user_story_id', userStoryId);
+      
+      console.log(`📊 TCs existentes en BD: ${existingTCs?.length || 0}`);
 
       if (error) throw error;
 
@@ -774,6 +777,10 @@ export class DatabaseService {
         }
         console.log(`📝 ${tcsToUpdate.length} TCs actualizados`);
       }
+      
+      // Final summary
+      const totalSynced = tcsToInsert.length + tcsToUpdate.length + tcsUnmodifiedIds.length;
+      console.log(`✅ SINCRONIZACIÓN COMPLETADA: ${totalSynced} TCs en total (${tcsToInsert.length} nuevos + ${tcsToUpdate.length} actualizados + ${tcsUnmodifiedIds.length} sin cambios)`);
 
     } catch (error) {
       console.error('❌ Error en smartUpdateUserStoryTestCases:', error);

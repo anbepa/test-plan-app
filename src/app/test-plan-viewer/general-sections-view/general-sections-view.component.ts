@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, finalize, from, of, switchMap } from 'rxjs';
@@ -33,18 +33,8 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
   isLoading = true;
 
   huList: HUData[] = [];
-  selectedSectionKeys: StaticSectionName[] = [];
   editingSectionKey: StaticSectionName | null = null;
   editingBuffer = '';
-
-  // Anchos de columna en píxeles (null = auto)
-  colWidths: (number | null)[] = [null, null, null, null, null, null];
-
-  private resizingColIndex: number = -1;
-  private resizeStartX: number = 0;
-  private resizeStartWidth: number = 0;
-  private readonly boundMouseMove = (e: MouseEvent) => this.onResizeMouseMove(e);
-  private readonly boundMouseUp = () => this.onResizeMouseUp();
 
   sections: SectionItem[] = [
     { key: 'repositoryLink', title: 'Repositorio Pruebas VSTS', value: '', editable: true, aiEnabled: false, loadingAI: false, errorAI: null },
@@ -61,7 +51,9 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     private databaseService: DatabaseService,
     private mapper: TestPlanMapperService,
     private aiService: AiUnifiedService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private cdr: ChangeDetectorRef,
+    private ngZone: NgZone
   ) { }
 
   async ngOnInit(): Promise<void> {
@@ -131,48 +123,13 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     });
   }
 
-  isSectionSelected(key: StaticSectionName): boolean {
-    return this.selectedSectionKeys.includes(key);
-  }
-
-  onSectionSelectionChange(key: StaticSectionName, checked: boolean): void {
-    if (checked) {
-      if (!this.selectedSectionKeys.includes(key)) {
-        this.selectedSectionKeys = [...this.selectedSectionKeys, key];
-      }
-      return;
-    }
-
-    this.selectedSectionKeys = this.selectedSectionKeys.filter(item => item !== key);
-
-    if (this.editingSectionKey === key) {
+  startEditing(section: SectionItem): void {
+    if (this.editingSectionKey !== null && this.editingSectionKey !== section.key) {
+      // Salir del anterior sin guardar
       this.cancelEditing();
     }
-  }
-
-  canEditSelected(): boolean {
-    return this.selectedSectionKeys.length === 1 && this.editingSectionKey === null;
-  }
-
-  canSaveSelected(): boolean {
-    return this.selectedSectionKeys.length === 1 && this.editingSectionKey === this.selectedSectionKeys[0];
-  }
-
-  canImproveWithAI(): boolean {
-    if (this.selectedSectionKeys.length !== 1 || this.editingSectionKey !== null) return false;
-    const selected = this.getSelectedSection();
-    return !!selected?.aiEnabled && !selected.loadingAI;
-  }
-
-  startEditingSelected(): void {
-    const selected = this.getSelectedSection();
-    if (!selected) {
-      this.toastService.warning('Selecciona una sección para editar');
-      return;
-    }
-
-    this.editingSectionKey = selected.key;
-    this.editingBuffer = selected.value;
+    this.editingSectionKey = section.key;
+    this.editingBuffer = section.value || '';
   }
 
   cancelEditing(): void {
@@ -180,15 +137,11 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     this.editingBuffer = '';
   }
 
-  async saveSelected(): Promise<void> {
-    const selected = this.getSelectedSection();
-    if (!selected || this.editingSectionKey !== selected.key) {
-      return;
-    }
+  async saveSection(section: SectionItem): Promise<void> {
+    if (this.editingSectionKey !== section.key) return;
 
-    const updates = this.buildDbUpdate(selected.key, this.editingBuffer);
-
-    const loadingToastId = this.toastService.loading('Guardando sección...');
+    const updates = this.buildDbUpdate(section.key, this.editingBuffer);
+    const loadingToastId = this.toastService.loading('Guardando...');
     const success = await this.databaseService.updateTestPlan(this.testPlanId, updates);
     this.toastService.dismiss(loadingToastId);
 
@@ -197,83 +150,72 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    selected.value = this.editingBuffer;
+    section.value = this.editingBuffer;
     this.editingSectionKey = null;
     this.editingBuffer = '';
-    this.toastService.success('Sección guardada correctamente');
+    this.toastService.success(`"${section.title}" guardada`);
+    this.cdr.detectChanges();
   }
 
-  improveSelectedWithAI(): void {
-    const selected = this.getSelectedSection();
-    if (!selected) {
-      this.toastService.warning('Selecciona una sección para mejorar');
-      return;
-    }
+  improveWithAI(section: SectionItem): void {
+    if (!section.aiEnabled || section.loadingAI) return;
 
-    if (!selected.aiEnabled) {
-      this.toastService.info('Esta sección no tiene mejora con IA habilitada');
-      return;
-    }
-
-    selected.loadingAI = true;
-    selected.errorAI = null;
+    section.loadingAI = true;
+    section.errorAI = null;
+    this.cdr.detectChanges();
 
     const huSummary = this.mapper.getHuSummaryForAI(this.huList);
 
-    this.aiService.generateEnhancedStaticSectionContent(selected.title, selected.value || '', huSummary)
+    this.aiService.generateEnhancedStaticSectionContent(section.title, section.value || '', huSummary)
       .pipe(
         switchMap((enhancedContent: string) => {
           if (!enhancedContent || !enhancedContent.trim()) {
-            this.toastService.info(`La sección "${selected.title}" ya está completa`);
+            this.ngZone.run(() => {
+              this.toastService.info(`"${section.title}" ya está completa`);
+              this.cdr.detectChanges();
+            });
             return of(null);
           }
 
           const compact = this.compactStaticSectionContent(enhancedContent);
-          const updates = this.buildDbUpdate(selected.key, compact);
+          const updates = this.buildDbUpdate(section.key, compact);
 
-          // Guardar automáticamente en BD
           return from(this.databaseService.updateTestPlan(this.testPlanId, updates)).pipe(
             switchMap((success: boolean) => {
-              if (!success) {
-                this.toastService.error(`No se pudo guardar la sección "${selected.title}" en la base de datos`);
-                return of(null);
-              }
-
-              // Persistencia exitosa → actualizar valor en memoria
-              selected.value = compact;
-              this.toastService.success(`Sección "${selected.title}" mejorada y guardada automáticamente`);
-              return of(compact);
+              this.ngZone.run(() => {
+                if (!success) {
+                  this.toastService.error(`No se pudo guardar "${section.title}"`);
+                } else {
+                  section.value = compact;
+                  this.toastService.success(`"${section.title}" mejorada y guardada`);
+                }
+                this.cdr.detectChanges();
+              });
+              return of(success ? compact : null);
             })
           );
         }),
         catchError(err => {
-          const errorMsg = err?.message || 'Error desconocido al mejorar con IA';
-          selected.errorAI = errorMsg;
-          this.toastService.error(`Error al mejorar "${selected.title}": ${errorMsg}`);
+          const errorMsg = err?.userMessage || err?.message || 'Error desconocido al mejorar con IA';
+          this.ngZone.run(() => {
+            section.errorAI = errorMsg;
+            this.toastService.error(`Error al mejorar "${section.title}": ${errorMsg}`);
+            this.cdr.detectChanges();
+          });
           return of(null);
         }),
         finalize(() => {
-          selected.loadingAI = false;
+          this.ngZone.run(() => {
+            section.loadingAI = false;
+            this.cdr.detectChanges();
+          });
         })
       )
       .subscribe();
   }
 
-  getSectionDisplayValue(section: SectionItem): string {
-    if (this.editingSectionKey === section.key) {
-      return this.editingBuffer;
-    }
-
-    return section.value || '';
-  }
-
   updateEditingBuffer(value: string): void {
     this.editingBuffer = value;
-  }
-
-  private getSelectedSection(): SectionItem | null {
-    if (this.selectedSectionKeys.length !== 1) return null;
-    return this.sections.find(s => s.key === this.selectedSectionKeys[0]) || null;
   }
 
   private setSectionValue(key: StaticSectionName, value: string): void {
@@ -302,47 +244,7 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  ngOnDestroy(): void {
-    document.removeEventListener('mousemove', this.boundMouseMove);
-    document.removeEventListener('mouseup', this.boundMouseUp);
-  }
-
-  onResizeMouseDown(event: MouseEvent, colIndex: number): void {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const th = (event.target as HTMLElement).closest('th') as HTMLElement;
-    const currentWidth = th ? th.getBoundingClientRect().width : 160;
-
-    this.resizingColIndex = colIndex;
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = currentWidth;
-
-    document.addEventListener('mousemove', this.boundMouseMove);
-    document.addEventListener('mouseup', this.boundMouseUp);
-  }
-
-  private onResizeMouseMove(event: MouseEvent): void {
-    if (this.resizingColIndex < 0) return;
-
-    const dx = event.clientX - this.resizeStartX;
-    const newWidth = Math.max(120, this.resizeStartWidth + dx);
-    const updated = [...this.colWidths];
-    updated[this.resizingColIndex] = newWidth;
-    this.colWidths = updated;
-  }
-
-  private onResizeMouseUp(): void {
-    this.resizingColIndex = -1;
-    document.removeEventListener('mousemove', this.boundMouseMove);
-    document.removeEventListener('mouseup', this.boundMouseUp);
-  }
-
-  getColStyle(index: number): Record<string, string> {
-    const w = this.colWidths[index];
-    if (w == null) return {};
-    return { width: w + 'px', minWidth: w + 'px', maxWidth: w + 'px' };
-  }
+  ngOnDestroy(): void { }
 
   private compactStaticSectionContent(content: string): string {
     if (!content) return '';

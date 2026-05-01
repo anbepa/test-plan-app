@@ -105,6 +105,8 @@
     margin: 0;
     font-size: 0.9rem;
     color: #374151;
+    line-height: 1.4;
+    word-break: break-word;
 }
 
 .progress-track {

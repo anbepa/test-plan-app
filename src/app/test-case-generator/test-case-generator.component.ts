@@ -119,14 +119,14 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
     const generationSteps = [
       'Analizando descripción y criterios de aceptación…',
-      shortTech ? `Generando escenarios · técnica ${shortTech}…` : 'Generando escenarios de prueba…',
-      'Estructurando y validando resultados…'
+      shortTech ? `Generando escenarios con técnica ${shortTech}…` : 'Generando escenarios de prueba…',
+      'Validando resultados…'
     ];
 
     const refinementSteps = [
       'Leyendo casos de prueba actuales…',
-      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
-      'Reorganizando y validando escenarios…'
+      shortTech ? `Refinando casos con técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Validando escenarios…'
     ];
 
     const steps = this.componentState === 'editingForRefinement' ? refinementSteps : generationSteps;

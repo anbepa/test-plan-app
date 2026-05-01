@@ -78,7 +78,7 @@ export class GeminiService {
     const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.5 }
     };
 
     return this.geminiClient.callGemini('generateTextCases', payload).pipe(
@@ -100,7 +100,7 @@ export class GeminiService {
     const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.5 }
     };
 
     console.log('[Gemini Smart] 🚀 Generando casos con continuación automática...');
@@ -154,8 +154,14 @@ export class GeminiService {
       return of(accumulatedResult);
     }
 
-    const existingTitles = (accumulatedResult.testCases || []).map((tc: any) => tc.title);
-    const promptText = PROMPTS.CONTINUATION_PROMPT(description, acceptanceCriteria, technique, existingTitles);
+    const currentCasesJson = JSON.stringify(accumulatedResult.testCases || [], null, 2);
+    const userRequest = `Agrega los casos de prueba que faltan para completar la cobertura`;
+    const promptText = PROMPTS.DIRECT_REFINE_PROMPT(
+        `Descripción: ${description}\nCriterios: ${acceptanceCriteria}`,
+        currentCasesJson,
+        userRequest,
+        technique
+    );
 
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
@@ -216,6 +222,10 @@ export class GeminiService {
   ): Observable<any> {
     const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
     const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
+
+    console.log('[Gemini Direct Refine] 📋 userReanalysisContext recibido:', JSON.stringify(userReanalysisContext));
+    console.log('[Gemini Direct Refine] 📋 técnica:', newTechnique);
+    console.log('[Gemini Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
     const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
     const payload: any = {

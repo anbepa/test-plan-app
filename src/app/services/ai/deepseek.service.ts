@@ -51,7 +51,7 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 180
+            max_tokens: 1500  // Aumentado: deepseek-reasoner consume ~500-1000 tokens en reasoning antes de generar content
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
@@ -89,7 +89,7 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.3,
+            temperature: 0.5,
             max_tokens: 16000
         };
 
@@ -132,7 +132,7 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.3,
+            temperature: 0.5,
             max_tokens: 16000
         };
 
@@ -187,8 +187,14 @@ export class DeepSeekService {
             return of(accumulatedResult);
         }
 
-        const existingTitles = (accumulatedResult.testCases || []).map((tc: any) => tc.title);
-        const promptText = PROMPTS.CONTINUATION_PROMPT(description, acceptanceCriteria, technique, existingTitles);
+        const currentCasesJson = JSON.stringify(accumulatedResult.testCases || [], null, 2);
+        const userRequest = `Agrega los casos de prueba que faltan para completar la cobertura`;
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(
+            `Descripción: ${description}\nCriterios: ${acceptanceCriteria}`,
+            currentCasesJson,
+            userRequest,
+            technique
+        );
 
         const payload: DeepSeekRequest = {
             model: this.MODEL,
@@ -251,6 +257,10 @@ export class DeepSeekService {
     ): Observable<any> {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
+
+        console.log('[DeepSeek Direct Refine] 📋 userReanalysisContext recibido:', JSON.stringify(userReanalysisContext));
+        console.log('[DeepSeek Direct Refine] 📋 técnica:', newTechnique);
+        console.log('[DeepSeek Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
         const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
         const payload: DeepSeekRequest = {

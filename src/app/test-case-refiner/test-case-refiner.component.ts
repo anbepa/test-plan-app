@@ -117,14 +117,14 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
     const regenerateSteps = [
       'Analizando contexto y descripción…',
-      shortTech ? `Regenerando escenarios · técnica ${shortTech}…` : 'Regenerando escenarios de prueba…',
-      'Estructurando y validando resultados…'
+      shortTech ? `Regenerando escenarios con técnica ${shortTech}…` : 'Regenerando escenarios de prueba…',
+      'Validando resultados…'
     ];
 
     const refineSteps = [
       'Leyendo casos de prueba actuales…',
-      shortTech ? `Refinando casos · técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
-      'Reorganizando y validando escenarios…'
+      shortTech ? `Refinando casos con técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
+      'Validando escenarios…'
     ];
 
     const steps = this.isContextPage ? regenerateSteps : refineSteps;
@@ -182,11 +182,25 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       this.startAiProgress();
       this.cdr.detectChanges();
 
-      const result: any = await firstValueFrom(this.aiService.generateTestCasesSmart(
-        this.editedDescription,
-        this.editedAcceptanceCriteria,
-        this.editedSelectedTechnique
-      ));
+      let result: any;
+
+      // Si estamos en la página de contexto Y hay contexto del analista, usar refinamiento
+      // para que el userRequest/editedContext sea efectivamente enviado a la IA
+      if (this.isContextPage && this.editedContext?.trim()) {
+        result = await firstValueFrom(this.aiService.refineTestCasesDirect(
+          this.hu!.originalInput,
+          this.hu!.detailedTestCases || [],
+          this.editedSelectedTechnique,
+          this.editedContext.trim()
+        ));
+      } else {
+        // Sin contexto: regeneración completa desde cero
+        result = await firstValueFrom(this.aiService.generateTestCasesSmart(
+          this.editedDescription,
+          this.editedAcceptanceCriteria,
+          this.editedSelectedTechnique
+        ));
+      }
 
       if (!result?.testCases || !this.hu) {
         this.toastService.error('La IA no devolvió escenarios válidos');
@@ -494,17 +508,29 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
 
+      console.log(`[Refiner saveData] 💾 Iniciando guardado. testPlanId=${this.testPlanId}, hu.id=${this.hu.id}, hu.dbUuid=${this.hu.dbUuid}`);
+
       // Try loading metadata. If not found, we'll try to create it.
-      await this.loadUserStoryData(false);
+      try {
+        await this.loadUserStoryData(false);
+      } catch (loadError: any) {
+        console.error(`[Refiner saveData] ⚠️  Error al cargar HU existente:`, loadError.message);
+        console.log(`[Refiner saveData] Procediendo a crear HU nueva...`);
+        this.userStoryDbId = null; // Reset to allow creation
+      }
+
+      console.log(`[Refiner saveData] Después loadUserStoryData: userStoryDbId=${this.userStoryDbId}`);
 
       this.normalizeDetailedTestCasesForPersistence();
 
       // If still no DB ID, it means this HU hasn't been saved to Supabase yet.
       // We'll create it now.
       if (!this.userStoryDbId) {
+        console.log(`[Refiner saveData] ⚠️  userStoryDbId es null. Creando HU nueva.`);
         await this.createUserStoryInDb();
       } else {
         // If it exists, update metadata first
+        console.log(`[Refiner saveData] ✅ HU ya existe. Actualizando metadatos. userStoryDbId=${this.userStoryDbId}`);
         await this.updateUserStoryMetadata(this.userStoryDbId);
       }
 
@@ -526,6 +552,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   /** Creates the user story in Supabase if it doesn't exist yet. */
   private async createUserStoryInDb(): Promise<void> {
     if (!this.hu || !this.testPlanId) return;
+
+    console.log(`[Refiner createUserStoryInDb] 🆕 Creando nueva HU en BD: custom_id=${this.editedHuId || this.hu.id}`);
 
     const payload = {
       test_plan_id: this.testPlanId,
@@ -549,6 +577,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     if (data) {
       this.userStoryDbId = data.id;
       this.hu.dbUuid = data.id;
+      console.log(`[Refiner createUserStoryInDb] ✅ HU creada exitosamente. userStoryDbId=${this.userStoryDbId}`);
     }
   }
 
@@ -590,6 +619,9 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   private async loadUserStoryData(syncCasesFromDb: boolean = true): Promise<void> {
     if (!this.hu || !this.testPlanId) return;
 
+    const searchBy = this.hu.dbUuid ? 'dbUuid' : 'custom_id+test_plan_id';
+    console.log(`[Refiner loadUserStoryData] Buscando HU por ${searchBy}: hu.id=${this.hu.id}, hu.dbUuid=${this.hu.dbUuid}, testPlanId=${this.testPlanId}`);
+
     let query = this.databaseService.supabase
       .from('user_stories')
       .select(`
@@ -619,8 +651,10 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       `);
 
     if (this.hu.dbUuid) {
+      console.log(`[Refiner loadUserStoryData] Usando dbUuid: ${this.hu.dbUuid}`);
       query = query.eq('id', this.hu.dbUuid);
     } else {
+      console.log(`[Refiner loadUserStoryData] Usando custom_id (${this.hu.id}) + test_plan_id (${this.testPlanId})`);
       query = query.eq('test_plan_id', this.testPlanId).eq('custom_id', this.hu.id);
     }
 
@@ -629,22 +663,26 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
       const { data, error } = await query.limit(1).single();
 
       if (error) {
-        // If not found, we don't throw, just let userStoryDbId remain null
+        // PGRST116: Resource not found (normal case - HU doesn't exist yet)
         if (error.code === 'PGRST116') {
+          console.warn(`[Refiner loadUserStoryData] ✅ HU no encontrada en BD (PGRST116). Será creada nueva.`);
           this.userStoryDbId = null;
           return;
         }
-        throw error;
+        
+        // Any other error (406, 401, etc.) is an API/authentication issue
+        console.error(`[Refiner loadUserStoryData] ❌ Error en consulta a BD. Código: ${error.code}, Mensaje: ${error.message}`);
+        throw new Error(`Error consultando HU de BD: ${error.code} - ${error.message}`);
       }
 
       userStory = data;
       this.userStoryDbId = userStory?.id || null;
       if (this.hu && this.userStoryDbId) this.hu.dbUuid = this.userStoryDbId;
+      console.log(`[Refiner loadUserStoryData] ✅ HU encontrada en BD. userStoryDbId=${this.userStoryDbId}`);
     } catch (err: any) {
-      // Catching any other potential issue
-      if (err.code !== 'PGRST116') {
-        throw err;
-      }
+      console.error(`[Refiner loadUserStoryData] ❌ Excepción capturada:`, err?.message || err);
+      // Re-throw to prevent silent failures and duplicate HU creation
+      throw err;
     }
 
     if (userStory?.custom_id) this.editedHuId = userStory.custom_id;

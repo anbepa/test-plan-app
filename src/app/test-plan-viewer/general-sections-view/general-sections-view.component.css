@@ -5,6 +5,338 @@
 .general-sections-page {
   min-height: 100vh;
   background: var(--bg-color);
+}
+
+/* ── Topbar: solo breadcrumb ── */
+.page-topbar {
+  display: flex;
+  align-items: center;
+  padding: 0.875rem 1.5rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.breadcrumb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.breadcrumb-button {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  transition: color 0.15s;
+}
+.breadcrumb-button:hover { color: #111827; }
+.breadcrumb-separator { color: #d1d5db; }
+.breadcrumb-current { color: #111827; font-weight: 600; }
+
+/* ── Layout ── */
+.sections-layout {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sections-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+/* ── Tarjeta ── */
+.section-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e3e8f2;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  overflow: hidden;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.section-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+.editing-card {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.loading-card {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08) !important;
+}
+
+/* ── Cabecera de tarjeta ── */
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e6ebf3;
+  user-select: none;
+}
+
+.editing-card .card-header {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-bottom-color: #bfdbfe;
+}
+
+.loading-card .card-header {
+  background: linear-gradient(180deg, #faf5ff 0%, #ede9fe 100%);
+  border-bottom-color: #ddd6fe;
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #334155;
+  flex: 1;
+}
+
+/* ── Botones de acción en tarjeta ── */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 0.45rem;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Editar */
+.icon-btn-edit {
+  color: #374151;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+.icon-btn-edit:hover {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+/* IA */
+.icon-btn-ai {
+  color: #7c3aed;
+  border-color: #ede9fe;
+  background: #f5f3ff;
+}
+.icon-btn-ai:hover {
+  color: #6d28d9;
+  border-color: #c4b5fd;
+  background: #ede9fe;
+}
+
+/* Guardar */
+.icon-btn-save {
+  color: #16a34a;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.icon-btn-save:hover {
+  color: #15803d;
+  border-color: #86efac;
+  background: #dcfce7;
+}
+
+/* Cancelar */
+.icon-btn-cancel {
+  color: #64748b;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+.icon-btn-cancel:hover {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+/* Badge "Mejorando…" */
+.badge-improving {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #7c3aed;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+
+.spinner-mini {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #ddd6fe;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Cuerpo de tarjeta ── */
+.card-body {
+  padding: 0.9rem 1rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Texto en modo vista */
+.section-text {
+  margin: 0;
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: var(--text-primary, #1e293b);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  flex: 1;
+  min-height: 3rem;
+}
+
+.text-clickable {
+  cursor: text;
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  margin: -0.4rem -0.5rem;
+  transition: background 0.15s;
+}
+.text-clickable:hover {
+  background: #f0f7ff;
+}
+
+/* Textarea edición inline */
+.inline-editor {
+  width: 100%;
+  border: 1.5px solid #2563eb;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  resize: vertical;
+  min-height: 110px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  line-height: 1.7;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  background: #f8fbff;
+  box-sizing: border-box;
+  flex: 1;
+}
+.inline-editor:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+}
+
+/* Error IA */
+.status-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #dc2626;
+}
+.status-error svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Hint inferior ── */
+.page-hint {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8125rem;
+  padding-left: 0.1rem;
+  margin: 0;
+}
+
+/* ── Loading ── */
+.loading-state {
+  margin: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--surface-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.spinner {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .sections-grid {
+    grid-template-columns: 1fr;
+  }
+  .sections-layout {
+    padding: 0.875rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-topbar {
+    padding: 0.75rem 1rem;
+  }
+  .card-header {
+    padding: 0.55rem 0.75rem;
+  }
+  .card-body {
+    padding: 0.75rem 0.82rem;
+  }
+}
+
+
+.general-sections-page {
+  min-height: 100vh;
+  background: var(--bg-color);
   padding: 0;
 }
 
