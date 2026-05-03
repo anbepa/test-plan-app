@@ -111,4 +111,11 @@ export class HuSyncService {
       map((payload) => payload.hu)
     );
   }
+
+  watchHuWithTimestamp(huId: string): Observable<{ hu: HUData; updatedAt: number }> {
+    return this.huSync$.pipe(
+      filter((payload) => payload.huId === huId),
+      map((payload) => ({ hu: payload.hu, updatedAt: payload.updatedAt }))
+    );
+  }
 }
