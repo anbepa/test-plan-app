@@ -38,6 +38,9 @@ export class ExecutionStorageService {
   private storageIndexBuilt = false;
   private storageIndexPromise: Promise<void> | null = null;
 
+  /** Cached user ID to avoid repeated getUser() calls that trigger NavigatorLock errors */
+  private cachedUserId: string | null = null;
+
   /** Debounce para saveExecution: executionId → timeoutId */
   private saveDebounceMap = new Map<string, any>();
   private pendingSaves = new Map<string, { execution: PlanExecution, resolve: () => void, reject: (e: any) => void }[]>();
@@ -49,11 +52,36 @@ export class ExecutionStorageService {
   }
 
   private async getCurrentUserId(): Promise<string> {
-    const { data, error } = await this.supabase.auth.getUser();
-    if (error || !data.user?.id) {
-      throw new Error('No hay usuario autenticado.');
+    if (this.cachedUserId) {
+      return this.cachedUserId;
     }
-    return data.user.id;
+
+    // Try getSession first (uses local storage, no network call, avoids lock contention)
+    try {
+      const { data: sessionData } = await this.supabase.auth.getSession();
+      if (sessionData?.session?.user?.id) {
+        this.cachedUserId = sessionData.session.user.id;
+        return this.cachedUserId;
+      }
+    } catch (_) { /* fall through to getUser */ }
+
+    // Fallback to getUser with retry
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { data, error } = await this.supabase.auth.getUser();
+        if (!error && data.user?.id) {
+          this.cachedUserId = data.user.id;
+          return this.cachedUserId;
+        }
+      } catch (e) {
+        if (attempt === 0) {
+          await new Promise(r => setTimeout(r, 100));
+          continue;
+        }
+      }
+    }
+
+    throw new Error('No hay usuario autenticado.');
   }
 
   // ════════════════════════════════════════════════════════════
@@ -123,23 +151,26 @@ export class ExecutionStorageService {
    * Guarda o actualiza una ejecución (con debounce de 500ms)
    */
   async saveExecution(execution: PlanExecution): Promise<void> {
+    // Deep-clone at call time to avoid debounce saving a mutated reference
+    const snapshot: PlanExecution = JSON.parse(JSON.stringify(execution));
+
     return new Promise<void>((resolve, reject) => {
       // Acumular promises pendientes
-      if (!this.pendingSaves.has(execution.id)) {
-        this.pendingSaves.set(execution.id, []);
+      if (!this.pendingSaves.has(snapshot.id)) {
+        this.pendingSaves.set(snapshot.id, []);
       }
-      this.pendingSaves.get(execution.id)!.push({ execution, resolve, reject });
+      this.pendingSaves.get(snapshot.id)!.push({ execution: snapshot, resolve, reject });
 
       // Cancelar debounce anterior
-      if (this.saveDebounceMap.has(execution.id)) {
-        clearTimeout(this.saveDebounceMap.get(execution.id));
+      if (this.saveDebounceMap.has(snapshot.id)) {
+        clearTimeout(this.saveDebounceMap.get(snapshot.id));
       }
 
       // Programar escritura con debounce
       const timeoutId = setTimeout(async () => {
-        this.saveDebounceMap.delete(execution.id);
-        const pending = this.pendingSaves.get(execution.id) || [];
-        this.pendingSaves.delete(execution.id);
+        this.saveDebounceMap.delete(snapshot.id);
+        const pending = this.pendingSaves.get(snapshot.id) || [];
+        this.pendingSaves.delete(snapshot.id);
 
         // Tomar la última ejecución (más actualizada)
         const latest = pending[pending.length - 1].execution;
@@ -152,7 +183,7 @@ export class ExecutionStorageService {
         }
       }, 500);
 
-      this.saveDebounceMap.set(execution.id, timeoutId);
+      this.saveDebounceMap.set(snapshot.id, timeoutId);
     });
   }
 

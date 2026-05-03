@@ -51,8 +51,25 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   isLoading = true;
   isHydratingEvidence = false;
   private huSyncSubscription: Subscription | null = null;
+  /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
+  private componentLoadedAt: number = 0;
 
   stats: any = null;
+
+  // ── New accordion / tab state ──
+  activeTab: 'test-cases' | 'summary' = 'test-cases';
+  statusFilter: string = 'all';
+  searchQuery: string = '';
+  expandedTestCaseIndex: number = -1;
+
+  get filteredTestCases(): TestCaseExecution[] {
+    if (!this.execution) return [];
+    return this.execution.testCases.filter(tc => {
+      const matchesStatus = this.statusFilter === 'all' || this.getTestCaseStatus(tc) === this.statusFilter;
+      const matchesSearch = !this.searchQuery || tc.title.toLowerCase().includes(this.searchQuery.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }
 
   constructor(
     private router: Router,
@@ -110,7 +127,12 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
       this.normalizeActiveSelection();
 
-      this.applyLatestHuSnapshot();
+      // AWAIT para evitar condición de carrera con el debounce de saveExecution
+      await this.applyLatestHuSnapshot();
+
+      // Registrar timestamp DESPUÉS de cargar para que subscribeToHuUpdates
+      // ignore el emit inmediato del BehaviorSubject (que es la versión stale de hu-scenarios)
+      this.componentLoadedAt = Date.now();
       this.subscribeToHuUpdates();
 
       this.persistExecutionContext();
@@ -623,7 +645,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   async saveExecution(): Promise<void> {
     if (!this.execution) return;
 
-    await this.autoSaveExecutionState();
+    await this.fastSaveExecutionState();
     this.toastService.success('Ejecución guardada');
   }
 
@@ -631,6 +653,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (!this.execution) return;
 
     await this.syncExecutionImagesToStorage();
+    this.execution.updatedAt = Date.now();
+    await this.storageService.saveExecution(this.execution);
+    this.persistExecutionContext();
+  }
+
+  /** Guarda solo el JSON de la ejecución (estados/notas) sin re-subir imágenes al Storage. */
+  private async fastSaveExecutionState(): Promise<void> {
+    if (!this.execution) return;
     this.execution.updatedAt = Date.now();
     await this.storageService.saveExecution(this.execution);
     this.persistExecutionContext();
@@ -653,20 +683,20 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (!step?.evidences?.length) return;
 
     const hasMissingImages = step.evidences.some(
-      ev => ev.id && !this.storageService.getCachedImage(ev.id)
+      ev => ev.id && (!ev.base64Data || !this.storageService.getCachedImage(ev.id))
     );
     if (!hasMissingImages) return;
 
     this.isHydratingEvidence = true;
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
 
     this.storageService.hydrateStepEvidence(step.evidences).then(hydrated => {
       step.evidences = hydrated;
       this.isHydratingEvidence = false;
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
     }).catch(() => {
       this.isHydratingEvidence = false;
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
     });
   }
 
@@ -747,7 +777,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (!this.hu?.id) return;
 
     this.huSyncSubscription?.unsubscribe();
-    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe(async (updatedHu) => {
+    this.huSyncSubscription = this.huSyncService.watchHuWithTimestamp(this.hu.id).subscribe(async ({ hu: updatedHu, updatedAt }) => {
+      // Ignorar emits que ocurrieron ANTES de que este componente terminara de cargar
+      // (el BehaviorSubject emite inmediatamente el último valor al suscribirse)
+      if (updatedAt <= this.componentLoadedAt) return;
       await this.applyHuChanges(updatedHu, true);
     });
   }
@@ -764,6 +797,24 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
 
     if (!updatedHu.detailedTestCases || !this.execution) {
+      return;
+    }
+
+    // ── Guard: skip reconciliation if HU structure hasn't changed ──
+    // Compare titles+steps of HU against current execution to detect real changes.
+    const huFingerprint = updatedHu.detailedTestCases
+      .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
+      .join(';;');
+    const execFingerprint = this.execution.testCases
+      .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
+      .join(';;');
+
+    if (huFingerprint === execFingerprint) {
+      // HU structure is identical — only update title if needed, no reconcile/save
+      if (this.execution.huTitle !== updatedHu.title) {
+        this.execution.huTitle = updatedHu.title;
+        await this.fastSaveExecutionState();
+      }
       return;
     }
 
@@ -997,13 +1048,148 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   getStatusLabel(status: string): string {
     switch (status) {
       case 'completed':
-        return '✓ Completado';
+        return 'Completado';
       case 'in-progress':
-        return '⟳ En Progreso';
+        return 'En Progreso';
       case 'failed':
-        return '✕ Falló';
+        return 'Falló';
       default:
-        return '◯ Pendiente';
+        return 'Pendiente';
+    }
+  }
+
+  // ── Accordion helpers ──
+  toggleAccordion(index: number): void {
+    this.expandedTestCaseIndex = this.expandedTestCaseIndex === index ? -1 : index;
+  }
+
+  getOriginalIndex(tc: TestCaseExecution): number {
+    if (!this.execution) return -1;
+    return this.execution.testCases.indexOf(tc);
+  }
+
+  selectStepInAccordion(tcIndex: number, stepIndex: number): void {
+    this.activeTestCaseIndex = tcIndex;
+    this.activeStepIndex = stepIndex;
+    this.hydrateCurrentStep();
+  }
+
+  /** Allows the user to click on a skeleton placeholder to force-hydrate and then open the image */
+  async hydrateAndOpen(ev: AssetEvidence): Promise<void> {
+    if (!ev.id) return;
+    this.isHydratingEvidence = true;
+    this.cdr.markForCheck();
+    try {
+      const loaded = await this.storageService.getImage(ev.id);
+      if (loaded?.base64Data) {
+        ev.base64Data = loaded.base64Data;
+        ev.originalBase64 = loaded.originalBase64 || loaded.base64Data;
+      }
+    } catch { /* ignore */ }
+    this.isHydratingEvidence = false;
+    this.cdr.markForCheck();
+  }
+
+  async updateStepStatusInAccordion(tcIndex: number, stepIndex: number, status: string): Promise<void> {
+    if (!this.execution) return;
+    const step = this.execution.testCases[tcIndex]?.steps[stepIndex];
+    if (!step) return;
+    step.status = status as any;
+    this.execution.testCases[tcIndex].status = this.getTestCaseStatus(this.execution.testCases[tcIndex]);
+    this.execution.updatedAt = Date.now();
+    await this.fastSaveExecutionState();
+    this.cdr.markForCheck();
+  }
+
+  async setAllStepsStatus(tcIndex: number, status: 'pending' | 'in-progress' | 'completed' | 'failed'): Promise<void> {
+    if (!this.execution) return;
+    const tc = this.execution.testCases[tcIndex];
+    if (!tc) return;
+    tc.steps.forEach(s => s.status = status);
+    tc.status = status;
+    this.execution.updatedAt = Date.now();
+    await this.fastSaveExecutionState();
+    this.cdr.markForCheck();
+    this.toastService.success('Estado actualizado');
+  }
+
+  // ── Summary / stat helpers ──
+  getCountByStatus(status: string): number {
+    if (!this.execution) return 0;
+    return this.execution.testCases.filter(tc => this.getTestCaseStatus(tc) === status).length;
+  }
+
+  getOverallCompletion(): number {
+    if (!this.execution || !this.execution.testCases.length) return 0;
+    const done = this.execution.testCases.filter(tc => {
+      const s = this.getTestCaseStatus(tc);
+      return s === 'completed' || s === 'failed';
+    }).length;
+    return Math.round((done / this.execution.testCases.length) * 100);
+  }
+
+  getStatusPercent(status: string): number {
+    if (!this.execution || !this.execution.testCases.length) return 0;
+    return Math.round((this.getCountByStatus(status) / this.execution.testCases.length) * 100);
+  }
+
+  getManualPercent(): number {
+    return 100;
+  }
+
+  getAutomationCoverage(): number {
+    return 0;
+  }
+
+  getExecutionStatus(): string {
+    if (!this.execution) return 'pending';
+    const total = this.execution.testCases.length;
+    if (!total) return 'pending';
+    const failed = this.getCountByStatus('failed');
+    const completed = this.getCountByStatus('completed');
+    const inProgress = this.getCountByStatus('in-progress');
+    if (failed > 0) return 'failed';
+    if (completed === total) return 'completed';
+    if (inProgress > 0 || completed > 0) return 'in-progress';
+    return 'pending';
+  }
+
+  getExecutionStatusLabel(): string {
+    const s = this.getExecutionStatus();
+    switch (s) {
+      case 'completed': return 'Completado';
+      case 'failed': return 'Fallido';
+      case 'in-progress': return 'En Progreso';
+      default: return 'Pendiente';
+    }
+  }
+
+  getSummaryStats(): { passRate: number; failRate: number; executed: number; pending: number } {
+    const total = this.execution?.testCases.length ?? 0;
+    const passed = this.getCountByStatus('completed');
+    const failed = this.getCountByStatus('failed');
+    const pending = this.getCountByStatus('pending') + this.getCountByStatus('in-progress');
+    return {
+      passRate: total ? Math.round((passed / total) * 100) : 0,
+      failRate: total ? Math.round((failed / total) * 100) : 0,
+      executed: passed + failed,
+      pending
+    };
+  }
+
+  formatDate(timestamp: number | string | undefined): string {
+    if (!timestamp) return '—';
+    const d = new Date(timestamp);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  getStatusDisplayLabel(status: string): string {
+    switch (status) {
+      case 'completed': return 'Completado';
+      case 'failed': return 'Falló';
+      case 'in-progress': return 'En Progreso';
+      default: return 'Pendiente';
     }
   }
 }

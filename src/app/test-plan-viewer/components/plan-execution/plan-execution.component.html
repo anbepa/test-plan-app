@@ -17,218 +17,419 @@
     <p>Cargando ejecución...</p>
   </div>
 
-  <!-- Content (show only when NOT loading) -->
+  <!-- Content -->
   <ng-container *ngIf="!isLoading">
-    <!-- Execution Body or Empty State -->
     <div *ngIf="execution; else noExecution" class="exec-body">
 
-    <!-- Title bar -->
-    <div class="exec-titlebar">
-      <div class="exec-title-left">
-        <h2 class="exec-title">{{ execution.huTitle }}</h2>
-      </div>
-      <div class="exec-title-right">
-        <ng-container *ngIf="stats">
-          <div class="stat-pill">
-            <span class="stat-pill-label">Pasos</span>
-            <span class="stat-pill-value">{{ stats.completedSteps }}/{{ stats.totalSteps }}</span>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Evidencias</span>
-            <span class="stat-pill-value">{{ stats.totalImages }}</span>
-          </div>
-          <div class="progress-track">
-            <div class="progress-fill" [style.width.%]="stats.completionPercentage"></div>
-          </div>
-          <div class="tb-divider"></div>
-        </ng-container>
-        <div class="tb-actions">
-          <button (click)="exportToDOCX()" class="btn-export">Descargar .docx</button>
-          <button (click)="deleteExecution()" class="btn-tb-danger" title="Eliminar ejecución">Eliminar</button>
-          <span *ngIf="isHydratingEvidence" class="hydrating-badge" title="Cargando imágenes en segundo plano...">
+      <!-- Title bar -->
+      <div class="exec-titlebar">
+        <div class="exec-title-left">
+          <h2 class="exec-title">{{ execution.huTitle }}</h2>
+          <span *ngIf="isHydratingEvidence" class="hydrating-badge">
             <span class="hydrating-spinner"></span> Cargando imágenes…
           </span>
         </div>
+        <div class="exec-title-right">
+          <ng-container *ngIf="stats">
+            <div class="stat-pill">
+              <span class="stat-pill-label">Pasos</span>
+              <span class="stat-pill-value">{{ stats.completedSteps }}/{{ stats.totalSteps }}</span>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-label">Evidencias</span>
+              <span class="stat-pill-value">{{ stats.totalImages }}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" [style.width.%]="stats.completionPercentage"></div>
+            </div>
+            <div class="tb-divider"></div>
+          </ng-container>
+          <div class="tb-actions">
+            <button (click)="exportToDOCX()" class="btn-export">Descargar Ejecución</button>
+            <button (click)="deleteExecution()" class="btn-tb-danger" title="Eliminar ejecución">Eliminar ejecución</button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Layout -->
-    <div class="exec-layout">
-
-      <!-- Sidebar: cases -->
-      <aside class="exec-sidebar">
-        <p class="sidebar-label">Casos de Prueba</p>
-        <div class="cases-list">
-          <button *ngFor="let tc of execution.testCases; let i = index; trackBy: trackByTestCaseId" (click)="selectTestCase(i)" class="case-item"
-            [class.active]="activeTestCaseIndex === i">
-            <span class="case-index" [ngClass]="'status-' + getTestCaseStatus(tc)">{{ i + 1 }}</span>
-            <span class="case-name">{{ tc.title }}</span>
-          </button>
-        </div>
-      </aside>
-
-      <!-- Main: steps + detail -->
-      <main class="exec-main" *ngIf="currentTestCase">
-
-        <!-- Steps strip -->
-        <div class="steps-strip">
-          <div class="flex-spacer"></div>
-          <button *ngFor="let step of currentTestCase.steps; let i = index" (click)="selectStep(i)" class="step-chip"
-            [class.active]="activeStepIndex === i" [class.done]="step.status === 'completed'"
-            [class.fail]="step.status === 'failed'" [class.progress]="step.status === 'in-progress'">
-            <span class="chip-num">{{ step.numero_paso }}</span>
-            <span class="chip-img" *ngIf="step.evidences.length > 0">📎{{ step.evidences.length }}</span>
-          </button>
+      <!-- Tab bar -->
+      <div class="tab-bar-wrapper">
+        <div class="tab-bar">
+          <button class="tab-btn" [class.active]="activeTab === 'test-cases'" (click)="activeTab = 'test-cases'">Casos de prueba</button>
+          <button class="tab-btn" [class.active]="activeTab === 'summary'" (click)="activeTab = 'summary'">Resumen</button>
         </div>
 
-        <!-- Step detail card -->
-        <div class="step-card" *ngIf="currentStep">
+        <!-- Filter pills + search (only for test-cases tab) -->
+        <div class="tab-controls" *ngIf="activeTab === 'test-cases'">
+          <div class="filter-pills">
+            <button class="filter-pill" [class.active]="statusFilter === 'all'" (click)="statusFilter = 'all'">Todos ({{ execution.testCases.length }})</button>
+              <button class="filter-pill filter-pill-passed" [class.active]="statusFilter === 'completed'" (click)="statusFilter = 'completed'">Completados ({{ getCountByStatus('completed') }})</button>
+              <button class="filter-pill filter-pill-failed" [class.active]="statusFilter === 'failed'" (click)="statusFilter = 'failed'">Fallidos ({{ getCountByStatus('failed') }})</button>
+              <button class="filter-pill filter-pill-progress" [class.active]="statusFilter === 'in-progress'" (click)="statusFilter = 'in-progress'">En Progreso ({{ getCountByStatus('in-progress') }})</button>
+              <button class="filter-pill filter-pill-pending" [class.active]="statusFilter === 'pending'" (click)="statusFilter = 'pending'">Pendientes ({{ getCountByStatus('pending') }})</button>
+          </div>
+          <div class="search-zone">
+            <div class="search-input-wrap">
+              <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="search-input" type="text" placeholder="Buscar..." [(ngModel)]="searchQuery" />
+              <button *ngIf="searchQuery" class="search-clear-btn" (click)="searchQuery = ''" title="Limpiar búsqueda">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <button class="btn-submit-result" (click)="saveExecution()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              Guardar ejecución
+            </button>
+          </div>
+        </div>
+      </div>
 
-          <!-- Step top row -->
-          <div class="step-card-header">
-            <div class="step-card-title-container">
-              <h3 class="scenario-name-above-step">{{ currentTestCase.title }}</h3>
-              <div class="step-card-title">
-                <span class="step-badge">Paso {{ currentStep.numero_paso }}</span>
-                <p class="step-text">{{ currentStep.accion }}</p>
-              </div>
-            </div>
-            <div class="step-status-row">
-              <select class="status-select status-select-sm" [ngClass]="'st-' + currentStep.status" [ngModel]="currentStep.status"
-                (ngModelChange)="updateStepStatus($event)">
-                <option value="pending">Pendiente</option>
-                <option value="in-progress">En progreso</option>
-                <option value="completed">Completado</option>
-                <option value="failed">Falló</option>
-              </select>
-            </div>
+      <!-- ════════════ TEST CASES TAB ════════════ -->
+      <div *ngIf="activeTab === 'test-cases'" class="tab-content">
+        <div class="tc-table-container">
+
+          <!-- Table header -->
+          <div class="tc-table-head">
+            <div class="tc-col-expander"></div>
+            <div class="tc-col-check"><input type="checkbox" class="tc-checkbox" /></div>
+            <div class="tc-col-title">Título</div>
+            <div class="tc-col-status">Estado</div>
+            <div class="tc-col-actions">Acciones</div>
           </div>
 
-          <!-- Evidences -->
-          <div class="evidence-zone">
-            <div class="evidence-zone-header">
-              <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ currentStep.evidences.length
-                  }}</span></span>
+          <!-- Accordion rows -->
+          <div *ngFor="let tc of filteredTestCases; let i = index; trackBy: trackByTestCaseId"
+               class="tc-row" [class.tc-row-expanded]="expandedTestCaseIndex === getOriginalIndex(tc)">
 
-              <div class="split-cells-controls">
-                <label class="grid-label">Dividir:</label>
-                <input type="number" min="1" max="10" [ngModel]="currentStep.evidenceColumns || 1"
-                  (ngModelChange)="updateGridConfig($event, currentStep.evidenceRows || 1)" title="Columnas"
-                  class="grid-input" />
-                <span class="grid-sep">x</span>
-                <input type="number" min="1" max="10" [ngModel]="currentStep.evidenceRows || 1"
-                  (ngModelChange)="updateGridConfig(currentStep.evidenceColumns || 1, $event)" title="Filas"
-                  class="grid-input" />
-              </div>
-
-              <div class="upload-dropdown">
-                <button (click)="showUploadMenu = !showUploadMenu" class="btn-upload btn-unified">
-                  + Subir Evidencia
-                  <span class="chevron">▾</span>
+            <!-- Collapsed row header -->
+            <div class="tc-row-header" (click)="toggleAccordion(getOriginalIndex(tc))">
+              <div class="tc-col-expander">
+                <button class="tc-chevron" [class.tc-chevron-open]="expandedTestCaseIndex === getOriginalIndex(tc)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
                 </button>
-                <div class="upload-menu-backdrop" *ngIf="showUploadMenu" (click)="showUploadMenu = false"></div>
-                <div class="upload-menu" *ngIf="showUploadMenu">
-                  <button (click)="triggerFileInput(); showUploadMenu = false" class="menu-item">
-                    📷 Subir Foto
-                  </button>
-                  <button (click)="triggerCsvInput(); showUploadMenu = false" class="menu-item">
-                    📄 Subir CSV
-                  </button>
-                </div>
               </div>
-              <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
-              <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
-              <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
+              <div class="tc-col-check">
+                <input type="checkbox" class="tc-checkbox" (click)="$event.stopPropagation()" />
+              </div>
+              <div class="tc-col-title">
+                <span class="tc-title-text">{{ tc.title }}</span>
+              </div>
+              <div class="tc-col-status">
+                <span class="status-badge" [ngClass]="'status-badge-' + getTestCaseStatus(tc)">
+                  <span class="status-dot"></span>
+                  {{ getStatusDisplayLabel(getTestCaseStatus(tc)) }}
+                </span>
+                <span class="exec-type-badge">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  Manual
+                </span>
+              </div>
+              <div class="tc-col-actions" (click)="$event.stopPropagation()">
+                <!-- Pendiente -->
+                <button class="act-icon-btn act-pending"
+                  title="Marcar todos como Pendiente"
+                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'pending')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </button>
+                <!-- En Progreso -->
+                <button class="act-icon-btn act-progress"
+                  title="Marcar todos como En Progreso"
+                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'in-progress')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                </button>
+                <!-- Completado -->
+                <button class="act-icon-btn act-done"
+                  title="Marcar todos como Completado"
+                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'completed')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 12l3 3 5-5"/>
+                  </svg>
+                </button>
+                <!-- Falló -->
+                <button class="act-icon-btn act-fail"
+                  title="Marcar todos como Falló"
+                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'failed')">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M15 9l-6 6M9 9l6 6"/>
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <!-- Gallery -->
-            <ng-container
-              *ngIf="(currentStep.evidenceColumns || 1) > 1 || (currentStep.evidenceRows || 1) > 1; else standardGallery">
-              <div class="ev-gallery is-grid"
-                [style.grid-template-columns]="'repeat(' + (currentStep.evidenceColumns || 1) + ', 1fr)'"
-                [style.grid-template-rows]="'repeat(' + (currentStep.evidenceRows || 1) + ', 1fr)'">
-                <div class="ev-thumb grid-view" *ngFor="let i of getGridCells(currentStep)">
-                  <ng-container *ngIf="currentStep.evidences[i]; let ev">
-                    <ng-container *ngIf="ev.type === 'image'; else csvGridThumb">
-                      <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
-                    </ng-container>
-                    <ng-template #csvGridThumb>
-                      <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
-                        <div class="csv-label-minimal">CSV</div>
-                        <div class="csv-peek" *ngIf="ev.tabularData">
-                          <table>
-                            <tr *ngFor="let row of ev.tabularData.slice(0, 5)">
-                              <td *ngFor="let cell of row.slice(0, 4)">{{ cell }}</td>
-                            </tr>
-                          </table>
-                        </div>
-                      </div>
-                    </ng-template>
-                    <div class="ev-thumb-actions">
-                      <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
-                      <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
-                      <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
-                    </div>
-                  </ng-container>
-                </div>
-              </div>
-            </ng-container>
+            <!-- Expanded body -->
+            <div class="tc-row-body" *ngIf="expandedTestCaseIndex === getOriginalIndex(tc)">
+              <div class="tc-detail-panel">
 
-            <ng-template #standardGallery>
-              <div class="ev-gallery" *ngIf="currentStep.evidences.length > 0; else noEv">
-                <div class="ev-thumb" *ngFor="let ev of currentStep.evidences">
-                  <!-- Render based on type -->
-                  <ng-container *ngIf="ev.type === 'image'; else csvThumb">
-                    <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
-                  </ng-container>
-                  <ng-template #csvThumb>
-                    <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
-                      <div class="csv-icon">📊</div>
-                      <div class="csv-peek" *ngIf="ev.tabularData">
-                        <table>
-                          <tr *ngFor="let row of ev.tabularData.slice(0, 3)">
-                            <td *ngFor="let cell of row.slice(0, 2)">{{ cell }}</td>
-                          </tr>
-                        </table>
-                      </div>
-                    </div>
-                  </ng-template>
-
-                  <div class="ev-thumb-actions">
-                    <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
-                    <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
-                    <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                <!-- Meta info -->
+                <div class="tc-meta-row" *ngIf="tc.preconditions">
+                  <div class="tc-meta-block">
+                    <span class="meta-label">Precondiciones</span>
+                    <span class="meta-value">{{ tc.preconditions }}</span>
                   </div>
                 </div>
+
+                <!-- Steps -->
+                <div class="tc-steps-header">
+                  <span class="steps-section-label">Pasos de Prueba</span>
+                </div>
+
+                <div *ngFor="let step of tc.steps; let si = index" class="step-item"
+                     [class.step-item-active]="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)">
+
+                  <div class="step-item-row" (click)="selectStepInAccordion(getOriginalIndex(tc), si)">
+                    <div class="step-num-label">Paso {{ step.numero_paso }}</div>
+                    <select class="step-status-sel" [ngClass]="'st-' + step.status"
+                            [ngModel]="step.status"
+                            (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)"
+                            (click)="$event.stopPropagation()">
+                      <option value="pending">Pendiente</option>
+                      <option value="in-progress">En Progreso</option>
+                      <option value="completed">Completado</option>
+                      <option value="failed">Falló</option>
+                    </select>
+                    <div class="step-content">
+                      <div class="step-action-text"><span class="step-field-label">Acción: </span>{{ step.accion }}</div>
+                      <div class="step-expected-text"><span class="step-field-label">Resultado esperado: </span>{{ tc.expectedResults }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Evidence zone (active step only) -->
+                  <div class="step-evidence-zone"
+                       *ngIf="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)">
+                    <div class="evidence-zone-header">
+                      <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ step.evidences.length }}</span></span>
+                      <div class="split-cells-controls">
+                        <label class="grid-label">Celdas:</label>
+                        <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
+                               (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" title="Columnas" class="grid-input" />
+                        <span class="grid-sep">×</span>
+                        <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
+                               (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" title="Filas" class="grid-input" />
+                      </div>
+                      <div class="upload-dropdown">
+                        <button (click)="showUploadMenu = !showUploadMenu" class="btn-upload btn-unified">
+                          + Subir Evidencia <span class="chevron">▾</span>
+                        </button>
+                        <div class="upload-menu-backdrop" *ngIf="showUploadMenu" (click)="showUploadMenu = false"></div>
+                        <div class="upload-menu" *ngIf="showUploadMenu">
+                          <button (click)="triggerFileInput(); showUploadMenu = false" class="menu-item">📷 Subir Foto</button>
+                          <button (click)="triggerCsvInput(); showUploadMenu = false" class="menu-item">📄 Subir CSV</button>
+                        </div>
+                      </div>
+                      <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
+                      <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
+                      <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
+                    </div>
+
+                    <!-- Gallery grid -->
+                    <ng-container *ngIf="(step.evidenceColumns || 1) > 1 || (step.evidenceRows || 1) > 1; else standardGallery">
+                      <div class="ev-gallery is-grid"
+                           [style.grid-template-columns]="'repeat(' + (step.evidenceColumns || 1) + ', 1fr)'"
+                           [style.grid-template-rows]="'repeat(' + (step.evidenceRows || 1) + ', 1fr)'">
+                        <div class="ev-thumb grid-view" *ngFor="let idx of getGridCells(step)">
+                          <ng-container *ngIf="step.evidences[idx]; let ev">
+                            <ng-container *ngIf="ev.type === 'image'; else csvGridThumb">
+                              <ng-container *ngIf="ev.base64Data; else imgSkeleton">
+                                <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                              </ng-container>
+                              <ng-template #imgSkeleton>
+                                <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
+                                  <span class="ev-skeleton-spinner"></span>
+                                  <span class="ev-skeleton-text">Cargando…</span>
+                                </div>
+                              </ng-template>
+                            </ng-container>
+                            <ng-template #csvGridThumb>
+                              <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                                <div class="csv-label-minimal">CSV</div>
+                                <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,5)"><td *ngFor="let cell of row.slice(0,4)">{{cell}}</td></tr></table></div>
+                              </div>
+                            </ng-template>
+                            <div class="ev-thumb-actions">
+                              <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                              <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
+                              <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                            </div>
+                          </ng-container>
+                        </div>
+                      </div>
+                    </ng-container>
+
+                    <ng-template #standardGallery>
+                      <div class="ev-gallery" *ngIf="step.evidences.length > 0; else noEv">
+                        <div class="ev-thumb" *ngFor="let ev of step.evidences">
+                          <ng-container *ngIf="ev.type === 'image'; else csvThumb">
+                            <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
+                              <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                            </ng-container>
+                            <ng-template #imgSkeletonStd>
+                              <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
+                                <span class="ev-skeleton-spinner"></span>
+                                <span class="ev-skeleton-text">Cargando…</span>
+                              </div>
+                            </ng-template>
+                          </ng-container>
+                          <ng-template #csvThumb>
+                            <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                              <div class="csv-icon">📊</div>
+                              <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
+                            </div>
+                          </ng-template>
+                          <div class="ev-thumb-actions">
+                            <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                            <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
+                            <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                          </div>
+                        </div>
+                      </div>
+                      <ng-template #noEv>
+                        <div class="ev-empty">Sin evidencias para este paso.</div>
+                      </ng-template>
+                    </ng-template>
+                  </div>
+                </div><!-- /step-item -->
+
               </div>
-              <ng-template #noEv>
-                <div class="ev-empty">Sin evidencias para este paso</div>
-              </ng-template>
-            </ng-template>
-          </div>
+            </div><!-- /tc-row-body -->
+          </div><!-- /tc-row -->
 
-          <!-- Expected Result Area -->
-          <div class="expected-result-section">
-            <div class="expected-result-label">Resultado esperado</div>
-            <p class="expected-result-text">{{ currentTestCase.expectedResults }}</p>
+          <div class="tc-empty-state" *ngIf="filteredTestCases.length === 0">
+            <p>No se encontraron casos de prueba con el filtro seleccionado.</p>
           </div>
+        </div>
+      </div><!-- /test-cases tab -->
 
-          <!-- Navigation -->
-          <div class="step-nav">
-            <button (click)="previousStep()" class="btn-nav-arrow"
-              [disabled]="activeTestCaseIndex === 0 && activeStepIndex === 0">← Anterior</button>
-            <button (click)="saveExecution()" class="btn-save">
-              Guardar Ejecución
-              <span *ngIf="hasUnsavedChanges" class="unsaved-indicator" title="Cambios sin guardar"></span>
-            </button>
-            <button (click)="nextStep()" class="btn-nav-arrow">Siguiente →</button>
+
+      <!-- ════════════ SUMMARY TAB ════════════ -->
+      <div *ngIf="activeTab === 'summary'" class="tab-content summary-tab">
+
+        <!-- Stat cards -->
+        <div class="summary-cards">
+          <div class="summary-card">
+            <div class="summary-card-icon summary-icon-total">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
+            </div>
+            <div class="summary-card-body">
+              <span class="summary-card-label">Total de Casos</span>
+              <span class="summary-card-value">{{ execution.testCases.length }}</span>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-icon summary-icon-passed">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/></svg>
+            </div>
+            <div class="summary-card-body">
+              <span class="summary-card-label">Completados</span>
+              <span class="summary-card-value summary-val-passed">{{ getCountByStatus('completed') }}</span>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-icon summary-icon-failed">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+            </div>
+            <div class="summary-card-body">
+              <span class="summary-card-label">Fallidos</span>
+              <span class="summary-card-value summary-val-failed">{{ getCountByStatus('failed') }}</span>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-icon summary-icon-progress">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="10 8 15 12 10 16"/></svg>
+            </div>
+            <div class="summary-card-body">
+              <span class="summary-card-label">En Progreso</span>
+              <span class="summary-card-value summary-val-progress">{{ getCountByStatus('in-progress') }}</span>
+            </div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-card-icon summary-icon-pending">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <div class="summary-card-body">
+              <span class="summary-card-label">Pendientes</span>
+              <span class="summary-card-value summary-val-pending">{{ getCountByStatus('pending') }}</span>
+            </div>
           </div>
         </div>
 
-      </main>
-    </div>
+        <!-- Progress Overview -->
+        <div class="summary-section">
+          <div class="summary-section-title-row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span class="summary-section-heading">Resumen de Progreso</span>
+          </div>
+          <div class="progress-overview-wrap">
+            <div class="overall-completion-row">
+              <span class="progress-label">Completitud General</span>
+              <span class="progress-pct">{{ getOverallCompletion() }}%</span>
+            </div>
+            <div class="overall-bar">
+              <div class="overall-bar-fill" [style.width.%]="getOverallCompletion()"></div>
+            </div>
+            <div class="multi-bar">
+              <div class="multi-seg seg-passed" [style.width.%]="getStatusPercent('completed')" [title]="getCountByStatus('completed') + ' Passed'"></div>
+              <div class="multi-seg seg-failed" [style.width.%]="getStatusPercent('failed')" [title]="getCountByStatus('failed') + ' Failed'"></div>
+              <div class="multi-seg seg-progress" [style.width.%]="getStatusPercent('in-progress')" [title]="getCountByStatus('in-progress') + ' In Progress'"></div>
+              <div class="multi-seg seg-pending" [style.width.%]="getStatusPercent('pending')" [title]="getCountByStatus('pending') + ' Pending'"></div>
+            </div>
+            <div class="progress-stats-row">
+              <div class="progress-stat"><span class="ps-label">Completados</span><span class="ps-value ps-passed">{{ getCountByStatus('completed') }}</span></div>
+              <div class="progress-stat"><span class="ps-label">Fallidos</span><span class="ps-value ps-failed">{{ getCountByStatus('failed') }}</span></div>
+              <div class="progress-stat"><span class="ps-label">En Progreso</span><span class="ps-value ps-progress">{{ getCountByStatus('in-progress') }}</span></div>
+              <div class="progress-stat"><span class="ps-label">Pendientes</span><span class="ps-value ps-pending">{{ getCountByStatus('pending') }}</span></div>
+            </div>
+          </div>
+        </div>
 
-  </div>
+        <!-- Run info + Quality metrics -->
+        <div class="summary-bottom-row">
+          <div class="summary-info-card">
+            <div class="info-card-header">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span class="info-card-title">Información de la Ejecución</span>
+            </div>
+            <div class="info-card-body">
+              <div class="info-row"><span class="info-label">Creado</span><span class="info-value">{{ formatDate(execution.createdAt) }}</span></div>
+              <div class="info-row">
+                <span class="info-label">Estado</span>
+                <span class="info-value">
+                  <span class="run-status-badge run-status-{{ getExecutionStatus() }}">
+                    <span class="status-dot"></span>{{ getExecutionStatusLabel() }}
+                  </span>
+                </span>
+              </div>
+              <div class="info-row"><span class="info-label">Total Casos</span><span class="info-value">{{ execution.testCases.length }}</span></div>
+              <div class="info-row"><span class="info-label">Completados</span><span class="info-value metric-passed">{{ getCountByStatus('completed') }}</span></div>
+              <div class="info-row"><span class="info-label">En Progreso</span><span class="info-value metric-progress">{{ getCountByStatus('in-progress') }}</span></div>
+              <div class="info-row"><span class="info-label">Pendientes</span><span class="info-value">{{ getCountByStatus('pending') }}</span></div>
+            </div>
+          </div>
+
+          <div class="summary-info-card">
+            <div class="info-card-header">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span class="info-card-title">Métricas de Calidad</span>
+            </div>
+            <div class="info-card-body">
+              <div class="info-row"><span class="info-label">Tasa de Completitud</span><span class="info-value metric-passed">{{ getSummaryStats().passRate }}%</span></div>
+              <div class="info-row"><span class="info-label">Tasa de Fallo</span><span class="info-value metric-failed">{{ getSummaryStats().failRate }}%</span></div>
+              <div class="info-row"><span class="info-label">Tasa En Progreso</span><span class="info-value metric-progress">{{ getStatusPercent('in-progress') }}%</span></div>
+              <div class="info-row"><span class="info-label">Casos Ejecutados</span><span class="info-value">{{ getSummaryStats().executed }}</span></div>
+              <div class="info-row"><span class="info-label">Casos Sin Ejecutar</span><span class="info-value">{{ getSummaryStats().pending }}</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /summary tab -->
+
+    </div><!-- /exec-body -->
+  </ng-container>
 
   <!-- No Execution -->
   <ng-template #noExecution>
@@ -240,9 +441,8 @@
       </div>
     </div>
   </ng-template>
-  </ng-container>
 
-  <!-- Confirmation Modal para eliminar -->
+  <!-- Confirmation Modal -->
   <app-confirmation-modal [isOpen]="showDeleteModal" title="Eliminar ejecución"
     message="¿Estás seguro de que deseas eliminar esta ejecución?" type="danger" confirmText="Aceptar"
     cancelText="Cancelar" (confirm)="confirmDeleteExecution()" (cancel)="showDeleteModal = false">
@@ -253,6 +453,7 @@
     <div class="modal-box" (click)="$event.stopPropagation()">
       <div class="modal-top">
         <span>{{ editingImageId ? 'Editar imagen' : 'Nueva imagen' }}</span>
+        <!-- translated -->
         <button class="modal-close" (click)="showImageEditor = false">✕</button>
       </div>
       <app-image-editor [imageBase64]="pendingImageBase64" [clearBase64]="pendingOriginalBase64 || pendingImageBase64"
@@ -260,11 +461,11 @@
     </div>
   </div>
 
-  <!-- Image Viewer Modal (Readonly) -->
+  <!-- Image Viewer Modal -->
   <div *ngIf="showImageViewer" class="modal-backdrop" (click)="showImageViewer = false">
     <div class="modal-box viewer-modal" (click)="$event.stopPropagation()">
       <div class="modal-top">
-        <span>Vista previa de evidencia</span>
+        <span>Vista Previa de Evidencia</span>
         <button class="modal-close" (click)="showImageViewer = false">✕</button>
       </div>
       <div class="viewer-body">
@@ -277,7 +478,7 @@
   <div *ngIf="showDataEditor" class="modal-backdrop" (click)="showDataEditor = false">
     <div class="modal-box data-modal" (click)="$event.stopPropagation()">
       <div class="modal-top">
-        <span>Editor de Datos (Excel)</span>
+        <span>Editor de Datos</span>
         <button class="modal-close" (click)="showDataEditor = false">✕</button>
       </div>
       <app-data-editor [data]="pendingTabularData" [hasHeader]="pendingHasHeader" [rowColors]="selectedImage?.rowColors"
