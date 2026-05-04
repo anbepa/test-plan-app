@@ -1,5 +1,5 @@
 export const PROMPTS = {
-  SCOPE: (description: string, acceptanceCriteria: string): string => `
+   SCOPE: (description: string, acceptanceCriteria: string): string => `
 Eres un analista de QA experimentado.
 Genera la sección de ALCANCE para un plan de pruebas.
 Basándote EXCLUSIVAMENTE en la siguiente Historia de Usuario y Criterios de Aceptación, redacta UN PÁRRAFO CONCISO (máximo 4 líneas) que defina CLARAMENTE el alcance de las pruebas.
@@ -14,7 +14,7 @@ Criterios de Aceptación:
 ${acceptanceCriteria}
 `,
 
-  STATIC_SECTION_ENHANCEMENT: (sectionName: string, existingContent: string, huSummary: string): string => `
+   STATIC_SECTION_ENHANCEMENT: (sectionName: string, existingContent: string, huSummary: string): string => `
 Actúa como QA Lead Senior.
 Debes generar una versión FINAL de la sección "${sectionName}" de un plan de pruebas.
 
@@ -54,7 +54,7 @@ FORMATO DE SALIDA OBLIGATORIO:
 AHORA GENERA la sección final para "${sectionName}".
 `,
 
-  RISK_STRATEGY_PROMPT: (huSummary: string, availableScenarios: string[]): string => `
+   RISK_STRATEGY_PROMPT: (huSummary: string, availableScenarios: string[]): string => `
 Actúa como QA Lead Senior especializado en gestión de riesgos de pruebas.
 
 CONTEXTO CONSOLIDADO (TODAS las HUs del plan, criterios y escenarios):
@@ -108,9 +108,9 @@ Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
 }
 `,
 
-  // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
+   // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
-  DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
+   DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
 Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA SUFICIENTE y sin ruido.
 
 HU:
@@ -214,7 +214,7 @@ REGLAS DE CALIDAD:
 - No agrupes en el resultado esperado comportamientos no ejecutados o no verificados en los pasos.
 - Cada caso debe validar una intención principal y, como máximo, una validación secundaria estrechamente relacionada.
 - Si un expectedResults menciona más de una validación relevante, los pasos deben ejercitar explícitamente todas esas validaciones.
-- IDIOMA OBLIGATORIO: Todo el contenido generado (title, preconditions, steps, expectedResults) debe estar escrito EXCLUSIVAMENTE en español. Está prohibido usar inglés o cualquier otro idioma.
+- IDIOMA OBLIGATORIO: TODO TU PROCESO DE RAZONAMIENTO INTERNO (pensamientos) Y el contenido generado (title, preconditions, steps, expectedResults) DEBEN estar escritos EXCLUSIVAMENTE en español. Está estrictamente prohibido pensar o escribir en inglés o spanglish.
 
 OPTIMIZACIÓN DE TOKENS:
 - Sé conciso: evita explicaciones narrativas.
@@ -241,8 +241,8 @@ FORMATO DE SALIDA:
 }
 `,
 
-  // Refinamiento directo (sin CoT) — igual que DIRECT_GENERATION_PROMPT + contexto del analista
-  DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
+   // Refinamiento directo (sin CoT) — igual que DIRECT_GENERATION_PROMPT + contexto del analista
+   DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
 Actúa como QA Senior. Tienes los casos de prueba actuales y una instrucción específica del analista. Tu tarea es aplicar esa instrucción y devolver el conjunto de casos refinado.
 
 INSTRUCCIÓN DEL ANALISTA (prioridad máxima — ejecútala de forma literal antes que cualquier otra regla):
@@ -349,7 +349,7 @@ REGLAS DE CALIDAD:
 - No agrupes en el resultado esperado comportamientos no ejecutados o no verificados en los pasos.
 - Cada caso debe validar una intención principal y, como máximo, una validación secundaria estrechamente relacionada.
 - Si un expectedResults menciona más de una validación relevante, los pasos deben ejercitar explícitamente todas esas validaciones.
-- IDIOMA OBLIGATORIO: Todo el contenido generado (title, preconditions, steps, expectedResults) debe estar escrito EXCLUSIVAMENTE en español. Está prohibido usar inglés o cualquier otro idioma.
+- IDIOMA OBLIGATORIO: TODO TU PROCESO DE RAZONAMIENTO INTERNO (pensamientos) Y el contenido generado (title, preconditions, steps, expectedResults) DEBEN estar escritos EXCLUSIVAMENTE en español. Está estrictamente prohibido pensar o escribir en inglés o spanglish.
 
 OPTIMIZACIÓN DE TOKENS:
 - Sé conciso: evita explicaciones narrativas.

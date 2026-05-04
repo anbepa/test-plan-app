@@ -140,6 +140,16 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     return this.isRefining;
   }
 
+  get currentHuDataForModal() {
+    if (!this.hu) return null;
+    return {
+      huId: this.hu.id || this.editedHuId,
+      huTitle: this.hu.title || this.editedTitle,
+      huDescription: this.editedDescription || this.hu.originalInput?.description,
+      acceptanceCriteria: this.editedAcceptanceCriteria || this.hu.originalInput?.acceptanceCriteria
+    };
+  }
+
   get aiProgressTitle(): string {
     const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
     return this.isContextPage ? `Regenerando con ${provider}` : `Refinando con ${provider}`;

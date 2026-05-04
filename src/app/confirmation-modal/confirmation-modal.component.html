@@ -16,71 +16,97 @@
         <div class="modal-body progress-body" *ngIf="isProgressMode">
             <!-- Robot + Speech + Thought Bubble Layout -->
             <div class="robot-scene">
-                <!-- Left: Robot + Speech -->
-                <div class="robot-col">
-                    <div class="tester-character">
-                        <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg">
-                            <rect x="30" y="12" width="40" height="40" rx="6" fill="#3b82f6"/>
-                            <circle cx="40" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
-                            <circle cx="40" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
-                            <circle cx="60" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
-                            <circle cx="60" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
-                            <line x1="48" y1="28" x2="52" y2="28" stroke="#0071e3" stroke-width="2"/>
-                            <path d="M 40 40 Q 50 42 60 40" stroke="#0071e3" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                            <rect x="35" y="56" width="30" height="32" rx="4" fill="#4a90e2"/>
-                            <rect x="40" y="62" width="20" height="20" rx="2" fill="#60a5fa" opacity="0.5"/>
-                            <rect x="24" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
-                            <rect x="66" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
-                            <rect x="42" y="90" width="6" height="14" fill="#1e3a5f"/>
-                            <rect x="52" y="90" width="6" height="14" fill="#1e3a5f"/>
-                            <rect x="40" y="106" width="10" height="4" rx="1" fill="#000"/>
-                            <rect x="50" y="106" width="10" height="4" rx="1" fill="#000"/>
-                        </svg>
+                <!-- Top: Thought Bubble (box) -->
+                <div class="thought-bubble-main" [class.is-acceptance]="isAcceptancePhase">
+                    <!-- Tabular Data: Solo se muestra durante el análisis -->
+                    <div class="reasoning-summary" *ngIf="reasoningMetadata && streamingPhase === 'thinking'">
+                        <div class="rs-row" style="align-items: flex-start;" *ngIf="reasoningMetadata.rules.length > 0">
+                            <div class="rs-label" style="margin-top: 6px;">Pensamiento:</div>
+                            <div class="rs-value">
+                                <ul class="thought-list" style="margin-bottom: 0;">
+                                    <li *ngFor="let rule of reasoningMetadata.rules" class="thought-list-item">{{ rule }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                    <!-- Roadmap (Analysis Phases) -->
+                    <div class="design-roadmap" *ngIf="streamingPhase === 'thinking'">
+                        <div class="roadmap-title">Progreso del Análisis</div>
+                        <div class="roadmap-steps">
+                            <div class="roadmap-step" *ngFor="let phase of analysisPhases" 
+                                 [class.active]="phase.active" [class.done]="phase.done">
+                                <div class="step-icon">
+                                    <span *ngIf="!phase.done">{{ phase.id }}</span>
+                                    <svg *ngIf="phase.done" viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="step-label">{{ phase.label }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- During generating: show detected case titles -->
+                    <div class="thought-cases" *ngIf="streamingPhase === 'generating' || streamingCaseTitles.length > 0">
+                        <div class="thought-cases-header" *ngIf="!isAcceptancePhase">
+                            <span>{{ streamingCaseTitles.length }} caso{{ streamingCaseTitles.length !== 1 ? 's' : '' }} identificado{{ streamingCaseTitles.length !== 1 ? 's' : '' }}…</span>
+                        </div>
+                        <div class="thought-cases-header" *ngIf="isAcceptancePhase">
+                            <span>{{ acceptedScenarioIndices.length }}/{{ streamingCaseTitles.length }} escenario{{ streamingCaseTitles.length !== 1 ? 's' : '' }} aceptado{{ acceptedScenarioIndices.length !== 1 ? 's' : '' }}</span>
+                        </div>
+                        <ul class="thought-cases-list">
+                            <li *ngFor="let title of streamingCaseTitles; let i = index" class="thought-case-item" [class.accepted]="acceptedScenarioIndices.includes(i)">
+                                <span class="tc-num" *ngIf="!acceptedScenarioIndices.includes(i)">{{ i + 1 }}</span>
+                                <span class="tc-check" *ngIf="acceptedScenarioIndices.includes(i)">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                </span>
+                                <span class="tc-title" [class.accepted-title]="acceptedScenarioIndices.includes(i)">{{ title }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Idle state placeholder -->
+                    <p class="thought-placeholder" *ngIf="streamingPhase === 'idle' && reasoningInsights.length === 0 && streamingCaseTitles.length === 0">
+                        Preparando análisis…
+                    </p>
+                </div>
+
+                <!-- Middle: Dots -->
+                <div class="thought-dots">
+                    <span class="tdot tdot-1"></span>
+                    <span class="tdot tdot-2"></span>
+                    <span class="tdot tdot-3"></span>
+                </div>
+
+                <!-- Bottom: Robot + Speech Row -->
+                <div class="robot-speech-row">
+                    <div class="robot-col">
+                        <div class="tester-character">
+                            <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg">
+                                <rect x="30" y="12" width="40" height="40" rx="6" fill="#3b82f6"/>
+                                <circle cx="40" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
+                                <circle cx="40" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
+                                <circle cx="60" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
+                                <circle cx="60" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
+                                <line x1="48" y1="28" x2="52" y2="28" stroke="#0071e3" stroke-width="2"/>
+                                <path d="M 40 40 Q 50 42 60 40" stroke="#0071e3" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                                <rect x="35" y="56" width="30" height="32" rx="4" fill="#4a90e2"/>
+                                <rect x="40" y="62" width="20" height="20" rx="2" fill="#60a5fa" opacity="0.5"/>
+                                <rect x="24" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
+                                <rect x="66" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
+                                <rect x="42" y="90" width="6" height="14" fill="#1e3a5f"/>
+                                <rect x="52" y="90" width="6" height="14" fill="#1e3a5f"/>
+                                <rect x="40" y="106" width="10" height="4" rx="1" fill="#000"/>
+                                <rect x="50" y="106" width="10" height="4" rx="1" fill="#000"/>
+                            </svg>
+                        </div>
                     </div>
                     <!-- Robot Speech (stage label) -->
                     <div class="robot-speech" *ngIf="streamingPhaseLabel">
-                        <span class="robot-speech-text">Me encuentro {{ streamingPhaseLabel }}</span>
-                    </div>
-                </div>
-
-                <!-- Right: Thought Bubble -->
-                <div class="thought-col">
-                    <!-- Dots connecting to robot -->
-                    <div class="thought-dots">
-                        <span class="tdot tdot-1"></span>
-                        <span class="tdot tdot-2"></span>
-                        <span class="tdot tdot-3"></span>
-                    </div>
-                    <!-- Bubble content changes based on phase -->
-                    <div class="thought-bubble-main" [class.is-acceptance]="isAcceptancePhase">
-                        <!-- During thinking: show reasoning insights -->
-                        <ul class="thought-list" *ngIf="streamingPhase === 'thinking' && reasoningInsights.length > 0">
-                            <li *ngFor="let insight of reasoningInsights" class="thought-list-item">{{ insight }}</li>
-                        </ul>
-
-                        <!-- During generating: show detected case titles -->
-                        <div class="thought-cases" *ngIf="streamingPhase === 'generating' || streamingCaseTitles.length > 0">
-                            <div class="thought-cases-header" *ngIf="!isAcceptancePhase">
-                                <span>{{ streamingCaseTitles.length }} caso{{ streamingCaseTitles.length !== 1 ? 's' : '' }} identificado{{ streamingCaseTitles.length !== 1 ? 's' : '' }}…</span>
-                            </div>
-                            <div class="thought-cases-header" *ngIf="isAcceptancePhase">
-                                <span>{{ acceptedScenarioIndices.length }}/{{ streamingCaseTitles.length }} escenario{{ streamingCaseTitles.length !== 1 ? 's' : '' }} aceptado{{ acceptedScenarioIndices.length !== 1 ? 's' : '' }}</span>
-                            </div>
-                            <ul class="thought-cases-list">
-                                <li *ngFor="let title of streamingCaseTitles; let i = index" class="thought-case-item" [class.accepted]="acceptedScenarioIndices.includes(i)">
-                                    <span class="tc-num" *ngIf="!acceptedScenarioIndices.includes(i)">{{ i + 1 }}</span>
-                                    <span class="tc-check" *ngIf="acceptedScenarioIndices.includes(i)">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                    </span>
-                                    <span class="tc-title" [class.accepted-title]="acceptedScenarioIndices.includes(i)">{{ title }}</span>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <!-- Idle state placeholder -->
-                        <p class="thought-placeholder" *ngIf="streamingPhase === 'idle' && reasoningInsights.length === 0 && streamingCaseTitles.length === 0">
-                            Preparando análisis…
-                        </p>
+                        <span class="robot-speech-text">{{ streamingPhaseLabel }}</span>
                     </div>
                 </div>
             </div>

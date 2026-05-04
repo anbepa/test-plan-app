@@ -98,6 +98,16 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   streamingContent: string = '';
   acceptedScenarioIndices: number[] = [];
   isAcceptancePhase: boolean = false;
+
+  get currentHuDataForModal() {
+    if (!this.hu) return null;
+    return {
+      huId: this.hu.id,
+      huTitle: this.hu.title,
+      huDescription: this.hu.originalInput?.description || '',
+      acceptanceCriteria: this.hu.originalInput?.acceptanceCriteria || ''
+    };
+  }
   private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
   private aiProgressIndex = 0;
   private lastStepAddAt = new Map<number, number>();
@@ -241,15 +251,23 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   goToPlansList(): void {
-    this.router.navigate(['/']);
+    this.router.navigate(['/viewer']);
   }
 
   goToPlanDetail(): void {
-    this.router.navigate(['/test-plan-detail', this.testPlanId]);
+    if (this.testPlanId) {
+      this.router.navigate(['/viewer'], { queryParams: { id: this.testPlanId } });
+    } else {
+      this.router.navigate(['/viewer']);
+    }
   }
 
   goBackToHuTable(): void {
-    this.router.navigate(['/test-plan-detail', this.testPlanId]);
+    if (this.testPlanId) {
+      this.router.navigate(['/viewer'], { queryParams: { id: this.testPlanId } });
+    } else {
+      this.router.navigate(['/viewer']);
+    }
   }
 
   openContextRegeneratorPage(): void {
