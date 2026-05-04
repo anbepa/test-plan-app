@@ -261,8 +261,16 @@ textarea.form-control {
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 16px;
-    transition: all 0.2s ease;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    animation: cardEnter 0.3s ease-out both;
 }
+
+.test-case-card:nth-child(1)  { animation-delay: 0.00s; }
+.test-case-card:nth-child(2)  { animation-delay: 0.05s; }
+.test-case-card:nth-child(3)  { animation-delay: 0.10s; }
+.test-case-card:nth-child(4)  { animation-delay: 0.15s; }
+.test-case-card:nth-child(5)  { animation-delay: 0.20s; }
+.test-case-card:nth-child(n+6){ animation-delay: 0.25s; }
 
 .test-case-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -411,8 +419,55 @@ textarea.form-control {
     }
 }
 
+/* Entrada suave para tarjetas de casos de prueba */
+@keyframes cardEnter {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Shimmer para contenido en carga */
+@keyframes shimmer {
+    0%   { background-position: -600px 0; }
+    100% { background-position:  600px 0; }
+}
+
+.loading-text {
+    background: linear-gradient(
+        90deg,
+        #f0f0f0 0%,
+        #e0e8f0 40%,
+        #f0f0f0 80%
+    );
+    background-size: 600px 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 6px;
+    color: transparent !important;
+    user-select: none;
+    min-height: 1.2em;
+    display: block;
+}
+
 .fade-in {
     animation: fadeIn 0.3s ease-out;
+}
+
+/* Accesibilidad: eliminar animaciones cuando el usuario las prefiere reducidas */
+@media (prefers-reduced-motion: reduce) {
+    .test-case-card,
+    .fade-in,
+    .loading-text,
+    .button-primary,
+    .btn-preview-action,
+    .btn-cancel-compact {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 
 /* === ACCIONES DEL FORMULARIO === */
@@ -470,7 +525,7 @@ textarea.form-control {
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .btn-cancel-compact:hover {
@@ -626,7 +681,7 @@ textarea.form-control {
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
     border: 2px solid color-mix(in srgb, var(--primary-color, #007AFF) 30%, #ffffff);
     gap: 0.5rem;
     min-height: 50px;

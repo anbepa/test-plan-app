@@ -136,8 +136,8 @@ export class AuthUiComponent {
   }
 
   private async navigateAfterAuth(): Promise<void> {
-    const redirectTo = this.route.snapshot.queryParamMap.get('redirectTo') || '/generator';
-    const safeRedirect = redirectTo === '/auth' ? '/generator' : redirectTo;
+    const redirectTo = this.route.snapshot.queryParamMap.get('redirectTo') || '/welcome';
+    const safeRedirect = redirectTo === '/auth' ? '/welcome' : redirectTo;
 
     if (this.router.url !== safeRedirect) {
       await this.router.navigateByUrl(safeRedirect, { replaceUrl: true });

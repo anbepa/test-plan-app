@@ -38,6 +38,8 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   strokeColor = '#FF0000';
   strokeWidth = 3;
 
+  presetColors = ['#FF0000','#FFBE00','#22c55e','#3b82f6','#000000','#FFFFFF'];
+
   drawingTools: DrawingTool[] = [
     { name: 'pen', label: 'Bolígrafo' },
     { name: 'highlighter', label: 'Resaltador' },
@@ -48,6 +50,11 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
     { name: 'text', label: 'Texto' },
     { name: 'eraser', label: 'Editar/Borrar' },
   ];
+
+  setPresetColor(color: string): void {
+    this.strokeColor = color;
+    this.onColorChange();
+  }
 
   ngAfterViewInit(): void {
     this.canvas = new fabric.Canvas('fabricCanvas', {

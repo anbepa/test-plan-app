@@ -12,8 +12,14 @@ export const routes: Routes = [
   },
   {
     path: '',
-    redirectTo: 'generator',
+    redirectTo: 'welcome',
     pathMatch: 'full'
+  },
+  {
+    path: 'welcome',
+    loadComponent: () => import('./welcome/welcome.component').then(m => m.WelcomeComponent),
+    title: 'Bienvenido',
+    canActivate: [authGuard]
   },
   {
     path: 'generator',
@@ -31,6 +37,18 @@ export const routes: Routes = [
     path: 'viewer/hu-scenarios',
     loadComponent: () => import('./test-plan-viewer/hu-scenarios-view/hu-scenarios-view.component').then(m => m.HuScenariosViewComponent),
     title: 'Escenarios de prueba por HU',
+    canActivate: [authGuard]
+  },
+  {
+    path: 'viewer/test-runs',
+    loadComponent: () => import('./test-plan-viewer/test-runs/test-runs.component').then(m => m.TestRunsComponent),
+    title: 'Test Runs',
+    canActivate: [authGuard]
+  },
+  {
+    path: 'manual-execution',
+    loadComponent: () => import('./manual-execution/manual-execution.component').then(m => m.ManualExecutionComponent),
+    title: 'Ejecución Manual',
     canActivate: [authGuard]
   },
   {

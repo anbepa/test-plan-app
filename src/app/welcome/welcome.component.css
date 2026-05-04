@@ -1,12 +1,198 @@
 .welcome-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 60px);
+  padding: 40px 24px;
+  background: linear-gradient(145deg, #f0f4ff 0%, #f8fafc 50%, #f0fdf4 100%);
+  gap: 32px;
+  overflow: hidden;
+}
+
+/* Watermark background SVG */
+.wm-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.wm-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Hero */
+.welcome-hero {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  padding: 48px 52px 44px;
+  box-shadow:
+    0 0 0 1px rgba(37,99,235,0.06),
+    0 20px 60px rgba(15,23,42,0.08),
+    0 4px 16px rgba(37,99,235,0.06);
+}
+
+/* Decorative top accent line */
+.welcome-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(90deg, #2563eb, #6366f1);
+  border-radius: 0 0 4px 4px;
+}
+
+.hero-badge {
+  display: none; /* removed per request */
+}
+
+.welcome-title {
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.welcome-description {
+  font-size: 1.05rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.6;
+  max-width: 380px;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 26px;
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37,99,235,0.4);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 26px;
+  background: rgba(255,255,255,0.8);
+  color: #374151;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  text-decoration: none;
+}
+.btn-secondary:hover {
+  border-color: #94a3b8;
+  background: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15,23,42,0.08);
+}
+
+/* Quick action cards */
+.quick-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  color: inherit;
+}
+.quick-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 2px 12px rgba(37,99,235,.1);
+  transform: translateX(3px);
+}
+
+.qc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 80px);
-  padding: 2rem;
-  background: linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 50%, #ececf1 100%);
-  position: relative;
-  overflow: hidden;
+  flex-shrink: 0;
+}
+.qc-blue   { background: #eff6ff; color: #2563eb; }
+.qc-indigo { background: #eef2ff; color: #4f46e5; }
+.qc-green  { background: #f0fdf4; color: #16a34a; }
+
+.qc-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.qc-sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.qc-arrow { color: #cbd5e1; flex-shrink: 0; }
+.quick-card:hover .qc-arrow { color: #2563eb; }
+
+@media (max-width: 640px) {
+  .welcome-container { padding: 24px 16px; }
+  .quick-cards { max-width: 100%; }
 }
 
 .welcome-container::before {

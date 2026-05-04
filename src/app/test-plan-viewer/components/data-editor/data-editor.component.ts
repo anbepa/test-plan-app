@@ -149,6 +149,17 @@ export class DataEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         return index;
     }
 
+    isNumericColumn(colIndex: number): boolean {
+        // Check data rows (skip header row 0 if hasHeader)
+        const startRow = this.hasHeader ? 1 : 0;
+        const sampleRows = this.localData.slice(startRow, startRow + 10);
+        if (sampleRows.length === 0) return false;
+        return sampleRows.every(row => {
+            const val = (row[colIndex] ?? '').toString().trim();
+            return val === '' || !isNaN(Number(val.replace(/[,\.]/g, '')));
+        });
+    }
+
     addRow() {
         const cols = (this.localData[0] || []).length || 2;
         this.localData.push(new Array(cols).fill(''));

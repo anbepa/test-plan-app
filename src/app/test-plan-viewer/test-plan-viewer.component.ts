@@ -735,11 +735,31 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const date = new Date(dateString);
     return date.toLocaleDateString('es-ES', {
       year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }
+
+  getFullDateTime(dateString: string | undefined): string {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  toSentenceCase(text: string | undefined): string {
+    if (!text) return '';
+    // Separar por espacios y caracteres especiales, convertir a minúsculas excepto la primera letra
+    const words = text.toLowerCase().split(/(\s+|-)/);
+    return words.map((word, index) => {
+      if (index === 0 || !word.trim()) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join('');
   }
 
   getTestCaseCount(testPlan: Partial<DbTestPlanWithRelations>): number {

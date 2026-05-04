@@ -1,0 +1,268 @@
+<div class="test-runs-page">
+  <div class="test-runs-header">
+    <div class="breadcrumb-row">
+      <button type="button" class="breadcrumb-button" (click)="goToPlansList()">← Lista de Planes</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToHuScenarios()">Ver escenarios de prueba</button>
+      <span class="breadcrumb-separator">/</span>
+      <button type="button" class="breadcrumb-button breadcrumb-current">Ejecuciones</button>
+    </div>
+  </div>
+
+  <div class="test-runs-content">
+    <div class="title-bar">
+      <div>
+        <h2 class="section-title">Ejecuciones de Prueba</h2>
+        <p class="section-subtitle-text">Gestiona y rastrea tus ejecuciones de prueba</p>
+      </div>
+      <div class="title-bar-actions">
+        <button type="button" class="button-secondary" (click)="loadTestRuns()">↻ Actualizar</button>
+        <button type="button" class="button-primary" (click)="openCreateModal()">Crear Ejecución</button>
+      </div>
+    </div>
+
+    <div class="filters-bar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" placeholder="Buscar ejecuciones..." [(ngModel)]="searchQuery" (input)="onSearchChange()">
+      </div>
+      <div class="filter-group">
+        <select class="filter-select" [(ngModel)]="statusFilter" (change)="onStatusFilterChange()">
+          <option value="all">Todos los estados</option>
+          <option *ngFor="let s of statusOptions" [value]="s">{{ getStatusLabel(s) }}</option>
+        </select>
+        <select class="filter-select" [(ngModel)]="sortOrder" (change)="onSortChange()">
+          <option value="newest">Más recientes</option>
+          <option value="oldest">Más antiguos</option>
+        </select>
+      </div>
+    </div>
+
+    <div *ngIf="isLoading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Cargando ejecuciones...</p>
+    </div>
+
+    <div *ngIf="!isLoading && paginatedRuns.length > 0" class="table-results-wrapper">
+      <div class="table-container">
+        <table class="plans-table">
+          <thead>
+            <tr>
+              <th class="check-col">
+                <input type="checkbox" [checked]="areAllVisibleSelected()"
+                  (change)="onToggleSelectAll($any($event.target).checked)">
+              </th>
+              <th>Nombre</th>
+              <th>Notas</th>
+              <th>Estado</th>
+              <th>Fecha</th>
+              <th>Progreso</th>
+              <th class="col-actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let run of paginatedRuns" [class.row-selected]="isRunSelected(run)">
+              <td class="check-col" data-label="Seleccionar">
+                <input type="checkbox" [checked]="isRunSelected(run)"
+                  (change)="onRunSelectionChange(run, $any($event.target).checked)">
+              </td>
+              <td data-label="Nombre">
+                <button type="button" class="plan-title-link" (click)="executeRun(run)">{{ run.name }}</button>
+              </td>
+              <td data-label="Notas"><span class="run-notes">{{ run.notes || 'Sin notas' }}</span></td>
+              <td data-label="Estado">
+                <span class="status-badge" [ngClass]="getStatusClass(run.status)">{{ getStatusLabel(run.status) }}</span>
+              </td>
+              <td data-label="Fecha">
+                <div class="date-cell">
+                  <span class="date-main">{{ formatDate(run.createdAt) }}</span>
+                  <span class="date-ago">⏱ {{ formatTimeAgo(run.updatedAt) }}</span>
+                </div>
+              </td>
+              <td data-label="Progreso">
+                <div class="progress-cell">
+                  <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" [style.width.%]="getProgressPercent(run)"></div>
+                  </div>
+                  <span class="progress-text">{{ getProgressPercent(run) }}% completado ({{ run.completedTestCases }}/{{ run.totalTestCases }})</span>
+                </div>
+              </td>
+              <td class="col-actions">
+                <button type="button" class="row-trash-btn" title="Eliminar ejecución"
+                  (click)="confirmDeleteRun(run)">
+                  <span class="icon-trash-red"></span>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Barra flotante de eliminación masiva -->
+    <div class="bulk-delete-bar" *ngIf="selectedRunIds.length > 0">
+      <span class="bulk-count">{{ selectedRunIds.length }} ejecución{{ selectedRunIds.length !== 1 ? 'es' : '' }} seleccionada{{ selectedRunIds.length !== 1 ? 's' : '' }}</span>
+      <button class="bulk-delete-btn" (click)="deleteSelectedRuns()">
+        <span class="icon-trash-white"></span>
+        Eliminar seleccionadas
+      </button>
+      <button class="bulk-cancel-btn" (click)="clearSelection()">
+        Cancelar
+      </button>
+    </div>
+
+    <div *ngIf="!isLoading && testRuns.length === 0" class="empty-state">
+      <h3>No hay ejecuciones</h3>
+      <p>Crea tu primera ejecución para comenzar a rastrear el progreso.</p>
+      <button type="button" class="button-primary" (click)="openCreateModal()">Crear Ejecución</button>
+    </div>
+
+    <div *ngIf="!isLoading && testRuns.length > 0 && filteredRuns.length === 0" class="no-results">
+      <p>No se encontraron ejecuciones que coincidan con tu búsqueda.</p>
+    </div>
+
+    <div *ngIf="!isLoading && filteredRuns.length > 0" class="pagination-container">
+      <div class="pagination-info">
+        <p>
+          Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> al
+          <strong>{{ Math.min(currentPage * itemsPerPage, filteredRuns.length) }}</strong> de
+          <strong>{{ filteredRuns.length }}</strong> {{ filteredRuns.length === 1 ? 'ejecución' : 'ejecuciones' }}
+        </p>
+      </div>
+      <div class="pagination-controls" *ngIf="totalPages > 1">
+        <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()">‹ Anterior</button>
+        <div class="pagination-numbers">
+          <ng-container *ngFor="let page of getPageNumbers()">
+            <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">{{ page }}</button>
+            <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
+          </ng-container>
+        </div>
+        <button class="pagination-button pagination-next" [disabled]="currentPage === totalPages" (click)="nextPage()">Siguiente ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CREAR EJECUCIÓN -->
+<div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+  <div class="modal-container" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Nueva Ejecución</h3>
+      <button type="button" class="modal-close-btn" (click)="closeCreateModal()">✕</button>
+    </div>
+    <div class="modal-tabs">
+      <button type="button" class="modal-tab" [class.active]="createModalTab === 'run'" (click)="createModalTab = 'run'">EJECUCIÓN</button>
+      <button type="button" class="modal-tab" [class.active]="createModalTab === 'notes'" (click)="createModalTab = 'notes'">NOTAS</button>
+    </div>
+    <div class="modal-body" *ngIf="createModalTab === 'run'">
+      <div class="modal-form-grid">
+        <div class="modal-form-left">
+          <div class="form-group">
+            <label class="form-label">Nombre <span class="required">*</span></label>
+            <input type="text" class="form-input" placeholder="Nombre de la ejecución" [(ngModel)]="newRunName">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Etiquetas</label>
+            <div class="tags-input-wrapper">
+              <div class="tags-list" *ngIf="newRunTags.length > 0">
+                <span class="tag-chip" *ngFor="let tag of newRunTags; let i = index">
+                  {{ tag }} <button type="button" class="tag-remove" (click)="removeTag(i)">×</button>
+                </span>
+              </div>
+              <input type="text" class="form-input" placeholder="Agregar etiquetas..." [(ngModel)]="tagInput" (keydown)="onTagKeydown($event)" [disabled]="newRunTags.length >= 10">
+              <span class="tags-hint">{{ newRunTags.length }}/10 etiquetas • Presiona Enter para crear</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-form-right">
+          <div class="form-group">
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="tcSelection" [value]="true" [(ngModel)]="newRunIncludeAll">
+                Incluir todos los casos de prueba
+                <span class="help-icon" title="Se incluirán todos los casos de prueba de esta HU">?</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="tcSelection" [value]="false" [(ngModel)]="newRunIncludeAll">
+                Seleccionar casos específicos:
+              </label>
+            </div>
+            <div class="tc-selection-summary" *ngIf="!newRunIncludeAll">
+              <span class="tc-count">{{ newRunSelectedTestCaseIds.length === 0 ? 'Ningún caso seleccionado' : newRunSelectedTestCaseIds.length + ' caso(s) seleccionado(s)' }}</span>
+              <button type="button" class="tc-select-link" (click)="openTestCaseSelector()">seleccionar casos ›</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado</label>
+            <select class="form-input form-select" [(ngModel)]="newRunStatus">
+              <option *ngFor="let s of statusOptions" [value]="s">{{ getStatusLabel(s) }}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-body" *ngIf="createModalTab === 'notes'">
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <textarea class="form-textarea" rows="8" placeholder="Agregar notas para esta ejecución..." [(ngModel)]="newRunNotes"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="button-cancel" (click)="closeCreateModal()">Cancelar</button>
+      <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || isCreating">
+        {{ isCreating ? 'Creando...' : 'Crear' }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SELECTOR DE CASOS DE PRUEBA -->
+<div class="modal-overlay" *ngIf="showTestCaseSelector" (click)="closeTestCaseSelector()">
+  <div class="modal-container tc-selector-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Seleccionar Casos de Prueba</h3>
+      <button type="button" class="modal-close-btn" (click)="closeTestCaseSelector()">✕</button>
+    </div>
+    <div class="tc-selector-body">
+      <div class="tc-selector-sidebar">
+        <p class="tc-sidebar-label">Todos los Casos</p>
+        <div class="tc-folder"><span class="tc-folder-icon">📁</span><span class="tc-folder-name">General</span></div>
+      </div>
+      <div class="tc-selector-main">
+        <input type="text" class="form-input search-tc-input" placeholder="Buscar casos de prueba..." [(ngModel)]="testCaseSelectorSearch">
+        <div class="tc-folder-header">
+          <strong>General</strong> ({{ testCases.length }} casos de prueba)
+          <button type="button" class="tc-select-all-link" (click)="selectAllTestCases()">Seleccionar todos</button>
+        </div>
+        <div class="tc-list">
+          <div class="tc-list-item" *ngFor="let tc of filteredTestCasesForSelector; let i = index" (click)="toggleTestCaseSelection(tc)">
+            <div class="tc-radio" [class.selected]="isTestCaseSelected(tc)"></div>
+            <div class="tc-item-info">
+              <span class="tc-item-title">{{ tc.title }}</span>
+              <span class="tc-item-id">{{ getTestCaseShortId(tc, i) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="tc-selector-count">{{ newRunSelectedTestCaseIds.length }} de {{ testCases.length }} casos seleccionados</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="button-cancel" (click)="closeTestCaseSelector()">Cancelar</button>
+      <button type="button" class="button-primary" (click)="closeTestCaseSelector()">Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Confirmación de Eliminación -->
+<app-confirmation-modal
+  [isOpen]="showDeleteModal"
+  title="Eliminar Ejecución"
+  [message]="deleteModalMessage"
+  confirmText="Eliminar"
+  cancelText="Cancelar"
+  type="danger"
+  (confirm)="deleteRun()"
+  (cancel)="cancelDelete()">
+</app-confirmation-modal>

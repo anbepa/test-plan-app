@@ -118,7 +118,6 @@
               <th class="col-num">Número de HU</th>
               <th class="col-num">Número de casos</th>
               <th class="col-num">Número de pasos</th>
-              <th class="col-actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -127,22 +126,16 @@
                 <input type="checkbox" [checked]="isPlanSelected(testPlan)"
                   (change)="onPlanSelectionChange(testPlan, $any($event.target).checked)">
               </td>
-              <td data-label="Fecha Creación">{{ formatDate(testPlan.created_at) }}</td>
+              <td data-label="Fecha Creación" [title]="getFullDateTime(testPlan.created_at)">{{ formatDate(testPlan.created_at) }}</td>
               <td class="plan-title-cell" data-label="Nombre Test plan" [title]="testPlan.title">
                 <button type="button" class="plan-title-link" (click)="viewPlanDirectly(testPlan)">
-                  {{ testPlan.title || 'Sin título' }}
+                  {{ toSentenceCase(testPlan.title) || 'Sin título' }}
                 </button>
               </td>
               <td class="col-num" data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
               <td class="col-num" data-label="Número de HU">{{ testPlan.user_stories?.length || 0 }}</td>
               <td class="col-num" data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
               <td class="col-num" data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
-              <td class="col-actions">
-                <button type="button" class="row-trash-btn" title="Eliminar plan"
-                  (click)="deleteSinglePlan(testPlan, $event)">
-                  <span class="icon-trash-red"></span>
-                </button>
-              </td>
             </tr>
           </tbody>
         </table>
@@ -185,6 +178,7 @@
           Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> -
           <strong>{{ Math.min(currentPage * itemsPerPage, filteredTestPlans.length) }}</strong>
           de <strong>{{ filteredTestPlans.length }}</strong> {{ filteredTestPlans.length === 1 ? 'plan' : 'planes' }}
+          <span class="results-text">({{ filteredTestPlans.length }} {{ filteredTestPlans.length === 1 ? 'resultado' : 'resultados' }})</span>
         </p>
       </div>
 
@@ -245,7 +239,7 @@
 
         <!-- Título principal -->
         <div class="header-title-section">
-          <h1 class="header-title">{{ testPlanTitle }}</h1>
+          <h1 class="header-title">{{ toSentenceCase(testPlanTitle) }}</h1>
         </div>
       </div>
     </div>
@@ -257,8 +251,9 @@
       <section class="results-section">
         <div class="hu-table-wrapper">
           <div class="hu-table-actions table-actions">
-            <button class="button-secondary" (click)="addNewHU()">
-              Añadir nueva hu
+            <button class="button-primary-solid" (click)="addNewHU()">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" style="width:15px;height:15px;flex-shrink:0"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
+              Añadir nueva HU
             </button>
             <button class="button-secondary" (click)="openPreview()" [disabled]="huList.length === 0">
               Previsualizar
@@ -283,7 +278,6 @@
                   <th>Nombre HU</th>
                   <th>Técnica</th>
                   <th class="col-num">Número de casos</th>
-                  <th class="actions-col">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -297,12 +291,6 @@
                   <td class="hu-name-cell hu-name-link" data-label="Nombre HU" (click)="openHUScenarios(hu, $event)">{{ hu.title }}</td>
                   <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
                   <td class="col-num" data-label="Número de casos">{{ hu.detailedTestCases?.length || 0 }}</td>
-                  <td class="actions-col" data-label="Acciones">
-                    <button type="button" class="row-delete-btn" aria-label="Eliminar HU" title="Eliminar HU"
-                      (click)="deleteHU(hu, $event)">
-                      <span class="icon-trash"></span>
-                    </button>
-                  </td>
                 </tr>
               </tbody>
             </table>
