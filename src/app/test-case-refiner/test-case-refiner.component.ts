@@ -290,7 +290,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         if (this.isContextPage) {
-          this.goToRefinerPage();
+          this.goToScenariosTable();
         }
       }
     });

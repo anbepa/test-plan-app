@@ -12,6 +12,6 @@ export const guestGuard: CanActivateFn = async (route) => {
     return true;
   }
 
-  const redirectTo = route.queryParamMap.get('redirectTo') || '/generator';
-  return router.createUrlTree([redirectTo === '/auth' ? '/generator' : redirectTo]);
+  const redirectTo = route.queryParamMap.get('redirectTo') || '/welcome';
+  return router.createUrlTree([redirectTo === '/auth' ? '/welcome' : redirectTo]);
 };

@@ -68,6 +68,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   draggedTestCaseStep: TestCaseStep | null = null;
   dragOverTestCaseStepId: string | null = null;
 
+  /** Fase de aceptación visual de escenarios */
+  acceptedScenarioIndices: number[] = [];
+  isAcceptancePhase: boolean = false;
+
   isCancelModalOpen: boolean = false;
   cancelModalTitle: string = 'Cancelar generación';
   cancelModalMessage: string = '¿Deseas guardar esta HU antes de cancelar? Si no guardas, se perderán los casos de prueba generados.';
@@ -100,10 +104,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   get isAiBusy(): boolean {
-    return this.loadingScope || this.loadingScenarios;
+    return this.loadingScope || this.loadingScenarios || this.isAcceptancePhase;
   }
 
   get aiProgressTitle(): string {
+    if (this.isAcceptancePhase) {
+      return 'Escenarios identificados';
+    }
     const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
     if (this.componentState === 'editingForRefinement') {
       return `Refinando con ${provider}`;
@@ -153,6 +160,21 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.aiProgressInterval = null;
     }
     this.aiProgressIndex = 0;
+  }
+
+  private finalizeAfterAcceptance(): void {
+    this.loadingScenarios = false;
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.isAcceptancePhase = false;
+    this.acceptedScenarioIndices = [];
+    this.componentState = 'previewingGenerated';
+    this.cdr.detectChanges();
+
+    setTimeout(() => {
+      const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
+      textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
+    }, 0);
   }
 
   private shortTechniqueName(technique: string): string {
@@ -418,17 +440,29 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         },
         complete: () => {
-          this.loadingScenarios = false;
-          this.streamingReasoning = '';
-          this.streamingContent = '';
           this.stopAiProgress();
-          this.componentState = 'previewingGenerated';
+          this.isAcceptancePhase = true;
+          this.acceptedScenarioIndices = [];
           this.cdr.detectChanges();
 
-          setTimeout(() => {
-            const textareas = document.querySelectorAll('.test-case-steps-table textarea.table-input');
-            textareas.forEach(ta => this.autoGrowTextarea(ta as HTMLTextAreaElement));
-          }, 0);
+          // Animar la aceptación secuencial de cada escenario
+          const totalCases = this.generatedHUData?.detailedTestCases?.length || 0;
+          if (totalCases > 0) {
+            const delay = Math.min(400, 2000 / totalCases); // max 2s total
+            let idx = 0;
+            const acceptInterval = setInterval(() => {
+              this.acceptedScenarioIndices = [...this.acceptedScenarioIndices, idx];
+              this.cdr.detectChanges();
+              idx++;
+              if (idx >= totalCases) {
+                clearInterval(acceptInterval);
+                // Breve pausa final antes de transicionar
+                setTimeout(() => this.finalizeAfterAcceptance(), 500);
+              }
+            }, delay);
+          } else {
+            this.finalizeAfterAcceptance();
+          }
         }
       });
     }

@@ -1,52 +1,72 @@
 <div class="image-editor-container">
   <div class="editor-toolbar">
-    <div class="toolbar-content">
-      <div class="tools-section">
-        <label class="section-label">Herramientas:</label>
-        <div class="tools-grid">
-          <button *ngFor="let tool of drawingTools" (click)="selectTool(tool.name)"
-            [class.active]="selectedTool === tool.name" class="tool-btn" [title]="tool.label">
-            {{ tool.label }}
+    <!-- Row 1: Tools + Stroke props + Actions -->
+    <div class="toolbar-row">
+
+      <!-- Tool icons -->
+      <div class="toolbar-group tools-group">
+        <!-- Pen -->
+        <button (click)="selectTool('pen')" [class.active]="selectedTool === 'pen'" class="tool-icon-btn" title="Bolígrafo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </button>
+        <!-- Highlighter -->
+        <button (click)="selectTool('highlighter')" [class.active]="selectedTool === 'highlighter'" class="tool-icon-btn" title="Resaltador">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 5.5l-3-3-8 8 3 3 8-8z"/></svg>
+        </button>
+        <!-- Line -->
+        <button (click)="selectTool('line')" [class.active]="selectedTool === 'line'" class="tool-icon-btn" title="Línea">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+        </button>
+        <!-- Arrow -->
+        <button (click)="selectTool('arrow')" [class.active]="selectedTool === 'arrow'" class="tool-icon-btn" title="Flecha">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
+        </button>
+        <!-- Circle -->
+        <button (click)="selectTool('circle')" [class.active]="selectedTool === 'circle'" class="tool-icon-btn" title="Círculo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+        </button>
+        <!-- Rectangle -->
+        <button (click)="selectTool('rectangle')" [class.active]="selectedTool === 'rectangle'" class="tool-icon-btn" title="Rectángulo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+        </button>
+        <!-- Text -->
+        <button (click)="selectTool('text')" [class.active]="selectedTool === 'text'" class="tool-icon-btn" title="Texto">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </button>
+        <!-- Eraser -->
+        <button (click)="selectTool('eraser')" [class.active]="selectedTool === 'eraser'" class="tool-icon-btn" title="Editar / Borrar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6.0001 17.0001L17 6"/></svg>
+        </button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Stroke size + preset colors -->
+      <div class="toolbar-group stroke-group">
+        <input type="range" min="1" max="20" [(ngModel)]="strokeWidth" class="size-slider"
+          (change)="onSizeChange()" title="Tamaño" />
+        <span class="size-badge">{{ strokeWidth }}px</span>
+        <div class="preset-colors">
+          <button *ngFor="let c of presetColors"
+            (click)="setPresetColor(c)"
+            class="color-swatch"
+            [class.color-swatch-active]="strokeColor === c"
+            [style.background]="c"
+            [title]="c">
           </button>
         </div>
       </div>
 
-      <div class="color-section">
-        <label class="section-label">Color:</label>
-        <div class="color-picker-group">
-          <input type="color" [(ngModel)]="strokeColor" class="color-picker" (change)="onColorChange()" />
-          <span class="color-value">{{ strokeColor }}</span>
-        </div>
-      </div>
+      <div class="toolbar-divider"></div>
 
-      <div class="size-section">
-        <label class="section-label">Tamaño:</label>
-        <div class="size-controls">
-          <input type="range" min="1" max="20" [(ngModel)]="strokeWidth" class="size-slider"
-            (change)="onSizeChange()" />
-          <span class="size-value">{{ strokeWidth }}px</span>
-        </div>
-      </div>
-
-      <div class="zoom-section">
-        <label class="section-label">Zoom:</label>
-        <div class="zoom-controls">
-          <button (click)="setZoom(currentZoom - 0.2)" class="zoom-btn">-</button>
-          <span class="zoom-value">{{ (currentZoom * 100).toFixed(0) }}%</span>
-          <button (click)="setZoom(currentZoom + 0.2)" class="zoom-btn">+</button>
-        </div>
-      </div>
-
-      <div class="action-buttons">
-        <button (click)="clearCanvas()" class="btn-clear">
-          Limpiar
-        </button>
+      <!-- Action buttons -->
+      <div class="toolbar-group action-group">
+        <button (click)="clearCanvas()" class="btn-clear">Limpiar</button>
         <button (click)="saveCanvas()" class="btn-save">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar
         </button>
-        <button (click)="downloadImage()" class="btn-download">
-          Descargar
-        </button>
+        <button (click)="downloadImage()" class="btn-download">Descargar</button>
       </div>
     </div>
   </div>
@@ -54,6 +74,12 @@
   <div class="canvas-container" #canvasContainer>
     <div class="canvas-wrapper">
       <canvas id="fabricCanvas" class="drawing-canvas"></canvas>
+    </div>
+    <!-- Zoom overlay -->
+    <div class="zoom-overlay">
+      <button (click)="setZoom(currentZoom - 0.2)" class="zoom-btn" title="Alejar">-</button>
+      <span class="zoom-value">{{ (currentZoom * 100).toFixed(0) }}%</span>
+      <button (click)="setZoom(currentZoom + 0.2)" class="zoom-btn" title="Acercar">+</button>
     </div>
   </div>
 </div>

@@ -8,6 +8,7 @@ import { DestroyRef, inject } from '@angular/core';
 import { ToastComponent } from './toast/toast.component';
 import { AuthUiComponent } from './auth/auth-ui.component';
 import { AuthService } from './services/auth/auth.service';
+import { SupabaseClientService } from './services/database/supabase-client.service';
 
 interface MenuItem {
   icon: string;
@@ -50,22 +51,37 @@ interface MenuItem {
 
             <nav class="sidebar-nav">
               <div class="logo-section">
-                <a class="app-logo" *ngIf="isSidebarExpandedView" (click)="showOnboarding()" style="cursor:pointer">
-                  <span class="logo-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 010 1.06L2.56 10l3.72 3.72a.75.75 0 01-1.06 1.06L.97 10.53a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 0zm7.44 0a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L17.44 10l-3.72-3.72a.75.75 0 010-1.06zM11.377 2.011a.75.75 0 01.612.867l-2.5 14.5a.75.75 0 01-1.478-.255l2.5-14.5a.75.75 0 01.866-.612z" clip-rule="evenodd" />
+                <a class="app-logo" *ngIf="isSidebarExpandedView" (click)="goToWelcome()" style="cursor:pointer">
+                  <div class="logo-svg-wrap">
+                    <svg width="38" height="38" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="64" height="64" rx="14" fill="#0071e3"/>
+                      <rect x="14" y="12" width="24" height="32" rx="3" fill="white" opacity="0.18"/>
+                      <rect x="14" y="12" width="24" height="32" rx="3" stroke="white" stroke-width="2"/>
+                      <line x1="19" y1="20" x2="32" y2="20" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                      <line x1="19" y1="26" x2="32" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                      <line x1="19" y1="32" x2="27" y2="32" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                      <circle cx="42" cy="43" r="12" fill="white"/>
+                      <path d="M37 43l3.5 3.5L47 39" stroke="#0071e3" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                  </span>
-                  <span class="logo-title">Test Plan Manager</span>
+                  </div>
+                  <div class="logo-text-block">
+                    <span class="logo-name">TestPlan</span>
+                    <span class="logo-tagline">Gestor QA</span>
+                  </div>
                 </a>
 
-                <a class="logo-compact" *ngIf="!isSidebarExpandedView" (click)="showOnboarding()" style="cursor:pointer">
-                  <span class="logo-compact-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2"/>
-                      <path d="M8 8h8M8 12h8M8 16h5" stroke-width="2" stroke-linecap="round"/>
+                <a class="logo-compact" *ngIf="!isSidebarExpandedView" (click)="goToWelcome()" style="cursor:pointer">
+                  <div class="logo-isotipo">
+                    <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="64" height="64" rx="14" fill="#0071e3"/>
+                      <rect x="14" y="12" width="24" height="32" rx="3" fill="white" opacity="0.18"/>
+                      <rect x="14" y="12" width="24" height="32" rx="3" stroke="white" stroke-width="2"/>
+                      <line x1="19" y1="20" x2="32" y2="20" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                      <line x1="19" y1="26" x2="32" y2="26" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                      <circle cx="42" cy="43" r="12" fill="white"/>
+                      <path d="M37 43l3.5 3.5L47 39" stroke="#0071e3" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                  </span>
+                  </div>
                 </a>
               </div>
 
@@ -95,7 +111,7 @@ interface MenuItem {
                   <a
                     *ngIf="!item.subItems"
                     [routerLink]="item.route"
-                    routerLinkActive="active"
+                    [class.active]="isMenuItemActive(item.route || '')"
                     class="menu-link"
                     (click)="onMenuItemClick()"
                     [attr.title]="getCollapsedOnlyTitle(item.label)">
@@ -106,6 +122,10 @@ interface MenuItem {
                       </svg>
                       <svg *ngIf="i === 1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <svg *ngIf="i === 2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </span>
                     <span class="menu-label">{{ item.label }}</span>
@@ -148,19 +168,24 @@ interface MenuItem {
             </nav>
 
             <div class="sidebar-user" *ngIf="authService.user$ | async as user">
-              <img *ngIf="getAvatarUrl(user)" [src]="getAvatarUrl(user)" alt="Avatar" class="user-avatar" />
-              <div class="user-meta">
-                <div class="user-name">{{ getDisplayName(user) }}</div>
-                <div class="user-email">{{ user.email }}</div>
+              <div class="user-row">
+                <div class="user-avatar-wrap">
+                  <img *ngIf="getAvatarUrl(user)" [src]="getAvatarUrl(user)" alt="Avatar" class="user-avatar" />
+                  <div *ngIf="!getAvatarUrl(user)" class="user-avatar-fallback">{{ (getDisplayName(user) || user.email || '?')[0].toUpperCase() }}</div>
+                </div>
+                <div class="user-meta">
+                  <div class="user-name">{{ getDisplayName(user) }}</div>
+                  <div class="user-email">{{ user.email }}</div>
+                </div>
+                <button class="logout-btn" (click)="logout()" title="Cerrar sesión">
+                  <span class="logout-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H9m4 8H7a2 2 0 01-2-2V6a2 2 0 012-2h6" />
+                    </svg>
+                  </span>
+                  <span class="logout-label">Cerrar sesión</span>
+                </button>
               </div>
-              <button class="logout-btn" (click)="logout()" [attr.title]="getCollapsedOnlyTitle('Cerrar sesión')">
-                <span class="logout-icon" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H9m4 8H7a2 2 0 01-2-2V6a2 2 0 012-2h6" />
-                  </svg>
-                </span>
-                <span class="logout-label">Cerrar sesión</span>
-              </button>
             </div>
           </aside>
 
@@ -170,29 +195,11 @@ interface MenuItem {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span class="header-title">Test Plan Manager</span>
+            <span class="header-title"><img src="/logo.png" alt="Gestor de Planes de Prueba" class="header-logo-img" /></span>
           </header>
 
           <main class="main-content" [class.sidebar-expanded]="isSidebarExpandedView && !isMobile" [class.sidebar-collapsed]="!isSidebarExpandedView && !isMobile">
-            <section class="onboarding-first" *ngIf="showOnboardingTip; else appContent">
-              <button class="onboarding-skip" (click)="dismissOnboardingTip()">Omitir</button>
-              <div class="onboarding-first-card">
-                <div class="onboarding-icon" aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h2>Bienvenido</h2>
-                <p>¿Qué deseas hacer primero?</p>
-                <div class="onboarding-actions">
-                  <button type="button" class="onboarding-btn onboarding-btn-secondary" (click)="goToViewerFromOnboarding()">Ver planes</button>
-                  <button type="button" class="onboarding-btn onboarding-btn-primary" (click)="goToGeneratorFromOnboarding()">Crear plan</button>
-                </div>
-              </div>
-            </section>
-            <ng-template #appContent>
-              <router-outlet></router-outlet>
-            </ng-template>
+            <router-outlet></router-outlet>
           </main>
         </div>
       </ng-container>
@@ -213,6 +220,7 @@ export class AppComponent {
   hoveredMenuItem: string | null = null; // Para controlar el hover en menú contraído
   temporaryExpanded = false; // Para expansión temporal en hover
   showOnboardingTip = false;
+  recentPlans: any[] = [];
 
   readonly isAuthenticated$;
 
@@ -220,7 +228,7 @@ export class AppComponent {
     return this.isMobile || this.sidebarExpanded || this.temporaryExpanded;
   }
 
-  constructor(public authService: AuthService, private router: Router) {
+  constructor(public authService: AuthService, public router: Router, private supabaseClient: SupabaseClientService) {
     this.isAuthenticated$ = this.authService.user$.pipe(map((user) => !!user));
 
     this.authService.user$
@@ -231,10 +239,24 @@ export class AppComponent {
           return;
         }
 
-        const onboardingDismissed = this.isOnboardingDismissed(user.id);
-        const forceMobileOnboarding = this.consumeMobileOnboardingPending();
-        this.showOnboardingTip = !onboardingDismissed || forceMobileOnboarding;
+        // Solo navegar a /welcome si estás en la raíz o sin navegar específicamente
+        const currentUrl = this.router.url;
+        if (currentUrl === '/' || currentUrl === '') {
+          this.router.navigateByUrl('/welcome');
+        }
       });
+  }
+
+  private async loadRecentPlans(userId: string): Promise<void> {
+    try {
+      const { data } = await this.supabaseClient.supabase
+        .from('test_plans')
+        .select('id, hu_title, updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(4);
+      this.recentPlans = data || [];
+    } catch { this.recentPlans = []; }
   }
 
   menuItems: MenuItem[] = [
@@ -247,8 +269,25 @@ export class AppComponent {
       icon: '',
       label: 'Ver planes de prueba',
       route: '/viewer'
+    },
+    {
+      icon: '',
+      label: 'Ejecución manual',
+      route: '/manual-execution'
     }
   ];
+
+  isMenuItemActive(route: string): boolean {
+    const url = this.router.url.split('?')[0];
+    if (route === '/viewer') {
+      // Only active for /viewer and its sub-routes EXCEPT /execute-plan
+      return url === '/viewer' || (url.startsWith('/viewer/') && !url.startsWith('/viewer/execute-plan'));
+    }
+    if (route === '/manual-execution') {
+      return url === '/manual-execution' || url.startsWith('/viewer/execute-plan');
+    }
+    return url === route || url.startsWith(route + '/');
+  }
 
   // Método para manejar hover en elementos del menú
   onMenuItemHover(itemLabel: string | null): void {
@@ -344,6 +383,11 @@ export class AppComponent {
   showOnboarding(): void {
     this.showOnboardingTip = true;
     this.closeSidebar();
+  }
+
+  goToWelcome(): void {
+    this.closeSidebar();
+    this.router.navigateByUrl('/welcome');
   }
 
   dismissOnboardingTip(): void {    const currentUserId = this.authService.user?.id;

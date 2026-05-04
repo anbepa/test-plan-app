@@ -75,6 +75,31 @@ export interface PlanExecution {
   completedAt?: number;
 }
 
+// --- Interfaces para Test Runs ---
+export type TestRunStatus = 'Pending' | 'In Progress' | 'Completed' | 'Failed' | 'Blocked';
+
+export interface TestRun {
+  id: string;
+  name: string;
+  huId: string;
+  huTitle: string;
+  testPlanId: string;
+  testPlanTitle: string;
+  status: TestRunStatus;
+  notes: string;
+  tags: string[];
+  milestone: string;
+  /** IDs of selected test cases (empty = all) */
+  selectedTestCaseIds: string[];
+  includeAllTestCases: boolean;
+  totalTestCases: number;
+  completedTestCases: number;
+  /** Links to PlanExecution.id when execution starts */
+  executionId?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // --- Interfaz Principal HUData ---
 export interface HUData {
   id: string;

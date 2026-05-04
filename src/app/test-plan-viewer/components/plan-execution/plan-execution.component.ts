@@ -28,6 +28,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   hu: HUData | null = null;
   testPlanId: string = '';
   testPlanTitle: string = '';
+  origin: string = 'test-runs';
+  private testRunId: string = '';
   execution: PlanExecution | null = null;
   activeTestCaseIndex = 0;
   activeStepIndex = 0;
@@ -37,6 +39,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   showDataEditor = false;
   showDeleteModal = false;
   showUploadMenu = false;
+  uploadMenuPos: { top: number; left: number } = { top: 0, left: 0 };
+
+  openUploadMenu(event: MouseEvent): void {
+    const btn = event.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    this.uploadMenuPos = { top: rect.bottom + 6, left: rect.right };
+    this.showUploadMenu = !this.showUploadMenu;
+  }
   editingImageId: string | null = null;
   previewImage: AssetEvidence | null = null;
   pendingImageBase64: string = '';
@@ -91,11 +101,28 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         this.hu = state.hu as HUData;
         this.testPlanId = state.testPlanId || '';
         this.testPlanTitle = state.testPlanTitle || '';
+        this.origin = state.origin || 'test-runs';
+        this.testRunId = state.testRunId || '';
       } else if (restoredContext) {
         this.testPlanId = restoredContext.testPlanId;
         this.testPlanTitle = restoredContext.testPlanTitle;
+        this.origin = restoredContext.origin || 'test-runs';
+        this.testRunId = restoredContext.testRunId || '';
       }
 
+      const forceNew = state?.forceNewExecution === true;
+
+      if (forceNew && this.hu) {
+        // New test run: create a fresh execution from scratch
+        await this.createNewExecution();
+        if (this.execution) {
+          this.storageService.setActiveExecutionId(this.execution.id);
+          // Link execution back to the test run
+          if (state?.testRunId) {
+            this.linkExecutionToTestRun(state.testRunId, this.execution.id);
+          }
+        }
+      } else {
       // Verificar si hay una ejecución existente
       const allExecutions = await this.storageService
         .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''));
@@ -104,13 +131,15 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
       const preferredExecution = restoredContext?.executionId
         ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
-        : null;
+        : (state?.testRunId
+            ? existingExecutions.find((exec) => exec.id === state.testRunId)
+            : null);
 
       if (existingExecutions.length > 0) {
         this.execution = preferredExecution || existingExecutions[0];
         this.storageService.setActiveExecutionId(this.execution.id);
 
-        if (!this.hu) {
+        if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
           this.hu = this.buildHuFromExecution(this.execution);
         }
       } else {
@@ -120,6 +149,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           this.storageService.setActiveExecutionId(this.execution.id);
         }
       }
+      }
 
       if (restoredContext) {
         this.activeTestCaseIndex = restoredContext.activeTestCaseIndex;
@@ -127,13 +157,18 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       }
       this.normalizeActiveSelection();
 
-      // AWAIT para evitar condición de carrera con el debounce de saveExecution
-      await this.applyLatestHuSnapshot();
+      // Skip HU sync when execution was created with a filtered subset of test cases
+      if (!forceNew) {
+        // AWAIT para evitar condición de carrera con el debounce de saveExecution
+        await this.applyLatestHuSnapshot();
+      }
 
       // Registrar timestamp DESPUÉS de cargar para que subscribeToHuUpdates
       // ignore el emit inmediato del BehaviorSubject (que es la versión stale de hu-scenarios)
       this.componentLoadedAt = Date.now();
-      this.subscribeToHuUpdates();
+      if (!forceNew) {
+        this.subscribeToHuUpdates();
+      }
 
       this.persistExecutionContext();
 
@@ -186,6 +221,53 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.hu.detailedTestCases
     );
     await this.storageService.saveExecution(this.execution);
+  }
+
+  /** Links an execution ID back to the test_runs table */
+  private async linkExecutionToTestRun(testRunId: string, executionId: string): Promise<void> {
+    try {
+      const { data } = await this.storageService['supabaseClient'].supabase.auth.getSession();
+      const userId = data?.session?.user?.id;
+      if (!userId) return;
+      this.testRunId = testRunId;
+      await this.storageService['supabaseClient'].supabase
+        .from('test_runs')
+        .update({ execution_id: executionId, updated_at: new Date().toISOString() })
+        .eq('id', testRunId)
+        .eq('user_id', userId);
+    } catch (_) {}
+  }
+
+  /** Syncs derived status from execution testCases back to test_runs table */
+  private async syncTestRunStatus(): Promise<void> {
+    if (!this.testRunId || !this.execution) return;
+    try {
+      const { data } = await this.storageService['supabaseClient'].supabase.auth.getSession();
+      const userId = data?.session?.user?.id;
+      if (!userId) return;
+
+      const tcs = this.execution.testCases || [];
+      const total = tcs.length;
+      const completed = tcs.filter(tc => tc.status === 'completed').length;
+      const hasFailed = tcs.some(tc => tc.status === 'failed');
+      const allDone = total > 0 && completed === total;
+      const hasInProgress = tcs.some(tc => tc.status === 'in-progress');
+
+      let status = 'Pending';
+      if (allDone) status = hasFailed ? 'Failed' : 'Completed';
+      else if (hasInProgress || completed > 0) status = 'In Progress';
+
+      await this.storageService['supabaseClient'].supabase
+        .from('test_runs')
+        .update({
+          status,
+          completed_test_cases: completed,
+          total_test_cases: total,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', this.testRunId)
+        .eq('user_id', userId);
+    } catch (_) {}
   }
 
   get currentTestCase() {
@@ -656,6 +738,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.execution.updatedAt = Date.now();
     await this.storageService.saveExecution(this.execution);
     this.persistExecutionContext();
+    this.syncTestRunStatus();
   }
 
   /** Guarda solo el JSON de la ejecución (estados/notas) sin re-subir imágenes al Storage. */
@@ -802,7 +885,16 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     // ── Guard: skip reconciliation if HU structure hasn't changed ──
     // Compare titles+steps of HU against current execution to detect real changes.
-    const huFingerprint = updatedHu.detailedTestCases
+    // Only consider HU test cases that already exist in the execution (handles filtered/partial executions)
+    const executionTitles = new Set(this.execution.testCases.map(tc => tc.title.trim()));
+    const relevantHuCases = updatedHu.detailedTestCases.filter(tc => executionTitles.has(tc.title.trim()));
+
+    // If no overlap at all, skip to avoid wiping the execution
+    if (relevantHuCases.length === 0 && this.execution.testCases.length > 0) {
+      return;
+    }
+
+    const huFingerprint = relevantHuCases
       .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
       .join(';;');
     const execFingerprint = this.execution.testCases
@@ -821,7 +913,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.execution.huTitle = updatedHu.title;
     this.execution.testCases = await this.reconcileExecutionWithHu(
       this.execution.testCases,
-      updatedHu.detailedTestCases
+      relevantHuCases
     );
 
     this.execution.updatedAt = Date.now();
@@ -954,13 +1046,18 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   goBack(): void {
     this.persistExecutionContext();
-    this.router.navigate(['/viewer/hu-scenarios'], {
-      state: {
-        hu: this.hu,
-        testPlanId: this.testPlanId,
-        testPlanTitle: this.testPlanTitle
-      }
-    });
+
+    if (this.origin === 'manual-execution') {
+      this.router.navigate(['/manual-execution']);
+    } else {
+      this.router.navigate(['/viewer/test-runs'], {
+        state: {
+          hu: this.hu,
+          testPlanId: this.testPlanId,
+          testPlanTitle: this.testPlanTitle
+        }
+      });
+    }
   }
 
   private persistExecutionContext(): void {
@@ -975,6 +1072,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         executionId: this.execution?.id || '',
         activeTestCaseIndex: this.activeTestCaseIndex,
         activeStepIndex: this.activeStepIndex,
+        origin: this.origin,
+        testRunId: this.testRunId,
         updatedAt: Date.now()
       }));
     } catch {
@@ -989,6 +1088,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     executionId: string;
     activeTestCaseIndex: number;
     activeStepIndex: number;
+    origin: string;
+    testRunId: string;
   } | null {
     try {
       const raw = localStorage.getItem(this.EXEC_CONTEXT_KEY);
@@ -1003,7 +1104,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         testPlanTitle: parsed.testPlanTitle || '',
         executionId: parsed.executionId || '',
         activeTestCaseIndex: Number.isFinite(parsed.activeTestCaseIndex) ? parsed.activeTestCaseIndex : 0,
-        activeStepIndex: Number.isFinite(parsed.activeStepIndex) ? parsed.activeStepIndex : 0
+        activeStepIndex: Number.isFinite(parsed.activeStepIndex) ? parsed.activeStepIndex : 0,
+        origin: parsed.origin || 'test-runs',
+        testRunId: parsed.testRunId || ''
       };
     } catch {
       return null;
