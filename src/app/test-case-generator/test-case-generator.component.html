@@ -150,9 +150,14 @@
       <h3 *ngIf="componentState === 'editingForRefinement'">Casos de Prueba</h3>
       <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
 
-      <div *ngIf="componentState === 'previewingGenerated'" class="scope-display-section">
-        <h4>Alcance Generado</h4>
-        <div class="scope-content" [class.loading-text]="loadingScope">
+      <div *ngIf="componentState === 'previewingGenerated' && generatedHUData" class="scope-display-section">
+        <div class="scope-header" (click)="generatedHUData.isScopeDetailsOpen = !generatedHUData.isScopeDetailsOpen" role="button" [attr.aria-expanded]="generatedHUData.isScopeDetailsOpen">
+          <h4>Alcance Generado</h4>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="collapse-icon" [class.collapsed]="!generatedHUData.isScopeDetailsOpen">
+            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="scope-content" [class.loading-text]="loadingScope" *ngIf="generatedHUData.isScopeDetailsOpen">
           <span *ngIf="loadingScope" class="spinner-inline"></span>
           {{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o
           no aplica.') }}
@@ -288,5 +293,6 @@
   [streamingContent]="streamingContent"
   [acceptedScenarioIndices]="acceptedScenarioIndices"
   [isAcceptancePhase]="isAcceptancePhase"
+  [testPlanData]="currentHuDataForModal"
   progressHint="">
 </app-confirmation-modal>

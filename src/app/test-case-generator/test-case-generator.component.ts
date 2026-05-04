@@ -49,6 +49,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   refinementTechnique: string = '';
   userRefinementContext: string = '';
 
+  get currentHuDataForModal() {
+    return {
+      huId: this.currentHuId,
+      huTitle: this.currentHuTitle,
+      huDescription: this.currentDescription,
+      acceptanceCriteria: this.currentAcceptanceCriteria
+    };
+  }
+
   cellName: string = '';
   cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
 

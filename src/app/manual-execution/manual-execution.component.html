@@ -158,13 +158,23 @@
         <div class="modal-form-left">
           <div class="form-group">
             <label class="form-label">Nombre <span class="required">*</span></label>
-            <input type="text" class="form-input" placeholder="Nombre de la ejecución" [(ngModel)]="newRunName">
+            <input type="text" class="form-input" placeholder="Ej: Ejecución de Regresión - Módulo Login" [(ngModel)]="newRunName">
           </div>
           <div class="form-group">
             <label class="form-label">Etiquetas</label>
             <div class="tags-input-wrapper">
               <div class="predefined-tags">
                 <button type="button" *ngFor="let pt of predefinedTags" class="predefined-tag-btn" [class.active]="newRunTags.includes(pt)" (click)="togglePredefinedTag(pt)">{{ pt }}</button>
+                <button type="button" class="add-tag-btn" (click)="toggleTagInput()" [title]="'Agregar etiqueta personalizada'">+</button>
+              </div>
+              <div class="custom-tag-input-group" *ngIf="showTagInput">
+                <input type="text" class="form-input custom-tag-input" placeholder="Nueva etiqueta..." [(ngModel)]="tagInput" (keydown)="onTagKeydown($event)">
+                <button type="button" class="btn-confirm-tag" (click)="addTag(); showTagInput = false">OK</button>
+              </div>
+              <div class="tags-chips-list" *ngIf="newRunTags.length > 0">
+                <span class="tag-chip" *ngFor="let tag of newRunTags; let i = index">
+                  {{ tag }} <button type="button" class="tag-remove" (click)="removeTag(i)">×</button>
+                </span>
               </div>
             </div>
           </div>
@@ -214,14 +224,19 @@
                     <p>Selecciona una HU del panel izquierdo para ver sus escenarios</p>
                   </div>
                   <div *ngIf="selectedHuNode">
-                    <input type="text" class="form-input search-tc-input" placeholder="Buscar casos de prueba..." [(ngModel)]="testCaseSelectorSearch">
+                    <div class="search-tc-wrapper">
+                      <span class="search-icon-sm">🔍</span>
+                      <input type="text" class="form-input search-tc-input" placeholder="Buscar casos de prueba..." [(ngModel)]="testCaseSelectorSearch">
+                    </div>
                     <div class="tc-folder-header">
                       <strong>{{ selectedHuNode.title }}</strong> ({{ selectedHuTestCases.length }} casos)
                       <button type="button" class="tc-select-all-link" (click)="selectAllTestCases()">Seleccionar todos</button>
                     </div>
                     <div class="tc-list">
                       <div class="tc-list-item" *ngFor="let tc of filteredTestCasesForSelector; let i = index" (click)="toggleTestCaseSelection(tc)">
-                        <div class="tc-radio" [class.selected]="isTestCaseSelected(tc)"></div>
+                        <div class="tc-checkbox" [class.selected]="isTestCaseSelected(tc)">
+                          <span class="check-mark" *ngIf="isTestCaseSelected(tc)">✓</span>
+                        </div>
                         <div class="tc-item-info">
                           <span class="tc-item-title">{{ tc.title }}</span>
                           <span class="tc-item-id">{{ getTestCaseShortId(tc, i) }}</span>
@@ -252,7 +267,7 @@
     </div>
     <div class="modal-footer">
       <button type="button" class="button-cancel" (click)="closeCreateModal()">Cancelar</button>
-      <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || !selectedHuNode || isCreating">
+      <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || !selectedHuNode || newRunSelectedTestCaseIds.length === 0 || isCreating">
         {{ isCreating ? 'Creando...' : 'Crear' }}
       </button>
     </div>

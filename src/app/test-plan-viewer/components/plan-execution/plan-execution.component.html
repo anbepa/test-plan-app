@@ -40,7 +40,7 @@
               <div class="progress-track">
                 <div class="progress-fill" [style.width.%]="stats.completionPercentage"></div>
               </div>
-              <span class="progress-pct">{{ stats.completionPercentage }}%</span>
+              <span class="progress-pct">{{ stats.completionPercentage | number:'1.0-0' }}%</span>
             </div>
             <div class="tb-divider"></div>
           </ng-container>

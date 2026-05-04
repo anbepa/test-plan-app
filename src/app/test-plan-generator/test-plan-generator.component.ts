@@ -407,13 +407,9 @@ export class TestPlanGeneratorComponent {
             duration: 4500
           });
 
-          // Redirigir a la vista correspondiente después de 2 segundos
+          // Redirigir a la lista general de planes de prueba después de 2 segundos
           setTimeout(() => {
-            if (this.isAppendMode && this.existingTestPlanId) {
-              this.router.navigate(['/viewer'], { queryParams: { id: this.existingTestPlanId } });
-            } else {
-              this.router.navigate(['/viewer'], { queryParams: { id: testPlanId } });
-            }
+            this.router.navigate(['/viewer']);
           }, 2000);
         } else {
           throw new Error('No se recibió ID del plan guardado');

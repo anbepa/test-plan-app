@@ -65,6 +65,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   showTestCaseSelector = false;
   testCaseSelectorSearch = '';
   isCreating = false;
+  showTagInput = false;
 
   // Plan/HU tree for selector
   planTree: PlanNode[] = [];
@@ -356,6 +357,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     this.showTestCaseSelector = false;
     this.testCaseSelectorSearch = '';
     this.selectedHuNode = null;
+    this.showTagInput = false;
     this.loadPlanTree();
   }
 
@@ -384,7 +386,16 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   }
 
   onTagKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') { event.preventDefault(); this.addTag(); }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.addTag();
+      this.showTagInput = false;
+    }
+  }
+
+  toggleTagInput(): void {
+    this.showTagInput = !this.showTagInput;
+    if (!this.showTagInput) this.tagInput = '';
   }
 
   openTestCaseSelector(): void {

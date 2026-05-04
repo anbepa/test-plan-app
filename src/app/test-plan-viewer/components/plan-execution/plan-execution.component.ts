@@ -717,6 +717,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (!this.execution) return;
 
     try {
+      this.toastService.info('Preparando evidencias para descarga...');
+      await this.storageService.hydrateAllEvidence(this.execution);
       await this.exportService.exportExecutionToDOCX(this.execution, this.hu);
       this.toastService.success('Ejecución exportada a DOCX exitosamente');
     } catch (error) {
