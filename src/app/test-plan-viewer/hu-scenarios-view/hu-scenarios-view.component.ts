@@ -10,6 +10,7 @@ import { ExportService } from '../../services/export/export.service';
 import { HuSyncService } from '../../services/core/hu-sync.service';
 import { DatabaseService } from '../../services/database/database.service';
 import { AiUnifiedService } from '../../services/ai/ai-unified.service';
+import { GeminiParserService } from '../../services/ai/gemini-parser.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -145,6 +146,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     private huSyncService: HuSyncService,
     private databaseService: DatabaseService,
     private aiService: AiUnifiedService,
+    private parserService: GeminiParserService,
     private cdr: ChangeDetectorRef
   ) { }
 
@@ -601,15 +603,25 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   private parseStreamResult(content: string): any {
     if (!content) return null;
     try {
-      const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
-      return JSON.parse(clean);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (!match) return null;
+      const result = this.parserService.cleanAndParseJSONWithMeta(content);
+      if (result.possiblyTruncated) {
+        this.toastService.warning(`La IA superó el límite de texto. Se rescataron ${result.completedTestCaseCount} casos completos.`);
+      }
+      return result.parsed;
+    } catch (e) {
+      console.warn('Falló el parseo con GeminiParserService, intentando fallback.', e);
+      // Fallback
       try {
-        return JSON.parse(match[0]);
+        const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
+        return JSON.parse(clean);
       } catch {
-        return null;
+        const match = content.match(/\{[\s\S]*\}/);
+        if (!match) return null;
+        try {
+          return JSON.parse(match[0]);
+        } catch {
+          return null;
+        }
       }
     }
   }

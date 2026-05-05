@@ -222,39 +222,91 @@
 
 /* ── Table ── */
 .table-results-wrapper {
-  border: 1px solid var(--border-color);
-  border-radius: 0.75rem;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
 }
 
-.table-container { overflow-x: auto; }
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  position: relative;
+  border-radius: 1rem;
+  border: 1px solid #dbe2ef;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+}
+
+.table-container::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: linear-gradient(90deg, #93c5fd 0%, #60a5fa 45%, #3b82f6 100%);
+  opacity: 0.55;
+  z-index: 3;
+}
 
 .plans-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px;
 }
 
 .plans-table th,
 .plans-table td {
-  padding: 1rem 1rem;
+  padding: 1.1rem 0.9rem;
+  border-bottom: 1px solid #e8edf5;
   text-align: left;
   font-size: 0.875rem;
   color: var(--text-primary);
-  border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
 }
 
-.plans-table th {
-  background: #f9fafb;
-  font-weight: 600;
-  color: #6b7280;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.plans-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fe 100%);
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.015em;
+  text-transform: none;
+  backdrop-filter: blur(4px);
 }
 
-.plans-table tbody tr:hover { background: #f9fafb; }
-.plans-table tbody tr.row-selected { background: #eff6ff; }
+.plans-table thead th:first-child {
+  border-top-left-radius: 0.95rem;
+}
+
+.plans-table thead th:last-child {
+  border-top-right-radius: 0.95rem;
+}
+
+.plans-table tbody tr:nth-child(even) {
+  background: #fafcff;
+}
+
+.plans-table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+.plans-table tbody tr:hover {
+  background: #eef5ff;
+}
+
+.plans-table tbody tr.row-selected {
+  background: #fafafa !important;
+  box-shadow: inset 3px 0 0 #cbd5e1;
+}
+
+.plans-table tbody tr:last-child td {
+  border-bottom: none;
+}
 
 .check-col { width: 40px; text-align: center; }
 .check-col input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary-color, #007AFF); }

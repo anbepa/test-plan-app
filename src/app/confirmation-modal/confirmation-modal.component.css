@@ -19,20 +19,24 @@
 /* Modal Container - Fondo blanco sólido */
 .modal-container {
     background: #ffffff;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 500px;
+    border-radius: 20px;
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Clips el contenido */
+    position: relative;
     box-shadow:
         0 10px 25px rgba(0, 0, 0, 0.15),
         0 0 0 1px rgba(0, 0, 0, 0.05);
-    overflow: visible;
     animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     transform-origin: center center;
 }
 
 /* En modo streaming el modal puede crecer más */
 .modal-container:has(.progress-body) {
-    max-width: 860px;
+    max-width: 920px;
 }
 
 /* Header */
@@ -76,19 +80,24 @@
 
 /* Body */
 .modal-body {
-    padding: 0 24px 24px 24px;
+    padding: 0 24px;
+    overflow-y: auto; /* Permite scroll si el contenido supera el modal */
+    flex: 1;
     color: #1d1d1f;
-    font-size: 15px;
-    line-height: 1.5;
-    font-weight: 400;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
 }
 
 .progress-body {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: 0.7rem;
+    align-items: stretch; /* Permite que thought-bubble ocupe todo el ancho */
+    text-align: center; /* Solo el texto fuera del bubble se centra */
+    gap: 0.6rem;
+    padding: 16px 24px 20px 24px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .progress-spinner {
@@ -117,7 +126,7 @@
 .progress-track {
     position: relative;
     width: 100%;
-    height: 8px;
+    height: 6px; /* Barra más delgada */
     border-radius: 999px;
     background: #e5e7eb;
     overflow: visible;
@@ -582,8 +591,8 @@
 }
 
 .tester-character {
-    width: 100px;
-    height: 120px;
+    width: 75px; /* Robot más pequeño */
+    height: 90px;
     animation: robotBobbing 3s ease-in-out infinite;
 }
 
@@ -606,9 +615,9 @@
     background: #eff6ff;
     border: 1px solid #dbeafe;
     border-radius: 16px;
-    padding: 14px 20px;
+    padding: 10px 16px; /* Padding reducido */
     position: relative;
-    max-width: 280px;
+    max-width: 240px; /* Más estrecho */
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
     animation: fadeSlideIn 0.3s ease-out;
 }
@@ -649,36 +658,56 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    margin: 4px 0;
+    gap: 8px;
+    margin: 4px auto;
     flex-shrink: 0;
 }
 
 .tdot {
-    background: #93c5fd;
+    background: white;
+    border: 2px solid #93c5fd;
     border-radius: 50%;
-    animation: dotPulse 1.4s ease-in-out infinite;
+    animation: dotPulse 2s ease-in-out infinite;
 }
-.tdot-1 { width: 6px;  height: 6px;  animation-delay: 0s; }
-.tdot-2 { width: 9px;  height: 9px;  animation-delay: 0.2s; }
-.tdot-3 { width: 12px; height: 12px; animation-delay: 0.4s; }
+.tdot-1 { width: 12px; height: 8px;  animation-delay: 0s;   transform: rotate(-15deg); }
+.tdot-2 { width: 20px; height: 14px; animation-delay: 0.2s; transform: rotate(-10deg); }
+.tdot-3 { display: none; }
 
-/* Main thought bubble at the top */
+/* === THOUGHT BUBBLE: Rectangular con borde punteado === */
 .thought-bubble-main {
-    width: 95%;
-    max-width: 550px;
-    height: 380px; /* Tamaño fijo para evitar que el modal crezca */
+    width: 100%;
+    height: auto;
+    min-height: 60px;
+    max-height: 260px; /* Máximo para que el modal no crezca infinito */
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    background: #f8fbff;
     border: 2px dashed #93c5fd;
-    border-radius: 24px;
-    padding: 24px;
-    box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.05);
-    animation: bubbleAppear 0.4s ease-out forwards, bubbleGlow 3s ease-in-out infinite;
+    border-radius: 16px;
     position: relative;
-    margin: 0 auto 10px auto;
+    margin: 10px 0 6px 0;
+    flex-shrink: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    animation: bubbleAppear 0.4s ease-out forwards;
+    box-shadow: 0 4px 20px rgba(147, 197, 253, 0.1);
+    background-image: none;
+    overflow: hidden;
+}
+
+.cloud-bg-container {
+    display: none;
+}
+
+.thought-bubble-content {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Scroll cuando el contenido excede el max-height */
+    min-height: 0;    /* Clave para que flex + overflow funcione correctamente */
+    position: relative;
+    z-index: 1;
+    padding: 14px 20px 14px 20px;
+    text-align: left;
+    align-items: flex-start;
 }
 
 @keyframes bubbleGlow {
@@ -686,36 +715,75 @@
     50% { border-color: #3b82f6; box-shadow: 0 8px 25px rgba(59, 130, 246, 0.12); }
 }
 
-/* Tabular Reasoning Summary */
-.reasoning-summary {
+/* Copilot-style accordion */
+.thought-accordion-container {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #f3f4f6;
+    height: 100%;
     flex-shrink: 0;
+    width: 100%; /* Ocupa todo el ancho disponible */
+    text-align: left;
 }
 
-.rs-row {
-    display: flex;
+.thought-accordion-header {
+    display: inline-flex;
     align-items: center;
-    gap: 16px;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    color: #6b7280;
+    width: fit-content;
+    transition: color 0.2s;
 }
 
-.rs-label {
+.thought-accordion-header:hover {
+    color: #374151;
+}
+
+.thought-accordion-title {
     font-size: 12px;
     font-weight: 600;
-    color: #6e6e73; /* Apple Gray */
-    width: 100px;
-    flex-shrink: 0;
 }
 
-.rs-value {
+.thought-accordion-icon {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+}
+
+.thought-accordion-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.thought-accordion-body {
+    padding-left: 20px; /* Más indentación sin línea vertical */
+    margin-top: 8px;
     flex: 1;
-    font-size: 14px;
-    color: #1d1d1f; /* Apple Black */
-    font-weight: 500;
+    overflow-y: auto;
+    margin-left: 6px;
+}
+
+.thought-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.thought-list-item {
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.4;
+}
+
+.thought-accordion-body::-webkit-scrollbar {
+    width: 4px;
+}
+.thought-accordion-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
 }
 
 .tech-value {
@@ -752,51 +820,104 @@
     word-break: break-word;
 }
 
-/* Roadmap (Analysis Phases) */
-.design-roadmap {
-    margin-top: 12px;
-    padding-top: 16px;
-    border-top: 1px solid #f3f4f6;
+/* Nested Accordion Elements (Phases) */
+.thought-phase-item {
+    margin-bottom: 6px;
+    border-radius: 6px;
 }
 
-.roadmap-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: #86868b;
-    margin-bottom: 12px;
-    text-align: center;
-}
-
-.roadmap-steps {
+.phase-header {
     display: flex;
-    justify-content: space-around;
-    gap: 8px;
-}
-
-.roadmap-step {
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    opacity: 0.3;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    user-select: none;
+    text-align: left; /* Texto siempre a la izquierda */
 }
 
-.roadmap-step.active { opacity: 1; transform: translateY(-2px); }
-.roadmap-step.done { opacity: 1; }
+.phase-header:hover {
+    background-color: #f3f4f6;
+}
 
-.step-icon {
-    width: 24px;
-    height: 24px;
+.phase-status-icon {
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: #f5f5f7;
-    border: 1px solid #d1d1d6;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.phase-status-icon.done {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+}
+
+.phase-status-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
+.phase-spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid #cbd5e1;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.phase-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #4b5563;
+    flex-grow: 1;
+}
+
+.phase-title.done-text {
+    color: #1f2937;
     font-weight: 600;
-    color: #86868b;
+}
+
+.phase-chevron {
+    width: 14px;
+    height: 14px;
+    color: #9ca3af;
+    transition: transform 0.2s ease;
+}
+
+.phase-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.phase-thoughts-list {
+    margin: 6px 0 10px 26px;
+    padding: 0 0 0 15px;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.phase-thought-item {
+    font-size: 12px;
+    color: #4b5563;
+    line-height: 1.4;
+    position: relative;
+}
+
+.phase-thought-item::before {
+    content: "•";
+    position: absolute;
+    left: -10px;
+    color: #9ca3af;
 }
 
 .active .step-icon {
