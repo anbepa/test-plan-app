@@ -55,6 +55,8 @@ AHORA GENERA la sección final para "${sectionName}".
 `,
 
    RISK_STRATEGY_PROMPT: (huSummary: string, availableScenarios: string[]): string => `
+*** REGLA DE ORO: TODO TU RAZONAMIENTO Y EL CONTENIDO GENERADO DEBEN ESTAR EXCLUSIVAMENTE EN ESPAÑOL. PROHIBIDO USAR INGLÉS O SPANGLISH. ***
+
 Actúa como QA Lead Senior especializado en gestión de riesgos de pruebas.
 
 CONTEXTO CONSOLIDADO (TODAS las HUs del plan, criterios y escenarios):
@@ -111,6 +113,8 @@ Devuelve SOLO JSON válido, sin markdown, sin comentarios, sin texto extra:
    // --- PROMPT PARA GENERACIÓN DIRECTA (SIN CoT) ---
 
    DIRECT_GENERATION_PROMPT: (description: string, acceptanceCriteria: string, technique: string): string => `
+*** REGLA DE ORO: TODO TU RAZONAMIENTO Y EL CONTENIDO GENERADO DEBEN ESTAR EXCLUSIVAMENTE EN ESPAÑOL. PROHIBIDO USAR INGLÉS O SPANGLISH. ***
+
 Actúa como QA Senior. Genera casos de prueba aplicando "${technique}" con COBERTURA SUFICIENTE y sin ruido.
 
 HU:
@@ -243,6 +247,8 @@ FORMATO DE SALIDA:
 
    // Refinamiento directo (sin CoT) — igual que DIRECT_GENERATION_PROMPT + contexto del analista
    DIRECT_REFINE_PROMPT: (originalRequirements: string, currentCases: string, userRequest: string, technique: string): string => `
+*** REGLA DE ORO: TODO TU RAZONAMIENTO Y EL CONTENIDO GENERADO DEBEN ESTAR EXCLUSIVAMENTE EN ESPAÑOL. PROHIBIDO USAR INGLÉS O SPANGLISH. ***
+
 Actúa como QA Senior. Tienes los casos de prueba actuales y una instrucción específica del analista. Tu tarea es aplicar esa instrucción y devolver el conjunto de casos refinado.
 
 INSTRUCCIÓN DEL ANALISTA (prioridad máxima — ejecútala de forma literal antes que cualquier otra regla):

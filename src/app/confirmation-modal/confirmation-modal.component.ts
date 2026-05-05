@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
@@ -8,7 +8,7 @@ import { CommonModule } from '@angular/common';
     templateUrl: './confirmation-modal.component.html',
     styleUrls: ['./confirmation-modal.component.css']
 })
-export class ConfirmationModalComponent {
+export class ConfirmationModalComponent implements OnDestroy {
     @Input() isOpen = false;
     @Input() title = 'Confirmación';
     @Input() message = '¿Estás seguro?';
@@ -31,12 +31,17 @@ export class ConfirmationModalComponent {
     /** Datos del plan de pruebas para contexto de análisis */
     @Input() testPlanData: any = null;
 
+    /** Texto que se muestra realmente en la UI (con efecto typewriter) */
+    displayedReasoning: string = '';
+    private reasoningBuffer: string = '';
+    private typewriterInterval: any;
+
     /** Calcula el porcentaje de progreso basado en las fases del stream */
     get streamProgress(): number {
         if (this.streamingPhase === 'idle') return 0;
         if (this.streamingPhase === 'thinking') {
             // 0-40% mientras está pensando (razonamiento CoT)
-            return Math.min(40, 5 + (this.streamingReasoning?.length ?? 0) / 100);
+            return Math.min(40, 5 + (this.displayedReasoning?.length ?? 0) / 100);
         }
         if (this.streamingPhase === 'generating') {
             // 40-95% mientras genera contenido (JSON)
@@ -53,6 +58,7 @@ export class ConfirmationModalComponent {
     /** Fase actual del stream: pensando (CoT), generando (JSON) o inactivo */
     get streamingPhase(): 'idle' | 'thinking' | 'generating' {
         if (this.streamingContent?.trim()) return 'generating';
+        // Usamos el buffer original para saber la fase real del servicio
         if (this.streamingReasoning?.trim()) return 'thinking';
         return 'idle';
     }
@@ -163,7 +169,8 @@ export class ConfirmationModalComponent {
 
     /** Extrae datos estructurados del razonamiento para tabular */
     get reasoningMetadata() {
-        const text = this.streamingReasoning || '';
+        // IMPORTANTE: Usamos displayedReasoning para que la UI siga el ritmo del typewriter
+        const text = this.displayedReasoning || '';
         const isThinking = this.streamingPhase === 'thinking';
         
         // Si ya no estamos pensando, devolver los últimos datos guardados
@@ -227,8 +234,18 @@ export class ConfirmationModalComponent {
 
             let cleanRule = line.replace(/^[-*#>\d.)+\s]+|(regla|ca|criterio)\s*\d*[:\-]?\s*/i, '').trim();
             // Si la frase tiene sentido y longitud adecuada, la consideramos un "pensamiento"
-            if (cleanRule.length > 15 && cleanRule.length < 120 && !rules.includes(cleanRule)) {
+            // Reducimos el mínimo a 5 para que se vea actividad más rápido
+            if (cleanRule.length > 5 && cleanRule.length < 180 && !rules.includes(cleanRule)) {
                 rules.push(this.translateInsight(cleanRule));
+            }
+        }
+
+        // Si la última línea se está escribiendo, la añadimos para dar feedback visual de actividad
+        const lastLine = lines[lines.length - 1];
+        if (lastLine && lastLine.length > 2 && lastLine.length < 180) {
+            const cleanLast = lastLine.replace(/^[-*#>\d.)+\s]+|(regla|ca|criterio)\s*\d*[:\-]?\s*/i, '').trim();
+            if (cleanLast.length > 2 && !rules.includes(cleanLast)) {
+                rules.push(cleanLast);
             }
         }
 
@@ -245,8 +262,65 @@ export class ConfirmationModalComponent {
     private lastCoverage: string[] = [];
     private lastRules: string[] = [];
 
+    /** Estado del acordeón de pensamiento principal */
+    isThoughtExpanded: boolean = true;
+    
+    /** Estado de expansión de los nodos hijos (Fases) */
+    expandedPhases: { [key: string]: boolean } = {
+        'requisitos': true,
+        'reglas': true,
+        'tecnica': true,
+        'escenarios': true,
+        'precondiciones': true,
+        'datos': true,
+        'riesgos': true
+    };
+
+    toggleThought() {
+        this.isThoughtExpanded = !this.isThoughtExpanded;
+    }
+    
+    togglePhase(phaseId: string, event: Event) {
+        event.stopPropagation();
+        this.expandedPhases[phaseId] = !this.expandedPhases[phaseId];
+    }
+    
+    trackByPhase(index: number, phase: any): string {
+        return phase.id;
+    }
+
+    trackByThought(index: number, thought: string): string {
+        return thought;
+    }
+
     /** Almacena los últimos datos válidos para que la tabla no quede vacía al terminar el razonamiento */
     ngOnChanges() {
+        // Manejo del efecto Typewriter
+        if (this.streamingReasoning !== this.reasoningBuffer) {
+            this.reasoningBuffer = this.streamingReasoning || '';
+            
+            // Si el servicio ya terminó de pensar o empezó a generar, "limpiamos" el buffer de golpe
+            if (this.streamingPhase === 'generating' || !this.streamingReasoning) {
+                this.displayedReasoning = this.reasoningBuffer;
+                if (this.typewriterInterval) {
+                    clearInterval(this.typewriterInterval);
+                    this.typewriterInterval = null;
+                }
+            } else if (!this.typewriterInterval) {
+                // Iniciamos el efecto de escritura suave
+                this.typewriterInterval = setInterval(() => {
+                    if (this.displayedReasoning.length < this.reasoningBuffer.length) {
+                        // Añadimos de 3 en 3 caracteres para que sea más ágil
+                        const nextChars = this.reasoningBuffer.substring(this.displayedReasoning.length, this.displayedReasoning.length + 3);
+                        this.displayedReasoning += nextChars;
+                    } else if (this.streamingPhase === 'generating') {
+                        clearInterval(this.typewriterInterval);
+                        this.typewriterInterval = null;
+                    }
+                }, 25); // Un poco más rápido (25ms) para evitar que se quede muy atrás
+            }
+        }
+
         const meta = this.reasoningMetadata;
         if (meta) {
             if (meta.complexity !== 'ANALIZANDO...') this.lastComplexity = meta.complexity;
@@ -256,17 +330,87 @@ export class ConfirmationModalComponent {
         }
     }
 
-    /** Estado de las fases de análisis (valor persistente) */
-    get analysisPhases() {
-        const text = this.streamingReasoning?.toLowerCase() || '';
+    /** Jerarquía estructurada del pensamiento de la IA */
+    get thoughtHierarchy() {
+        const text = this.displayedReasoning || '';
+        const lowerText = text.toLowerCase();
         const isGenerating = this.streamingPhase === 'generating';
+        const rawRules = this.reasoningMetadata?.rules || [];
         
-        return [
-            { id: 1, label: 'Comprensión de Requisitos', active: true, done: text.length > 100 || isGenerating },
-            { id: 2, label: 'Identificación de Reglas', active: text.length > 200 || isGenerating, done: text.length > 500 || isGenerating },
-            { id: 3, label: 'Aplicación de Técnica QA', active: !!this.lastTechnique || isGenerating, done: isGenerating },
-            { id: 4, label: 'Diseño de Escenarios', active: isGenerating, done: false }
-        ];
+        const phases: any[] = [];
+
+        // 1. Comprensión de Requisitos (Core)
+        const reqThoughts = rawRules.filter(r => 
+            /historia|usuario|requerimiento|funcionalidad|objetivo/i.test(r)
+        );
+        phases.push({ 
+            id: 'requisitos', 
+            label: 'Análisis de Requisitos', 
+            active: true, 
+            done: text.length > 150 || isGenerating,
+            thoughts: reqThoughts.length > 0 ? reqThoughts : (rawRules.length > 0 ? [rawRules[0]] : [])
+        });
+
+        // 2. Precondiciones (Dinámico)
+        const preThoughts = rawRules.filter(r => /precondición|entorno|ambiente|estado inicial|configura/i.test(r));
+        if (preThoughts.length > 0) {
+            phases.push({
+                id: 'precondiciones',
+                label: 'Precondiciones y Entorno',
+                active: true,
+                done: text.length > 400 || isGenerating,
+                thoughts: preThoughts
+            });
+        }
+
+        // 3. Identificación de Reglas (Core)
+        const ruleThoughts = rawRules.filter(r => 
+            /regla|condición|límite|validación|negocio|campo/i.test(r)
+        ).slice(-3);
+        phases.push({ 
+            id: 'reglas', 
+            label: 'Reglas de Negocio', 
+            active: text.length > 250 || isGenerating, 
+            done: text.length > 600 || isGenerating,
+            thoughts: ruleThoughts
+        });
+
+        // 4. Datos de Prueba (Dinámico)
+        const dataThoughts = rawRules.filter(r => /dato|valor|data|input|entrada|parámetro/i.test(r));
+        if (dataThoughts.length > 0) {
+            phases.push({
+                id: 'datos',
+                label: 'Estrategia de Datos',
+                active: true,
+                done: isGenerating,
+                thoughts: dataThoughts.slice(-2)
+            });
+        }
+
+        // 5. Riesgos (Dinámico)
+        const riskThoughts = rawRules.filter(r => /riesgo|error|excepción|fallo|peligro|seguridad/i.test(r));
+        if (riskThoughts.length > 0) {
+            phases.push({
+                id: 'riesgos',
+                label: 'Análisis de Riesgos',
+                active: true,
+                done: isGenerating,
+                thoughts: riskThoughts.slice(-2)
+            });
+        }
+
+        // 6. Escenarios (Core final)
+        if (isGenerating) {
+            phases.push({ 
+                id: 'escenarios', 
+                label: 'Generación de Escenarios', 
+                active: true, 
+                done: false,
+                thoughts: ['Estructurando casos de prueba finales...']
+            });
+        }
+
+        return phases;
     }
 
     /** Extrae fragmentos clave del razonamiento CoT para mostrar al usuario */
@@ -357,5 +501,11 @@ export class ConfirmationModalComponent {
 
     open() {
         this.isOpen = true;
+    }
+
+    ngOnDestroy() {
+        if (this.typewriterInterval) {
+            clearInterval(this.typewriterInterval);
+        }
     }
 }

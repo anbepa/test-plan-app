@@ -1,9 +1,16 @@
 <!-- src/app/test-plan-viewer/test-plan-viewer.component.html -->
 <div class="viewer-container">
-  <!-- VISTA DE LISTA -->
-  <div *ngIf="!selectedTestPlan" class="list-view">
+    <!-- VISTA DE LISTA -->
+    <div *ngIf="!selectedTestPlan" class="list-view">
 
-    <!-- Loading State -->
+      <!-- Encabezado de la lista -->
+      <div class="title-bar" *ngIf="!isLoading && !errorMessage">
+        <div>
+          <h2 class="section-title">Planes de Prueba</h2>
+        </div>
+      </div>
+
+      <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <div class="spinner"></div>
       <p>Cargando planes de prueba...</p>

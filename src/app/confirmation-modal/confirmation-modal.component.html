@@ -18,36 +18,45 @@
             <div class="robot-scene">
                 <!-- Top: Thought Bubble (box) -->
                 <div class="thought-bubble-main" [class.is-acceptance]="isAcceptancePhase">
-                    <!-- Tabular Data: Solo se muestra durante el análisis -->
-                    <div class="reasoning-summary" *ngIf="reasoningMetadata && streamingPhase === 'thinking'">
-                        <div class="rs-row" style="align-items: flex-start;" *ngIf="reasoningMetadata.rules.length > 0">
-                            <div class="rs-label" style="margin-top: 6px;">Pensamiento:</div>
-                            <div class="rs-value">
-                                <ul class="thought-list" style="margin-bottom: 0;">
-                                    <li *ngFor="let rule of reasoningMetadata.rules" class="thought-list-item">{{ rule }}</li>
+                    <div class="thought-bubble-content">
+                        <!-- Tabular Data: Solo se muestra durante el análisis -->
+                    <!-- Copilot-style Accordion for Thought -->
+                    <div class="thought-accordion-container" *ngIf="streamingPhase === 'thinking'">
+                        <div class="thought-accordion-header" (click)="toggleThought()">
+                            <span class="thought-accordion-title">
+                                Pensamiento de la IA
+                            </span>
+                            <svg class="thought-accordion-icon" [class.expanded]="isThoughtExpanded" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        
+                        <!-- Accordion Body (Parent Level) -->
+                        <div class="thought-accordion-body" *ngIf="isThoughtExpanded">
+                            <div class="thought-phase-item" *ngFor="let phase of thoughtHierarchy; trackBy: trackByPhase">
+                                <!-- Phase Header (Child Level) -->
+                                <div class="phase-header" (click)="togglePhase(phase.id, $event)">
+                                    <div class="phase-status-icon" [class.done]="phase.done">
+                                        <svg *ngIf="phase.done" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <span *ngIf="!phase.done" class="phase-spinner"></span>
+                                    </div>
+                                    <span class="phase-title" [class.done-text]="phase.done">{{ phase.label }}</span>
+                                    <svg class="phase-chevron" [class.expanded]="expandedPhases[phase.id]" *ngIf="phase.thoughts.length > 0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                
+                                <!-- Phase Thoughts (Grandchild Level) -->
+                                <ul class="phase-thoughts-list" *ngIf="expandedPhases[phase.id] && phase.thoughts.length > 0">
+                                    <li *ngFor="let thought of phase.thoughts; trackBy: trackByThought" class="phase-thought-item">{{ thought }}</li>
                                 </ul>
                             </div>
                         </div>
                     </div>
 
 
-
-                    <!-- Roadmap (Analysis Phases) -->
-                    <div class="design-roadmap" *ngIf="streamingPhase === 'thinking'">
-                        <div class="roadmap-title">Progreso del Análisis</div>
-                        <div class="roadmap-steps">
-                            <div class="roadmap-step" *ngFor="let phase of analysisPhases" 
-                                 [class.active]="phase.active" [class.done]="phase.done">
-                                <div class="step-icon">
-                                    <span *ngIf="!phase.done">{{ phase.id }}</span>
-                                    <svg *ngIf="phase.done" viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
-                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="step-label">{{ phase.label }}</div>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- During generating: show detected case titles -->
                     <div class="thought-cases" *ngIf="streamingPhase === 'generating' || streamingCaseTitles.length > 0">
@@ -73,6 +82,7 @@
                         Preparando análisis…
                     </p>
                 </div>
+            </div>
 
                 <!-- Middle: Dots -->
                 <div class="thought-dots">
