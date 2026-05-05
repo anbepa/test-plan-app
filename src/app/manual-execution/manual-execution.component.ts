@@ -543,15 +543,31 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
       await this.loadPlanTree();
     }
 
+    // Paso 1: Búsqueda exacta por testPlanId + huId (evita confundir HUs con mismo nombre en distintos planes)
     for (const plan of this.planTree) {
+      if (run.testPlanId && plan.id !== run.testPlanId) continue; // Filtrar por plan primero
       for (const huNode of plan.hus) {
         const huId = huNode.hu.dbUuid || huNode.hu.id;
-        if (huId === run.huId || huNode.hu.id === run.huId) {
+        if (huId === run.huId) {
           huForExecution = huNode.hu;
           break;
         }
       }
       if (huForExecution) break;
+    }
+
+    // Paso 2 (fallback): si no encontró con testPlanId, buscar solo por huId en todos los planes
+    if (!huForExecution) {
+      for (const plan of this.planTree) {
+        for (const huNode of plan.hus) {
+          const huId = huNode.hu.dbUuid || huNode.hu.id;
+          if (huId === run.huId || huNode.hu.id === run.huId) {
+            huForExecution = huNode.hu;
+            break;
+          }
+        }
+        if (huForExecution) break;
+      }
     }
 
     if (!huForExecution) {

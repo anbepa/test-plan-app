@@ -329,7 +329,7 @@
           </div>
           <div class="progress-overview-wrap">
             <div class="overall-completion-row">
-              <span class="progress-label">Completitud General</span>
+              <span class="progress-label">Progreso de Ejecución</span>
               <span class="progress-pct-label">{{ getOverallCompletion() }}%</span>
             </div>
             <div class="multi-bar">
@@ -377,11 +377,12 @@
               <span class="info-card-title">Métricas de Calidad</span>
             </div>
             <div class="info-card-body">
-              <div class="info-row"><span class="info-label">Tasa de Completitud</span><span class="info-value metric-passed">{{ getSummaryStats().passRate }}%</span></div>
+              <div class="info-row"><span class="info-label">Tasa de Éxito</span><span class="info-value metric-passed">{{ getSummaryStats().passRate }}%</span></div>
               <div class="info-row"><span class="info-label">Tasa de Fallo</span><span class="info-value metric-failed">{{ getSummaryStats().failRate }}%</span></div>
-              <div class="info-row"><span class="info-label">Tasa En Progreso</span><span class="info-value metric-progress">{{ getStatusPercent('in-progress') }}%</span></div>
-              <div class="info-row"><span class="info-label">Casos Ejecutados</span><span class="info-value">{{ getSummaryStats().executed }}</span></div>
-              <div class="info-row"><span class="info-label">Casos Sin Ejecutar</span><span class="info-value">{{ getSummaryStats().pending }}</span></div>
+              <div class="info-row"><span class="info-label">Avance General</span><span class="info-value metric-progress">{{ getOverallCompletion() }}%</span></div>
+              <div class="info-row"><span class="info-label">Casos Finalizados</span><span class="info-value">{{ getSummaryStats().executed }}</span></div>
+              <div class="info-row"><span class="info-label">Casos en Progreso</span><span class="info-value metric-progress-alt">{{ getSummaryStats().inProgress }}</span></div>
+              <div class="info-row"><span class="info-label">Casos Pendientes</span><span class="info-value">{{ getSummaryStats().pending }}</span></div>
             </div>
           </div>
         </div>

@@ -123,31 +123,46 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           }
         }
       } else {
-      // Verificar si hay una ejecución existente
-      const allExecutions = await this.storageService
-        .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''));
-
-      const existingExecutions = allExecutions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-
-      const preferredExecution = restoredContext?.executionId
-        ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
-        : (state?.testRunId
-            ? existingExecutions.find((exec) => exec.id === state.testRunId)
-            : null);
-
-      if (existingExecutions.length > 0) {
-        this.execution = preferredExecution || existingExecutions[0];
-        this.storageService.setActiveExecutionId(this.execution.id);
-
-        if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
-          this.hu = this.buildHuFromExecution(this.execution);
-        }
-      } else {
-        // Crear nueva ejecución
-        await this.createNewExecution();
-        if (this.execution) {
+      // Si tenemos un executionId específico, cargarlo directamente (evita confundir ejecuciones de HUs con mismo nombre)
+      if (state?.testRunId) {
+        const directExecution = await this.storageService.getExecution(state.testRunId);
+        if (directExecution) {
+          this.execution = directExecution;
           this.storageService.setActiveExecutionId(this.execution.id);
+          if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
+            this.hu = this.buildHuFromExecution(this.execution);
+          }
         }
+      }
+
+      // Fallback: buscar por HU si no se encontró ejecución directa
+      if (!this.execution) {
+        const allExecutions = await this.storageService
+          .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''));
+
+        const existingExecutions = allExecutions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+        const preferredExecution = restoredContext?.executionId
+          ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
+          : null; // Ya no hacer fallback a testRunId aquí, se manejó arriba
+
+        if (existingExecutions.length > 0 && (preferredExecution || !state?.testRunId)) {
+          this.execution = preferredExecution || existingExecutions[0];
+          this.storageService.setActiveExecutionId(this.execution.id);
+
+          if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
+            this.hu = this.buildHuFromExecution(this.execution);
+          }
+        }
+      }
+
+      // Si aún no hay ejecución, crear una nueva
+      if (!this.execution) {
+        await this.createNewExecution();
+      }
+
+      if (this.execution) {
+        this.storageService.setActiveExecutionId((this.execution as any).id);
       }
       }
 
@@ -846,7 +861,29 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   private async updateStats(): Promise<void> {
     if (!this.execution) return;
-    this.stats = await this.storageService.getExecutionStats(this.execution.id);
+
+    // Calcular localmente para evitar esperar al debounce del storage service y DB roundtrips
+    let totalSteps = 0;
+    let executedSteps = 0;
+    let totalImages = 0;
+
+    this.execution.testCases.forEach(tc => {
+      tc.steps.forEach(step => {
+        totalSteps++;
+        if (step.status === 'completed' || step.status === 'failed') executedSteps++;
+        totalImages += (step.evidences || []).length;
+      });
+    });
+
+    this.stats = {
+      totalTestCases: this.execution.testCases.length,
+      totalSteps,
+      completedSteps: executedSteps,
+      completionPercentage: totalSteps > 0 ? (executedSteps / totalSteps) * 100 : 0,
+      totalImages
+    };
+
+    this.cdr.detectChanges();
   }
 
   private async applyLatestHuSnapshot(): Promise<void> {
@@ -1203,7 +1240,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.execution.testCases[tcIndex].status = this.getTestCaseStatus(this.execution.testCases[tcIndex]);
     this.execution.updatedAt = Date.now();
     await this.fastSaveExecutionState();
-    this.cdr.markForCheck();
+    await this.updateStats(); // Recalcular stats para actualizar las barras de progreso
+    this.cdr.detectChanges(); // Forzar re-render inmediato (markForCheck no garantiza esto tras await)
   }
 
   async setAllStepsStatus(tcIndex: number, status: 'pending' | 'in-progress' | 'completed' | 'failed'): Promise<void> {
@@ -1214,7 +1252,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     tc.status = status;
     this.execution.updatedAt = Date.now();
     await this.fastSaveExecutionState();
-    this.cdr.markForCheck();
+    await this.updateStats(); // Recalcular stats para actualizar las barras de progreso
+    this.cdr.detectChanges(); // Forzar re-render inmediato
     this.toastService.success('Estado actualizado');
   }
 
@@ -1225,12 +1264,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   }
 
   getOverallCompletion(): number {
-    if (!this.execution || !this.execution.testCases.length) return 0;
-    const done = this.execution.testCases.filter(tc => {
-      const s = this.getTestCaseStatus(tc);
-      return s === 'completed' || s === 'failed';
-    }).length;
-    return Math.round((done / this.execution.testCases.length) * 100);
+    return Math.round(this.stats?.completionPercentage || 0);
   }
 
   getStatusPercent(status: string): number {
@@ -1269,15 +1303,18 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  getSummaryStats(): { passRate: number; failRate: number; executed: number; pending: number } {
+  getSummaryStats(): { passRate: number; failRate: number; executed: number; inProgress: number; pending: number } {
     const total = this.execution?.testCases.length ?? 0;
     const passed = this.getCountByStatus('completed');
     const failed = this.getCountByStatus('failed');
-    const pending = this.getCountByStatus('pending') + this.getCountByStatus('in-progress');
+    const inProgress = this.getCountByStatus('in-progress');
+    const pending = this.getCountByStatus('pending');
+    
     return {
       passRate: total ? Math.round((passed / total) * 100) : 0,
       failRate: total ? Math.round((failed / total) * 100) : 0,
       executed: passed + failed,
+      inProgress,
       pending
     };
   }

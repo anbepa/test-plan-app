@@ -113,6 +113,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   private aiProgressIndex = 0;
   private lastStepAddAt = new Map<number, number>();
 
+  private componentLoadedAt = Date.now();
   private huSyncSubscription: Subscription | null = null;
 
   get isAiBusy(): boolean {
@@ -154,18 +155,20 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     const state = this.router.getCurrentNavigation()?.extras.state || history.state;
 
     if (state?.hu) {
-      this.hu = state.hu as HUData;
+      // Initialize with fresh data and clear cases to avoid flash of old data
+      const initialHu = state.hu as HUData;
+      this.hu = { ...initialHu, detailedTestCases: [] };
       this.testPlanId = state.testPlanId || '';
       this.testPlanTitle = state.testPlanTitle || '';
 
+      // Check if we have a more recent version in sync service but keep cases empty for now
       const latestHu = this.huSyncService.getLatestHu(this.hu.id);
       const sameRecord = latestHu?.dbUuid && this.hu.dbUuid && latestHu.dbUuid === this.hu.dbUuid;
-      if (sameRecord && latestHu!.detailedTestCases && latestHu!.detailedTestCases.length > 0) {
-        this.hu = latestHu!;
+      if (sameRecord) {
+        this.hu = { ...latestHu!, detailedTestCases: [] };
       }
 
-      // Clear stale test cases to avoid flash of old data while loading from DB
-      this.hu.detailedTestCases = [];
+      this.componentLoadedAt = Date.now();
       this.loadScenariosFromDb();
       this.subscribeToHuUpdates();
       return;
@@ -241,8 +244,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.huSyncSubscription = this.huSyncService.watchHu(this.hu.id).subscribe((updatedHu: HUData) => {
-      this.hu = updatedHu;
+    // Usar watchHuWithTimestamp para ignorar emisiones de cache previas a la carga del componente
+    this.huSyncSubscription = this.huSyncService.watchHuWithTimestamp(this.hu.id).subscribe(({ hu, updatedAt }) => {
+      // Ignorar si la actualización es anterior a cuando abrimos esta vista
+      if (updatedAt < this.componentLoadedAt) return;
+
+      this.hu = hu;
       this.cdr.detectChanges();
     });
   }
