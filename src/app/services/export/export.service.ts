@@ -112,11 +112,9 @@ export class ExportService {
         const scenariosHeader = new TableRow({
             children: [
                 new TableCell({
-                    width: { size: 10, type: WidthType.PERCENTAGE },
                     children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
                 }),
                 new TableCell({
-                    width: { size: 90, type: WidthType.PERCENTAGE },
                     children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
                 })
             ]
@@ -152,7 +150,8 @@ export class ExportService {
         });
 
         children.push(new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.AUTOFIT,
+            alignment: AlignmentType.CENTER,
             rows: [scenariosHeader, ...scenariosRows]
         }));
 
@@ -257,6 +256,14 @@ export class ExportService {
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows
             }));
+
+            children.push(new Paragraph({
+                spacing: { before: 200, after: 200 },
+                children: [
+                    new TextRun({ text: 'Resultado Esperado: ', bold: true }),
+                    new TextRun({ text: testCase.expectedResults || 'N/A' })
+                ]
+            }));
         });
 
         const doc = new Document({
@@ -285,15 +292,18 @@ export class ExportService {
      * Mismo formato que exportToDOCX: página 55.8cm, tabla 25/75%, 1 página por escenario.
      * La columna de evidencias contiene las imágenes reales subidas por el usuario.
      */
-    async exportExecutionToDOCX(execution: PlanExecution, hu: HUData | null): Promise<void> {
+    async exportExecutionToDOCX(
+        execution: PlanExecution,
+        hu: HUData | null,
+        onProgress?: (current: number, total: number) => void
+    ): Promise<void> {
         if (!execution.testCases || execution.testCases.length === 0) {
             throw new Error('No hay casos de prueba para exportar');
         }
 
-        // Obtener todas las imágenes reales (con base64) para esta ejecución
-        const allImages = await this.storageService.getAllImages();
-        const imageMap = new Map<string, AssetEvidence>();
-        allImages.forEach(img => imageMap.set(img.id, img));
+        // Asegurar que el índice de Storage esté construido UNA sola vez antes del loop
+        await this.storageService.buildStorageIndex();
+        const total = execution.testCases.length;
 
         const children: Array<Paragraph | Table> = [];
 
@@ -315,11 +325,9 @@ export class ExportService {
         const scenariosHeader = new TableRow({
             children: [
                 new TableCell({
-                    width: { size: 10, type: WidthType.PERCENTAGE },
                     children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
                 }),
                 new TableCell({
-                    width: { size: 90, type: WidthType.PERCENTAGE },
                     children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
                 })
             ]
@@ -355,7 +363,8 @@ export class ExportService {
         });
 
         children.push(new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.AUTOFIT,
+            alignment: AlignmentType.CENTER,
             rows: [scenariosHeader, ...scenariosRows]
         }));
 
@@ -367,6 +376,15 @@ export class ExportService {
             const scenarioTitle = testCase.title?.trim()
                 ? `${scenarioNumber}. ${testCase.title.trim()}`
                 : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            // ── Opción B: hidratar solo las evidencias de este test-case ──
+            const allStepEvidences = testCase.steps.flatMap(s => s.evidences || []);
+            if (allStepEvidences.length > 0) {
+                await this.storageService.hydrateStepEvidence(allStepEvidences);
+            }
+
+            // Reportar progreso al componente
+            onProgress?.(index + 1, total);
 
             children.push(new Paragraph({
                 children: [
@@ -396,10 +414,10 @@ export class ExportService {
                 const rows = Math.max(1, Number((step as any).evidenceRows) || 1);
                 const isGrid = cols > 1 || rows > 1;
 
-                // Re-hidratar evidencias con base64 para este paso
+                // Leer evidencias desde caché (ya hidratadas arriba)
                 const hydratedEvidences = (step.evidences || []).map(ev => {
-                    const realImg = imageMap.get(ev.id);
-                    return realImg ? { ...ev, base64Data: realImg.base64Data } : ev;
+                    const cached = this.storageService.getCachedImage(ev.id);
+                    return cached ? { ...ev, base64Data: cached.base64Data } : ev;
                 });
 
                 const mainRow = new TableRow({
@@ -455,6 +473,14 @@ export class ExportService {
             children.push(new Table({
                 width: { size: 100, type: WidthType.PERCENTAGE },
                 rows: [headerRow, ...stepRows]
+            }));
+
+            children.push(new Paragraph({
+                spacing: { before: 200, after: 200 },
+                children: [
+                    new TextRun({ text: 'Resultado Esperado: ', bold: true }),
+                    new TextRun({ text: testCase.expectedResults || 'N/A' })
+                ]
             }));
         }
 

@@ -73,6 +73,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   hasUnsavedChanges = false;
   isLoading = true;
   isHydratingEvidence = false;
+  /** Estado de progreso de exportación DOCX */
+  isExporting = false;
+  exportProgress = 0;      // casos procesados
+  exportTotal = 0;         // total de casos
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -805,15 +809,32 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   }
 
   async exportToDOCX(): Promise<void> {
-    if (!this.execution) return;
+    if (!this.execution || this.isExporting) return;
 
     try {
-      this.toastService.info('Preparando evidencias para descarga...');
-      await this.storageService.hydrateAllEvidence(this.execution);
-      await this.exportService.exportExecutionToDOCX(this.execution, this.hu);
+      this.isExporting = true;
+      this.exportProgress = 0;
+      this.exportTotal = this.execution.testCases.length;
+      this.cdr.markForCheck();
+
+      await this.exportService.exportExecutionToDOCX(
+        this.execution,
+        this.hu,
+        (current, total) => {
+          this.exportProgress = current;
+          this.exportTotal = total;
+          this.cdr.markForCheck();
+        }
+      );
+
       this.toastService.success('Ejecución exportada a DOCX exitosamente');
     } catch (error) {
       this.toastService.error('Error al exportar la ejecución');
+    } finally {
+      this.isExporting = false;
+      this.exportProgress = 0;
+      this.exportTotal = 0;
+      this.cdr.markForCheck();
     }
   }
 
