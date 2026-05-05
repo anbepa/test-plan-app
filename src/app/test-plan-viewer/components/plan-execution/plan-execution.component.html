@@ -64,7 +64,7 @@
         <!-- Filter select + search (only for test-cases tab) -->
         <div class="tab-controls" *ngIf="activeTab === 'test-cases'">
           <div class="filter-pills">
-            <select class="filter-select" [(ngModel)]="statusFilter">
+            <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
               <option value="all">Todos ({{ execution.testCases.length }})</option>
               <option value="completed">Completados ({{ getCountByStatus('completed') }})</option>
               <option value="failed">Fallidos ({{ getCountByStatus('failed') }})</option>
@@ -75,8 +75,8 @@
           <div class="search-zone">
             <div class="search-input-wrap">
               <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="search-input" type="text" placeholder="Buscar..." [(ngModel)]="searchQuery" />
-              <button *ngIf="searchQuery" class="search-clear-btn" (click)="searchQuery = ''" title="Limpiar búsqueda">
+              <input class="search-input" type="text" placeholder="Buscar..." [(ngModel)]="searchQuery" (ngModelChange)="onFilterChange()" />
+              <button *ngIf="searchQuery" class="search-clear-btn" (click)="searchQuery = ''; onFilterChange()" title="Limpiar búsqueda">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
@@ -98,7 +98,7 @@
           </div>
 
           <!-- Accordion rows -->
-          <div *ngFor="let tc of filteredTestCases; let i = index; trackBy: trackByTestCaseId"
+          <div *ngFor="let tc of paginatedTestCases; let i = index; trackBy: trackByTestCaseId"
                class="tc-row" [class.tc-row-expanded]="expandedTestCaseIndex === getOriginalIndex(tc)">
 
             <!-- Collapsed row header -->
@@ -228,81 +228,67 @@
                       <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
                       <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
                       <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
-                      <span class="evidence-zone-label ev-label-right">Evidencias <span class="ev-count">{{ step.evidences.length }}</span></span>
-                      <div class="split-cells-controls">
-                        <label class="grid-label">Celdas:</label>
-                        <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
-                               (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" title="Columnas" class="grid-input" />
-                        <span class="grid-sep">×</span>
-                        <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
-                               (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" title="Filas" class="grid-input" />
-                      </div>
-                    </div>
 
-                    <!-- Gallery grid -->
-                    <ng-container *ngIf="(step.evidenceColumns || 1) > 1 || (step.evidenceRows || 1) > 1; else standardGallery">
-                      <div class="ev-gallery is-grid"
-                           [style.grid-template-columns]="'repeat(' + (step.evidenceColumns || 1) + ', 1fr)'"
-                           [style.grid-template-rows]="'repeat(' + (step.evidenceRows || 1) + ', 1fr)'">
-                        <div class="ev-thumb grid-view" *ngFor="let idx of getGridCells(step)">
-                          <ng-container *ngIf="step.evidences[idx]; let ev">
-                            <ng-container *ngIf="ev.type === 'image'; else csvGridThumb">
-                              <ng-container *ngIf="ev.base64Data; else imgSkeleton">
-                                <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
-                              </ng-container>
-                              <ng-template #imgSkeleton>
-                                <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
-                                  <span class="ev-skeleton-spinner"></span>
-                                  <span class="ev-skeleton-text">Cargando…</span>
+                      <div class="ev-header-right">
+                        <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ step.evidences.length }}</span></span>
+                        <div class="report-settings-dropdown">
+                          <button (click)="openReportSettings($event)" class="btn-report-settings" title="Configuración de reporte">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                            </svg>
+                          </button>
+                          <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
+                          <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
+                            <div class="popover-header">Ajustes de Reporte</div>
+                            <div class="popover-body">
+                              <div class="popover-grid-inputs">
+                                <div class="popover-input-group">
+                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
+                                         (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" class="popover-input" />
+                                  <span class="popover-input-hint">Cols</span>
                                 </div>
-                              </ng-template>
-                            </ng-container>
-                            <ng-template #csvGridThumb>
-                              <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
-                                <div class="csv-label-minimal">CSV</div>
-                                <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,5)"><td *ngFor="let cell of row.slice(0,4)">{{cell}}</td></tr></table></div>
+                                <span class="popover-sep">×</span>
+                                <div class="popover-input-group">
+                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
+                                         (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" class="popover-input" />
+                                  <span class="popover-input-hint">Filas</span>
+                                </div>
                               </div>
-                            </ng-template>
-                            <div class="ev-thumb-actions">
-                              <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
-                              <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
-                              <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                             </div>
-                          </ng-container>
-                        </div>
-                      </div>
-                    </ng-container>
-
-                    <ng-template #standardGallery>
-                      <div class="ev-gallery" *ngIf="step.evidences.length > 0; else noEv">
-                        <div class="ev-thumb" *ngFor="let ev of step.evidences">
-                          <ng-container *ngIf="ev.type === 'image'; else csvThumb">
-                            <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
-                              <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
-                            </ng-container>
-                            <ng-template #imgSkeletonStd>
-                              <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
-                                <span class="ev-skeleton-spinner"></span>
-                                <span class="ev-skeleton-text">Cargando…</span>
-                              </div>
-                            </ng-template>
-                          </ng-container>
-                          <ng-template #csvThumb>
-                            <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
-                              <div class="csv-icon">📊</div>
-                              <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
-                            </div>
-                          </ng-template>
-                          <div class="ev-thumb-actions">
-                            <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
-                            <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
-                            <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                           </div>
                         </div>
                       </div>
-                      <ng-template #noEv>
-                        <div class="ev-empty">Sin evidencias para este paso.</div>
-                      </ng-template>
+                    </div>
+
+                    <!-- Gallery -->
+                    <div class="ev-gallery" *ngIf="step.evidences.length > 0; else noEv">
+                      <div class="ev-thumb" *ngFor="let ev of step.evidences">
+                        <ng-container *ngIf="ev.type === 'image'; else csvThumb">
+                          <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
+                            <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                          </ng-container>
+                          <ng-template #imgSkeletonStd>
+                            <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
+                              <span class="ev-skeleton-spinner"></span>
+                              <span class="ev-skeleton-text">Cargando…</span>
+                            </div>
+                          </ng-template>
+                        </ng-container>
+                        <ng-template #csvThumb>
+                          <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                            <div class="csv-icon">📊</div>
+                            <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
+                          </div>
+                        </ng-template>
+                        <div class="ev-thumb-actions">
+                          <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                          <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
+                          <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                        </div>
+                      </div>
+                    </div>
+                    <ng-template #noEv>
+                      <div class="ev-empty">Sin evidencias para este paso.</div>
                     </ng-template>
                   </div>
                 </div><!-- /step-item -->
@@ -313,6 +299,29 @@
 
           <div class="tc-empty-state" *ngIf="filteredTestCases.length === 0">
             <p>No se encontraron casos de prueba con el filtro seleccionado.</p>
+          </div>
+
+          <!-- Pagination -->
+          <div *ngIf="!isLoading && filteredTestCases.length > 0" class="pagination-container">
+            <div class="pagination-info">
+              <p>Mostrando <strong>{{ (currentPage - 1) * pageSize + 1 }}</strong> - <strong>{{ Math.min(currentPage * pageSize, filteredTestCases.length) }}</strong> de <strong>{{ filteredTestCases.length }}</strong> casos</p>
+            </div>
+            <div class="pagination-controls" *ngIf="totalPages > 1">
+              <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+              <div class="pagination-numbers">
+                <ng-container *ngFor="let page of visiblePages">
+                  <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">
+                    {{ page }}
+                  </button>
+                  <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
+                </ng-container>
+              </div>
+              <button class="pagination-button pagination-next" [disabled]="currentPage === totalPages" (click)="nextPage()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </div><!-- /test-cases tab -->

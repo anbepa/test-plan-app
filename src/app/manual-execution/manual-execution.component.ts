@@ -71,6 +71,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   planTree: PlanNode[] = [];
   selectedHuNode: HuNode | null = null;
   isLoadingPlans = false;
+  isLoadingTestCases = false;
 
   // Selection
   selectedRunIds: string[] = [];
@@ -410,9 +411,38 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     plan.expanded = !plan.expanded;
   }
 
-  selectHuNode(huNode: HuNode): void {
+  async selectHuNode(huNode: HuNode): Promise<void> {
     this.selectedHuNode = huNode;
     this.newRunSelectedTestCaseIds = [];
+
+    // Lazy load test cases if they are not loaded yet but we know they exist
+    if ((!huNode.hu.detailedTestCases || huNode.hu.detailedTestCases.length === 0) && huNode.hu.testCasesCount && huNode.hu.testCasesCount > 0) {
+      try {
+        this.isLoadingTestCases = true;
+        this.cdr.detectChanges();
+        
+        const fullHuDb = await this.databaseService.getUserStoryWithTestCases(huNode.dbUuid || '');
+        if (fullHuDb) {
+          huNode.hu.detailedTestCases = (fullHuDb.test_cases || []).map((tc: any) => ({
+            dbId: tc.id,
+            title: tc.title,
+            preconditions: tc.preconditions,
+            steps: (tc.test_case_steps || []).map((step: any) => ({
+              dbId: step.id,
+              numero_paso: step.step_number,
+              accion: step.action
+            })),
+            expectedResults: tc.expected_results
+          }));
+        }
+      } catch (err) {
+        console.error('Error lazy loading test cases for HU:', err);
+        this.toastService.error('Error al cargar los casos de prueba de la HU');
+      } finally {
+        this.isLoadingTestCases = false;
+        this.cdr.detectChanges();
+      }
+    }
   }
 
   get selectedHuTestCases(): DetailedTestCase[] {

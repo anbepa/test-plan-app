@@ -219,10 +219,16 @@
                   </div>
                 </div>
                 <div class="plan-tree-main">
-                  <div *ngIf="!selectedHuNode" class="tree-main-placeholder">
+                  <div *ngIf="isLoadingTestCases" class="tree-main-placeholder" style="display:flex; flex-direction:column; align-items:center; gap: 1rem;">
+                    <div class="spinner-border text-primary" role="status" style="width: 2rem; height: 2rem; border-width: 0.25em;">
+                      <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p>Cargando casos de prueba...</p>
+                  </div>
+                  <div *ngIf="!isLoadingTestCases && !selectedHuNode" class="tree-main-placeholder">
                     <p>Selecciona una HU del panel izquierdo para ver sus escenarios</p>
                   </div>
-                  <div *ngIf="selectedHuNode">
+                  <div *ngIf="!isLoadingTestCases && selectedHuNode">
                     <div class="search-tc-wrapper">
                       <span class="search-icon-sm">🔍</span>
                       <input type="text" class="form-input search-tc-input" placeholder="Buscar casos de prueba..." [(ngModel)]="testCaseSelectorSearch">

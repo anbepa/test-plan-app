@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SupabaseClientService } from './supabase-client.service';
 import { DatabaseHelperService } from './database-helper.service';
-import type {
+import {
   DbTestPlan,
   DbUserStory,
   DbTestCase,
@@ -224,7 +224,7 @@ export class DatabaseService {
     }
   }
 
-  async getAllTestPlansWithRelations(page: number = 1, pageSize: number = 10): Promise<{ data: DbTestPlanWithRelations[], count: number }> {
+  async getAllTestPlansWithRelations(page: number = 1, pageSize: number = 10): Promise<{ data: any[], count: number }> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
       console.log(`🔍 Obteniendo test plans desde Supabase (Página ${page}, Tamaño ${pageSize})...`);
@@ -235,19 +235,10 @@ export class DatabaseService {
       const { data, error, count } = await this.supabase
         .from('test_plans')
         .select(`
-          *,
+          id, title, cell_name, team, created_at, updated_at, repository_link,
           user_stories (
-            *,
-            test_cases (
-              *,
-              test_case_steps (
-                id,
-                test_case_id,
-                step_number,
-                action,
-                created_at
-              )
-            )
+            id, custom_id, title, sprint, description, acceptance_criteria, position, test_plan_id,
+            test_cases:test_cases(count)
           )
         `, { count: 'exact' })
         .eq('user_id', currentUserId)
@@ -259,73 +250,60 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log(`✅ ${data?.length || 0} Test Plans recuperados de Supabase (Total: ${count})`);
       return { data: data || [], count: count || 0 };
-
     } catch (error) {
       console.error('❌ Error al obtener test plans:', error);
       throw error;
     }
   }
 
-  async getTestPlanHeaders(): Promise<DbTestPlan[]> {
+  async getTestPlanSummariesPaginated(page: number = 1, pageSize: number = 10): Promise<{ data: any[], count: number }> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
-      console.log('🔍 Obteniendo headers de test plans...');
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await this.supabase
+        .from('v_test_plan_summary')
+        .select('*', { count: 'exact' })
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      return { data: data || [], count: count || 0 };
+    } catch (error) {
+      console.error('❌ Error en getTestPlanSummariesPaginated:', error);
+      throw error;
+    }
+  }
+
+  async getTestPlanHeaders(): Promise<any[]> {
+    try {
+      const currentUserId = await this.getCurrentUserIdOrThrow();
+      console.log('🔍 Obteniendo resúmenes optimizados de test plans...');
       const { data, error } = await this.supabase
-        .from('test_plans')
-        .select(`
-          id, 
-          title, 
-          created_at, 
-          updated_at, 
-          cell_name, 
-          team, 
-          repository_link, 
-          user_stories(
-            id,
-            sprint,
-            test_cases(
-              id,
-              test_case_steps(id)
-            )
-          )
-        `)
+        .from('v_test_plan_summary')
+        .select('*')
         .eq('user_id', currentUserId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      console.log(`✅ ${data?.length || 0} Headers recuperados`);
+      console.log(`✅ ${data?.length || 0} Resúmenes recuperados de la vista`);
       return data || [];
     } catch (error) {
-      console.error('❌ Error al obtener headers:', error);
+      console.error('❌ Error al obtener headers desde la vista:', error);
       throw error;
     }
   }
 
-  async getTestPlanHeaderById(id: string): Promise<DbTestPlan | null> {
+  async getTestPlanHeaderById(id: string): Promise<any | null> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
       const { data, error } = await this.supabase
-        .from('test_plans')
-        .select(`
-          id,
-          title,
-          created_at,
-          updated_at,
-          cell_name,
-          team,
-          repository_link,
-          user_stories(
-            id,
-            sprint,
-            test_cases(
-              id,
-              test_case_steps(id)
-            )
-          )
-        `)
+        .from('v_test_plan_summary')
+        .select('*')
         .eq('id', id)
         .eq('user_id', currentUserId)
         .single();
@@ -333,7 +311,7 @@ export class DatabaseService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('❌ Error al obtener header del plan:', error);
+      console.error('❌ Error al obtener resumen del plan por ID:', error);
       return null;
     }
   }
@@ -349,16 +327,7 @@ export class DatabaseService {
           *,
           user_stories (
             *,
-            test_cases (
-              *,
-              test_case_steps (
-                id,
-                test_case_id,
-                step_number,
-                action,
-                created_at
-              )
-            )
+            test_cases:test_cases(count)
           )
         `)
         .eq('id', id)
@@ -375,6 +344,35 @@ export class DatabaseService {
 
     } catch (error) {
       console.error('❌ Error:', error);
+      return null;
+    }
+  }
+
+  async getUserStoryWithTestCases(userStoryId: string): Promise<any | null> {
+    console.log(`📥 Obteniendo detalles completos de HU ${userStoryId}...`);
+    try {
+      const { data, error } = await this.supabase
+        .from('user_stories')
+        .select(`
+          *,
+          test_cases (
+            *,
+            test_case_steps (
+              id,
+              test_case_id,
+              step_number,
+              action,
+              created_at
+            )
+          )
+        `)
+        .eq('id', userStoryId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('❌ Error al obtener detalles de la HU:', error);
       return null;
     }
   }
@@ -539,11 +537,6 @@ export class DatabaseService {
 
         if (updateError) throw updateError;
 
-        // NOTE: Test cases for updated HUs are intentionally NOT touched here.
-        // TCs are exclusively managed by the refiner via smartUpdateUserStoryTestCases.
-        // Deleting and re-inserting TCs here would break dbId tracking and cause data loss
-        // when the huList is stale (e.g. passed via route state from viewer to generator).
-
         console.log(`📝 ${toUpdate.length} HUs actualizadas (solo metadata, TCs sin tocar)`);
       }
 
@@ -610,7 +603,6 @@ export class DatabaseService {
 
   async smartUpdateUserStoryTestCases(userStoryId: string, testCases: DetailedTestCase[]): Promise<void> {
     console.log(`🧠 Smart Update TCs para HU ${userStoryId}. Casos a sincronizar: ${testCases.length}`);
-    console.log(`📋 Detalles de casos entrada:`, testCases.map(tc => ({ title: tc.title, dbId: tc.dbId, steps: tc.steps?.length || 0 })));
 
     if (!userStoryId) {
       console.error('❌ smartUpdateUserStoryTestCases: userStoryId is missing!');
@@ -623,8 +615,6 @@ export class DatabaseService {
         .select('*, test_case_steps(*)')
         .eq('user_story_id', userStoryId);
       
-      console.log(`📊 TCs existentes en BD: ${existingTCs?.length || 0}`);
-
       if (error) throw error;
 
       const existingMap = new Map((existingTCs || []).map(tc => [tc.id, tc]));
@@ -650,13 +640,6 @@ export class DatabaseService {
 
       tcsToDeleteIds.push(...existingMap.keys());
 
-      console.log(`📊 Resumen TCs:
-        - Nuevos: ${tcsToInsert.length}
-        - Modificados: ${tcsToUpdate.length}
-        - Sin cambios: ${tcsUnmodifiedIds.length}
-        - Eliminados: ${tcsToDeleteIds.length}
-      `);
-
       if (tcsToDeleteIds.length > 0) {
         const { error: deleteStepsError } = await this.supabase
           .from('test_case_steps')
@@ -665,35 +648,22 @@ export class DatabaseService {
 
         if (deleteStepsError) throw deleteStepsError;
 
-        const { data: deletedCases, error: deleteCasesError } = await this.supabase
+        const { error: deleteCasesError } = await this.supabase
           .from('test_cases')
           .delete()
-          .in('id', tcsToDeleteIds)
-          .select('id');
+          .in('id', tcsToDeleteIds);
 
         if (deleteCasesError) throw deleteCasesError;
-
-        const deletedCount = deletedCases?.length ?? 0;
-        if (deletedCount !== tcsToDeleteIds.length) {
-          throw new Error(
-            `No se pudieron eliminar todos los TCs en BD. Esperados: ${tcsToDeleteIds.length}, eliminados: ${deletedCount}`
-          );
-        }
-
-        console.log(`🗑️ ${deletedCount} TCs eliminados`);
       }
 
       if (tcsToInsert.length > 0) {
-        const tcsPayload = tcsToInsert.map(tc => {
-          if (!userStoryId) throw new Error('userStoryId missing during payload creation');
-          return {
-            user_story_id: userStoryId,
-            title: tc.title,
-            preconditions: tc.preconditions,
-            expected_results: tc.expectedResults,
-            position: tc.position
-          };
-        });
+        const tcsPayload = tcsToInsert.map(tc => ({
+          user_story_id: userStoryId,
+          title: tc.title,
+          preconditions: tc.preconditions,
+          expected_results: tc.expectedResults,
+          position: tc.position
+        }));
 
         const { data: insertedTCs, error: insertError } = await this.supabase
           .from('test_cases')
@@ -721,7 +691,6 @@ export class DatabaseService {
             await this.dbHelper.chunkedInsert('test_case_steps', stepsPayload);
           }
         }
-        console.log(`✨ ${tcsToInsert.length} TCs nuevos insertados`);
       }
 
       if (tcsToUpdate.length > 0) {
@@ -742,12 +711,10 @@ export class DatabaseService {
         if (updateError) throw updateError;
 
         const updateIds = tcsToUpdate.map(tc => tc.dbId!);
-        const { error: deleteUpdatedStepsError } = await this.supabase
+        await this.supabase
           .from('test_case_steps')
           .delete()
           .in('test_case_id', updateIds);
-
-        if (deleteUpdatedStepsError) throw deleteUpdatedStepsError;
 
         const newStepsPayload: DbTestCaseStep[] = [];
         tcsToUpdate.forEach(tc => {
@@ -765,13 +732,7 @@ export class DatabaseService {
         if (newStepsPayload.length > 0) {
           await this.dbHelper.chunkedInsert('test_case_steps', newStepsPayload);
         }
-        console.log(`📝 ${tcsToUpdate.length} TCs actualizados`);
       }
-      
-      // Final summary
-      const totalSynced = tcsToInsert.length + tcsToUpdate.length + tcsUnmodifiedIds.length;
-      console.log(`✅ SINCRONIZACIÓN COMPLETADA: ${totalSynced} TCs en total (${tcsToInsert.length} nuevos + ${tcsToUpdate.length} actualizados + ${tcsUnmodifiedIds.length} sin cambios)`);
-
     } catch (error) {
       console.error('❌ Error en smartUpdateUserStoryTestCases:', error);
       throw error;
@@ -783,37 +744,20 @@ export class DatabaseService {
     testPlanData: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
   ): Promise<void> {
-    console.log('📝 Actualizando test plan completo en Supabase...');
-
     try {
       const { error: planError } = await this.supabase
         .from('test_plans')
         .update(testPlanData)
         .eq('id', testPlanId);
 
-      if (planError) {
-        console.error('❌ Error al actualizar test plan:', planError);
-        throw planError;
-      }
+      if (planError) throw planError;
 
-      console.log('✅ Test plan actualizado');
-
-      const { error: deleteError } = await this.supabase
+      await this.supabase
         .from('user_stories')
         .delete()
         .eq('test_plan_id', testPlanId);
 
-      if (deleteError) {
-        console.error('❌ Error al eliminar user stories anteriores:', deleteError);
-        throw deleteError;
-      }
-
-      console.log('✅ User stories anteriores eliminadas');
-
       await this.persistUserStoriesGraph(testPlanId, userStories);
-
-      console.log('🎉 Test plan actualizado completamente!');
-
     } catch (error) {
       console.error('❌ Error general en updateCompleteTestPlan:', error);
       throw error;
@@ -821,30 +765,16 @@ export class DatabaseService {
   }
 
   async deleteTestPlan(id: string): Promise<boolean> {
-    console.log(`🗑️ Eliminando test plan ${id}...`);
-
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
-      const { data: deletedPlans, error } = await this.supabase
+      const { error } = await this.supabase
         .from('test_plans')
         .delete()
         .eq('id', id)
-        .eq('user_id', currentUserId)
-        .select('id');
+        .eq('user_id', currentUserId);
 
-      if (error) {
-        console.error('❌ Error al eliminar:', error);
-        throw error;
-      }
-
-      const deletedCount = deletedPlans?.length ?? 0;
-      if (deletedCount === 0) {
-        throw new Error(`No se eliminó el test plan ${id}. Verifica políticas RLS/permisos.`);
-      }
-
-      console.log(`✅ Test plan eliminado (${deletedCount})`);
+      if (error) throw error;
       return true;
-
     } catch (error) {
       console.error('❌ Error:', error);
       return false;
@@ -875,142 +805,76 @@ export class DatabaseService {
     }
   }
 
-  private async persistUserStoriesGraph(
-    testPlanId: string,
-    userStories: DbUserStoryWithRelations[]
-  ): Promise<void> {
-    if (!userStories.length) {
-      return;
-    }
+  private async persistUserStoriesGraph(testPlanId: string, userStories: DbUserStoryWithRelations[]): Promise<void> {
+    const husToInsert = userStories.map(us => ({
+      test_plan_id: testPlanId,
+      custom_id: us.custom_id,
+      title: us.title,
+      description: us.description,
+      acceptance_criteria: us.acceptance_criteria,
+      generated_scope: us.generated_scope,
+      generated_test_case_titles: us.generated_test_case_titles,
+      generation_mode: us.generation_mode,
+      sprint: us.sprint,
+      refinement_technique: us.refinement_technique,
+      refinement_context: us.refinement_context,
+      position: us.position
+    }));
 
-    const userStoryKeys: string[] = [];
-    const userStoriesPayload: DbUserStory[] = userStories.map((us, index) => {
-      const resolvedPosition = us.position ?? index;
-      userStoryKeys.push(this.dbHelper.makeUserStoryKey(resolvedPosition, us.custom_id));
-
-      return {
-        test_plan_id: testPlanId,
-        custom_id: us.custom_id,
-        title: us.title,
-        description: us.description,
-        acceptance_criteria: us.acceptance_criteria,
-        generated_scope: us.generated_scope,
-        generated_test_case_titles: us.generated_test_case_titles,
-        generation_mode: us.generation_mode,
-        sprint: us.sprint,
-        refinement_technique: us.refinement_technique,
-        refinement_context: us.refinement_context,
-        position: resolvedPosition
-      };
-    });
-
-    const insertedUserStories = await this.dbHelper.chunkedInsert(
+    const insertedHUs = await this.dbHelper.chunkedInsert(
       'user_stories',
-      userStoriesPayload,
-      'id, position, custom_id'
+      husToInsert,
+      'id, custom_id, title, position'
     );
 
-    console.log(`✅ ${insertedUserStories.length} user stories guardadas`);
-
-    if (!insertedUserStories.length) {
-      return;
+    if (insertedHUs.length !== userStories.length) {
+      throw new Error('Mismatch in inserted user stories count');
     }
 
-    const insertedUserStoryMap = new Map<string, { id: string; position: number | null; custom_id: string | null }>();
-    insertedUserStories.forEach(us => {
-      const key = this.dbHelper.makeUserStoryKey(us.position, us.custom_id);
-      if (us.id) {
-        insertedUserStoryMap.set(key, us);
-      }
-    });
+    const testCasesPayload: any[] = [];
+    const tcMetadata: { originalUs: DbUserStoryWithRelations, insertedId: string }[] = [];
 
-    const testCasesPayload: DbTestCase[] = [];
-    const testCaseStepsMeta = new Map<string, { steps: { step_number: number | null | undefined; action: string }[] }>();
-
-    userStories.forEach((us, index) => {
-      const insertedUs = insertedUserStoryMap.get(userStoryKeys[index]);
-
-      if (!insertedUs?.id) {
-        console.warn('⚠️ No se pudo encontrar la user story recién guardada para el índice', index);
-        return;
-      }
-
-      if (!us.test_cases?.length) {
-        return;
-      }
-
-      us.test_cases.forEach((tc, tcIndex) => {
-        const resolvedPosition = tc.position ?? tcIndex + 1;
-        const testCaseKey = this.dbHelper.makeTestCaseKey(insertedUs.id!, resolvedPosition);
-
+    insertedHUs.forEach((insertedHu, index) => {
+      const originalUs = userStories[index];
+      const tcs = originalUs.test_cases || [];
+      
+      tcs.forEach(tc => {
         testCasesPayload.push({
-          user_story_id: insertedUs.id!,
+          user_story_id: insertedHu.id,
           title: tc.title,
           preconditions: tc.preconditions,
           expected_results: tc.expected_results,
-          position: resolvedPosition
+          position: tc.position
         });
-
-        const steps = tc.test_case_steps
-          ?.filter(step => step.action?.trim())
-          .map((step, stepIndex) => ({
-            step_number: step.step_number ?? stepIndex + 1,
-            action: step.action
-          })) || [];
-
-        if (steps.length > 0) {
-          testCaseStepsMeta.set(testCaseKey, { steps });
-        }
+        tcMetadata.push({ originalUs, insertedId: insertedHu.id });
       });
     });
 
-    if (!testCasesPayload.length) {
-      return;
-    }
+    if (testCasesPayload.length === 0) return;
 
-    const insertedTestCases = await this.dbHelper.chunkedInsert(
+    const insertedTCs = await this.dbHelper.chunkedInsert(
       'test_cases',
       testCasesPayload,
-      'id, user_story_id, position'
+      'id, user_story_id, title'
     );
 
-    console.log(`  ✅ ${insertedTestCases.length} test cases guardados`);
+    const stepsPayload: any[] = [];
+    insertedTCs.forEach((insertedTc, index) => {
+      const originalTc = tcMetadata[index].originalUs.test_cases?.find(tc => tc.title === insertedTc.title);
+      if (!originalTc) return;
 
-    if (!insertedTestCases.length) {
-      return;
-    }
-
-    const insertedTestCaseMap = new Map<string, { id: string; user_story_id: string; position: number | null }>();
-    insertedTestCases.forEach(tc => {
-      if (tc.id && tc.user_story_id) {
-        insertedTestCaseMap.set(this.dbHelper.makeTestCaseKey(tc.user_story_id, tc.position), tc);
-      }
-    });
-
-    const stepsPayload: DbTestCaseStep[] = [];
-
-    testCaseStepsMeta.forEach((meta, key) => {
-      const insertedTestCase = insertedTestCaseMap.get(key);
-
-      if (!insertedTestCase?.id) {
-        console.warn('⚠️ No se pudo encontrar el test case recién guardado para la clave', key);
-        return;
-      }
-
-      meta.steps.forEach((step, index) => {
+      const steps = originalTc.test_case_steps || [];
+      steps.forEach((step, stepIdx) => {
         stepsPayload.push({
-          test_case_id: insertedTestCase.id!,
-          step_number: step.step_number ?? index + 1,
+          test_case_id: insertedTc.id,
+          step_number: step.step_number ?? stepIdx + 1,
           action: step.action
         });
       });
     });
 
-    if (!stepsPayload.length) {
-      return;
+    if (stepsPayload.length > 0) {
+      await this.dbHelper.chunkedInsert('test_case_steps', stepsPayload);
     }
-
-    await this.dbHelper.chunkedInsert('test_case_steps', stepsPayload);
-    console.log(`    ✅ ${stepsPayload.length} steps guardados`);
   }
 }
