@@ -371,3 +371,196 @@
   .exec-body { padding: 12px 12px 24px; }
   .tc-row-body { padding: 0 8px 12px 56px; }
 }
+
+/* ── Pagination ── */
+.pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background-color: #fff;
+  border-top: 1px solid #e5e7eb;
+}
+
+.pagination-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pagination-numbers {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.pagination-button,
+.pagination-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2rem;
+  height: 2.2rem;
+  padding: 0 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background-color: #fff;
+  color: #374151;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-button:hover:not(:disabled),
+.pagination-number:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  color: var(--primary-color, #007AFF);
+}
+
+.pagination-number.active {
+  background-color: var(--primary-color, #007AFF);
+  border-color: var(--primary-color, #007AFF);
+  color: #fff;
+  font-weight: 700;
+}
+
+.pagination-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.pagination-button svg {
+  color: inherit;
+}
+
+/* ── Report Settings Popover ── */
+.ev-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.btn-report-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid #d1d5db;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.btn-report-settings:hover {
+  background: #f8fafc;
+  border-color: var(--primary-color, #007AFF);
+  color: var(--primary-color, #007AFF);
+  transform: rotate(30deg);
+}
+
+.report-settings-popover {
+  min-width: 130px;
+  padding: 8px !important;
+  border-radius: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+}
+
+.popover-header {
+  padding: 4px 8px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 8px;
+}
+
+.popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popover-label {
+  display: none; /* Hide to save space, hint labels are enough */
+}
+
+.popover-grid-inputs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.popover-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.popover-input {
+  width: 36px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  outline: none;
+  padding: 0;
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.popover-input::-webkit-outer-spin-button,
+.popover-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.popover-input:focus {
+  border-color: #007AFF;
+  background: white;
+}
+
+.popover-input-hint {
+  font-size: 9px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.popover-sep {
+  font-size: 14px;
+  color: #d1d5db;
+  margin-top: -12px;
+}

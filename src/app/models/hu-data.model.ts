@@ -114,6 +114,7 @@ export interface HUData {
   };
   generatedScope?: string;
   generatedTestCaseTitles?: string;
+  testCasesCount?: number;
   detailedTestCases?: DetailedTestCase[];
   editingScope?: boolean;
   editingTestCases?: boolean;

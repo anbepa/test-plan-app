@@ -25,6 +25,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   @ViewChild('csvInput') csvInput!: ElementRef;
   private readonly EXEC_CONTEXT_KEY = 'execute_plan_context_v2';
 
+  Math = Math;
+
   hu: HUData | null = null;
   testPlanId: string = '';
   testPlanTitle: string = '';
@@ -39,13 +41,24 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   showDataEditor = false;
   showDeleteModal = false;
   showUploadMenu = false;
+  showReportSettings = false;
   uploadMenuPos: { top: number; left: number } = { top: 0, left: 0 };
+  reportSettingsPos: { top: number; left: number } = { top: 0, left: 0 };
 
   openUploadMenu(event: MouseEvent): void {
     const btn = event.currentTarget as HTMLElement;
     const rect = btn.getBoundingClientRect();
     this.uploadMenuPos = { top: rect.bottom + 6, left: rect.right };
     this.showUploadMenu = !this.showUploadMenu;
+    this.showReportSettings = false;
+  }
+
+  openReportSettings(event: MouseEvent): void {
+    const btn = event.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    this.reportSettingsPos = { top: rect.bottom + 6, left: rect.right };
+    this.showReportSettings = !this.showReportSettings;
+    this.showUploadMenu = false;
   }
   editingImageId: string | null = null;
   previewImage: AssetEvidence | null = null;
@@ -72,6 +85,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   searchQuery: string = '';
   expandedTestCaseIndex: number = -1;
 
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 10;
+
   get filteredTestCases(): TestCaseExecution[] {
     if (!this.execution) return [];
     return this.execution.testCases.filter(tc => {
@@ -79,6 +96,65 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       const matchesSearch = !this.searchQuery || tc.title.toLowerCase().includes(this.searchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
     });
+  }
+
+  get totalPages(): number {
+    return Math.ceil(this.filteredTestCases.length / this.pageSize);
+  }
+
+  get paginatedTestCases(): TestCaseExecution[] {
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    return this.filteredTestCases.slice(startIndex, startIndex + this.pageSize);
+  }
+
+  get visiblePages(): number[] {
+    const total = this.totalPages;
+    const current = this.currentPage;
+    const pages: number[] = [];
+
+    if (total <= 7) {
+      for (let i = 1; i <= total; i++) pages.push(i);
+    } else {
+      if (current <= 4) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push(-1); // ellipsis
+        pages.push(total);
+      } else if (current >= total - 3) {
+        pages.push(1);
+        pages.push(-1);
+        for (let i = total - 4; i <= total; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push(-1);
+        for (let i = current - 1; i <= current + 1; i++) pages.push(i);
+        pages.push(-1);
+        pages.push(total);
+      }
+    }
+    return pages;
+  }
+
+  nextPage(): void {
+    if (this.currentPage < this.totalPages) {
+      this.goToPage(this.currentPage + 1);
+    }
+  }
+
+  previousPage(): void {
+    if (this.currentPage > 1) {
+      this.goToPage(this.currentPage - 1);
+    }
+  }
+
+  goToPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  onFilterChange(): void {
+    this.currentPage = 1;
   }
 
   constructor(

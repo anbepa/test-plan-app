@@ -12,7 +12,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
 import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
 import { ExportService } from '../services/export/export.service';
 import { HuSyncService } from '../services/core/hu-sync.service';
-import { catchError, finalize, tap, of, filter } from 'rxjs';
+import { catchError, finalize, tap, of, filter, Subscription } from 'rxjs';
 
 import { StaticSectionName, RiskStrategyData } from './components/general-sections/general-sections.component';
 
@@ -99,6 +99,8 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
   private metadataChanged = false;
   private structureChanged = false;
+  private queryParamsSub?: Subscription;
+  private routerEventsSub?: Subscription;
 
   constructor(
     private databaseService: DatabaseService,
@@ -115,7 +117,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   async ngOnInit() {
     await this.loadTestPlans();
 
-    this.route.queryParams.subscribe(async params => {
+    this.queryParamsSub = this.route.queryParams.subscribe(async params => {
       const id = params['id'];
       if (id && this.testPlans.length > 0) {
         const testPlan = this.testPlans.find(tp => tp.id === id);
@@ -127,7 +129,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     // Detectar cuando vuelves a esta ruta (ej: después de agregar HU desde generator)
     // Esto recarga el plan actual para reflejar cambios
-    this.router.events
+    this.routerEventsSub = this.router.events
       .pipe(
         filter(event => event instanceof NavigationEnd)
       )
@@ -151,6 +153,12 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     if (this.riskSaveTimer) {
       clearTimeout(this.riskSaveTimer);
       this.riskSaveTimer = null;
+    }
+    if (this.queryParamsSub) {
+      this.queryParamsSub.unsubscribe();
+    }
+    if (this.routerEventsSub) {
+      this.routerEventsSub.unsubscribe();
     }
   }
 
@@ -220,11 +228,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
 
     if (this.selectedSprintFilter && this.selectedSprintFilter !== 'all') {
       const normalizedSelectedSprint = this.normalizeSprint(this.selectedSprintFilter);
-      filtered = filtered.filter(tp =>
-        tp.user_stories?.some((us: any) =>
-          this.normalizeSprint(us.sprint) === normalizedSelectedSprint
-        )
-      );
+      filtered = filtered.filter(tp => {
+        // Usar main_sprint de la vista o buscar en user_stories si existen (compatibilidad)
+        const sprint = (tp as any).main_sprint || this.getMainSprint(tp);
+        return this.normalizeSprint(sprint) === normalizedSelectedSprint;
+      });
     }
 
     if (this.selectedCellFilter && this.selectedCellFilter !== 'all') {
@@ -315,12 +323,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   getAvailableSprints(): string[] {
     const sprints = new Set<string>();
     this.testPlans.forEach(tp => {
-      tp.user_stories?.forEach((us: any) => {
-        const normalizedSprint = this.normalizeSprint(us.sprint);
-        if (normalizedSprint) {
-          sprints.add(normalizedSprint);
-        }
-      });
+      const mainSprint = (tp as any).main_sprint || this.getMainSprint(tp);
+      const normalizedSprint = this.normalizeSprint(mainSprint);
+      if (normalizedSprint && normalizedSprint !== 'Sin Sprint') {
+        sprints.add(normalizedSprint);
+      }
     });
     return Array.from(sprints).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
   }
@@ -341,6 +348,9 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   }
 
   getMainSprint(testPlan: Partial<DbTestPlanWithRelations>): string {
+    // Si viene de la vista optimizada
+    if ((testPlan as any).main_sprint) return (testPlan as any).main_sprint;
+
     const sprints = testPlan.user_stories?.map((us: any) => us.sprint).filter(Boolean) || [];
     const sprintCounts = sprints.reduce((acc: any, sprint: string) => {
       acc[sprint] = (acc[sprint] || 0) + 1;
@@ -444,26 +454,15 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   getGroupedTestPlans(): { sprint: string; plans: Partial<DbTestPlanWithRelations>[] }[] {
     const grouped = new Map<string, Partial<DbTestPlanWithRelations>[]>();
 
-    // Usar paginatedTestPlans en lugar de filteredTestPlans
     this.paginatedTestPlans.forEach(tp => {
-      // Obtener el sprint más común en las HUs del test plan
-      const sprints = tp.user_stories?.map((us: any) => us.sprint).filter(Boolean) || [];
-      const sprintCounts = sprints.reduce((acc: any, sprint: string) => {
-        acc[sprint] = (acc[sprint] || 0) + 1;
-        return acc;
-      }, {});
-
-      const mainSprint = Object.keys(sprintCounts).length > 0
-        ? Object.keys(sprintCounts).reduce((a, b) => sprintCounts[a] > sprintCounts[b] ? a : b)
-        : 'Sin Sprint';
-
+      const mainSprint = (tp as any).main_sprint || this.getMainSprint(tp);
+      
       if (!grouped.has(mainSprint)) {
         grouped.set(mainSprint, []);
       }
       grouped.get(mainSprint)?.push(tp);
     });
 
-    // Convertir a array y ordenar
     return Array.from(grouped.entries())
       .map(([sprint, plans]) => ({ sprint, plans }))
       .sort((a, b) => {
@@ -655,7 +654,27 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.huActionsMenuOpenId = this.huActionsMenuOpenId === menuKey ? null : menuKey;
   }
 
-  openHUScenarios(hu: HUData, event?: Event): void {
+  async getHuWithTestCasesLoaded(hu: HUData): Promise<HUData> {
+    if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+      if (hu.testCasesCount && hu.testCasesCount > 0) {
+        this.isLoading = true;
+        try {
+          const fullHuDb = await this.databaseService.getUserStoryWithTestCases(hu.dbUuid || '');
+          if (fullHuDb) {
+            const mappedList = this.mapper.mapDbTestPlanToHUList({ user_stories: [fullHuDb] });
+            if (mappedList && mappedList.length > 0) {
+              return mappedList[0];
+            }
+          }
+        } finally {
+          this.isLoading = false;
+        }
+      }
+    }
+    return hu;
+  }
+
+  async openHUScenarios(hu: HUData, event?: Event): Promise<void> {
     event?.stopPropagation();
     this.huActionsMenuOpenId = null;
 
@@ -664,25 +683,29 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const loadedHu = await this.getHuWithTestCasesLoaded(hu);
+
     this.router.navigate(['/viewer/hu-scenarios'], {
       state: {
-        hu,
+        hu: loadedHu,
         testPlanId: this.selectedTestPlan.id,
         testPlanTitle: this.testPlanTitle || ''
       }
     });
   }
 
-  showSelectedHUScenarios(): void {
+  async showSelectedHUScenarios(): Promise<void> {
     const selectedHus = this.getSelectedHus();
     if (selectedHus.length !== 1) {
       this.toastService.warning('Selecciona una HU para ver escenarios de prueba');
       return;
     }
 
+    const loadedHu = await this.getHuWithTestCasesLoaded(selectedHus[0]);
+
     this.router.navigate(['/viewer/hu-scenarios'], {
       state: {
-        hu: selectedHus[0],
+        hu: loadedHu,
         testPlanId: this.selectedTestPlan?.id || '',
         testPlanTitle: this.testPlanTitle || ''
       }
@@ -762,13 +785,26 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     }).join('');
   }
 
+  getUserStoriesCount(testPlan: Partial<DbTestPlanWithRelations>): number {
+    if ((testPlan as any).user_stories_count !== undefined) {
+      return (testPlan as any).user_stories_count;
+    }
+    return testPlan.user_stories?.length || 0;
+  }
+
   getTestCaseCount(testPlan: Partial<DbTestPlanWithRelations>): number {
+    if ((testPlan as any).test_cases_count !== undefined) {
+      return (testPlan as any).test_cases_count;
+    }
     return testPlan.user_stories?.reduce((total: number, us: any) => {
       return total + (us.test_cases?.length || 0);
     }, 0) || 0;
   }
 
   getTotalStepsCount(testPlan: Partial<DbTestPlanWithRelations>): number {
+    if ((testPlan as any).test_case_steps_count !== undefined) {
+      return (testPlan as any).test_case_steps_count;
+    }
     return testPlan.user_stories?.reduce((total: number, us: any) => {
       return total + (us.test_cases?.reduce((tcTotal: number, tc: any) => {
         return tcTotal + (tc.test_case_steps?.length || 0);
@@ -789,11 +825,13 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  openEditModal(hu: HUData): void {
+  async openEditModal(hu: HUData): Promise<void> {
+    const loadedHu = await this.getHuWithTestCasesLoaded(hu);
+    
     // Navegar al componente dedicado de refinamiento
     this.router.navigate(['/refiner'], {
       state: {
-        hu: hu,
+        hu: loadedHu,
         testPlanId: this.selectedTestPlan?.id || ''
       }
     });

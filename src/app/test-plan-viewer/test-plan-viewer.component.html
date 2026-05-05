@@ -139,10 +139,10 @@
                   {{ toSentenceCase(testPlan.title) || 'Sin título' }}
                 </button>
               </td>
-              <td class="col-num" data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
-              <td class="col-num" data-label="Número de HU">{{ testPlan.user_stories?.length || 0 }}</td>
-              <td class="col-num" data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
-              <td class="col-num" data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
+               <td class="col-num" data-label="Sprint">{{ getMainSprint(testPlan) }}</td>
+               <td class="col-num" data-label="Número de HU">{{ getUserStoriesCount(testPlan) }}</td>
+               <td class="col-num" data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
+               <td class="col-num" data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
             </tr>
           </tbody>
         </table>
@@ -297,7 +297,7 @@
                   <td data-label="Numero HU">{{ hu.id }}</td>
                   <td class="hu-name-cell hu-name-link" data-label="Nombre HU" (click)="openHUScenarios(hu, $event)">{{ hu.title }}</td>
                   <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
-                  <td class="col-num" data-label="Número de casos">{{ hu.detailedTestCases?.length || 0 }}</td>
+                  <td class="col-num" data-label="Número de casos">{{ hu.testCasesCount || (hu.detailedTestCases?.length || 0) }}</td>
                 </tr>
               </tbody>
             </table>

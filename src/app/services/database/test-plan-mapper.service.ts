@@ -121,11 +121,20 @@ export class TestPlanMapperService {
                 .map((line, i) => `CA${i + 1}: ${line.slice(0, 150)}`)
                 .join(' | ');
 
-            const testCaseTitles = (hu.detailedTestCases || [])
+            let testCaseTitles = (hu.detailedTestCases || [])
                 .map(tc => tc.title?.trim())
                 .filter(Boolean)
                 .slice(0, 8)
                 .join(' | ');
+                
+            if (!testCaseTitles && hu.generatedTestCaseTitles) {
+                testCaseTitles = hu.generatedTestCaseTitles
+                    .split(/\r?\n|\|/)
+                    .map(l => l.trim())
+                    .filter(Boolean)
+                    .slice(0, 8)
+                    .join(' | ');
+            }
 
             return [
                 `HU ${index + 1}/${huList.length}: ${hu.id} | ${hu.title}`,
@@ -162,7 +171,12 @@ export class TestPlanMapperService {
             generatedTestCaseTitles: us.generated_test_case_titles,
             refinementTechnique: us.refinement_technique,
             refinementContext: us.refinement_context,
-            detailedTestCases: (us.test_cases || []).map((tc: any) => ({
+            testCasesCount: (us.test_cases && us.test_cases[0] && us.test_cases[0].count !== undefined)
+                ? us.test_cases[0].count
+                : (us.test_cases ? us.test_cases.length : 0),
+            detailedTestCases: (us.test_cases && us.test_cases[0] && us.test_cases[0].count !== undefined)
+                ? []
+                : (us.test_cases || []).map((tc: any) => ({
                 dbId: tc.id,
                 title: tc.title,
                 preconditions: tc.preconditions,
