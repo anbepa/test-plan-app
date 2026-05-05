@@ -49,7 +49,13 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
               Guardar
             </button>
-            <button (click)="exportToDOCX()" class="btn-export">Descargar</button>
+            <button (click)="exportToDOCX()" class="btn-export" [disabled]="isExporting" [class.btn-export-loading]="isExporting">
+              <ng-container *ngIf="!isExporting">Descargar</ng-container>
+              <ng-container *ngIf="isExporting">
+                <span class="btn-spinner"></span>
+                {{ exportProgress }}/{{ exportTotal }}
+              </ng-container>
+            </button>
           </div>
         </div>
       </div>
@@ -465,6 +471,25 @@
     <div class="loading-box">
       <div class="loading-spinner"></div>
       <p>Procesando archivo... por favor espera</p>
+    </div>
+  </div>
+
+  <!-- Export Progress Overlay -->
+  <div class="global-loading-overlay export-progress-overlay" *ngIf="isExporting">
+    <div class="loading-box export-progress-box">
+      <div class="export-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </div>
+      <p class="export-title">Generando reporte DOCX</p>
+      <p class="export-subtitle">Procesando escenario {{ exportProgress }} de {{ exportTotal }}…</p>
+      <div class="export-bar-track">
+        <div class="export-bar-fill" [style.width.%]="exportTotal > 0 ? (exportProgress / exportTotal) * 100 : 0"></div>
+      </div>
+      <p class="export-hint">No cierres esta ventana</p>
     </div>
   </div>
 </div>

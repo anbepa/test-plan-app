@@ -43,46 +43,8 @@ export class ExcelMatrixExporterComponent {
       }
       const worksheetData: any[][] = [];
 
-      // ========== HEADER COMPACTO (Filas 1-3) ==========
-
-      // Fila 1: Título principal del documento
-      worksheetData.push([
-        'MATRIZ DE EJECUCIÓN DE CASOS DE PRUEBA',
-        '',
-        '',
-        '',
-        '',
-        ''
-      ]);
-
-      // Fila 2: Historia de Usuario y Fecha
-      const fechaGeneracion = new Date().toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-
-      worksheetData.push([
-        'Historia de Usuario:',
-        hu.id || 'N/A',
-        '',
-        'Fecha de Ejecución:',
-        fechaGeneracion,
-        ''
-      ]);
-
-      // Fila 3: Set de Escenarios y Estado
-      const totalEscenarios = hu.detailedTestCases?.length || 0;
-      worksheetData.push([
-        'Set de Escenarios:',
-        `${totalEscenarios} caso(s) de prueba`,
-        '',
-        'Estado General:',
-        '⏳ Pendiente',
-        ''
-      ]);
-
-      // Fila 4: Encabezados de la tabla
+      // ========== HEADER DE LA TABLA ==========
+      // Fila 1: Encabezados de la tabla
       worksheetData.push([
         'ID Caso',
         'Escenario de Prueba',
@@ -95,25 +57,10 @@ export class ExcelMatrixExporterComponent {
       // ========== CONTENIDO DE CASOS DE PRUEBA ==========
       const merges: XLSX.Range[] = [];
       const rowHeights: any[] = [
-        { hpt: 30 },  // Fila 1: Título
-        { hpt: 25 },  // Fila 2: HU y Fecha
-        { hpt: 25 },  // Fila 3: Set y Estado
-        { hpt: 30 }   // Fila 4: Encabezados
+        { hpt: 30 }   // Fila 1: Encabezados
       ];
 
-      let currentRow = 4; // Empezar después del header (fila 4 = índice 3)
-
-      // Combinar celdas del header
-      // Fila 1: Título completo
-      merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
-
-      // Fila 2: HU y Fecha
-      merges.push({ s: { r: 1, c: 1 }, e: { r: 1, c: 2 } });
-      merges.push({ s: { r: 1, c: 4 }, e: { r: 1, c: 5 } });
-
-      // Fila 3: Set y Estado
-      merges.push({ s: { r: 2, c: 1 }, e: { r: 2, c: 2 } });
-      merges.push({ s: { r: 2, c: 4 }, e: { r: 2, c: 5 } });
+      let currentRow = 1; // Empezar después del header (fila 1 = índice 0)
 
       // Procesar cada caso de prueba
       hu.detailedTestCases.forEach((tc, tcIdx) => {
@@ -258,10 +205,10 @@ export class ExcelMatrixExporterComponent {
         fill: { fgColor: { rgb: 'EFF6FF' } }, // Azul muy claro
         alignment: { vertical: 'top', horizontal: 'center', wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: 'BFDBFE' } },
-          bottom: { style: 'thin', color: { rgb: 'BFDBFE' } },
-          left: { style: 'medium', color: { rgb: '60A5FA' } },
-          right: { style: 'thin', color: { rgb: 'BFDBFE' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
@@ -271,10 +218,10 @@ export class ExcelMatrixExporterComponent {
         fill: { fgColor: { rgb: 'F9FAFB' } },
         alignment: { vertical: 'top', horizontal: 'left', wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          left: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          right: { style: 'thin', color: { rgb: 'D1D5DB' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
@@ -284,10 +231,10 @@ export class ExcelMatrixExporterComponent {
         fill: { fgColor: { rgb: 'FFFFFF' } },
         alignment: { vertical: 'top', horizontal: 'left', wrapText: true },
         border: {
-          top: { style: 'hair', color: { rgb: 'E5E7EB' } }, // Bordes sutiles
-          bottom: { style: 'hair', color: { rgb: 'E5E7EB' } },
-          left: { style: 'hair', color: { rgb: 'E5E7EB' } },
-          right: { style: 'hair', color: { rgb: 'E5E7EB' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
@@ -297,10 +244,10 @@ export class ExcelMatrixExporterComponent {
         fill: { fgColor: { rgb: 'F9FAFB' } }, // Gris claro para alternar
         alignment: { vertical: 'top', horizontal: 'left', wrapText: true },
         border: {
-          top: { style: 'hair', color: { rgb: 'E5E7EB' } },
-          bottom: { style: 'hair', color: { rgb: 'E5E7EB' } },
-          left: { style: 'hair', color: { rgb: 'E5E7EB' } },
-          right: { style: 'hair', color: { rgb: 'E5E7EB' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
@@ -308,24 +255,24 @@ export class ExcelMatrixExporterComponent {
       const evidenceCellStyle = {
         font: { italic: true, color: { rgb: '9CA3AF' }, sz: 9 },
         fill: { fgColor: { rgb: 'F3F4F6' } },
-        alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
+        alignment: { vertical: 'top', horizontal: 'center', wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          left: { style: 'medium', color: { rgb: '9CA3AF' } }, // Bordes más gruesos
-          right: { style: 'medium', color: { rgb: '9CA3AF' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
       const evidenceCellAlternoStyle = {
         font: { italic: true, color: { rgb: '9CA3AF' }, sz: 9 },
         fill: { fgColor: { rgb: 'FFFFFF' } }, // Alternar color
-        alignment: { vertical: 'center', horizontal: 'center', wrapText: true },
+        alignment: { vertical: 'top', horizontal: 'center', wrapText: true },
         border: {
-          top: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          bottom: { style: 'thin', color: { rgb: 'D1D5DB' } },
-          left: { style: 'medium', color: { rgb: '9CA3AF' } },
-          right: { style: 'medium', color: { rgb: '9CA3AF' } }
+          top: { style: 'medium', color: { rgb: '000000' } },
+          bottom: { style: 'medium', color: { rgb: '000000' } },
+          left: { style: 'medium', color: { rgb: '000000' } },
+          right: { style: 'medium', color: { rgb: '000000' } }
         }
       };
 
@@ -341,28 +288,11 @@ export class ExcelMatrixExporterComponent {
         const row = parseInt(match[2]);
 
         if (row === 1) {
-          // Título principal
-          cell.s = titleStyle;
-        } else if (row === 2) {
-          // Fila 2: HU y Fecha
-          if (col === 'A' || col === 'D') {
-            cell.s = headerLabelStyle;
-          } else {
-            cell.s = headerValueStyle;
-          }
-        } else if (row === 3) {
-          // Fila 3: Set y Estado
-          if (col === 'A' || col === 'D') {
-            cell.s = headerLabelStyle;
-          } else {
-            cell.s = headerValueStyle;
-          }
-        } else if (row === 4) {
           // Encabezados de tabla
           cell.s = tableHeaderStyle;
         } else {
-          // Contenido (filas 5+)
-          const dataRow = row - 4; // Fila relativa de datos
+          // Contenido (filas 2+)
+          const dataRow = row - 1; // Fila relativa de datos
           const isAlternoRow = dataRow % 2 === 0; // Filas pares = gris
 
           if (col === 'A') {
