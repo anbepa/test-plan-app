@@ -52,11 +52,17 @@
           </div>
         </div>
 
-        <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="no-test-cases-state">
+        <!-- Loading state for scenarios -->
+        <div *ngIf="isLoadingScenarios" class="loading-scenarios-container">
+          <div class="scenarios-spinner"></div>
+          <p>Cargando escenarios desde la base de datos...</p>
+        </div>
+
+        <div *ngIf="!isLoadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="no-test-cases-state">
           <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar / Refinar con IA</strong> para generarlos.</p>
         </div>
 
-        <div *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
+        <div *ngIf="!isLoadingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0">
           <div class="tc-header-bar">
             <h4 class="section-subtitle">Casos de Prueba ({{ hu.detailedTestCases.length }})</h4>
             <div class="tc-search-wrap">

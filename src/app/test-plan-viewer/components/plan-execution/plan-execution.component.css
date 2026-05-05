@@ -304,7 +304,8 @@
 .info-value { color: var(--text-primary, #1D1D1F); font-weight: 600; }
 .metric-passed { color: #16a34a !important; }
 .metric-failed { color: #dc2626 !important; }
-.metric-progress { color: #2563eb !important; }
+.metric-progress { color: #007AFF !important; font-weight: 700; }
+.metric-progress-alt { color: #5856D6 !important; font-weight: 700; }
 .run-status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
 .run-status-pending { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
 .run-status-completed { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }

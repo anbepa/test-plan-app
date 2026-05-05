@@ -547,22 +547,22 @@ export class ExecutionStorageService {
     if (!execution) return null;
 
     let totalSteps = 0;
-    let completedSteps = 0;
+    let executedSteps = 0; // Se cuentan tanto exitosos como fallidos
     let totalImages = 0;
 
     execution.testCases.forEach(tc => {
       tc.steps.forEach(step => {
         totalSteps++;
-        if (step.status === 'completed') completedSteps++;
-        totalImages += step.evidences.length;
+        if (step.status === 'completed' || step.status === 'failed') executedSteps++;
+        totalImages += (step.evidences || []).length;
       });
     });
 
     return {
       totalTestCases: execution.testCases.length,
       totalSteps,
-      completedSteps,
-      completionPercentage: totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0,
+      completedSteps: executedSteps,
+      completionPercentage: totalSteps > 0 ? (executedSteps / totalSteps) * 100 : 0,
       totalImages
     };
   }
