@@ -636,6 +636,10 @@ export class TestRunsComponent implements OnInit, OnDestroy {
   goToHuScenarios(): void {
     if (!this.hu) return;
     this.router.navigate(['/viewer/hu-scenarios'], {
+      queryParams: {
+        huId: this.hu.dbUuid || this.hu.id,
+        testPlanId: this.testPlanId
+      },
       state: {
         hu: this.hu,
         testPlanId: this.testPlanId,
