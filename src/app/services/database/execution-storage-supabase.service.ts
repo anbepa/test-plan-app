@@ -45,7 +45,17 @@ export class ExecutionStorageService {
   private saveDebounceMap = new Map<string, any>();
   private pendingSaves = new Map<string, { execution: PlanExecution, resolve: () => void, reject: (e: any) => void }[]>();
 
-  constructor(private supabaseClient: SupabaseClientService) {}
+  constructor(private supabaseClient: SupabaseClientService) {
+    this.supabaseClient.supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        this.cachedUserId = session?.user?.id || null;
+        this.imageCache.clear();
+        this.storageIndex.clear();
+        this.storageIndexBuilt = false;
+        this.storageIndexPromise = null;
+      }
+    });
+  }
 
   private get supabase(): SupabaseClient {
     return this.supabaseClient.supabase;
@@ -89,15 +99,36 @@ export class ExecutionStorageService {
   // ════════════════════════════════════════════════════════════
 
   /**
+   * Ejecuta una consulta a Supabase con reintento automático en caso de error 403/401 (token expirado)
+   */
+  private async withRetry<T>(operation: () => Promise<{ data: T | null; error: any }>): Promise<{ data: T | null; error: any }> {
+    let result = await operation();
+    
+    if (result.error && (result.error.code === '403' || result.error.code === '401' || result.error.code === 'PGRST301' || result.error.message?.includes('violates row-level security policy'))) {
+      console.warn('⚠️ Error de autenticación detectado (403/401). Forzando refresh de token y reintentando...');
+      // Forzar refresh de token
+      await this.supabase.auth.getUser();
+      this.cachedUserId = null; // Invalidar caché
+      
+      // Reintentar operación
+      result = await operation();
+    }
+    
+    return result;
+  }
+
+  /**
    * Obtiene todas las ejecuciones del usuario autenticado
    */
   async getAllExecutions(): Promise<PlanExecution[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await this.supabase
-      .from(this.TABLE)
-      .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
+    const { data, error } = await this.withRetry(async () => {
+      const userId = await this.getCurrentUserId();
+      return await this.supabase
+        .from(this.TABLE)
+        .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
+    });
 
     if (error) {
       console.error('❌ Error al obtener ejecuciones:', error);
@@ -111,13 +142,15 @@ export class ExecutionStorageService {
    * Obtiene una ejecución específica por ID
    */
   async getExecution(executionId: string): Promise<PlanExecution | null> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await this.supabase
-      .from(this.TABLE)
-      .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
-      .eq('id', executionId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const { data, error } = await this.withRetry(async () => {
+      const userId = await this.getCurrentUserId();
+      return await this.supabase
+        .from(this.TABLE)
+        .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
+        .eq('id', executionId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    });
 
     if (error) {
       console.error('❌ Error al obtener ejecución:', error);
@@ -131,13 +164,15 @@ export class ExecutionStorageService {
    * Obtiene todas las ejecuciones de una HU específica
    */
   async getExecutionsByHU(huId: string): Promise<PlanExecution[]> {
-    const userId = await this.getCurrentUserId();
-    const { data, error } = await this.supabase
-      .from(this.TABLE)
-      .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
-      .eq('user_id', userId)
-      .eq('hu_id', huId)
-      .order('updated_at', { ascending: false });
+    const { data, error } = await this.withRetry(async () => {
+      const userId = await this.getCurrentUserId();
+      return await this.supabase
+        .from(this.TABLE)
+        .select('id, hu_id, hu_title, execution_data, created_at, updated_at')
+        .eq('user_id', userId)
+        .eq('hu_id', huId)
+        .order('updated_at', { ascending: false });
+    });
 
     if (error) {
       console.error('❌ Error al obtener ejecuciones por HU:', error);
@@ -188,19 +223,21 @@ export class ExecutionStorageService {
   }
 
   private async doSaveExecution(execution: PlanExecution): Promise<void> {
-    const userId = await this.getCurrentUserId();
     const compactExecution = this.compactExecutionForStorage(execution);
 
-    const { error } = await this.supabase
-      .from(this.TABLE)
-      .upsert({
-        id: execution.id,
-        user_id: userId,
-        hu_id: execution.huId,
-        hu_title: execution.huTitle,
-        execution_data: compactExecution,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+    const { error } = await this.withRetry(async () => {
+      const userId = await this.getCurrentUserId();
+      return await this.supabase
+        .from(this.TABLE)
+        .upsert({
+          id: execution.id,
+          user_id: userId,
+          hu_id: execution.huId,
+          hu_title: execution.huTitle,
+          execution_data: compactExecution,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+    });
 
     if (error) {
       console.error('❌ Error al guardar ejecución:', error);
@@ -219,11 +256,14 @@ export class ExecutionStorageService {
       await this.deleteStorageFolder(`${userId}/${executionId}`);
 
       // 2. Eliminar registro de la tabla
-      const { error } = await this.supabase
-        .from(this.TABLE)
-        .delete()
-        .eq('id', executionId)
-        .eq('user_id', userId);
+      const { error } = await this.withRetry(async () => {
+        const currentUserId = await this.getCurrentUserId();
+        return await this.supabase
+          .from(this.TABLE)
+          .delete()
+          .eq('id', executionId)
+          .eq('user_id', currentUserId);
+      });
 
       if (error) {
         console.error('❌ Error al eliminar ejecución:', error);
