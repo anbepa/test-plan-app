@@ -5,6 +5,7 @@ import { DatabaseService, DbTestPlanWithRelations } from '../services/database/d
 import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
 import { WordExporterComponent } from '../word-exporter/word-exporter.component';
+import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
 
 @Component({
     selector: 'app-test-plan-preview',
@@ -27,6 +28,7 @@ export class TestPlanPreviewComponent implements OnInit {
         private route: ActivatedRoute,
         private router: Router,
         private databaseService: DatabaseService,
+        private mapper: TestPlanMapperService,
         private toastService: ToastService
     ) { }
 
@@ -48,55 +50,8 @@ export class TestPlanPreviewComponent implements OnInit {
             const plan = await this.databaseService.getTestPlanById(id);
             if (plan) {
                 this.testPlan = plan;
-                // Convertir UserStories a HUData
-                this.huList = (plan.user_stories || []).map((us: any, index: number) => {
-                    let originalInput: HUData['originalInput'] = {
-                        generationMode: 'text',
-                        description: '',
-                        acceptanceCriteria: '',
-                        selectedTechnique: ''
-                    };
-                    try {
-                        originalInput = {
-                            generationMode: (us.generation_mode as any) || 'text',
-                            description: us.description || '',
-                            acceptanceCriteria: us.acceptance_criteria || '',
-                            selectedTechnique: us.refinement_technique || ''
-                        };
-                    } catch (e) {
-                        console.error('Error parsing user story data', e);
-                    }
-
-                    let detailedTestCases = [];
-                    try {
-                        detailedTestCases = (us.test_cases || []).map((tc: any) => ({
-                            title: tc.title || '',
-                            preconditions: tc.preconditions || '',
-                            steps: (tc.test_case_steps || []).map((step: any, idx: number) => ({
-                                numero_paso: idx + 1,
-                                accion: step.action || ''
-                            })),
-                            expectedResults: tc.expected_results || '',
-                            isExpanded: false
-                        }));
-                    } catch (e) {
-                        console.error('Error parsing test_cases', e);
-                    }
-
-                    // Usar el custom_id si existe, sino generar uno temporal
-                    const customId = us.custom_id || `HU_${index + 1}_${plan.title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20)}`;
-
-                    return {
-                        id: customId,
-                        title: us.title || '',
-                        sprint: us.sprint || '',
-                        originalInput: originalInput,
-                        generatedScope: us.generated_scope || '',
-                        detailedTestCases: detailedTestCases,
-                        refinementTechnique: us.refinement_technique || '',
-                        refinementContext: us.refinement_context || ''
-                    } as HUData;
-                });
+                // Convertir UserStories a HUData usando el mapper centralizado
+                this.huList = this.mapper.mapDbTestPlanToHUList(plan);
 
                 this.generatePreview();
             } else {

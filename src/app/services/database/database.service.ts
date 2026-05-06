@@ -327,7 +327,10 @@ export class DatabaseService {
           *,
           user_stories (
             *,
-            test_cases:test_cases(count)
+            test_cases (
+              *,
+              test_case_steps!test_case_steps_test_case_id_fkey (*)
+            )
           )
         `)
         .eq('id', id)
