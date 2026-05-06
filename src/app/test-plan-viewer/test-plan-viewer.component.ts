@@ -686,6 +686,10 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const loadedHu = await this.getHuWithTestCasesLoaded(hu);
 
     this.router.navigate(['/viewer/hu-scenarios'], {
+      queryParams: {
+        huId: loadedHu.dbUuid || loadedHu.id,
+        testPlanId: this.selectedTestPlan.id
+      },
       state: {
         hu: loadedHu,
         testPlanId: this.selectedTestPlan.id,
@@ -704,6 +708,10 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     const loadedHu = await this.getHuWithTestCasesLoaded(selectedHus[0]);
 
     this.router.navigate(['/viewer/hu-scenarios'], {
+      queryParams: {
+        huId: loadedHu.dbUuid || loadedHu.id,
+        testPlanId: this.selectedTestPlan?.id || ''
+      },
       state: {
         hu: loadedHu,
         testPlanId: this.selectedTestPlan?.id || '',

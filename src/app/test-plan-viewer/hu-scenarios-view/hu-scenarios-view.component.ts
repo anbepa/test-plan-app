@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { ExcelMatrixExporterComponent } from '../../excel-matrix-exporter/excel-matrix-exporter.component';
 import { ConfirmationModalComponent } from '../../confirmation-modal/confirmation-modal.component';
 import { HUData, DetailedTestCase, TestCaseStep } from '../../models/hu-data.model';
@@ -9,6 +9,7 @@ import { ToastService } from '../../services/core/toast.service';
 import { ExportService } from '../../services/export/export.service';
 import { HuSyncService } from '../../services/core/hu-sync.service';
 import { DatabaseService } from '../../services/database/database.service';
+import { TestPlanMapperService } from '../../services/database/test-plan-mapper.service';
 import { AiUnifiedService } from '../../services/ai/ai-unified.service';
 import { GeminiParserService } from '../../services/ai/gemini-parser.service';
 import { Subscription } from 'rxjs';
@@ -142,10 +143,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
+    private route: ActivatedRoute,
     private toastService: ToastService,
     private exportService: ExportService,
     private huSyncService: HuSyncService,
     private databaseService: DatabaseService,
+    private mapper: TestPlanMapperService,
     private aiService: AiUnifiedService,
     private parserService: GeminiParserService,
     private cdr: ChangeDetectorRef
@@ -157,24 +160,93 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     if (state?.hu) {
       // Initialize with fresh data and clear cases to avoid flash of old data
       const initialHu = state.hu as HUData;
-      this.hu = { ...initialHu, detailedTestCases: [] };
       this.testPlanId = state.testPlanId || '';
       this.testPlanTitle = state.testPlanTitle || '';
 
-      // Check if we have a more recent version in sync service but keep cases empty for now
-      const latestHu = this.huSyncService.getLatestHu(this.hu.id);
-      const sameRecord = latestHu?.dbUuid && this.hu.dbUuid && latestHu.dbUuid === this.hu.dbUuid;
-      if (sameRecord) {
-        this.hu = { ...latestHu!, detailedTestCases: [] };
+      // Check if we have a more recent version in sync service
+      const latestHu = this.huSyncService.getLatestHu(initialHu.id);
+      const sameRecord = latestHu?.dbUuid && initialHu.dbUuid && latestHu.dbUuid === initialHu.dbUuid;
+      const resolvedHu = sameRecord ? latestHu! : initialHu;
+
+      // ── Optimización: si el padre ya envió los test cases, usarlos directamente ──
+      // Evita un segundo round-trip a user_stories que el padre ya hizo en
+      // getHuWithTestCasesLoaded() → getUserStoryWithTestCases()
+      const hasTestCasesFromState = (initialHu.detailedTestCases?.length ?? 0) > 0;
+
+      if (hasTestCasesFromState) {
+        // Los datos vienen completos del padre — no hace falta re-fetch
+        this.hu = resolvedHu;
+      } else {
+        // Sin test cases en el state: inicializar vacío y cargar desde BD
+        this.hu = { ...resolvedHu, detailedTestCases: [] };
       }
 
       this.componentLoadedAt = Date.now();
-      this.loadScenariosFromDb();
+
+      if (!hasTestCasesFromState) {
+        this.loadScenariosFromDb();
+      } else {
+        this.isLoadingScenarios = false;
+      }
+
       this.subscribeToHuUpdates();
       return;
     }
 
+    // ── Fallback: page refresh — recover from query params ──
+    const huId = this.route.snapshot.queryParamMap.get('huId');
+    const testPlanId = this.route.snapshot.queryParamMap.get('testPlanId');
+
+    if (huId) {
+      this.testPlanId = testPlanId || '';
+      this.loadHuFromDatabase(huId);
+      return;
+    }
+
     this.toastService.warning('No se encontró la HU seleccionada');
+  }
+
+  /**
+   * Carga la HU completa desde Supabase cuando se recarga la página (sin state)
+   */
+  private async loadHuFromDatabase(dbUuid: string): Promise<void> {
+    this.isLoadingScenarios = true;
+    this.cdr.detectChanges();
+
+    try {
+      const fullHuDb = await this.databaseService.getUserStoryWithTestCases(dbUuid);
+      if (!fullHuDb) {
+        this.toastService.warning('No se encontró la HU en la base de datos');
+        this.goBackToHuTable();
+        return;
+      }
+
+      // Recover test plan title from DB if we have testPlanId
+      if (this.testPlanId && !this.testPlanTitle) {
+        try {
+          const header = await this.databaseService.getTestPlanHeaderById(this.testPlanId);
+          this.testPlanTitle = header?.title || '';
+        } catch { /* non-critical */ }
+      }
+
+      // Map DB data to HUData using the existing mapper
+      const mappedList = this.mapper.mapDbTestPlanToHUList({ user_stories: [fullHuDb] });
+      if (mappedList && mappedList.length > 0) {
+        this.hu = mappedList[0];
+        this.componentLoadedAt = Date.now();
+        this.subscribeToHuUpdates();
+      } else {
+        this.toastService.warning('No se pudo procesar la HU desde la base de datos');
+        this.goBackToHuTable();
+      }
+    } catch (error) {
+      console.error('Error loading HU from database:', error);
+      this.toastService.error('Error al recuperar la HU desde la base de datos');
+      this.goBackToHuTable();
+    } finally {
+      this.isLoadingScenarios = false;
+      this.cdr.detectChanges();
+    }
   }
 
   private async loadScenariosFromDb(): Promise<void> {
@@ -197,7 +269,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
             preconditions,
             expected_results,
             position,
-            test_case_steps (
+            test_case_steps!test_case_steps_test_case_id_fkey (
               id,
               step_number,
               action
@@ -230,6 +302,10 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
       if (this.hu) {
         this.hu.detailedTestCases = testCases;
+        // CRITICAL: Guardar el UUID real para futuros guardados
+        if (data.id) {
+          this.hu.dbUuid = data.id;
+        }
       }
     } catch (error) {
       console.error('Error loading scenarios:', error);
@@ -382,10 +458,9 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
               setTimeout(async () => {
                 const saved = await this.saveData();
                 if (!saved) {
-                  this.toastService.error('No se pudo guardar la regeneración en base de datos');
+                  this.toastService.error('Error al persistir cambios en la base de datos');
                 } else {
-                  this.huSyncService.publishHuUpdate(this.hu!, this.testPlanId, 'viewer' as any);
-                  this.toastService.success(`${result.testCases.length} casos regenerados y guardados con éxito`);
+                  this.toastService.success(`${result.length} escenarios guardados permanentemente`);
                 }
                 this.isLoading = false;
                 this.isRefining = false;
@@ -449,7 +524,37 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   async saveEditTestCase(index: number): Promise<void> {
     this.editingTestCaseIndex = null;
-    await this.saveData();
+    
+    const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
+    if (!userStoryId || !this.hu || !this.hu.detailedTestCases) {
+      this.toastService.error('Error de sistema: ID de HU no válido para guardado');
+      return;
+    }
+
+    const testCase = this.hu.detailedTestCases[index];
+    
+    try {
+      // Usar la función optimizada para guardar solo este caso
+      const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, testCase, index);
+      
+      // Actualizar el modelo en memoria con el ID (por si era nuevo) y pasos limpios
+      this.hu.detailedTestCases[index] = {
+        ...updatedCase,
+        steps: (updatedCase.steps || [])
+          .filter(s => s.accion?.trim())
+          .map((s, sIdx) => ({ ...s, numero_paso: sIdx + 1 }))
+      };
+
+      this.toastService.success(`Escenario guardado correctamente`);
+      
+      // Notificar cambios al resto de la app
+      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer');
+      
+    } catch (error) {
+      console.error('Error guardando escenario:', error);
+      this.toastService.error('Error al guardar el escenario');
+    }
+    
     this.cdr.detectChanges();
   }
 
@@ -634,80 +739,47 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   private async saveData(): Promise<boolean> {
-    if (!this.hu || !this.hu.dbUuid) return false;
+    // Intentar usar dbUuid o id (si el id es un UUID)
+    const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
+    
+    if (!userStoryId) {
+      console.error('❌ No se puede guardar: No hay un UUID válido para la HU');
+      this.toastService.error('Error de sistema: ID de HU no válido para guardado');
+      return false;
+    }
 
-    const userStoryId = this.hu.dbUuid;
+    const cases = this.hu!.detailedTestCases || [];
+
+    console.log(`🚀 Intentando guardar HU: ${userStoryId}`, { 
+      count: cases.length,
+      cases: cases 
+    });
 
     try {
-      // 1. Get existing test case IDs to delete their steps first
-      const { data: existingTCs } = await this.databaseService.supabase
-        .from('test_cases')
-        .select('id')
-        .eq('user_story_id', userStoryId);
+      const result = await this.databaseService.saveHuScenariosTransactional(userStoryId, cases);
+      console.log('✅ Guardado exitoso. Registros en BD:', result);
+      this.toastService.success(`${cases.length} escenarios guardados en base de datos`);
 
-      if (existingTCs && existingTCs.length > 0) {
-        const ids = existingTCs.map((tc: any) => tc.id);
-        await this.databaseService.supabase
-          .from('test_case_steps')
-          .delete()
-          .in('test_case_id', ids);
-        await this.databaseService.supabase
-          .from('test_cases')
-          .delete()
-          .eq('user_story_id', userStoryId);
+      // Actualizar modelo en memoria para consistencia (sin re-fetch)
+      if (this.hu) {
+        this.hu.detailedTestCases = cases.map((tc, idx) => ({
+          ...tc,
+          steps: (tc.steps || [])
+            .filter(s => s.accion?.trim())
+            .map((s, sIdx) => ({ ...s, numero_paso: sIdx + 1 }))
+        }));
       }
 
-      // 2. Insert all test cases fresh
-      const cases = this.hu.detailedTestCases || [];
-      if (cases.length === 0) return true;
-
-      const tcPayload = cases.map((tc: DetailedTestCase, idx: number) => ({
-        user_story_id: userStoryId,
-        title: tc.title,
-        preconditions: tc.preconditions || '',
-        expected_results: tc.expectedResults || '',
-        position: idx
-      }));
-
-      const { data: insertedTCs, error: insertErr } = await this.databaseService.supabase
-        .from('test_cases')
-        .insert(tcPayload)
-        .select();
-
-      if (insertErr) throw insertErr;
-
-      // 3. Insert all steps
-      if (insertedTCs) {
-        const stepsPayload: any[] = [];
-        insertedTCs.forEach((inserted: any, idx: number) => {
-          const original = cases[idx];
-          (original.steps || []).forEach((s: TestCaseStep, sIdx: number) => {
-            if (s.accion && s.accion.trim()) {
-              stepsPayload.push({
-                test_case_id: inserted.id,
-                step_number: sIdx + 1,
-                action: s.accion
-              });
-            }
-          });
-        });
-
-        if (stepsPayload.length > 0) {
-          const { error: stepsErr } = await this.databaseService.supabase
-            .from('test_case_steps')
-            .insert(stepsPayload);
-          if (stepsErr) throw stepsErr;
-        }
+      // Notificar cambios al resto de la app
+      if (this.hu) {
+        this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer');
       }
-
-      this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer');
-
-      // 4. Reload from DB to get dbIds and ensure consistency
-      await this.loadScenariosFromDb();
-
+      
       return true;
-    } catch (error) {
-      console.error('Error saving test cases:', error);
+
+    } catch (error: any) {
+      console.error('❌ Error crítico al guardar (Transaction failed):', error);
+      this.toastService.error(`No se pudo guardar: ${error.message || 'Error de base de datos'}`);
       return false;
     }
   }

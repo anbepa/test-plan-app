@@ -205,7 +205,7 @@ export class DatabaseService {
           *,
           test_cases (
             *,
-            test_case_steps (*)
+            test_case_steps!test_case_steps_test_case_id_fkey (*)
           )
         `)
         .is('test_plan_id', null)
@@ -357,7 +357,7 @@ export class DatabaseService {
           *,
           test_cases (
             *,
-            test_case_steps (
+            test_case_steps!test_case_steps_test_case_id_fkey (
               id,
               test_case_id,
               step_number,
@@ -612,7 +612,7 @@ export class DatabaseService {
     try {
       const { data: existingTCs, error } = await this.supabase
         .from('test_cases')
-        .select('*, test_case_steps(*)')
+        .select('*, test_case_steps!test_case_steps_test_case_id_fkey(*)')
         .eq('user_story_id', userStoryId);
       
       if (error) throw error;
@@ -875,6 +875,93 @@ export class DatabaseService {
 
     if (stepsPayload.length > 0) {
       await this.dbHelper.chunkedInsert('test_case_steps', stepsPayload);
+    }
+  }
+  async saveHuScenariosTransactional(userStoryId: string, testCases: DetailedTestCase[]): Promise<any> {
+    console.log(`🛡️ Guardado transaccional para HU ${userStoryId}...`);
+    
+    // Preparar el payload para el RPC
+    const payload = testCases.map((tc, index) => ({
+      temp_id: `temp_${index}`,
+      title: tc.title,
+      preconditions: tc.preconditions || '',
+      expectedResults: tc.expectedResults || '',
+      position: index,
+      steps: (tc.steps || []).map((s, sIdx) => ({
+        step_number: sIdx + 1,
+        action: s.accion
+      }))
+    }));
+
+    try {
+      const { data, error } = await this.supabase.rpc('save_hu_scenarios_safe', {
+        p_user_story_id: userStoryId,
+        p_test_cases: payload
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('❌ Error en guardado transaccional:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Guarda o actualiza un único caso de prueba y sus pasos sin afectar al resto.
+   */
+  async saveSingleTestCase(userStoryId: string, testCase: DetailedTestCase, position: number): Promise<DetailedTestCase> {
+    try {
+      let testCaseId = testCase.dbId;
+
+      // 1. Upsert test_case (si no tiene dbId, se insertará como nuevo)
+      const { data: tcData, error: tcError } = await this.supabase
+        .from('test_cases')
+        .upsert({
+          ...(testCaseId ? { id: testCaseId } : {}),
+          user_story_id: userStoryId,
+          title: testCase.title,
+          preconditions: testCase.preconditions || '',
+          expected_results: testCase.expectedResults || '',
+          position: position
+        })
+        .select('id')
+        .single();
+      
+      if (tcError) throw tcError;
+      testCaseId = tcData.id;
+
+      // 2. Eliminar pasos anteriores (si existe)
+      const { error: delError } = await this.supabase
+        .from('test_case_steps')
+        .delete()
+        .eq('test_case_id', testCaseId);
+      
+      if (delError) throw delError;
+
+      // 3. Insertar pasos nuevos
+      if (testCase.steps && testCase.steps.length > 0) {
+        // Filtrar pasos vacíos
+        const validSteps = testCase.steps.filter(s => s.accion?.trim());
+        if (validSteps.length > 0) {
+          const stepsToInsert = validSteps.map((s, idx) => ({
+            test_case_id: testCaseId,
+            step_number: idx + 1,
+            action: s.accion
+          }));
+
+          const { error: stepError } = await this.supabase
+            .from('test_case_steps')
+            .insert(stepsToInsert);
+          
+          if (stepError) throw stepError;
+        }
+      }
+
+      return { ...testCase, dbId: testCaseId };
+    } catch (error) {
+      console.error('❌ Error guardando caso individual:', error);
+      throw error;
     }
   }
 }

@@ -373,6 +373,10 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     if (!this.hu) return;
 
     this.router.navigate(['/viewer/hu-scenarios'], {
+      queryParams: {
+        huId: this.hu.dbUuid || this.hu.id,
+        testPlanId: this.testPlanId
+      },
       state: {
         hu: this.hu,
         testPlanId: this.testPlanId
@@ -484,16 +488,27 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     // Refresca de inmediato en UI
     this.cdr.detectChanges();
 
-    const saved = await this.saveData();
-    if (saved) {
-      this.toastService.success('Caso actualizado y guardado en base de datos');
-      return;
+    try {
+      const storyId = this.userStoryDbId || this.hu.dbUuid;
+      
+      // Si la HU ya existe en BD, usamos el guardado optimizado individual
+      if (storyId && storyId.length > 20) {
+        const updatedCase = await this.databaseService.saveSingleTestCase(storyId, testCase, index);
+        testCase.dbId = updatedCase.dbId;
+        this.toastService.success('Caso actualizado y guardado de forma optimizada');
+      } else {
+        // Fallback: Si la HU es nueva, guardamos todo junto
+        const saved = await this.saveData();
+        if (!saved) throw new Error('Falló el guardado masivo de fallback');
+        this.toastService.success('Caso actualizado y guardado junto con la HU');
+      }
+    } catch (error) {
+      console.error('Error guardando escenario:', error);
+      // Rollback local si falla persistencia
+      this.hu.detailedTestCases = snapshotBeforeSave;
+      this.cdr.detectChanges();
+      this.toastService.error('No se pudo guardar la edición en base de datos. Se restauró la versión anterior.');
     }
-
-    // Rollback local si falla persistencia
-    this.hu.detailedTestCases = snapshotBeforeSave;
-    this.cdr.detectChanges();
-    this.toastService.error('No se pudo guardar la edición en base de datos. Se restauró la versión anterior.');
   }
 
   cancelEditTestCase(index: number): void {
@@ -809,7 +824,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
           preconditions,
           expected_results,
           position,
-          test_case_steps (
+          test_case_steps!test_case_steps_test_case_id_fkey (
             id,
             test_case_id,
             step_number,
