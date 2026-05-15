@@ -85,3 +85,11 @@ export interface TestPlanSummary {
   user_stories_count: number;
   test_cases_count: number;
 }
+
+export interface DbEvidenceHU {
+  id?: string;
+  numero: string;
+  title: string;
+  user_id?: string;
+  created_at?: string;
+}

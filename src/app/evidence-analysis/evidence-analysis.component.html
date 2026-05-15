@@ -1,0 +1,114 @@
+<div class="evidence-container">
+    <div class="header-section">
+        <h1>Análisis de Evidencias</h1>
+        <p class="subtitle">Sube capturas o videos y la IA generará automáticamente hallazgos, pasos, errores y recomendaciones.</p>
+    </div>
+
+    <div class="main-content">
+        <!-- Formulario de Contexto -->
+        <div class="context-card section-card">
+            <div class="form-group hu-input-container">
+                <label>Nº HU</label>
+                <div class="input-wrapper">
+                    <input type="text" [ngModel]="huNumber" (ngModelChange)="handleHUChange($event)" placeholder="1" class="input-field">
+                    <div class="check-icon" *ngIf="isExistingHU">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                </div>
+                <div class="hu-feedback" *ngIf="huFeedback" [class.success]="isExistingHU">
+                    {{ huFeedback }}
+                </div>
+            </div>
+            
+            <div class="form-group flex-1">
+                <label>TÍTULO DE LA PRUEBA</label>
+                <input type="text" [(ngModel)]="testTitle" [disabled]="isExistingHU" placeholder="NUEVO" class="input-field" [class.disabled]="isExistingHU">
+            </div>
+
+            <div class="form-group flex-1">
+                <label>CONTEXTO ADICIONAL (OPCIONAL)</label>
+                <input type="text" [(ngModel)]="additionalContext" placeholder="aa" class="input-field">
+            </div>
+        </div>
+
+        <!-- Área de Carga (Sólo si no hay archivos) -->
+        <div class="upload-area" 
+             *ngIf="files.length === 0"
+             (dragover)="onDragOver($event)" 
+             (dragleave)="onDragLeave($event)" 
+             (drop)="onDrop($event)"
+             (click)="triggerFileInput()"
+             [class.dragging]="isDragging">
+            
+            <div class="upload-icon-wrapper">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+            </div>
+            <h3>Haz clic o arrastra evidencias</h3>
+            <p>Soporta imágenes (PNG, JPG) y videos. También puedes pegar (Ctrl+V) desde el portapapeles.</p>
+        </div>
+
+        <!-- Galería de Evidencias -->
+        <div class="evidences-gallery section-card" *ngIf="files.length > 0">
+            <div class="gallery-header">
+                <div class="header-left">
+                    <h3>EVIDENCIAS</h3>
+                    <div class="selection-badge">
+                        {{ selectedIndices.length }} seleccionadas
+                    </div>
+                </div>
+                
+                <div class="header-right">
+                    <button class="btn-text" (click)="toggleSelectAll()">
+                        {{ selectedIndices.length === files.length ? 'Deseleccionar todo' : 'Seleccionar todo' }}
+                    </button>
+                    
+                    <button class="btn-icon" (click)="triggerFileInput()" title="Agregar más">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+
+                    <button class="btn-generate" (click)="generateAnalysis()" [disabled]="isProcessing || selectedIndices.length === 0">
+                        <span class="spinner" *ngIf="isProcessing"></span>
+                        <span *ngIf="!isProcessing">GENERAR ANÁLISIS {{ selectedIndices.length }}</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid-container">
+                <div class="evidence-card" *ngFor="let file of files; let i = index" 
+                     [class.selected]="selectedIndices.includes(i)"
+                     (click)="toggleSelect(i)">
+                    
+                    <!-- Checkbox superior izquierdo -->
+                    <div class="card-checkbox" [class.checked]="selectedIndices.includes(i)">
+                        <svg *ngIf="selectedIndices.includes(i)" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+
+                    <!-- Botón eliminar (hover) -->
+                    <button class="btn-remove" (click)="removeFile(i, $event)" title="Eliminar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                    
+                    <div class="image-container">
+                        <img [src]="file.dataURL" *ngIf="!file.isVideo" class="thumbnail" loading="lazy">
+                        <div *ngIf="file.isVideo" class="video-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer">
+                        <div class="file-info">
+                            <span class="file-name" [title]="file.name">{{ file.name }}</span>
+                        </div>
+                        <span class="file-ext">{{ getExtension(file.name) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <input type="file" #fileInput multiple (change)="onFileSelected($event)" style="display: none;" accept="image/*,video/*">
+    </div>
+</div>
