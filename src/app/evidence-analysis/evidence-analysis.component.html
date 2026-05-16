@@ -8,9 +8,9 @@
         <!-- Formulario de Contexto -->
         <div class="context-card section-card">
             <div class="form-group hu-input-container">
-                <label>Nº HU</label>
+                <label><b>Nº de Historia de Usuario</b></label>
                 <div class="input-wrapper">
-                    <input type="text" [ngModel]="huNumber" (ngModelChange)="handleHUChange($event)" placeholder="1" class="input-field">
+                    <input type="text" [ngModel]="huNumber" (ngModelChange)="handleHUChange($event)" placeholder="Ej: 15834" class="input-field">
                     <div class="check-icon" *ngIf="isExistingHU">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     </div>
@@ -21,13 +21,13 @@
             </div>
             
             <div class="form-group flex-1">
-                <label>TÍTULO DE LA PRUEBA</label>
-                <input type="text" [(ngModel)]="testTitle" [disabled]="isExistingHU" placeholder="NUEVO" class="input-field" [class.disabled]="isExistingHU">
+                <label><b>Título del escenario</b></label>
+                <input type="text" [(ngModel)]="testTitle" [disabled]="isExistingHU" placeholder="Ej: Consulta de saldo en cajero" class="input-field" [class.disabled]="isExistingHU">
             </div>
-
-            <div class="form-group flex-1">
-                <label>CONTEXTO ADICIONAL (OPCIONAL)</label>
-                <input type="text" [(ngModel)]="additionalContext" placeholder="aa" class="input-field">
+ 
+            <div class="form-group flex-2">
+                <label><b>Contexto adicional (Opcional)</b></label>
+                <input type="text" [(ngModel)]="additionalContext" placeholder="Ej: Solo analizar los cálculos de intereses o el flujo de error..." class="input-field">
             </div>
         </div>
 
@@ -54,43 +54,52 @@
         <!-- Galería de Evidencias -->
         <div class="evidences-gallery section-card" *ngIf="files.length > 0">
             <div class="gallery-header">
-                <div class="header-left">
-                    <h3>EVIDENCIAS</h3>
+                <div class="header-left" style="margin-left: -0.5rem;">
+                    <button class="btn-text-ghost" (click)="toggleSelectAll()">
+                        {{ selectedIndices.length === files.length ? 'Deseleccionar todo' : 'Seleccionar todo' }}
+                    </button>
+                    <div class="header-divider"></div>
                     <div class="selection-badge">
                         {{ selectedIndices.length }} seleccionadas
                     </div>
                 </div>
                 
                 <div class="header-right">
-                    <button class="btn-text" (click)="toggleSelectAll()">
-                        {{ selectedIndices.length === files.length ? 'Deseleccionar todo' : 'Seleccionar todo' }}
-                    </button>
-                    
-                    <button class="btn-icon" (click)="triggerFileInput()" title="Agregar más">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    </button>
-
-                    <button class="btn-generate" (click)="generateAnalysis()" [disabled]="isProcessing || selectedIndices.length === 0">
+                    <button class="btn-generate btn-ai-premium" (click)="generateAnalysis()" [disabled]="isProcessing || selectedIndices.length === 0">
                         <span class="spinner" *ngIf="isProcessing"></span>
-                        <span *ngIf="!isProcessing">GENERAR ANÁLISIS {{ selectedIndices.length }}</span>
+                        <span *ngIf="!isProcessing">GENERAR ANÁLISIS <b>{{ selectedIndices.length }}</b></span>
                     </button>
                 </div>
             </div>
             
             <div class="grid-container">
+                <!-- Dropzone integrado en la galería -->
+                <div class="evidence-card add-card" (click)="triggerFileInput()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)" [class.dragging]="isDragging">
+                    <div class="add-icon">+</div>
+                    <span class="add-text">Añadir evidencias</span>
+                </div>
                 <div class="evidence-card" *ngFor="let file of files; let i = index" 
                      [class.selected]="selectedIndices.includes(i)"
+                     draggable="true"
+                     (dragstart)="onDragStart(i)"
+                     (dragover)="onCardDragOver($event)"
+                     (drop)="onCardDrop(i, $event)"
                      (click)="toggleSelect(i)">
                     
-                    <!-- Checkbox superior izquierdo -->
+                    <!-- Checkbox superior izquierdo con Offset -->
                     <div class="card-checkbox" [class.checked]="selectedIndices.includes(i)">
                         <svg *ngIf="selectedIndices.includes(i)" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     </div>
-
-                    <!-- Botón eliminar (hover) -->
-                    <button class="btn-remove" (click)="removeFile(i, $event)" title="Eliminar">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </button>
+ 
+                    <!-- Acciones rápidas (Hover) -->
+                    <div class="card-actions-overlay">
+                        <button class="btn-action-circle" (click)="openPreview(file.dataURL, $event)" title="Previsualizar">
+                            👁️
+                        </button>
+                        <button class="btn-action-circle danger" (click)="removeFile(i, $event)" title="Eliminar">
+                            🗑️
+                        </button>
+                    </div>
                     
                     <div class="image-container">
                         <img [src]="file.dataURL" *ngIf="!file.isVideo" class="thumbnail" loading="lazy">
@@ -103,12 +112,19 @@
                         <div class="file-info">
                             <span class="file-name" [title]="file.name">{{ file.name }}</span>
                         </div>
-                        <span class="file-ext">{{ getExtension(file.name) }}</span>
                     </div>
                 </div>
             </div>
         </div>
 
         <input type="file" #fileInput multiple (change)="onFileSelected($event)" style="display: none;" accept="image/*,video/*">
+    </div>
+ 
+    <!-- Preview Modal -->
+    <div class="preview-modal-overlay" *ngIf="showPreview" (click)="showPreview = false">
+        <div class="preview-modal-content" (click)="$event.stopPropagation()">
+            <button class="btn-close-preview" (click)="showPreview = false">&times;</button>
+            <img [src]="previewUrl" class="full-preview-image">
+        </div>
     </div>
 </div>

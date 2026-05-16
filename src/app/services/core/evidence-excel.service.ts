@@ -73,23 +73,42 @@ export class EvidenceExcelService {
         row.alignment = { vertical: 'middle', wrapText: true };
         row.height = 280; // Altura para que quepa la imagen
 
-        // Insertar Imagen si existe
-        const imgData = report.report_images?.find((img: any) => img.step_id === step.id);
-        if (imgData && imgData.image_url) {
-          try {
-            const response = await fetch(imgData.image_url);
-            const buffer = await response.arrayBuffer();
-            const imageId = workbook.addImage({
-              buffer: buffer,
-              extension: 'png',
-            });
+        // Obtener imágenes asociadas a este paso
+        let stepImages = report.report_images?.filter((img: any) => img.step_id === step.id) || [];
+        
+        // FALLBACK: Si no hay imágenes vinculadas por ID, intentar por referencia de texto/orden (como hace la UI)
+        if (stepImages.length === 0 && step.imagen_referencia) {
+          const match = step.imagen_referencia.match(/\d+/);
+          if (match) {
+            const order = parseInt(match[0], 10);
+            const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
+            if (fallbackImg) stepImages = [fallbackImg];
+          }
+        }
+        
+        if (stepImages.length > 0) {
+          // Ajustar altura de fila según cantidad de imágenes
+          row.height = 280 * stepImages.length;
+          
+          for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
+            const imgData = stepImages[imgIdx];
+            if (imgData && imgData.image_url) {
+              try {
+                const response = await fetch(imgData.image_url);
+                const buffer = await response.arrayBuffer();
+                const imageId = workbook.addImage({
+                  buffer: buffer,
+                  extension: 'png',
+                });
 
-            worksheet.addImage(imageId, {
-              tl: { col: 4, row: currentRowIndex - 1 },
-              ext: { width: 600, height: 350 }
-            });
-          } catch (e) {
-            console.error('Error al insertar imagen en Excel', e);
+                worksheet.addImage(imageId, {
+                  tl: { col: 4, row: (currentRowIndex - 1) + (imgIdx * 0.8) },
+                  ext: { width: 400, height: 250 }
+                });
+              } catch (e) {
+                console.error('Error al insertar imagen en Excel', e);
+              }
+            }
           }
         }
 
@@ -125,7 +144,7 @@ export class EvidenceExcelService {
   /**
    * Genera un Excel con múltiples reportes
    */
-  async downloadBulkExcelReport(reports: any[]): Promise<boolean> {
+  async downloadBulkExcelReport(reports: any[], onProgress?: (current: number, total: number) => void): Promise<boolean> {
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Matriz Masiva');
@@ -145,8 +164,11 @@ export class EvidenceExcelService {
       worksheet.getRow(1).height = 40;
 
       let currentRow = 3;
+      let processed = 0;
 
       for (const report of reports) {
+        processed++;
+        onProgress?.(processed, reports.length);
         // Encabezado de cada reporte
         const subHeader = worksheet.addRow([`ESCENARIO: ${report.nombre_del_escenario}`, '', '', '', '', `ESTADO: ${report.estado_general}`]);
         subHeader.font = { bold: true };

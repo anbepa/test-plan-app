@@ -237,18 +237,23 @@ export class EvidenceDatabaseService {
     }));
   }
 
-  async getReportIds(): Promise<string[]> {
+  async getReportIds(huFilter?: string): Promise<string[]> {
     const userId = await this.getCurrentUserId();
     if (!userId) return [];
 
-    const { data, error } = await this.supabase
+    let query = this.supabase
       .from('test_scenarios')
       .select('id')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .eq('user_id', userId);
+
+    if (huFilter) {
+      query = query.ilike('historia_usuario', `%${huFilter}%`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
-    console.log('DEBUG: Reporte cargado de Supabase:', data);
+    console.log('DEBUG: IDs de Reporte cargados de Supabase:', data);
     return (data || []).map(r => r.id);
   }
 
@@ -390,6 +395,26 @@ export class EvidenceDatabaseService {
 
   async updateScenario(id: string, data: any, steps?: any[]): Promise<void> {
     try {
+      // 1. CAPTURAR ASOCIACIONES ACTUALES (Mapear numero_paso -> [image_ids])
+      const { data: currentImages } = await this.supabase
+        .from('report_images')
+        .select('id, step_id')
+        .eq('report_id', id);
+        
+      const { data: currentSteps } = await this.supabase
+        .from('test_scenario_steps')
+        .select('id, numero_paso')
+        .eq('scenario_id', id);
+        
+      const stepToImagesMap = new Map<number, string[]>();
+      if (currentImages && currentSteps) {
+        currentSteps.forEach(s => {
+          const imgs = currentImages.filter(img => img.step_id === s.id).map(img => img.id);
+          if (imgs.length > 0) stepToImagesMap.set(s.numero_paso, imgs);
+        });
+      }
+
+      // 2. Actualizar datos básicos del escenario
       const { error: scenarioError } = await this.supabase
         .from('test_scenarios')
         .update(data)
@@ -398,7 +423,7 @@ export class EvidenceDatabaseService {
       if (scenarioError) throw scenarioError;
 
       if (steps && steps.length > 0) {
-        // Eliminar pasos existentes (bulk)
+        // 3. Eliminar pasos existentes
         const { error: deleteError } = await this.supabase
           .from('test_scenario_steps')
           .delete()
@@ -406,7 +431,7 @@ export class EvidenceDatabaseService {
 
         if (deleteError) console.warn('Error eliminando pasos antiguos:', deleteError);
 
-        // Insertar nuevos pasos (bulk)
+        // 4. Insertar nuevos pasos y obtener sus IDs
         const stepsToInsert = steps.map((step, index) => ({
           scenario_id: id,
           numero_paso: step.numero_paso || (index + 1),
@@ -414,11 +439,43 @@ export class EvidenceDatabaseService {
           imagen_referencia: step.imagen_referencia || 'N/A'
         }));
 
-        const { error: stepsError } = await this.supabase
+        const { data: insertedSteps, error: stepsError } = await this.supabase
           .from('test_scenario_steps')
-          .insert(stepsToInsert);
+          .insert(stepsToInsert)
+          .select();
 
         if (stepsError) throw stepsError;
+
+        // 5. RESTAURAR ASOCIACIONES DE IMÁGENES
+        // Estrategia combinada: numero_paso + imagen_referencia
+        if (insertedSteps && insertedSteps.length > 0) {
+          for (const step of insertedSteps) {
+            // A. Intentar por mapeo de número de paso (lo más robusto si el orden no cambió)
+            const imageIds = stepToImagesMap.get(step.numero_paso);
+            if (imageIds && imageIds.length > 0) {
+              for (const imageId of imageIds) {
+                await this.supabase
+                  .from('report_images')
+                  .update({ step_id: step.id })
+                  .eq('id', imageId);
+              }
+              continue; // Ya vinculado
+            } 
+            
+            // B. Intentar por referencia de texto (si Gemini cambió el orden o añadió pasos)
+            if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
+              const match = step.imagen_referencia.match(/\d+/);
+              if (match) {
+                const order = parseInt(match[0], 10);
+                await this.supabase
+                  .from('report_images')
+                  .update({ step_id: step.id })
+                  .eq('report_id', id)
+                  .eq('image_order', order);
+              }
+            }
+          }
+        }
       }
 
     } catch (error) {
@@ -440,6 +497,51 @@ export class EvidenceDatabaseService {
       .from('test_scenario_steps')
       .delete()
       .in('id', stepIds);
+    if (error) throw error;
+  }
+
+  /**
+   * Intercambia las imágenes entre dos pasos
+   */
+  async swapStepImages(image1Id: string, step1Id: string, image2Id: string, step2Id: string): Promise<void> {
+    const { error: err1 } = await this.supabase
+      .from('report_images')
+      .update({ step_id: step2Id })
+      .eq('id', image1Id);
+      
+    if (err1) throw err1;
+
+    const { error: err2 } = await this.supabase
+      .from('report_images')
+      .update({ step_id: step1Id })
+      .eq('id', image2Id);
+      
+    if (err2) throw err2;
+  }
+
+  /**
+   * Copia una imagen a otro paso
+   */
+  async copyImageToStep(image: any, targetStepId: string): Promise<void> {
+    const { id, created_at, ...rest } = image;
+    const { error } = await this.supabase
+      .from('report_images')
+      .insert([{
+          ...rest,
+          step_id: targetStepId,
+          created_at: new Date().toISOString()
+      }]);
+    if (error) throw error;
+  }
+
+  /**
+   * Elimina una imagen de reporte
+   */
+  async deleteReportImage(imageId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('report_images')
+      .delete()
+      .eq('id', imageId);
     if (error) throw error;
   }
 

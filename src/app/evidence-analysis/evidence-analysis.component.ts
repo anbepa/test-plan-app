@@ -22,10 +22,17 @@ export class EvidenceAnalysisComponent {
   files: EvidenceFile[] = [];
   selectedIndices: number[] = [];
   
-  isDragging = false;
-  isProcessing = false;
   isExistingHU = false;
   huFeedback = '';
+  isDragging = false;
+  isProcessing = false;
+  
+  // Preview Modal
+  showPreview = false;
+  previewUrl = '';
+  
+  // Reordering
+  draggedItemIndex: number | null = null;
   
   @ViewChild('fileInput') fileInput!: ElementRef;
 
@@ -95,8 +102,17 @@ export class EvidenceAnalysisComponent {
 
   async processFiles(fileList: File[]) {
     this.isProcessing = true;
+    let duplicates = 0;
+    
     try {
       for (const file of fileList) {
+        // Detección de duplicados básica por nombre y tamaño
+        const isDuplicate = this.files.some(f => f.name === file.name && f.size === file.size);
+        if (isDuplicate) {
+          duplicates++;
+          continue;
+        }
+
         if (file.type.startsWith('image/')) {
           const base64 = await this.readFileAsDataURL(file);
           this.files.push({
@@ -109,10 +125,11 @@ export class EvidenceAnalysisComponent {
         }
       }
       
-      // Ordenar por nombre para asegurar secuencia cronológica (como en el proyecto de referencia)
-      this.files.sort((a, b) => a.name.localeCompare(b.name));
+      if (duplicates > 0) {
+        this.toast.warning(`${duplicates} archivos omitidos por estar duplicados.`);
+      }
       
-      // Actualizar selección para incluir todos los nuevos (o todos)
+      // Actualizar selección para incluir todos
       this.selectedIndices = this.files.map((_, i) => i);
       
     } catch (e) {
@@ -175,6 +192,33 @@ export class EvidenceAnalysisComponent {
     this.selectedIndices = this.selectedIndices
       .filter(i => i !== index)
       .map(i => i > index ? i - 1 : i);
+  }
+
+  // Drag & Drop Reordering
+  onDragStart(index: number) {
+    this.draggedItemIndex = index;
+  }
+
+  onCardDragOver(event: DragEvent) {
+    event.preventDefault();
+  }
+
+  onCardDrop(index: number, event: DragEvent) {
+    event.preventDefault();
+    if (this.draggedItemIndex === null || this.draggedItemIndex === index) return;
+
+    const movedItem = this.files.splice(this.draggedItemIndex, 1)[0];
+    this.files.splice(index, 0, movedItem);
+    
+    // Reset selection to match new order (simplification)
+    this.selectedIndices = this.files.map((_, i) => i);
+    this.draggedItemIndex = null;
+  }
+
+  openPreview(url: string, event: Event) {
+    event.stopPropagation();
+    this.previewUrl = url;
+    this.showPreview = true;
   }
 
   getExtension(filename: string): string {

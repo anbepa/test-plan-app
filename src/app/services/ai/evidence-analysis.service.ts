@@ -20,18 +20,19 @@ export class EvidenceAnalysisService {
 
   public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
     const promptText = PROMPT_FLOW_ANALYSIS_FROM_IMAGES(context);
-    const contents = [{
-      role: 'user',
-      parts: [
-        { text: promptText }
-      ] as any[]
-    }];
+    
+    // ESTRATEGIA: Refuerzo de Atención. 
+    // Enviamos el contexto del usuario como la PRIMERA parte del mensaje para que tenga prioridad máxima.
+    const parts: any[] = [
+      { text: `CONTEXTO DEL USUARIO Y REQUERIMIENTOS PRIORITARIOS:\n${context || 'Ninguno'}\n\n--- SIGUE LAS INSTRUCCIONES DEL PROMPT A CONTINUACIÓN ---` },
+      { text: promptText }
+    ];
 
     for (const file of evidences) {
       if (file.dataURL) {
         const matches = file.dataURL.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-          contents[0].parts.push({
+          parts.push({
             inline_data: {
               mime_type: matches[1],
               data: matches[2]
@@ -42,72 +43,8 @@ export class EvidenceAnalysisService {
     }
 
     const payload = {
-      contents,
-      generationConfig: {
-        temperature: 0.2,
-      }
-    };
-
-    return this.geminiClient.callGemini('generateTextCases', payload).pipe(
-      map(response => {
-        let textContent = '';
-        if (response.candidates && response.candidates[0]?.content?.parts) {
-          textContent = response.candidates[0].content.parts.map((p: any) => p.text).join('');
-        }
-        
-        let cleanedJsonText = textContent;
-        const jsonBlockMatch = textContent.match(/```json\s*([\s\S]*?)\s*```/);
-
-        if (jsonBlockMatch) {
-            cleanedJsonText = jsonBlockMatch[1];
-        } else {
-            const firstBracket = textContent.indexOf('[');
-            const firstBrace = textContent.indexOf('{');
-            const lastBracket = textContent.lastIndexOf(']');
-            const lastBrace = textContent.lastIndexOf('}');
-
-            const start = (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) ? firstBracket : firstBrace;
-            const end = (lastBracket !== -1 && (lastBrace === -1 || lastBracket > lastBrace)) ? lastBracket : lastBrace;
-
-            if (start !== -1 && end !== -1 && end > start) {
-                cleanedJsonText = textContent.substring(start, end + 1);
-            }
-        }
-
-        try {
-            return JSON.parse(cleanedJsonText);
-        } catch (e) {
-            throw new Error("La respuesta de la IA no contiene un JSON válido.");
-        }
-      })
-    );
-  }
-
-  public refineAnalysis(originalReport: any, instruction: string): Observable<any> {
-    // Clonar el reporte para no modificar el original en el estado local
-    const reportForPrompt = JSON.parse(JSON.stringify(originalReport));
-    
-    // Incluir la instrucción del usuario dentro del JSON como campo específico
-    // Tal cual lo hace el proyecto de referencia
-    reportForPrompt.user_provided_additional_context = instruction.trim();
-
-    // Eliminar campos que no necesitamos enviar a la IA (como blob URLs o metadatos internos)
-    delete reportForPrompt.id;
-    delete reportForPrompt.created_at;
-    delete reportForPrompt.updated_at;
-    delete reportForPrompt.user_id;
-
-    const promptText = PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(JSON.stringify(reportForPrompt, null, 2));
-    const payload = {
-      contents: [{
-        role: 'user',
-        parts: [{ text: promptText }]
-      }],
-      generationConfig: { 
-        temperature: 0.1,
-        topP: 0.95,
-        topK: 40
-      }
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0.1 }
     };
 
     return this.geminiClient.callGemini('generateTextCases', payload).pipe(
@@ -119,6 +56,78 @@ export class EvidenceAnalysisService {
         return this.parseAndExtractJson(textContent);
       })
     );
+  }
+
+  public refineAnalysis(originalReport: any, instruction: string): Observable<any> {
+    const reportForPrompt = JSON.parse(JSON.stringify(originalReport));
+    reportForPrompt.user_provided_additional_context = instruction.trim();
+
+    delete reportForPrompt.id;
+    delete reportForPrompt.created_at;
+    delete reportForPrompt.updated_at;
+    delete reportForPrompt.user_id;
+
+    const promptText = PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(JSON.stringify(reportForPrompt, null, 2));
+    
+    // 1. Obtener imágenes ordenadas por su orden original (fuente de verdad)
+    const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
+    
+    const fetchImages$ = new Observable<any[]>(observer => {
+      const imagePromises = images.map(async (img: any) => {
+        try {
+          const res = await fetch(img.image_url);
+          const blob = await res.blob();
+          return new Promise<{mime_type: string, data: string}>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = (reader.result as string).split(',')[1];
+              resolve({ mime_type: blob.type, data: base64 });
+            };
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) { return null; }
+      });
+      Promise.all(imagePromises).then(data => {
+        observer.next(data.filter(d => d !== null));
+        observer.complete();
+      });
+    });
+
+    return new Observable(observer => {
+      fetchImages$.subscribe(inlineData => {
+        // ESTRATEGIA: Refuerzo de Atención.
+        // Colocamos la instrucción específica como la primera parte para "resetear" el foco de la IA.
+        const parts: any[] = [
+          { text: `INSTRUCCIÓN DE REFINAMIENTO (MÁXIMA PRIORIDAD):\n${instruction}\n\n--- REFINA EL SIGUIENTE JSON SEGÚN ESTA ORDEN ---` },
+          { text: promptText }
+        ];
+        
+        inlineData.forEach(d => parts.push({ inline_data: d }));
+
+        const payload = {
+          contents: [{ role: 'user', parts }],
+          generationConfig: { 
+            temperature: 0.1,
+            topP: 0.95,
+            topK: 40
+          }
+        };
+
+        this.geminiClient.callGemini('generateTextCases', payload).subscribe({
+          next: response => {
+            let textContent = '';
+            if (response.candidates && response.candidates[0]?.content?.parts) {
+              textContent = response.candidates[0].content.parts.map((p: any) => p.text).join('');
+            }
+            try {
+              observer.next(this.parseAndExtractJson(textContent));
+              observer.complete();
+            } catch (e) { observer.error(e); }
+          },
+          error: err => observer.error(err)
+        });
+      });
+    });
   }
 
   private parseAndExtractJson(textContent: string): any {
