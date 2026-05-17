@@ -458,7 +458,32 @@ export class EvidenceDatabaseService {
 
     if (huError) {
       console.warn('Error al eliminar la entrada de HU (puede que no exista):', huError);
-      // No lanzamos error aquí porque los escenarios ya se borraron
+    }
+  }
+
+  async deleteAllReports(): Promise<void> {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return;
+
+    // 1. Eliminar todos los escenarios asociados a este usuario
+    const { error: scenariosError } = await this.supabase
+      .from('test_scenarios')
+      .delete()
+      .eq('user_id', userId);
+
+    if (scenariosError) {
+      console.error('Error al eliminar todos los escenarios:', scenariosError);
+      throw scenariosError;
+    }
+
+    // 2. Eliminar todas las HUs de este usuario
+    const { error: huError } = await this.supabase
+      .from('evidence_hus')
+      .delete()
+      .eq('user_id', userId);
+
+    if (huError) {
+      console.warn('Error al eliminar todas las entradas de HU:', huError);
     }
   }
 
@@ -574,6 +599,22 @@ export class EvidenceDatabaseService {
       .from('test_scenario_steps')
       .delete()
       .in('id', stepIds);
+    if (error) throw error;
+  }
+
+  async deleteStep(stepId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('test_scenario_steps')
+      .delete()
+      .eq('id', stepId);
+    if (error) throw error;
+  }
+
+  async updateStepNumber(stepId: string, num: number): Promise<void> {
+    const { error } = await this.supabase
+      .from('test_scenario_steps')
+      .update({ numero_paso: num })
+      .eq('id', stepId);
     if (error) throw error;
   }
 

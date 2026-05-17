@@ -77,7 +77,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                 Word
               </button>
             </div>
-            <button class="btn-minimal-danger" (click)="requestDeleteHU()" [disabled]="!appliedHuFilter || appliedHuFilter === 'Todas las historias'" title="Eliminar Historia de Usuario">
+            <button class="btn-minimal-danger" (click)="requestDeleteHU()" [disabled]="!appliedHuFilter" [title]="appliedHuFilter === 'Todas las historias' ? 'Eliminar todos los escenarios de todas las HUs' : 'Eliminar Historia de Usuario'">
               🗑
             </button>
           </div>
@@ -101,7 +101,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let report of reports" [class.row-selected]="selectedReports.includes(report.id)" (click)="goToDetail(report.id)">
+                <tr *ngFor="let report of reports; trackBy: trackById" [class.row-selected]="selectedReports.includes(report.id)" (click)="goToDetail(report.id)">
                   <td class="check-col" (click)="$event.stopPropagation()">
                     <input type="checkbox" [checked]="selectedReports.includes(report.id)" (click)="toggleSelection(report.id)">
                   </td>
@@ -773,6 +773,10 @@ export class EvidenceReportListComponent implements OnInit {
     }
   }
 
+  trackById(index: number, item: any): string {
+    return item.id;
+  }
+
   onSearch() {
     this.currentPage = 1;
     this.loadReports();
@@ -884,14 +888,20 @@ export class EvidenceReportListComponent implements OnInit {
   showDeleteModal = false;
   deleteModalTitle = '';
   deleteModalMessage = '';
-  deleteMode: 'single' | 'bulk' | 'hu' = 'bulk';
+  deleteMode: 'single' | 'bulk' | 'hu' | 'all_hus' = 'bulk';
   reportToDeleteId: string | null = null;
 
   requestDeleteHU() {
-    if (!this.appliedHuFilter || this.appliedHuFilter === 'Todas las historias') return;
-    this.deleteMode = 'hu';
-    this.deleteModalTitle = '¿Eliminar todos los escenarios?';
-    this.deleteModalMessage = `Estás a punto de eliminar todos los escenarios de la HU ${this.appliedHuFilter}. Esta acción no se puede deshacer.`;
+    if (!this.appliedHuFilter) return;
+    if (this.appliedHuFilter === 'Todas las historias') {
+      this.deleteMode = 'all_hus';
+      this.deleteModalTitle = '¿Eliminar TODOS los escenarios?';
+      this.deleteModalMessage = 'Estás a punto de eliminar absolutamente todos los escenarios de prueba de todas las historias de usuario de forma permanente. Esta acción no se puede deshacer.';
+    } else {
+      this.deleteMode = 'hu';
+      this.deleteModalTitle = '¿Eliminar todos los escenarios?';
+      this.deleteModalMessage = `Estás a punto de eliminar todos los escenarios de la HU ${this.appliedHuFilter}. Esta acción no se puede deshacer.`;
+    }
     this.showDeleteModal = true;
   }
 
@@ -906,7 +916,11 @@ export class EvidenceReportListComponent implements OnInit {
   async confirmDeletion() {
     this.showDeleteModal = false;
     try {
-      if (this.deleteMode === 'hu') {
+      if (this.deleteMode === 'all_hus') {
+        await this.dbService.deleteAllReports();
+        this.toast.success('Todos los escenarios de todas las HUs han sido eliminados de la base de datos');
+        this.clearFilters();
+      } else if (this.deleteMode === 'hu') {
         await this.dbService.deleteReportsByHU(this.appliedHuFilter);
         this.toast.success(`Todos los escenarios de la HU ${this.appliedHuFilter} han sido eliminados`);
         this.clearFilters(); // Limpiamos todo ya que la HU ya no existe

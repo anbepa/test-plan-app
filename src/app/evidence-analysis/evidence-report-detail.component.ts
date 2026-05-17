@@ -6,12 +6,12 @@ import { EvidenceDatabaseService } from '../services/database/evidence-database.
 import { EvidenceAnalysisService } from '../services/ai/evidence-analysis.service';
 import { EvidenceExcelService } from '../services/core/evidence-excel.service';
 import { ToastService } from '../services/core/toast.service';
-import { SharedConfirmModalComponent } from '../shared/components/shared-confirm-modal.component';
+import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 @Component({
   selector: 'app-evidence-report-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, SharedConfirmModalComponent],
+  imports: [CommonModule, RouterModule, FormsModule, ConfirmationModalComponent],
   template: `
     <div class="detail-page fade-in" [class.drawer-open]="showRefiner">
       <!-- Navigation Header (Sticky Breadcrumb Bar) -->
@@ -139,7 +139,12 @@ import { SharedConfirmModalComponent } from '../shared/components/shared-confirm
               <tbody>
                 <tr *ngFor="let step of report.test_scenario_steps">
                   <td class="col-num">
-                    <div class="step-index">{{ step.numero_paso }}</div>
+                    <div class="col-num-inner">
+                      <div class="step-index">{{ step.numero_paso }}</div>
+                      <button *ngIf="showRefiner" class="btn-delete-step" (click)="deleteStep(step, $event)" title="Eliminar este paso">
+                        <span style="font-size: 10px;">🗑</span>
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <div 
@@ -260,14 +265,28 @@ import { SharedConfirmModalComponent } from '../shared/components/shared-confirm
       </div>
 
       <!-- Modal de Confirmación -->
-      <app-shared-confirm-modal
+      <app-confirmation-modal
         [isOpen]="showDeleteModal"
         [title]="'¿Eliminar escenario?'"
         [message]="'Estás a punto de eliminar este escenario de prueba permanentemente. Esta acción no se puede deshacer.'"
         [confirmText]="'Eliminar permanentemente'"
-        (onClose)="showDeleteModal = false"
-        (onConfirm)="confirmDelete()"
-      ></app-shared-confirm-modal>
+        [cancelText]="'Cancelar'"
+        [type]="'danger'"
+        (confirm)="confirmDelete()"
+        (cancel)="showDeleteModal = false"
+      ></app-confirmation-modal>
+
+      <!-- Modal de Confirmación para borrar Paso -->
+      <app-confirmation-modal
+        [isOpen]="showDeleteStepModal"
+        [title]="'¿Eliminar paso de prueba?'"
+        [message]="'Estás a punto de eliminar este paso permanentemente. Los pasos restantes se reordenarán de forma consecutiva.'"
+        [confirmText]="'Eliminar paso'"
+        [cancelText]="'Cancelar'"
+        [type]="'danger'"
+        (confirm)="confirmDeleteStep()"
+        (cancel)="showDeleteStepModal = false"
+      ></app-confirmation-modal>
     </div>
   `,
   styles: [`
@@ -475,8 +494,15 @@ import { SharedConfirmModalComponent } from '../shared/components/shared-confirm
     .steps-table th { text-align: left; padding: 1.2rem 1rem; color: #86868b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #f2f2f7; }
     .steps-table td { padding: 1.5rem 1rem; vertical-align: middle; border-bottom: 1px solid #f9f9fb; }
 
-    .col-num { width: 70px; }
+    .col-num { width: 70px; position: relative; }
+    .col-num-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .step-index { width: 34px; height: 34px; background: #f5f5f7; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #86868b; font-size: 0.9rem; }
+    
+    .btn-delete-step {
+      background: #ff3b30; color: white; border: none; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; box-shadow: 0 2px 5px rgba(255, 59, 48, 0.3); opacity: 0; transform: scale(0.8);
+    }
+    tr:hover .btn-delete-step { opacity: 1; transform: scale(1); }
+    .btn-delete-step:hover { transform: scale(1.1) !important; background: #d70015; }
 
     .step-text { font-size: 1rem; line-height: 1.6; color: #1d1d1f; font-weight: 500; outline: none; padding: 0.4rem; border-radius: 8px; transition: background 0.2s; }
     .step-text:focus { background: #f5f5f7; }
@@ -766,6 +792,8 @@ export class EvidenceReportDetailComponent implements OnInit {
   isRefining = false;
   refinementInstruction = '';
   showDeleteModal = false;
+  showDeleteStepModal = false;
+  stepToDelete: any = null;
 
   // AI Drawer state
   showHistory = false;
@@ -1097,6 +1125,44 @@ export class EvidenceReportDetailComponent implements OnInit {
       await this.loadReport(this.report.id);
     } catch (e) {
       this.toast.error('Error al eliminar evidencia');
+    }
+  }
+
+  deleteStep(step: any, event: MouseEvent) {
+    event.stopPropagation();
+    this.stepToDelete = step;
+    this.showDeleteStepModal = true;
+  }
+
+  async confirmDeleteStep() {
+    if (!this.stepToDelete) return;
+    this.showDeleteStepModal = false;
+    const step = this.stepToDelete;
+    this.stepToDelete = null;
+
+    try {
+      await this.dbService.deleteStep(step.id);
+      
+      // Re-indexar los pasos restantes para que sean continuos
+      const remainingSteps = this.report.test_scenario_steps
+        .filter((s: any) => s.id !== step.id)
+        .map((s: any, index: number) => ({
+          ...s,
+          numero_paso: index + 1
+        }));
+
+      for (const s of remainingSteps) {
+        const originalStep = this.report.test_scenario_steps.find((orig: any) => orig.id === s.id);
+        if (originalStep && originalStep.numero_paso !== s.numero_paso) {
+          await this.dbService.updateStepNumber(s.id, s.numero_paso);
+        }
+      }
+
+      this.toast.success('Paso eliminado y secuencia actualizada');
+      await this.loadReport(this.report.id);
+    } catch (e) {
+      console.error(e);
+      this.toast.error('Error al eliminar el paso');
     }
   }
 
