@@ -21,10 +21,8 @@ export class EvidenceAnalysisService {
   public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
     const promptText = PROMPT_FLOW_ANALYSIS_FROM_IMAGES(context);
     
-    // ESTRATEGIA: Refuerzo de Atención. 
-    // Enviamos el contexto del usuario como la PRIMERA parte del mensaje para que tenga prioridad máxima.
+    // Enviar un único bloque de texto para asegurar que Gemini respete el contexto
     const parts: any[] = [
-      { text: `CONTEXTO DEL USUARIO Y REQUERIMIENTOS PRIORITARIOS:\n${context || 'Ninguno'}\n\n--- SIGUE LAS INSTRUCCIONES DEL PROMPT A CONTINUACIÓN ---` },
       { text: promptText }
     ];
 
@@ -67,7 +65,7 @@ export class EvidenceAnalysisService {
     delete reportForPrompt.updated_at;
     delete reportForPrompt.user_id;
 
-    const promptText = PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(JSON.stringify(reportForPrompt, null, 2));
+    const promptText = PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(JSON.stringify(reportForPrompt, null, 2), instruction.trim());
     
     // 1. Obtener imágenes ordenadas por su orden original (fuente de verdad)
     const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
@@ -95,10 +93,8 @@ export class EvidenceAnalysisService {
 
     return new Observable(observer => {
       fetchImages$.subscribe(inlineData => {
-        // ESTRATEGIA: Refuerzo de Atención.
-        // Colocamos la instrucción específica como la primera parte para "resetear" el foco de la IA.
+        // Enviar un único bloque de texto para que Gemini no se confunda con el contexto
         const parts: any[] = [
-          { text: `INSTRUCCIÓN DE REFINAMIENTO (MÁXIMA PRIORIDAD):\n${instruction}\n\n--- REFINA EL SIGUIENTE JSON SEGÚN ESTA ORDEN ---` },
           { text: promptText }
         ];
         

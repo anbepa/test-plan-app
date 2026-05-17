@@ -1,4 +1,7 @@
 export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
+    🛑 CONTEXTO DEL USUARIO Y REQUERIMIENTOS PRIORITARIOS:
+    ${annotationsContext ? `"${annotationsContext}"\n    (Debes considerar y priorizar estrictamente este contexto en todo tu análisis)` : 'Ninguno proporcionado por el usuario.'}
+    
     **FORMATO DE RESPUESTA OBLIGATORIO - LEE ESTO PRIMERO:**
     
     Debes responder EXACTAMENTE con este formato JSON. USA ESTOS NOMBRES DE CAMPOS, NO OTROS:
@@ -190,9 +193,6 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
     }
     \u0060\u0060\u0060
     
-    **CONTEXTO ADICIONAL DEL USUARIO (PRIORIDAD MÁXIMA):**
-    ${annotationsContext ? `"${annotationsContext}"` : 'Ninguno proporcionado por el usuario.'}
-
     **IMPORTANTE:**
     1. RESPONDER ÚNICAMENTE EN ESPAÑOL.
     2. USAR EXACTAMENTE LAS CLAVES JSON DEFINIDAS ARRIBA: "id_caso", "escenario_prueba", "pasos", "numero_paso", "descripcion", "imagen_referencia", "resultado_esperado", "resultado_obtenido", "estado_general"
@@ -202,18 +202,26 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
     
     PROCEDE A GENERAR EL ANÁLISIS INTEGRAL:`;
 
-export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string) => `
+export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string, instruction: string) => `
     Eres un **QA Lead Expert Full Stack**.
     
-    El usuario ha generado un caso de prueba y ahora desea **REFINARLO** con contexto adicional.
+    El usuario ha revisado un caso de prueba generado previamente y solicita un **REFINAMIENTO ESTRICTO**.
     
-    **CASO DE PRUEBA ACTUAL:**
+    ======================================================================
+    🛑 INSTRUCCIÓN DEL USUARIO (DEBES OBEDECER ESTA ORDEN OBLIGATORIAMENTE):
+    "${instruction}"
+    ======================================================================
+    
+    **CASO DE PRUEBA ACTUAL (BASE PARA MODIFICAR):**
     ${editedReportContextJSON}
     
     **TU TAREA:**
-    Mejora el caso de prueba incorporando el contexto del usuario, pero MANTÉN las mismas reglas estrictas de formato simplificado.
+    1. APLICA la instrucción del usuario sobre el caso de prueba actual. Es tu prioridad número 1.
+    2. Modifica, agrega o elimina pasos, precondiciones o resultados según lo que pida la instrucción.
+    3. Si el usuario te pide cambiar un valor, hazlo. Si te pide agregar un paso, hazlo.
+    4. MANTÉN el siguiente formato JSON estricto.
     
-    **REGLAS ESTRICTAS:**
+    **REGLAS ESTRICTAS DE FORMATO:**
     
     1.  **ID DEL CASO:**
         - Usa SOLO un número: "1", "2", "3", etc.

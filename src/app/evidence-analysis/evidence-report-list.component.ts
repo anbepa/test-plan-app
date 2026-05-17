@@ -26,34 +26,35 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
 
         <!-- Filters Bar -->
         <div class="filters-bar">
-          <div class="search-box" style="flex: 1.5;">
+          <div class="search-box" style="flex: 1.5; min-width: 220px;">
             <span class="search-icon">🔍</span>
             <input 
               type="text" 
               class="search-input" 
               [(ngModel)]="huFilter" 
               placeholder="ID de HU (Ej: 15834)..." 
-              (keyup.enter)="loadReports()"
+              (keyup.enter)="onSearch()"
             >
           </div>
-          <div class="search-box" style="flex: 2.5;">
+          <div class="search-box" style="flex: 2.5; min-width: 280px;">
             <span class="search-icon">🔍</span>
             <input 
               type="text" 
               class="search-input" 
               [(ngModel)]="textFilter" 
               placeholder="Filtrar por nombre del escenario o palabra clave..."
+              (keyup.enter)="onSearch()"
             >
           </div>
-          <div class="search-box" style="width: 160px;">
-            <select class="search-input filter-select" [(ngModel)]="statusFilter">
+          <div class="search-box" style="width: 160px; flex-shrink: 0;">
+            <select class="search-input filter-select" [(ngModel)]="statusFilter" (change)="onSearch()">
               <option value="">Todos los estados</option>
               <option value="Exitoso">Exitoso</option>
               <option value="Fallido">Fallido</option>
             </select>
           </div>
           <div class="filter-group">
-            <button class="button-primary" (click)="loadReports()">Buscar HU</button>
+            <button class="button-primary" (click)="onSearch()">Buscar</button>
             <button class="button-ghost" (click)="clearFilters()">Limpiar</button>
           </div>
         </div>
@@ -69,14 +70,14 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
           
           <div class="hu-actions-group">
             <div class="export-btn-group">
-              <button class="export-trigger" (click)="exportAllExcel()" [disabled]="filteredReports.length === 0">
+              <button class="export-trigger" (click)="exportAllExcel()" [disabled]="reports.length === 0">
                 Excel
               </button>
-              <button class="export-trigger" (click)="exportAllDocx()" [disabled]="filteredReports.length === 0">
+              <button class="export-trigger" (click)="exportAllDocx()" [disabled]="reports.length === 0">
                 Word
               </button>
             </div>
-            <button class="btn-minimal-danger" (click)="requestDeleteHU()" [disabled]="!appliedHuFilter" title="Eliminar Historia de Usuario">
+            <button class="btn-minimal-danger" (click)="requestDeleteHU()" [disabled]="!appliedHuFilter || appliedHuFilter === 'Todas las historias'" title="Eliminar Historia de Usuario">
               🗑
             </button>
           </div>
@@ -100,7 +101,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let report of filteredReports" [class.row-selected]="selectedReports.includes(report.id)" (click)="goToDetail(report.id)">
+                <tr *ngFor="let report of reports" [class.row-selected]="selectedReports.includes(report.id)" (click)="goToDetail(report.id)">
                   <td class="check-col" (click)="$event.stopPropagation()">
                     <input type="checkbox" [checked]="selectedReports.includes(report.id)" (click)="toggleSelection(report.id)">
                   </td>
@@ -126,9 +127,9 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                     </div>
                   </td>
                 </tr>
-                <tr *ngIf="filteredReports.length === 0">
+                <tr *ngIf="reports.length === 0">
                   <td colspan="7" class="empty-table-msg">
-                    No se encontraron escenarios para la historia <strong>{{ appliedHuFilter }}</strong>.
+                    No se encontraron escenarios para los filtros seleccionados.
                   </td>
                 </tr>
               </tbody>
@@ -144,16 +145,18 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
         </div>
 
         <!-- Pagination -->
-        <div class="pagination-container" *ngIf="appliedHuFilter && filteredReports.length > 0">
+        <div class="pagination-container" *ngIf="appliedHuFilter && totalItems > 0">
           <div class="pagination-info">
-            <p>Mostrando <strong>1-{{ filteredReports.length }}</strong> de <strong>{{ filteredReports.length }}</strong> escenarios</p>
+            <p>Mostrando <strong>{{ ((currentPage - 1) * pageSize) + 1 }}-{{ getMathMin(currentPage * pageSize, totalItems) }}</strong> de <strong>{{ totalItems }}</strong> escenarios</p>
           </div>
           <div class="pagination-controls">
-            <button class="pag-btn" disabled>‹</button>
+            <button class="pag-btn" [disabled]="currentPage === 1" (click)="prevPage()">‹</button>
             <div class="pag-pages">
-              <span class="pag-page active">1</span>
+              <ng-container *ngFor="let p of getPages()">
+                <span class="pag-page" [class.active]="p === currentPage" (click)="goToPage(p)">{{ p }}</span>
+              </ng-container>
             </div>
-            <button class="pag-btn" disabled>›</button>
+            <button class="pag-btn" [disabled]="currentPage === getTotalPages()" (click)="nextPage()">›</button>
           </div>
         </div>
       </div>
@@ -736,6 +739,11 @@ export class EvidenceReportListComponent implements OnInit {
   statusFilter: string = '';
   selectedReports: string[] = [];
   
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalItems: number = 0;
+  
   // Estado de exportación
   isExporting = false;
   exportProgress = 0;
@@ -752,8 +760,8 @@ export class EvidenceReportListComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    // No cargamos nada al inicio para evitar llamadas innecesarias a la BD
-    // El usuario debe buscar por HU
+    // Cargar todos los reportes inicialmente
+    this.loadReports();
   }
 
   toggleSelection(id: string) {
@@ -765,65 +773,95 @@ export class EvidenceReportListComponent implements OnInit {
     }
   }
 
-  async loadReports() {
-    if (!this.huFilter) {
-      this.reports = [];
-      this.appliedHuFilter = '';
-      this.huName = '';
-      return;
+  onSearch() {
+    this.currentPage = 1;
+    this.loadReports();
+  }
+
+  getMathMin(a: number, b: number): number {
+    return Math.min(a, b);
+  }
+
+  getTotalPages(): number {
+    return Math.ceil(this.totalItems / this.pageSize);
+  }
+
+  getPages(): number[] {
+    const totalPages = this.getTotalPages();
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i);
     }
-    
+    return pages;
+  }
+
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.getTotalPages() && page !== this.currentPage) {
+      this.currentPage = page;
+      this.loadReports();
+    }
+  }
+
+  prevPage() {
+    this.goToPage(this.currentPage - 1);
+  }
+
+  nextPage() {
+    this.goToPage(this.currentPage + 1);
+  }
+
+  async loadReports() {
     try {
       // 1. Intentar obtener el nombre de la HU desde la BD
       let foundHU = null;
-      try {
-        const stories = await this.dbService.searchEvidenceHU(this.huFilter);
-        foundHU = stories.find(s => s.numero?.toString() === this.huFilter.toString());
-      } catch (e) {
-        console.warn('Error al buscar HU:', e);
+      if (this.huFilter) {
+        try {
+          const stories = await this.dbService.searchEvidenceHU(this.huFilter);
+          foundHU = stories.find(s => s.numero?.toString() === this.huFilter.toString());
+        } catch (e) {
+          console.warn('Error al buscar HU:', e);
+        }
       }
 
-      // 2. Obtener escenarios
-      const reports = await this.dbService.getReports(this.huFilter);
+      // 2. Obtener escenarios paginados
+      const result = await this.dbService.getReportsPaginated({
+        huFilter: this.huFilter,
+        textFilter: this.textFilter,
+        statusFilter: this.statusFilter,
+        page: this.currentPage,
+        pageSize: this.pageSize
+      });
 
-      // 3. VALIDACIÓN: Si no existe la HU en la BD Y no hay escenarios, no mostramos nada
-      if (!foundHU && reports.length === 0) {
-        this.toast.error(`La Historia de Usuario "${this.huFilter}" no existe.`);
+      const reports = result.data;
+      this.totalItems = result.total;
+
+      // 3. VALIDACIÓN: Si hay filtro y no existe la HU en la BD Y no hay escenarios, lanzamos error
+      if (this.huFilter && !foundHU && reports.length === 0 && this.currentPage === 1) {
+        this.toast.error(`No se encontró la Historia de Usuario "${this.huFilter}".`);
         this.appliedHuFilter = '';
         this.reports = [];
+        this.totalItems = 0;
         this.huName = '';
         return;
       }
 
-      // 4. Si existe o tiene escenarios, activamos la vista
+      // 4. Activamos la vista con los resultados
       this.reports = reports;
-      this.appliedHuFilter = this.huFilter;
-      this.huName = foundHU ? foundHU.title : '';
+      // Usamos 'Todas las historias' si no hay filtro para que el *ngIf="appliedHuFilter" muestre la tabla
+      this.appliedHuFilter = this.huFilter ? this.huFilter : 'Todas las historias';
+      this.huName = foundHU ? foundHU.title : (this.huFilter ? '' : 'Todos los escenarios');
       
     } catch (e) {
       this.toast.error('Error al cargar la información');
     }
   }
 
-  get filteredReports() {
-    return this.reports.filter(r => {
-      const matchesText = !this.textFilter || 
-        r.nombre_del_escenario?.toLowerCase().includes(this.textFilter.toLowerCase()) || 
-        r.id_caso?.includes(this.textFilter);
-      
-      const matchesStatus = !this.statusFilter || r.estado_general === this.statusFilter;
-      
-      return matchesText && matchesStatus;
-    });
-  }
-
   clearFilters() {
     this.huFilter = '';
-    this.appliedHuFilter = '';
-    this.huName = '';
     this.textFilter = '';
     this.statusFilter = '';
-    this.reports = [];
+    this.currentPage = 1;
+    this.loadReports(); // Recargar todos al limpiar
   }
 
   goToDetail(id: string) {
@@ -850,7 +888,7 @@ export class EvidenceReportListComponent implements OnInit {
   reportToDeleteId: string | null = null;
 
   requestDeleteHU() {
-    if (!this.appliedHuFilter) return;
+    if (!this.appliedHuFilter || this.appliedHuFilter === 'Todas las historias') return;
     this.deleteMode = 'hu';
     this.deleteModalTitle = '¿Eliminar todos los escenarios?';
     this.deleteModalMessage = `Estás a punto de eliminar todos los escenarios de la HU ${this.appliedHuFilter}. Esta acción no se puede deshacer.`;
@@ -890,17 +928,17 @@ export class EvidenceReportListComponent implements OnInit {
   }
 
   areAllVisibleSelected(): boolean {
-    return this.filteredReports.length > 0 && this.filteredReports.every(r => this.selectedReports.includes(r.id));
+    return this.reports.length > 0 && this.reports.every(r => this.selectedReports.includes(r.id));
   }
 
   toggleSelectAllVisible() {
     if (this.areAllVisibleSelected()) {
-      this.filteredReports.forEach(r => {
+      this.reports.forEach(r => {
         const index = this.selectedReports.indexOf(r.id);
         if (index > -1) this.selectedReports.splice(index, 1);
       });
     } else {
-      this.filteredReports.forEach(r => {
+      this.reports.forEach(r => {
         if (!this.selectedReports.includes(r.id)) {
           this.selectedReports.push(r.id);
         }
@@ -909,18 +947,34 @@ export class EvidenceReportListComponent implements OnInit {
   }
 
   async exportAllExcel() {
-    if (this.filteredReports.length === 0) return;
+    if (this.reports.length === 0) return;
     
     this.isExporting = true;
     this.exportType = 'Excel';
     this.exportProgress = 0;
-    this.exportTotal = this.filteredReports.length;
     this.cdr.detectChanges();
 
     try {
+      // Obtener TODOS los registros que coinciden con los filtros (sin paginación)
+      const result = await this.dbService.getReportsPaginated({
+        huFilter: this.huFilter,
+        textFilter: this.textFilter,
+        statusFilter: this.statusFilter,
+        page: 1,
+        pageSize: 10000
+      });
+      const allMatchingReports = result.data;
+      
+      this.exportTotal = allMatchingReports.length;
+      if (this.exportTotal === 0) {
+        this.isExporting = false;
+        return;
+      }
+      this.cdr.detectChanges();
+
       const fullReports = [];
-      for (let i = 0; i < this.filteredReports.length; i++) {
-        const report = this.filteredReports[i];
+      for (let i = 0; i < allMatchingReports.length; i++) {
+        const report = allMatchingReports[i];
         const full = await this.dbService.getReportById(report.id);
         fullReports.push(full);
         this.exportProgress = i + 1;
@@ -950,18 +1004,34 @@ export class EvidenceReportListComponent implements OnInit {
   }
 
   async exportAllDocx() {
-    if (this.filteredReports.length === 0) return;
+    if (this.reports.length === 0) return;
     
     this.isExporting = true;
     this.exportType = 'DOCX';
     this.exportProgress = 0;
-    this.exportTotal = this.filteredReports.length;
     this.cdr.detectChanges();
 
     try {
+      // Obtener TODOS los registros que coinciden con los filtros (sin paginación)
+      const result = await this.dbService.getReportsPaginated({
+        huFilter: this.huFilter,
+        textFilter: this.textFilter,
+        statusFilter: this.statusFilter,
+        page: 1,
+        pageSize: 10000
+      });
+      const allMatchingReports = result.data;
+      
+      this.exportTotal = allMatchingReports.length;
+      if (this.exportTotal === 0) {
+        this.isExporting = false;
+        return;
+      }
+      this.cdr.detectChanges();
+
       const fullReports = [];
-      for (let i = 0; i < this.filteredReports.length; i++) {
-        const report = this.filteredReports[i];
+      for (let i = 0; i < allMatchingReports.length; i++) {
+        const report = allMatchingReports[i];
         const full = await this.dbService.getReportById(report.id);
         fullReports.push(full);
         this.exportProgress = i + 1;

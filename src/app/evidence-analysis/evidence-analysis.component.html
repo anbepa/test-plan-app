@@ -1,7 +1,7 @@
 <div class="evidence-container">
     <div class="header-section">
         <h1>Análisis de Evidencias</h1>
-        <p class="subtitle">Sube capturas o videos y la IA generará automáticamente hallazgos, pasos, errores y recomendaciones.</p>
+        <p class="subtitle">Sube capturas y la IA generará automáticamente el escenario de prueba</p>
     </div>
 
     <div class="main-content">
@@ -10,7 +10,7 @@
             <div class="form-group hu-input-container">
                 <label><b>Nº de Historia de Usuario</b></label>
                 <div class="input-wrapper">
-                    <input type="text" [ngModel]="huNumber" (ngModelChange)="handleHUChange($event)" placeholder="Ej: 15834" class="input-field">
+                    <input type="text" [ngModel]="huNumber" (ngModelChange)="handleHUChange($event)" placeholder="Ej: 15834" class="input-field" [disabled]="isProcessing">
                     <div class="check-icon" *ngIf="isExistingHU">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     </div>
@@ -22,12 +22,12 @@
             
             <div class="form-group flex-1">
                 <label><b>Título del escenario</b></label>
-                <input type="text" [(ngModel)]="testTitle" [disabled]="isExistingHU" placeholder="Ej: Consulta de saldo en cajero" class="input-field" [class.disabled]="isExistingHU">
+                <input type="text" [(ngModel)]="testTitle" [disabled]="isExistingHU || isProcessing" placeholder="Ej: Consulta de saldo en cajero" class="input-field" [class.disabled]="isExistingHU || isProcessing">
             </div>
  
             <div class="form-group flex-2">
                 <label><b>Contexto adicional (Opcional)</b></label>
-                <input type="text" [(ngModel)]="additionalContext" placeholder="Ej: Solo analizar los cálculos de intereses o el flujo de error..." class="input-field">
+                <input type="text" [(ngModel)]="additionalContext" placeholder="Ej: Solo analizar los cálculos de intereses o el flujo de error..." class="input-field" [disabled]="isProcessing">
             </div>
         </div>
 
@@ -55,7 +55,7 @@
         <div class="evidences-gallery section-card" *ngIf="files.length > 0">
             <div class="gallery-header">
                 <div class="header-left" style="margin-left: -0.5rem;">
-                    <button class="btn-text-ghost" (click)="toggleSelectAll()">
+                    <button class="btn-text-ghost" (click)="toggleSelectAll()" [disabled]="isProcessing">
                         {{ selectedIndices.length === files.length ? 'Deseleccionar todo' : 'Seleccionar todo' }}
                     </button>
                     <div class="header-divider"></div>
@@ -65,26 +65,26 @@
                 </div>
                 
                 <div class="header-right">
-                    <button class="btn-generate btn-ai-premium" (click)="generateAnalysis()" [disabled]="isProcessing || selectedIndices.length === 0">
+                    <button class="button-primary" (click)="generateAnalysis()" [disabled]="isProcessing || selectedIndices.length === 0">
                         <span class="spinner" *ngIf="isProcessing"></span>
                         <span *ngIf="!isProcessing">GENERAR ANÁLISIS <b>{{ selectedIndices.length }}</b></span>
                     </button>
                 </div>
             </div>
             
-            <div class="grid-container">
+            <div class="grid-container" [class.processing-overlay]="isProcessing">
                 <!-- Dropzone integrado en la galería -->
-                <div class="evidence-card add-card" (click)="triggerFileInput()" (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)" [class.dragging]="isDragging">
+                <div class="evidence-card add-card" (click)="!isProcessing && triggerFileInput()" (dragover)="!isProcessing && onDragOver($event)" (dragleave)="!isProcessing && onDragLeave($event)" (drop)="!isProcessing && onDrop($event)" [class.dragging]="isDragging">
                     <div class="add-icon">+</div>
                     <span class="add-text">Añadir evidencias</span>
                 </div>
                 <div class="evidence-card" *ngFor="let file of files; let i = index" 
                      [class.selected]="selectedIndices.includes(i)"
-                     draggable="true"
-                     (dragstart)="onDragStart(i)"
-                     (dragover)="onCardDragOver($event)"
-                     (drop)="onCardDrop(i, $event)"
-                     (click)="toggleSelect(i)">
+                     [draggable]="!isProcessing"
+                     (dragstart)="!isProcessing && onDragStart(i)"
+                     (dragover)="!isProcessing && onCardDragOver($event)"
+                     (drop)="!isProcessing && onCardDrop(i, $event)"
+                     (click)="!isProcessing && toggleSelect(i)">
                     
                     <!-- Checkbox superior izquierdo con Offset -->
                     <div class="card-checkbox" [class.checked]="selectedIndices.includes(i)">

@@ -237,6 +237,65 @@ export class EvidenceDatabaseService {
     }));
   }
 
+  async getReportsPaginated(params: {
+    huFilter?: string;
+    textFilter?: string;
+    statusFilter?: string;
+    page: number;
+    pageSize: number;
+  }): Promise<{ data: any[], total: number }> {
+    const userId = await this.getCurrentUserId();
+    if (!userId) return { data: [], total: 0 };
+
+    let query = this.supabase
+      .from('test_scenarios')
+      .select(`
+        id,
+        id_caso,
+        historia_usuario,
+        nombre_del_escenario,
+        estado_general,
+        created_at,
+        test_scenario_steps (count)
+      `, { count: 'exact' })
+      .eq('user_id', userId);
+
+    if (params.huFilter) {
+      query = query.ilike('historia_usuario', `%${params.huFilter}%`);
+    }
+    
+    if (params.textFilter) {
+      // Búsqueda por id_caso o nombre_del_escenario
+      query = query.or(`id_caso.ilike.%${params.textFilter}%,nombre_del_escenario.ilike.%${params.textFilter}%`);
+    }
+
+    if (params.statusFilter) {
+      // La base de datos puede tener nulos o variaciones de 'Exitoso'
+      if (params.statusFilter.toLowerCase() === 'exitoso') {
+        // Exitoso incluye aquellos con estado explícito Exitoso o nulos (que por defecto se asumen Exitoso en el front)
+        query = query.or(`estado_general.ilike.exitoso%,estado_general.is.null,estado_general.eq.''`);
+      } else {
+        query = query.ilike('estado_general', `${params.statusFilter}%`);
+      }
+    }
+
+    const from = (params.page - 1) * params.pageSize;
+    const to = from + params.pageSize - 1;
+
+    const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) throw error;
+    
+    const mappedData = (data || []).map(r => ({
+      ...r,
+      steps_count: r.test_scenario_steps?.[0]?.count || 0
+    }));
+
+    return { data: mappedData, total: count || 0 };
+  }
+
   async getReportIds(huFilter?: string): Promise<string[]> {
     const userId = await this.getCurrentUserId();
     if (!userId) return [];
@@ -357,11 +416,17 @@ export class EvidenceDatabaseService {
   }
 
   async deleteReport(id: string): Promise<void> {
-    const { error } = await this.supabase
+    const userId = await this.getCurrentUserId();
+    if (!userId) throw new Error('No autorizado');
+
+    const { error, count } = await this.supabase
       .from('test_scenarios')
-      .delete()
-      .eq('id', id);
+      .delete({ count: 'exact' })
+      .eq('id', id)
+      .eq('user_id', userId);
+      
     if (error) throw error;
+    if (count === 0) throw new Error('No se pudo borrar el registro físico de BD (verifica RLS)');
   }
 
   async deleteReportsByHU(huNumber: string): Promise<void> {
@@ -369,15 +434,19 @@ export class EvidenceDatabaseService {
     if (!userId || !huNumber) return;
 
     // 1. Eliminar los escenarios asociados
-    const { error: scenariosError } = await this.supabase
+    const { error: scenariosError, count } = await this.supabase
       .from('test_scenarios')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('user_id', userId)
-      .ilike('historia_usuario', `%${huNumber}%`);
+      .eq('historia_usuario', huNumber);
 
     if (scenariosError) {
       console.error('Error al eliminar reportes por HU:', scenariosError);
       throw scenariosError;
+    }
+    
+    if (count === 0) {
+      console.warn('Ningún escenario físico eliminado para esta HU.');
     }
 
     // 2. Eliminar la entrada en la tabla de HUs de evidencias (si existe)
@@ -423,6 +492,14 @@ export class EvidenceDatabaseService {
       if (scenarioError) throw scenarioError;
 
       if (steps && steps.length > 0) {
+        // 2.5. Desvincular las imágenes temporalmente para evitar que el ON DELETE CASCADE las destruya
+        const { error: detachError } = await this.supabase
+          .from('report_images')
+          .update({ step_id: null })
+          .eq('report_id', id);
+          
+        if (detachError) console.warn('Error desvinculando imágenes antes de actualizar:', detachError);
+
         // 3. Eliminar pasos existentes
         const { error: deleteError } = await this.supabase
           .from('test_scenario_steps')
