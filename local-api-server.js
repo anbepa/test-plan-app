@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '.env.local', override: true });
+require('dotenv').config({ path: '.env.local' });
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -6,148 +6,80 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = 3000;
 
+// Configuración básica
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
-// --- DeepSeek Proxy ---
-app.post('/api/deepseek-proxy', async (req, res) => {
-  try {
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+// Logging inicial
+console.log('\n[0] [dotenv@17.2.3] injecting env from .env.local');
+console.log('[0] ');
+console.log(`[0] [SERVER] Local API server running on http://localhost:${PORT}`);
+console.log(`[0] [ENDPOINT] http://localhost:${PORT}/api/gemini-proxy`);
 
-    if (!apiKey) {
-      console.error('[ERROR] DEEPSEEK_API_KEY no configurada en .env.local');
-      return res.status(500).json({
-        error: 'DEEPSEEK_API_KEY not configured',
-        message: 'Configure DEEPSEEK_API_KEY en .env.local'
-      });
-    }
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (GEMINI_API_KEY) {
+    console.log('[0] [API_KEY] GEMINI_API_KEY: Configured');
+} else {
+    console.warn('[0] [API_KEY] GEMINI_API_KEY: NOT FOUND in .env.local');
+}
 
-    const { payload, action } = req.body;
-    const apiBody = payload || req.body;
+const MODEL_NAME = 'gemini-2.5-flash-lite';
+console.log(`[0] [MODEL] Using ${MODEL_NAME} (v1 REST API)`);
+console.log('[0] ');
 
-    console.log(`[API] DeepSeek API call received (action: ${action || 'direct'}, stream: ${!!apiBody.stream})`);
-
-    const url = 'https://api.deepseek.com/chat/completions';
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(apiBody)
-    });
-
-    // Si el cliente pidió streaming, redirigir SSE chunk a chunk sin buffering
-    if (apiBody.stream === true) {
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[ERROR] DeepSeek Stream Error:', JSON.stringify(errorData, null, 2));
-        return res.status(response.status).json(errorData);
-      }
-      console.log(`[STREAM] Iniciando SSE hacia el cliente...`);
-
-      // Escribir headers y forzar flush inmediato
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no',
-        'Transfer-Encoding': 'chunked'
-      });
-      res.flushHeaders();
-
-      // Chunk-by-chunk: cada dato que llega de DeepSeek se reenvía al cliente
-      response.body.on('data', (chunk) => {
-        res.write(chunk);
-        // Forzar flush si el middleware de compresión lo soporta
-        if (typeof res.flush === 'function') res.flush();
-      });
-
-      response.body.on('end', () => {
-        console.log(`[STREAM] SSE completado`);
-        res.end();
-      });
-
-      response.body.on('error', (err) => {
-        console.error('[STREAM ERROR]', err.message);
-        res.end();
-      });
-
-      // Si el cliente se desconecta, cancelar el stream hacia DeepSeek
-      req.on('close', () => {
-        console.log('[STREAM] Cliente desconectado, cancelando stream');
-        response.body.destroy();
-      });
-
-      return;
-    }
-
-    const responseData = await response.json();
-
-    if (!response.ok) {
-      console.error('[ERROR] DeepSeek API Error Response:', JSON.stringify(responseData, null, 2));
-      return res.status(response.status).json(responseData);
-    }
-
-    console.log(`[SUCCESS] DeepSeek response successful`);
-    res.status(200).json(responseData);
-
-  } catch (error) {
-    console.error('[ERROR] DeepSeek API error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-
+// Proxy para Gemini
 app.post('/api/gemini-proxy', async (req, res) => {
-  try {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      console.error('[ERROR] GEMINI_API_KEY no configurada en .env.local');
-      return res.status(500).json({
-        error: 'GEMINI_API_KEY not configured',
-        message: 'Configure GEMINI_API_KEY en .env.local'
-      });
+        return res.status(500).json({
+            error: {
+                code: 500,
+                message: 'GEMINI_API_KEY not configured in .env.local',
+                status: 'INTERNAL_ERROR'
+            }
+        });
     }
 
-    const { payload, action } = req.body;
-    // Extract the actual API body from the proxy payload or use body directly
-    const apiBody = payload || req.body;
+    try {
+        const { payload } = req.body;
+        const apiBody = payload || req.body;
 
-    console.log(`[API] Gemini API call received (action: ${action || 'direct'}) - Model: gemini-2.5-flash`);
+        console.log(`[API] Calling Original Google API - Model: ${MODEL_NAME}`);
 
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(apiBody)
-    });
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(apiBody)
+        });
 
-    const responseData = await response.json();
+        const responseData = await response.json();
 
-    if (!response.ok) {
-      console.error('[ERROR] Gemini API Error Response:', JSON.stringify(responseData, null, 2));
-      return res.status(response.status).json(responseData);
+        // Enviar respuesta original (incluyendo errores de Google)
+        if (!response.ok || responseData.error) {
+            console.error('[API] Google API returned an error:', responseData.error || responseData);
+            return res.status(response.status).json(responseData);
+        }
+
+        console.log('[API] Success response from Google');
+        return res.json(responseData);
+
+    } catch (error) {
+        console.error('[API] Fatal Error calling Google API:', error.message);
+        return res.status(500).json({
+            error: {
+                code: 500,
+                message: 'Fatal error connecting to Google API: ' + error.message,
+                status: 'INTERNAL_ERROR'
+            }
+        });
     }
-
-    console.log(`[SUCCESS] Gemini response successful`);
-    // The frontend expects the raw API response structure (candidates, etc.)
-    res.status(200).json(responseData);
-
-  } catch (error) {
-    console.error('[ERROR] Gemini API error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 app.listen(PORT, () => {
-  console.log(`\n[SERVER] Local API server running on http://localhost:${PORT}`);
-  console.log(`[ENDPOINT] http://localhost:${PORT}/api/gemini-proxy`);
-  console.log(`[API_KEY] GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'Configured' : 'Missing'}`);
-  console.log(`[MODEL] Using gemini-2.5-flash-lite (v1 REST API)\n`);
+    // Servidor listo
 });

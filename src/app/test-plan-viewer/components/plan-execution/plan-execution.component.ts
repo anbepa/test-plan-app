@@ -70,6 +70,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   pendingImageNaturalWidth: number = 1280;
   pendingImageNaturalHeight: number = 720;
   isParsingFile = false;
+  loadingText = 'Procesando archivo... por favor espera';
   hasUnsavedChanges = false;
   isLoading = true;
   isHydratingEvidence = false;
@@ -495,11 +496,22 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     if (files && files.length > 0) {
       const file = files[0];
-      const reader = new FileReader();
+      this.loadingText = 'Leyendo archivo... por favor espera';
+      this.isParsingFile = true;
+      this.cdr.detectChanges();
 
+      const reader = new FileReader();
       reader.onload = (e) => {
         const base64 = e.target?.result as string;
-        this.addEvidenceAndOpenEditor(base64, 'archivo');
+        this.addEvidenceAndOpenEditor(base64, 'archivo').catch(() => {
+          this.isParsingFile = false;
+          this.cdr.detectChanges();
+        });
+      };
+      reader.onerror = () => {
+        this.isParsingFile = false;
+        this.toastService.error('Error al leer el archivo');
+        this.cdr.detectChanges();
       };
 
       reader.readAsDataURL(file);
@@ -516,6 +528,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         return;
       }
 
+      this.loadingText = 'Obteniendo imagen del portapapeles... por favor espera';
+      this.isParsingFile = true;
+      this.cdr.detectChanges();
+
       const clipboardItems = await navigator.clipboard.read();
 
       for (const item of clipboardItems) {
@@ -524,12 +540,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
         const blob = await item.getType(imageType);
         const base64 = await this.blobToDataURL(blob);
-        this.addEvidenceAndOpenEditor(base64, 'portapapeles');
+        await this.addEvidenceAndOpenEditor(base64, 'portapapeles');
         return;
       }
 
+      this.isParsingFile = false;
       this.toastService.warning('No se encontró ninguna imagen en el portapapeles');
     } catch (error) {
+      this.isParsingFile = false;
       this.toastService.error('No se pudo leer el portapapeles. Verifica permisos del navegador');
     }
   }
@@ -543,48 +561,68 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     });
   }
 
-  private async addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): Promise<void> {
-    if (!this.currentStep || !this.execution) {
-      this.toastService.warning('No hay un paso activo para guardar la evidencia');
-      return;
-    }
+  private addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.currentStep || !this.execution) {
+        this.toastService.warning('No hay un paso activo para guardar la evidencia');
+        resolve();
+        return;
+      }
 
-    const img = new Image();
-    img.onload = async () => {
-      const evidenceId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const newImage: AssetEvidence = {
-        id: evidenceId,
-        stepId: this.currentStep!.stepId,
-        fileName: `evidencia_${Date.now()}.png`,
-        type: 'image',
-        base64Data: base64,
-        originalBase64: base64,
-        naturalWidth: img.naturalWidth,
-        naturalHeight: img.naturalHeight,
-        timestamp: Date.now()
+      this.loadingText = 'Guardando evidencia... por favor espera';
+      this.isParsingFile = true;
+      this.cdr.detectChanges();
+
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const evidenceId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          const newImage: AssetEvidence = {
+            id: evidenceId,
+            stepId: this.currentStep!.stepId,
+            fileName: `evidencia_${Date.now()}.png`,
+            type: 'image',
+            base64Data: base64,
+            originalBase64: base64,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            timestamp: Date.now()
+          };
+
+          this.currentStep!.evidences.push(newImage);
+          await this.storageService.saveImage(newImage);
+          await this.autoSaveExecutionState();
+
+          this.pendingImageBase64 = base64;
+          this.pendingOriginalBase64 = base64;
+          this.pendingImageNaturalWidth = img.naturalWidth;
+          this.pendingImageNaturalHeight = img.naturalHeight;
+          this.selectedImage = newImage;
+          this.editingImageId = evidenceId;
+          this.showImageEditor = true;
+
+          await this.updateStats();
+          this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
+          resolve();
+        } catch (err) {
+          console.error('Error saving image:', err);
+          this.toastService.error('Error al guardar la evidencia');
+          reject(err);
+        } finally {
+          this.isParsingFile = false;
+          this.cdr.detectChanges();
+        }
       };
 
-      this.currentStep!.evidences.push(newImage);
-      await this.storageService.saveImage(newImage);
-      await this.autoSaveExecutionState();
+      img.onerror = () => {
+        this.isParsingFile = false;
+        this.toastService.error('No se pudo procesar la imagen');
+        this.cdr.detectChanges();
+        reject(new Error('Image processing failed'));
+      };
 
-      this.pendingImageBase64 = base64;
-      this.pendingOriginalBase64 = base64;
-      this.pendingImageNaturalWidth = img.naturalWidth;
-      this.pendingImageNaturalHeight = img.naturalHeight;
-      this.selectedImage = newImage;
-      this.editingImageId = evidenceId;
-      this.showImageEditor = false;
-
-      await this.updateStats();
-      this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
-    };
-
-    img.onerror = () => {
-      this.toastService.error('No se pudo procesar la imagen');
-    };
-
-    img.src = base64;
+      img.src = base64;
+    });
   }
 
   openAssetEditor(asset: AssetEvidence): void {
@@ -625,6 +663,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.loadingText = 'Procesando archivo CSV... por favor espera';
     this.isParsingFile = true;
     const reader = new FileReader();
     reader.onload = async (e: any) => {
@@ -753,42 +792,55 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   async onImageSaved(data: { base64: string, stateJson: string }): Promise<void> {
     if (!this.currentStep || !this.execution) return;
 
-    if (this.editingImageId) {
-      // Actualizar imagen existente
-      const imageIndex = this.currentStep.evidences.findIndex((img: AssetEvidence) => img.id === this.editingImageId);
-      if (imageIndex >= 0) {
-        const updatedImage = this.currentStep.evidences[imageIndex];
-        updatedImage.base64Data = data.base64;
-        updatedImage.originalBase64 = updatedImage.originalBase64 || this.pendingOriginalBase64 || updatedImage.base64Data;
-        updatedImage.editorStateJson = data.stateJson;
-        updatedImage.timestamp = Date.now();
-        await this.storageService.saveImage(updatedImage);
+    this.loadingText = 'Guardando cambios de la imagen... por favor espera';
+    this.isParsingFile = true;
+    this.cdr.detectChanges();
+
+    try {
+      if (this.editingImageId) {
+        // Actualizar imagen existente
+        const imageIndex = this.currentStep.evidences.findIndex((img: AssetEvidence) => img.id === this.editingImageId);
+        if (imageIndex >= 0) {
+          const updatedImage = this.currentStep.evidences[imageIndex];
+          updatedImage.base64Data = data.base64;
+          updatedImage.originalBase64 = updatedImage.originalBase64 || this.pendingOriginalBase64 || updatedImage.base64Data;
+          updatedImage.editorStateJson = data.stateJson;
+          updatedImage.timestamp = Date.now();
+          await this.storageService.saveImage(updatedImage);
+        }
+      } else {
+        // Crear nueva imagen
+        const newImage: AssetEvidence = {
+          id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          stepId: this.currentStep.stepId,
+          fileName: `evidencia_${Date.now()}.png`,
+          type: 'image',
+          base64Data: data.base64,
+          originalBase64: this.pendingImageBase64,
+          editorStateJson: data.stateJson,
+          naturalWidth: this.pendingImageNaturalWidth,
+          naturalHeight: this.pendingImageNaturalHeight,
+          timestamp: Date.now()
+        };
+        this.currentStep.evidences.push(newImage);
+        await this.storageService.saveImage(newImage);
       }
-    } else {
-      // Crear nueva imagen
-      const newImage: AssetEvidence = {
-        id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        stepId: this.currentStep.stepId,
-        fileName: `evidencia_${Date.now()}.png`,
-        type: 'image',
-        base64Data: data.base64,
-        originalBase64: this.pendingImageBase64,
-        editorStateJson: data.stateJson,
-        naturalWidth: this.pendingImageNaturalWidth,
-        naturalHeight: this.pendingImageNaturalHeight,
-        timestamp: Date.now()
-      };
-      this.currentStep.evidences.push(newImage);
-      await this.storageService.saveImage(newImage);
+
+      this.execution.updatedAt = Date.now();
+      await this.autoSaveExecutionState();
+
+      this.showImageEditor = false;
+      this.editingImageId = null;
+      this.selectedImage = null;
+      await this.updateStats();
+      this.toastService.success('Imagen guardada correctamente');
+    } catch (error) {
+      console.error('Error onImageSaved:', error);
+      this.toastService.error('Error al guardar los cambios de la imagen');
+    } finally {
+      this.isParsingFile = false;
+      this.cdr.detectChanges();
     }
-
-    this.execution.updatedAt = Date.now();
-    await this.autoSaveExecutionState();
-
-    this.showImageEditor = false;
-    this.editingImageId = null;
-    this.selectedImage = null;
-    await this.updateStats();
   }
 
   async deleteImage(imageId: string): Promise<void> {
@@ -848,7 +900,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   private async autoSaveExecutionState(): Promise<void> {
     if (!this.execution) return;
 
-    await this.syncExecutionImagesToStorage();
+    // Deshabilitado para evitar subidas redundantes concurrentes que causan race conditions.
+    // Las evidencias ya se suben de manera individual e inmediata al crearse/modificarse.
+    // await this.syncExecutionImagesToStorage();
     this.execution.updatedAt = Date.now();
     await this.storageService.saveExecution(this.execution);
     this.persistExecutionContext();
@@ -880,7 +934,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (!step?.evidences?.length) return;
 
     const hasMissingImages = step.evidences.some(
-      ev => ev.id && (!ev.base64Data || !this.storageService.getCachedImage(ev.id))
+      ev => ev.id && (
+        ev.type === 'csv'
+          ? (!ev.tabularData && !this.storageService.getCachedImage(ev.id))
+          : (!ev.base64Data && !this.storageService.getCachedImage(ev.id))
+      )
     );
     if (!hasMissingImages) return;
 

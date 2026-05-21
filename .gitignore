@@ -57,6 +57,8 @@ Thumbs.db
 # Angular/local environment overrides (secret-safe)
 src/environments/environment.local.ts
 src/environments/environment.*.local.ts
+# Generado en build time por build-vercel.sh desde las vars de Vercel — no commitear
+src/environments/environment.prod.ts
 
 # Common secret/certificate files
 *.pem

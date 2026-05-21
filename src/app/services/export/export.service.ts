@@ -504,6 +504,232 @@ export class ExportService {
     }
 
     /**
+     * Exporta reportes de análisis de evidencias a DOCX.
+     * Mantiene el formato de Ejecución: página 55.8cm, tabla 25/75%, 1 página por escenario.
+     */
+    async exportEvidenceAnalysisToDOCX(
+        reports: any[],
+        huNumber: string,
+        huTitle?: string,
+        onProgress?: (current: number, total: number) => void
+    ): Promise<void> {
+        if (!reports || reports.length === 0) {
+            throw new Error('No hay reportes para exportar');
+        }
+
+        const total = reports.length;
+        const children: Array<Paragraph | Table> = [];
+
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS ---
+        children.push(new Paragraph({
+            text: `Reporte de Evidencias - HU: ${huNumber}${huTitle ? ' | ' + huTitle : ''}`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        children.push(new Paragraph({
+            text: "Matriz de Escenarios y Evidencias",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        const scenariosHeader = new TableRow({
+            children: [
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
+                }),
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
+                })
+            ]
+        });
+
+        const scenariosRows = reports.map((report, idx) => {
+            const scenarioId = `Evid_Scenario_${idx + 1}`;
+            return new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ text: `${idx + 1}`, alignment: AlignmentType.CENTER })]
+                    }),
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new InternalHyperlink({
+                                        children: [
+                                            new TextRun({
+                                                text: report.nombre_del_escenario || `Escenario ${idx + 1}`,
+                                                color: "2E74B5",
+                                                bold: true
+                                            })
+                                        ],
+                                        anchor: scenarioId
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+        });
+
+        children.push(new Table({
+            layout: TableLayoutType.AUTOFIT,
+            alignment: AlignmentType.CENTER,
+            rows: [scenariosHeader, ...scenariosRows]
+        }));
+
+        // --- CONTENIDO DE ESCENARIOS ---
+        for (let index = 0; index < reports.length; index++) {
+            const report = reports[index];
+            const scenarioNumber = index + 1;
+            const scenarioId = `Evid_Scenario_${scenarioNumber}`;
+            const scenarioTitle = report.nombre_del_escenario?.trim()
+                ? `${scenarioNumber}. ${report.nombre_del_escenario.trim()}`
+                : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            onProgress?.(index + 1, total);
+
+            children.push(new Paragraph({
+                children: [
+                    new BookmarkStart(scenarioId, index),
+                    new TextRun({
+                        text: scenarioTitle,
+                        color: "2E74B5",
+                        bold: true
+                    }),
+                    new BookmarkEnd(index)
+                ],
+                heading: HeadingLevel.HEADING_1,
+                pageBreakBefore: true,
+                spacing: { after: 240 }
+            }));
+
+            const headerRow = new TableRow({
+                children: [
+                    new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Paso a paso', bold: true, underline: {} })] })]
+                    }),
+                    new TableCell({
+                        width: { size: 75, type: WidthType.PERCENTAGE },
+                        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Evidencias', bold: true, underline: {} })] })]
+                    })
+                ]
+            });
+
+            const steps = report.test_scenario_steps || [];
+            const stepRows = [];
+
+            for (const step of steps) {
+                const stepNumber = step.numero_paso;
+                const stepAction = step.descripcion_accion_observada || `Paso ${stepNumber}`;
+
+                // Buscar imágenes asociadas a este paso (todas)
+                let stepImages = report.report_images?.filter((img: any) => img.step_id === step.id) || [];
+
+                // FALLBACK: Si no hay imágenes por ID (común tras refinar), buscar por referencia/orden
+                if (stepImages.length === 0 && step.imagen_referencia) {
+                    const match = step.imagen_referencia.match(/\d+/);
+                    if (match) {
+                        const order = parseInt(match[0], 10);
+                        const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
+                        if (fallbackImg) stepImages = [fallbackImg];
+                    }
+                }
+                
+                const evidenceContent: (Paragraph | Table)[] = [];
+
+                if (stepImages.length > 0) {
+                    for (const imgData of stepImages) {
+                        if (imgData.image_url) {
+                            try {
+                                const imgRes = await this.fetchImageAsUint8Array(imgData.image_url);
+                                if (imgRes) {
+                                    const dims = this.scaleImageDimensions(1280, 720, 900, 675);
+                                    evidenceContent.push(new Paragraph({
+                                        alignment: AlignmentType.CENTER,
+                                        spacing: { before: 120, after: 120 },
+                                        children: [
+                                            new ImageRun({
+                                                data: imgRes.bytes,
+                                                transformation: { width: dims.width, height: dims.height },
+                                                type: imgRes.type as any
+                                            })
+                                        ]
+                                    }));
+                                }
+                            } catch (err) {}
+                        }
+                    }
+                } else {
+                    evidenceContent.push(new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 120, after: 120 },
+                        children: [new TextRun({ text: this.EVIDENCE_PLACEHOLDER, bold: true, underline: {} })]
+                    }));
+                }
+
+                stepRows.push(new TableRow({
+                    children: [
+                        new TableCell({
+                            width: { size: 25, type: WidthType.PERCENTAGE },
+                            children: [new Paragraph({ text: `${stepNumber}. ${stepAction}`, alignment: AlignmentType.LEFT })]
+                        }),
+                        new TableCell({
+                            width: { size: 75, type: WidthType.PERCENTAGE },
+                            children: evidenceContent
+                        })
+                    ]
+                }));
+            }
+
+            children.push(new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [headerRow, ...stepRows]
+            }));
+
+            children.push(new Paragraph({
+                spacing: { before: 200, after: 200 },
+                children: [
+                    new TextRun({ text: 'Resultado Esperado: ', bold: true }),
+                    new TextRun({ text: report.resultado_obtenido || 'Exitoso' })
+                ]
+            }));
+        }
+
+        const doc = new Document({
+            sections: [{
+                properties: {
+                    page: {
+                        size: { width: this.CUSTOM_PAGE_SIZE_TWIP, height: this.CUSTOM_PAGE_SIZE_TWIP },
+                    },
+                },
+                children: children,
+            }],
+        });
+
+        const blob = await Packer.toBlob(doc);
+        const filename = this.escapeFilename(`Reporte_Evidencias_HU_${huNumber}.docx`);
+        saveAs(blob, filename);
+    }
+
+    private async fetchImageAsUint8Array(url: string): Promise<{ bytes: Uint8Array, type: string } | null> {
+        try {
+            const response = await fetch(url);
+            const buffer = await response.arrayBuffer();
+            const contentType = response.headers.get('content-type') || 'image/png';
+            const type = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+            return { bytes: new Uint8Array(buffer), type };
+        } catch (e) {
+            console.error('Error fetching image for DOCX:', e);
+            return null;
+        }
+    }
+
+    /**
      * Construye un grid anidado (tabla) para las evidencias si el usuario ha configurado cols > 1 o rows > 1
      */
     private buildEvidenceGrid(evidences: any[], cols: number = 1, rows: number = 1, notes?: string): Array<Paragraph | Table> {
@@ -512,7 +738,13 @@ export class ExportService {
         }
 
         const validCols = Math.max(1, cols || 1);
-        const validRows = Math.max(1, rows || 1);
+        let validRows = Math.max(1, rows || 1);
+
+        // Auto-calcular filas necesarias para no perder evidencias
+        const requiredRows = Math.ceil(evidences.length / validCols);
+        if (requiredRows > validRows) {
+            validRows = requiredRows;
+        }
 
         if (validCols === 1 && validRows === 1) {
             return this.buildEvidenceCellContent(evidences, notes);
@@ -543,8 +775,8 @@ export class ExportService {
                 bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
                 left: { style: BorderStyle.NONE, size: 0, color: "auto" },
                 right: { style: BorderStyle.NONE, size: 0, color: "auto" },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "auto" },
-                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "auto" }
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "000000" }
             },
             rows: tableRows
         }));

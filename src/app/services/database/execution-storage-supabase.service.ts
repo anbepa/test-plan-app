@@ -755,6 +755,7 @@ export class ExecutionStorageService {
   }
 
   private async saveCsvEvidence(userId: string, executionId: string, asset: AssetEvidence): Promise<void> {
+    if (!asset.tabularData) return;
     const filePath = `${userId}/${executionId}/${asset.id}.json`;
 
     // Serializar todo el asset (sin base64, porque CSV no tiene)
@@ -970,7 +971,10 @@ export class ExecutionStorageService {
             naturalHeight: evidence.naturalHeight,
             // NO guardar base64 en la tabla — solo en Storage
             base64Data: '',
-            originalBase64: ''
+            originalBase64: '',
+            tabularData: evidence.tabularData,
+            rowColors: evidence.rowColors,
+            csvConfig: evidence.csvConfig
           }))
         }))
       }))
