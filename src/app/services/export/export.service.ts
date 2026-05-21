@@ -738,7 +738,13 @@ export class ExportService {
         }
 
         const validCols = Math.max(1, cols || 1);
-        const validRows = Math.max(1, rows || 1);
+        let validRows = Math.max(1, rows || 1);
+
+        // Auto-calcular filas necesarias para no perder evidencias
+        const requiredRows = Math.ceil(evidences.length / validCols);
+        if (requiredRows > validRows) {
+            validRows = requiredRows;
+        }
 
         if (validCols === 1 && validRows === 1) {
             return this.buildEvidenceCellContent(evidences, notes);
@@ -769,8 +775,8 @@ export class ExportService {
                 bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
                 left: { style: BorderStyle.NONE, size: 0, color: "auto" },
                 right: { style: BorderStyle.NONE, size: 0, color: "auto" },
-                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "auto" },
-                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "auto" }
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "000000" }
             },
             rows: tableRows
         }));
