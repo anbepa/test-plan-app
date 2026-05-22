@@ -76,6 +76,9 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
               <button class="export-trigger" (click)="exportAllDocx()" [disabled]="reports.length === 0">
                 Word
               </button>
+              <button class="export-trigger export-trigger-pdf" (click)="exportAllPdf()" [disabled]="reports.length === 0">
+                PDF
+              </button>
             </div>
             <button class="btn-minimal-danger" (click)="requestDeleteHU()" [disabled]="!appliedHuFilter" [title]="appliedHuFilter === 'Todas las historias' ? 'Eliminar todos los escenarios de todas las HUs' : 'Eliminar Historia de Usuario'">
               🗑
@@ -400,8 +403,11 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       transition: background 0.2s;
     }
     .export-trigger:first-child { border-right: 1.5px solid #d2d2d7; }
+    .export-trigger:not(:first-child):not(:last-child) { border-right: 1.5px solid #d2d2d7; }
     .export-trigger:hover:not(:disabled) { background: #f5f5f7; }
     .export-trigger:disabled { opacity: 0.5; cursor: not-allowed; }
+    .export-trigger-pdf { color: #dc2626; }
+    .export-trigger-pdf:hover:not(:disabled) { background: rgba(220,38,38,.06); }
 
     .btn-minimal-danger {
       width: 32px; height: 32px; border-radius: 8px; border: none;
@@ -748,7 +754,7 @@ export class EvidenceReportListComponent implements OnInit {
   isExporting = false;
   exportProgress = 0;
   exportTotal = 0;
-  exportType: 'DOCX' | 'Excel' = 'DOCX';
+  exportType: 'DOCX' | 'Excel' | 'PDF' = 'DOCX';
 
   constructor(
     private router: Router,
@@ -1026,7 +1032,6 @@ export class EvidenceReportListComponent implements OnInit {
     this.cdr.detectChanges();
 
     try {
-      // Obtener TODOS los registros que coinciden con los filtros (sin paginación)
       const result = await this.dbService.getReportsPaginated({
         huFilter: this.huFilter,
         textFilter: this.textFilter,
@@ -1069,6 +1074,62 @@ export class EvidenceReportListComponent implements OnInit {
     } catch (e) {
       console.error('Error en exportación Word:', e);
       this.toast.error('Error al generar el documento Word');
+    } finally {
+      this.isExporting = false;
+    }
+  }
+
+  async exportAllPdf() {
+    if (this.reports.length === 0) return;
+
+    this.isExporting = true;
+    this.exportType = 'PDF';
+    this.exportProgress = 0;
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dbService.getReportsPaginated({
+        huFilter: this.huFilter,
+        textFilter: this.textFilter,
+        statusFilter: this.statusFilter,
+        page: 1,
+        pageSize: 10000
+      });
+      const allMatchingReports = result.data;
+
+      this.exportTotal = allMatchingReports.length;
+      if (this.exportTotal === 0) {
+        this.isExporting = false;
+        return;
+      }
+      this.cdr.detectChanges();
+
+      const fullReports = [];
+      for (let i = 0; i < allMatchingReports.length; i++) {
+        const report = allMatchingReports[i];
+        const full = await this.dbService.getReportById(report.id);
+        fullReports.push(full);
+        this.exportProgress = i + 1;
+        this.cdr.detectChanges();
+      }
+
+      this.exportProgress = 0;
+      this.cdr.detectChanges();
+
+      await this.exportService.exportEvidenceAnalysisToPDF(
+        fullReports,
+        this.appliedHuFilter,
+        this.huName,
+        (current, total) => {
+          this.exportProgress = current;
+          this.exportTotal = total;
+          this.cdr.detectChanges();
+        }
+      );
+      this.toast.success('Reporte PDF generado con éxito');
+    } catch (e) {
+      console.error('Error en exportación PDF:', e);
+      this.toast.error('Error al generar el reporte PDF');
     } finally {
       this.isExporting = false;
     }
