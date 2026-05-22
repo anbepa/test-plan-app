@@ -80,7 +80,7 @@ export class EvidenceDatabaseService {
 
       // 1. COMPRESIÓN A WEBP
       const compressedBlob = await this.compressToWebP(fileData);
-      
+
       // Limpiar nombre de archivo
       const cleanName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       const path = `${userId}/${Date.now()}_${cleanName}.webp`;
@@ -132,7 +132,7 @@ export class EvidenceDatabaseService {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject(new Error('No se pudo obtener el contexto del canvas'));
-        
+
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
@@ -154,7 +154,7 @@ export class EvidenceDatabaseService {
   async saveEvidenceReport(reportData: any, evidenceFiles: any[], huNumber?: string): Promise<string> {
     try {
       const userId = await this.getCurrentUserId();
-      
+
       const scenarioToInsert = {
         nombre_del_escenario: reportData.escenario_prueba || reportData.nombre_escenario || 'Análisis de Evidencias',
         id_caso: reportData.id_caso?.toString() || '1',
@@ -166,7 +166,7 @@ export class EvidenceDatabaseService {
         user_id: userId,
         fecha_ejecucion: new Date().toISOString().split('T')[0],
         // Campo adicional para asociar a la tabla de evidence_hus si fuera necesario en el futuro
-        // user_story_id: some_id 
+        // user_story_id: some_id
       };
 
       const { data: scenario, error: scenarioError } = await this.supabase
@@ -230,7 +230,7 @@ export class EvidenceDatabaseService {
 
     if (error) throw error;
     console.log('DEBUG: Reportes cargados de Supabase:', data);
-    
+
     return (data || []).map(r => ({
       ...r,
       steps_count: r.test_scenario_steps?.[0]?.count || 0
@@ -263,7 +263,7 @@ export class EvidenceDatabaseService {
     if (params.huFilter) {
       query = query.ilike('historia_usuario', `%${params.huFilter}%`);
     }
-    
+
     if (params.textFilter) {
       // Búsqueda por id_caso o nombre_del_escenario
       query = query.or(`id_caso.ilike.%${params.textFilter}%,nombre_del_escenario.ilike.%${params.textFilter}%`);
@@ -287,7 +287,7 @@ export class EvidenceDatabaseService {
       .range(from, to);
 
     if (error) throw error;
-    
+
     const mappedData = (data || []).map(r => ({
       ...r,
       steps_count: r.test_scenario_steps?.[0]?.count || 0
@@ -334,7 +334,7 @@ export class EvidenceDatabaseService {
     if (data.report_images) {
       data.report_images.sort((a: any, b: any) => (a.image_order || 0) - (b.image_order || 0));
     }
-    
+
     // Asegurar que los pasos existan y estén ordenados
     if (data.test_scenario_steps) {
       data.test_scenario_steps.sort((a: any, b: any) => (a.numero_paso || 0) - (b.numero_paso || 0));
@@ -347,7 +347,7 @@ export class EvidenceDatabaseService {
 
   private async saveImages(scenarioId: string, files: any[], steps: any[]) {
     const imagesToInsert: any[] = [];
-    
+
     // 1. Parsear todas las asociaciones posibles primero
     const associations: { stepId: string, imageIndex: number }[] = [];
     steps.forEach(step => {
@@ -365,14 +365,15 @@ export class EvidenceDatabaseService {
     // 2. Procesar cada archivo de imagen
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (!file.dataURL || !file.dataURL.startsWith('data:image')) continue;
+      // Si no hay URL pública ni dataURL, saltar
+      if (!file.publicUrl && (!file.dataURL || !file.dataURL.startsWith('data:image'))) continue;
 
       try {
-        // Subir a Storage una sola vez por archivo
-        const imageUrl = await this.uploadImageToStorage(file.dataURL, file.name || `evidencia_${i+1}`);
-        
+        // Reutilizar la URL si ya se subió previamente en el componente
+        const imageUrl = file.publicUrl || await this.uploadImageToStorage(file.dataURL, file.name || `evidencia_${i+1}`);
+
         const imageAssociations = associations.filter(a => a.imageIndex === i);
-        
+
         if (imageAssociations.length > 0) {
           // Crear un registro por cada paso que referencia esta imagen
           imageAssociations.forEach(assoc => {
@@ -424,7 +425,7 @@ export class EvidenceDatabaseService {
       .delete({ count: 'exact' })
       .eq('id', id)
       .eq('user_id', userId);
-      
+
     if (error) throw error;
     if (count === 0) throw new Error('No se pudo borrar el registro físico de BD (verifica RLS)');
   }
@@ -444,7 +445,7 @@ export class EvidenceDatabaseService {
       console.error('Error al eliminar reportes por HU:', scenariosError);
       throw scenariosError;
     }
-    
+
     if (count === 0) {
       console.warn('Ningún escenario físico eliminado para esta HU.');
     }
@@ -494,12 +495,12 @@ export class EvidenceDatabaseService {
         .from('report_images')
         .select('id, step_id')
         .eq('report_id', id);
-        
+
       const { data: currentSteps } = await this.supabase
         .from('test_scenario_steps')
         .select('id, numero_paso')
         .eq('scenario_id', id);
-        
+
       const stepToImagesMap = new Map<number, string[]>();
       if (currentImages && currentSteps) {
         currentSteps.forEach(s => {
@@ -522,7 +523,7 @@ export class EvidenceDatabaseService {
           .from('report_images')
           .update({ step_id: null })
           .eq('report_id', id);
-          
+
         if (detachError) console.warn('Error desvinculando imágenes antes de actualizar:', detachError);
 
         // 3. Eliminar pasos existentes
@@ -562,8 +563,8 @@ export class EvidenceDatabaseService {
                   .eq('id', imageId);
               }
               continue; // Ya vinculado
-            } 
-            
+            }
+
             // B. Intentar por referencia de texto (si Gemini cambió el orden o añadió pasos)
             if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
               const match = step.imagen_referencia.match(/\d+/);
@@ -626,14 +627,14 @@ export class EvidenceDatabaseService {
       .from('report_images')
       .update({ step_id: step2Id })
       .eq('id', image1Id);
-      
+
     if (err1) throw err1;
 
     const { error: err2 } = await this.supabase
       .from('report_images')
       .update({ step_id: step1Id })
       .eq('id', image2Id);
-      
+
     if (err2) throw err2;
   }
 
@@ -663,4 +664,44 @@ export class EvidenceDatabaseService {
     if (error) throw error;
   }
 
+  /**
+   * Añade un nuevo paso manual a un escenario
+   */
+  async addStep(scenarioId: string, numeroPaso: number, descripcion: string): Promise<any> {
+    const { data, error } = await this.supabase
+      .from('test_scenario_steps')
+      .insert([{
+        scenario_id: scenarioId,
+        numero_paso: numeroPaso,
+        descripcion_accion_observada: descripcion,
+        imagen_referencia: 'N/A'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Sube una imagen y la asocia directamente a un paso
+   */
+  async saveImageForStep(scenarioId: string, stepId: string, fileData: string, fileName: string, order: number): Promise<void> {
+    const imageUrl = await this.uploadImageToStorage(fileData, fileName);
+
+    const { error } = await this.supabase
+      .from('report_images')
+      .insert([{
+        report_id: scenarioId,
+        step_id: stepId,
+        file_name: fileName,
+        file_type: 'image/webp',
+        image_url: imageUrl,
+        image_order: order,
+        is_video: false,
+        is_stored_in_storage: true
+      }]);
+
+    if (error) throw error;
+  }
 }

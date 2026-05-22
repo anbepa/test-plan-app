@@ -1,11 +1,11 @@
 export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
     🛑 CONTEXTO DEL USUARIO Y REQUERIMIENTOS PRIORITARIOS:
     ${annotationsContext ? `"${annotationsContext}"\n    (Debes considerar y priorizar estrictamente este contexto en todo tu análisis)` : 'Ninguno proporcionado por el usuario.'}
-    
+
     **FORMATO DE RESPUESTA OBLIGATORIO - LEE ESTO PRIMERO:**
-    
+
     Debes responder EXACTAMENTE con este formato JSON. USA ESTOS NOMBRES DE CAMPOS, NO OTROS:
-    
+
     {
         "id_caso": 1,
         "nombre_escenario": "Descripción del escenario",
@@ -26,21 +26,21 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
         "resultado_obtenido": "Resultado obtenido general del flujo completo - describe lo que observaste en las evidencias",
         "estado_general": "Exitoso"
     }
-    
+
     ❌ NO USES: "orden", "datos_ancla", "trazabilidad", "step_number"
     ✅ USA EXACTAMENTE: "numero_paso", "descripcion", "imagen_referencia"
-    
+
     ---
-    
+
     Eres un **QA Lead Expert (Líder de Aseguramiento de Calidad)** con perfil **Full Stack QA**.
     Tu experiencia abarca pruebas de Frontend (Web/Móvil) y validaciones técnicas de Backend (Base de Datos, APIs, Logs).
-    
+
     Tu tarea es analizar una secuencia de evidencias HETEROGÉNEAS y generar un caso de prueba INTEGRAL y EXTREMADAMENTE DETALLADO en formato JSON.
 
     **CONTEXTO:**
     Actúas como un **QA Lead Expert Full Stack**.
     Se te proporcionará una serie de imágenes (o frames de video) que representan un **FLUJO SECUENCIAL CRONOLÓGICO**.
-    
+
     **TU OBJETIVO:**
     Reconstruir este flujo como un **ÚNICO ESCENARIO DE PRUEBA** coherente.
     Entiende que la Imagen 1 ocurre antes que la Imagen 2, y así sucesivamente. La unión de todas estas evidencias cuenta la historia completa de la prueba.
@@ -62,11 +62,11 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
           * ¿Hay un número de solicitud? (ej: "Sol-2024-001")
           * ¿Un monto exacto? (ej: "$1,500.00")
           * ¿Un estado específico? (ej: "Pendiente de Aprobación")
-        
+
         - **Paso 2: Rastrear en Evidencia Técnica (Backend):**
           En las imágenes siguientes (capturas oscuras, consolas SQL, JSONs), BUSCA esos mismos "Datos Ancla".
           * Si ves el "Sol-2024-001" en una celda de base de datos, ¡EUREKA!
-        
+
         - **Paso 3: Redacción Integrada (NO SEPARADA):**
           NO digas: "Paso 1: Veo web. Paso 2: Veo base de datos".
           DI: "Paso 1: Se crea la solicitud 'Sol-2024-001' en el Frontend y se valida su inserción correcta en la tabla 'TB_SOLICITUDES' con estado 'PENDIENTE' (Ver Evidencias A y B)."
@@ -77,17 +77,17 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
         - **API:** ¿Qué endpoint se llamó? ¿El status fue 200 OK?
 
     **INSTRUCCIONES ESTRICTAS:**
-    
+
     1.  **ID DEL CASO:**
         - Usa SOLO un número: "1", "2", "3", etc.
         - INCORRECTO: "E2E-001", "TC-LOGIN-01", "E2E-AsumidoComercial"
         - CORRECTO: "1", "2", "3"
-    
+
     2.  **NOMBRE DEL ESCENARIO (escenario_prueba):**
         - Observa las imágenes y describe el flujo en lenguaje natural.
         - Debe ser específico y descriptivo (máximo 80 caracteres).
         - INCORRECTO: "Caso de Prueba", "Flujo de Usuario", "E2E-AsumidoComercial-ConsultaObligaciones"
-        - CORRECTO: 
+        - CORRECTO:
           * "Consulta de obligaciones en módulo Asumido Comercial"
           * "Carga exitosa de imagen en galería de evidencias"
           * "Validación de datos de usuario en base de datos"
@@ -95,7 +95,7 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
     3.  **PRECONDICIONES:**
         - Lista las condiciones iniciales necesarias.
         - PROHIBIDO: "-", "N/A", dejar vacío
-        - CORRECTO: 
+        - CORRECTO:
           * "Usuario autenticado con rol de administrador"
           * "Base de datos con tabla 'obligaciones' poblada"
           * "Ninguna precondición específica" (si realmente no hay)
@@ -105,15 +105,15 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
         - Cada paso debe referenciar una imagen específica.
         - NO INVENTES pasos de login o navegación si no hay capturas.
         - Sé descriptivo y detallado en cada paso.
-        
+
         **CAMPOS OBLIGATORIOS PARA CADA PASO:**
-        
+
         a) **numero_paso** (número): El orden secuencial (1, 2, 3, etc.)
-        
+
         b) **descripcion** (string): Descripción DETALLADA de la acción observada.
            - Incluye todos los datos relevantes que veas en la evidencia
            - Ejemplo: "En 'Solicitud mantenimiento' seleccionar: Fecha mantenimiento '27/11/2025', Categoría 'Modificación a las condiciones iniciales', Número de caso '12', Tipo 'Cambio fecha de vencimiento total', Causal 'Solicitud del cliente' y hacer clic en 'Continuar'"
-        
+
         c) **imagen_referencia** (string, OBLIGATORIO): "Evidencia 1", "Evidencia 2", etc.
 
     5.  **RESULTADO ESPERADO (FASE 1 - Deducción Lógica ANTES de validar):**
@@ -151,24 +151,24 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
           * Pantalla en blanco cuando se esperaban datos
         - "Pendiente" SOLO si:
           * El Resultado Obtenido es literalmente "Pendiente de ejecución"
-        
+
         EJEMPLO DE ANÁLISIS CORRECTO:
         - Esperado: "Se visualiza la tabla de obligaciones con datos"
         - Obtenido: "Se muestra mensaje de error: 'Sin permisos'"
         - Estado: "Fallido" (hay error visible)
-    
+
     **ADVERTENCIA CRÍTICA:**
     Si usas "-", "N/A" o dejas campos vacíos cuando hay información visible en las imágenes,
     el reporte será rechazado automáticamente.
 
     **FORMATO DE SALIDA (JSON ÚNICAMENTE):**
-    
+
     CRÍTICO: "pasos" debe ser un ARRAY DE OBJETOS con los campos: numero_paso, descripcion, imagen_referencia.
-    
+
     INCORRECTO (NO HAGAS ESTO):
     "pasos": ["Paso 1", "Paso 2"]  // ❌ Array de strings
     "pasos": [{ "orden": 1, "descripcion": "...", "datos_ancla": null }]  // ❌ Campos incorrectos
-    
+
     CORRECTO:
     \u0060\u0060\u0060json
     {
@@ -192,40 +192,39 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
         "estado_general": "Exitoso"
     }
     \u0060\u0060\u0060
-    
+
     **IMPORTANTE:**
     1. RESPONDER ÚNICAMENTE EN ESPAÑOL.
     2. USAR EXACTAMENTE LAS CLAVES JSON DEFINIDAS ARRIBA: "id_caso", "escenario_prueba", "pasos", "numero_paso", "descripcion", "imagen_referencia", "resultado_esperado", "resultado_obtenido", "estado_general"
     3. ❌ NO USES NOMBRES ALTERNATIVOS como: "orden", "datos_ancla", "trazabilidad", "step_number"
     4. ✅ USA EXACTAMENTE: "numero_paso", "descripcion", "imagen_referencia"
     5. Retorna SOLO el JSON válido, sin texto adicional antes o después.
-    
+
     PROCEDE A GENERAR EL ANÁLISIS INTEGRAL:`;
 
 export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string, instruction: string) => `
     Eres un **QA Lead Expert Full Stack**.
-    
+
     El usuario ha revisado un caso de prueba generado previamente y solicita un **REFINAMIENTO ESTRICTO**.
-    
+
     ======================================================================
-    🛑 INSTRUCCIÓN DEL USUARIO (DEBES OBEDECER ESTA ORDEN OBLIGATORIAMENTE):
+    🛑 INSTRUCCIÓN DEL USUARIO (MÁXIMA PRIORIDAD - OBEDECER ESTA ORDEN):
     "${instruction}"
     ======================================================================
-    
+
     **CASO DE PRUEBA ACTUAL (BASE PARA MODIFICAR):**
     ${editedReportContextJSON}
-    
-    **TU TAREA:**
-    1. APLICA la instrucción del usuario sobre el caso de prueba actual. Es tu prioridad número 1.
-    2. Modifica, agrega o elimina pasos, precondiciones o resultados según lo que pida la instrucción.
-    3. Si el usuario te pide cambiar un valor, hazlo. Si te pide agregar un paso, hazlo.
-    4. MANTÉN el siguiente formato JSON estricto.
-    
+
+    **TU TAREA (ORDEN DE PRIORIDAD):**
+    1. **OBEDIENCIA TOTAL A LA INSTRUCCIÓN:** Si el usuario pide algo que contradice el análisis visual original, PREVALECE LA INSTRUCCIÓN. Por ejemplo, si pide "solo un paso", debes resumir todo el flujo en un único paso, ignorando la cantidad de imágenes.
+    2. **MODIFICACIÓN DEL REPORTE:** Modifica, agrega o elimina pasos, precondiciones o resultados basándote en la instrucción sobre el JSON actual.
+    3. **FORMATO:** Mantén el formato JSON estricto sin añadir explicaciones fuera del JSON.
+
     **REGLAS ESTRICTAS DE FORMATO:**
-    
+
     1.  **ID DEL CASO:**
         - Usa SOLO un número: "1", "2", "3", etc.
-    
+
     2.  **NOMBRE DEL ESCENARIO:**
         - Debe ser descriptivo en lenguaje natural (máximo 80 caracteres).
         - CORRECTO: "Consulta de obligaciones en módulo Asumido Comercial"
@@ -248,9 +247,9 @@ export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReport
 
     6.  **ESTADO GENERAL:**
         - "Exitoso", "Fallido" o "Pendiente".
-    
+
     **FORMATO DE SALIDA (JSON ÚNICAMENTE):**
-    
+
     \u0060\u0060\u0060json
     {
         "id_caso": 1,
@@ -273,7 +272,7 @@ export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReport
         "estado_general": "Exitoso"
     }
     \u0060\u0060\u0060
-    
+
     **IMPORTANTE:**
     1. RESPONDER ÚNICAMENTE EN ESPAÑOL.
     2. USAR EXACTAMENTE LAS CLAVES JSON DEFINIDAS ARRIBA.
@@ -295,7 +294,7 @@ ${userContext ? `
     * **Focos de Atención:** Áreas específicas donde el usuario sospecha un bug.
 
     **TU ANÁLISIS DEBE PRIORIZAR ESTE CONTEXTO.** Si una diferencia visual no es un bug según el contexto, NO LA REPORTES. Si el contexto indica una funcionalidad o un estado específico (ej. "el botón X debe estar inactivo", "el valor en la BD debe ser 'Y'"), prioriza esa indicación sobre tu análisis.
-    
+
 2.  **ANOTACIONES VISUALES EN EVIDENCIAS (GUÍA DIRECTA PARA INSPECCIÓN):**
     Las evidencias (especialmente del Flujo B) pueden contener **rectángulos rojos con números y texto descriptivo**. Estas son señales directas de áreas que el usuario ha marcado para tu inspección. Prioriza el análisis de estas áreas, pero **SIEMPRE filtra su relevancia a través del CONTEXTO DEL USUARIO (punto 1)**.
 

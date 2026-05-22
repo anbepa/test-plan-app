@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -25,7 +25,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
 
       <!-- Main Body Container -->
       <div class="detail-body" [class.drawer-open]="showRefiner">
-        
+
         <!-- Primary Title Card (Sticky) -->
         <div class="title-card sticky-title">
           <div class="title-card-left">
@@ -94,8 +94,8 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
           </div>
 
           <p class="drawer-hint">Ingresa instrucciones para ajustar este escenario.</p>
-          <textarea 
-            class="refiner-input" 
+          <textarea
+            class="refiner-input"
             placeholder="Ej: Ajusta los pasos para que sean más técnicos..."
             [(ngModel)]="refinementInstruction"
             [disabled]="isRefining"
@@ -115,7 +115,12 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
           <header class="card-header">
             <div class="header-left">
               <span class="scenario-id">CASO #{{ report.id_caso || '1' }}</span>
-              <h2 class="scenario-title">{{ report.nombre_del_escenario }}</h2>
+              <h2 class="scenario-title"
+                  contenteditable="true"
+                  (blur)="onFieldBlur('nombre_del_escenario', $event)"
+                  title="Haz clic para editar el título">
+                {{ report.nombre_del_escenario }}
+              </h2>
               <span class="steps-count">{{ report.test_scenario_steps?.length || 0 }} Pasos analizados</span>
             </div>
             <div class="header-right">
@@ -147,10 +152,10 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                     </div>
                   </td>
                   <td>
-                    <div 
-                      class="step-text" 
+                    <div
+                      class="step-text"
                       [class.regenerating]="isRefining"
-                      contenteditable="true" 
+                      contenteditable="true"
                       (blur)="onStepBlur(step, $event)"
                       title="Haz clic para editar manualmente"
                     >
@@ -165,8 +170,8 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                     </div>
                   </td>
                   <td style="text-align: center;">
-                    <div 
-                      class="evidence-cell" 
+                    <div
+                      class="evidence-cell"
                       [draggable]="showRefiner && getImageForStep(step)"
                       (dragstart)="onDragStart($event, step)"
                       (dragover)="onDragOver($event)"
@@ -209,15 +214,28 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                       </ng-container>
 
                       <ng-container *ngIf="!getImageForStep(step)">
-                        <div class="empty-evidence-slot" *ngIf="showRefiner">
-                          <span style="font-size: 1.5rem;">↑</span>
-                          <span>Soltar</span>
+                        <div class="empty-evidence-slot" *ngIf="showRefiner" (click)="triggerImageUpload(step)">
+                          <span style="font-size: 1.2rem;">+</span>
+                          <span>Subir</span>
                         </div>
                         <button *ngIf="!showRefiner" class="btn-view-no-evidence" disabled>
                           <span style="font-size: 1.2rem;">🖼</span>
                         </button>
                       </ng-container>
                     </div>
+                  </td>
+                </tr>
+                <!-- Añadir Paso Manual -->
+                <tr *ngIf="showRefiner">
+                  <td class="col-num">
+                    <div class="col-num-inner">
+                      <button class="btn-add-step" (click)="addNewStep()" title="Añadir nuevo paso">
+                        <span>+</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td colspan="2">
+                    <button class="btn-add-step-text" (click)="addNewStep()">Añadir un nuevo paso manual...</button>
                   </td>
                 </tr>
                 <tr *ngIf="!report.test_scenario_steps || report.test_scenario_steps.length === 0">
@@ -244,10 +262,18 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
               </div>
             </div>
             <div class="result-body">
-              <p [innerHTML]="formatTechnicalText(report.resultado_obtenido)"></p>
+              <div
+                class="result-text-editable"
+                contenteditable="true"
+                (blur)="onFieldBlur('resultado_obtenido', $event)"
+                title="Haz clic para editar el resultado obtenido"
+                [innerHTML]="formatTechnicalText(report.resultado_obtenido)">
+              </div>
             </div>
           </div>
         </section>
+
+        <input type="file" #stepImageInput style="display: none;" (change)="onStepImageSelected($event)" accept="image/*">
       </div>
     </main>
 
@@ -378,7 +404,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .nav-tool-btn i { font-size: 0.75rem; }
     .nav-tool-btn:hover:not(:disabled) { background: #f9fafb; border-color: #86868b; color: #1d1d1f; }
     .nav-tool-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    
+
     .nav-arrow {
       font-size: 20px;
       line-height: 1;
@@ -388,7 +414,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       justify-content: center;
       margin-top: -2px; /* Ajuste visual para centrar verticalmente */
     }
-    
+
     .nav-tool-info { display: flex; align-items: center; gap: 3px; padding: 0 10px; font-size: 13px; font-weight: 700; color: #111827; }
     .nav-tool-info .sep { color: #9ca3af; font-weight: 400; font-size: 11px; }
 
@@ -401,13 +427,13 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       display: flex; align-items: center; gap: 8px; cursor: pointer; transition: all 0.2s; border: none;
     }
 
-    .btn-refiner-card { 
+    .btn-refiner-card {
       background: #ffffff; color: #0071e3; border: 1.5px solid #0071e3;
     }
     .btn-refiner-card:hover { background: rgba(0,113,227,0.05); }
     .btn-refiner-card.active { background: #0071e3; color: #ffffff; }
 
-    .btn-export-card { 
+    .btn-export-card {
       background: #0071e3; color: #ffffff; box-shadow: 0 4px 12px rgba(0,113,227,0.2);
     }
     .btn-export-card:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,113,227,0.3); }
@@ -455,19 +481,19 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .refiner-footer { display: flex; justify-content: flex-end; }
     .btn-execute { background: #0071e3; color: white; border: none; padding: 0.7rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
 
-    .main-content { 
-      padding: 0 24px 40px; 
-      display: flex; 
-      gap: 32px; 
+    .main-content {
+      padding: 0 24px 40px;
+      display: flex;
+      gap: 32px;
       align-items: flex-start;
       transition: all 0.4s;
     }
-    
+
     .content-body { flex: 1; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 
-    .section-card { 
-      background: #ffffff; border-radius: 24px; padding: 2.5rem; 
-      box-shadow: 0 4px 30px rgba(0,0,0,0.02); 
+    .section-card {
+      background: #ffffff; border-radius: 24px; padding: 2.5rem;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.02);
       border: 2px solid transparent;
       transition: all 0.3s;
     }
@@ -497,7 +523,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .col-num { width: 70px; position: relative; }
     .col-num-inner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     .step-index { width: 34px; height: 34px; background: #f5f5f7; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #86868b; font-size: 0.9rem; }
-    
+
     .btn-delete-step {
       background: #ff3b30; color: white; border: none; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; box-shadow: 0 2px 5px rgba(255, 59, 48, 0.3); opacity: 0; transform: scale(0.8);
     }
@@ -527,7 +553,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       padding: 6px;
       position: relative;
     }
-    
+
     .evidence-cell[draggable="true"] { cursor: grab; }
     .evidence-cell[draggable="true"]:active { cursor: grabbing; }
 
@@ -536,7 +562,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       transform: scale(1.02);
       box-shadow: inset 0 0 0 2px #0071e3;
     }
-    
+
     /* Placeholder (imagen aún no activada - cero descargas) */
     .thumb-placeholder {
       width: 74px;
@@ -619,7 +645,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       background: #f5f5f7;
       transition: opacity 0.3s ease;
     }
-    
+
     .btn-delete-evidence {
       position: absolute;
       top: -6px;
@@ -641,14 +667,29 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       opacity: 0.85;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .btn-delete-evidence:hover { 
-      transform: scale(1.15) rotate(90deg); 
-      background: #ff3b30; 
+    .btn-delete-evidence:hover {
+      transform: scale(1.15) rotate(90deg);
+      background: #ff3b30;
       opacity: 1;
       box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
     }
     .btn-delete-evidence i { font-size: 10px !important; }
-    
+
+    .btn-add-step {
+      width: 34px; height: 34px; background: #0071e3; color: white; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-add-step:hover { transform: scale(1.1); background: #0077ed; }
+
+    .btn-add-step-text {
+      width: 100%; text-align: left; background: none; border: 1px dashed #d2d2d7; padding: 1rem; border-radius: 12px; color: #86868b; font-weight: 500; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-add-step-text:hover { background: #f5f5f7; border-color: #0071e3; color: #0071e3; }
+
+    .result-text-editable {
+      font-size: 1.1rem; line-height: 1.6; color: #1e6144; margin: 0; font-weight: 500; outline: none; padding: 0.5rem; border-radius: 8px; transition: background 0.2s;
+    }
+    .result-text-editable:focus { background: rgba(255,255,255,0.5); }
+
     .empty-evidence-slot {
       font-size: 0.65rem;
       color: #86868b;
@@ -666,9 +707,9 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     }
     .empty-evidence-slot i { font-size: 1.1rem; color: #d2d2d7; }
     .empty-evidence-slot span { font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
-    
-    .dragging-over .empty-evidence-slot { 
-      border-color: #0071e3; 
+
+    .dragging-over .empty-evidence-slot {
+      border-color: #0071e3;
       background: rgba(0, 113, 227, 0.05);
       color: #0071e3;
     }
@@ -702,18 +743,18 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       font-weight: 600;
       border: 1px solid rgba(0,113,227,0.1);
     }
-    
+
     .tech-value {
       color: #bf40bf;
       font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
       font-weight: 600;
     }
 
-    .btn-symbol { 
-      font-size: 1.2rem; 
-      line-height: 1; 
-      display: inline-flex; 
-      align-items: center; 
+    .btn-symbol {
+      font-size: 1.2rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
       justify-content: center;
       background: none !important;
       border: none !important;
@@ -754,13 +795,13 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .drawer-header h3 { margin: 0; font-size: 1.2rem; font-weight: 700; }
     .btn-close-drawer { background: none; border: none; font-size: 2rem; color: #86868b; cursor: pointer; }
     .drawer-body { padding: 24px; flex: 1; display: flex; flex-direction: column; gap: 16px; position: relative; }
-    
+
     .history-list {
       background: #f5f5f7; border-radius: 12px; padding: 8px; margin-bottom: 8px;
       max-height: 200px; overflow-y: auto; border: 1px solid #e5e5e7;
     }
-    .history-item { 
-      padding: 10px; border-radius: 8px; font-size: 13px; cursor: pointer; 
+    .history-item {
+      padding: 10px; border-radius: 8px; font-size: 13px; cursor: pointer;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .history-item:hover { background: #ffffff; color: #0071e3; }
@@ -787,7 +828,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
 export class EvidenceReportDetailComponent implements OnInit {
   report: any;
   selectedImage: any = null;
-  
+
   showRefiner = false;
   isRefining = false;
   refinementInstruction = '';
@@ -813,6 +854,9 @@ export class EvidenceReportDetailComponent implements OnInit {
   pendingImageStep: string | null = null;
   /** IntersectionObserver para activar imágenes al entrar al viewport */
   private imgObserver: IntersectionObserver | null = null;
+
+  @ViewChild('stepImageInput') stepImageInput!: any;
+  currentStepForImage: any = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -920,10 +964,10 @@ export class EvidenceReportDetailComponent implements OnInit {
 
   async navigateReport(direction: number) {
     if (!this.canNavigate(direction)) return;
-    
+
     const nextIndex = this.currentReportIndex + direction;
     const nextId = this.allReportIds[nextIndex];
-    
+
     this.router.navigate(['/evidence-analysis/report', nextId]);
     this.currentReportIndex = nextIndex;
     await this.loadReport(nextId);
@@ -979,7 +1023,7 @@ export class EvidenceReportDetailComponent implements OnInit {
   getImageForStep(step: any) {
     if (!this.report) return null;
     let img = this.report.report_images?.find((i: any) => i.step_id === step.id);
-    
+
     if (!img && step.imagen_referencia) {
       const match = step.imagen_referencia.match(/\d+/);
       if (match) {
@@ -1106,7 +1150,7 @@ export class EvidenceReportDetailComponent implements OnInit {
         await this.dbService.copyImageToStep(sourceImage, targetStep.id);
         this.toast.success('Evidencia copiada al paso');
       }
-      
+
       // Forzar recarga de los datos para ver cambios
       await this.loadReport(this.report.id);
     } catch (e) {
@@ -1142,7 +1186,7 @@ export class EvidenceReportDetailComponent implements OnInit {
 
     try {
       await this.dbService.deleteStep(step.id);
-      
+
       // Re-indexar los pasos restantes para que sean continuos
       const remainingSteps = this.report.test_scenario_steps
         .filter((s: any) => s.id !== step.id)
@@ -1184,6 +1228,63 @@ export class EvidenceReportDetailComponent implements OnInit {
     }
   }
 
+  async onFieldBlur(field: string, event: any) {
+    const newValue = event.target.innerText.trim();
+    if (this.report[field] !== newValue) {
+      try {
+        const updateData: any = {};
+        updateData[field] = newValue;
+        await this.dbService.updateScenario(this.report.id, updateData);
+        this.report[field] = newValue;
+        this.toast.success('Cambio guardado');
+      } catch (e) {
+        this.toast.error('Error al guardar el cambio');
+      }
+    }
+  }
+
+  async addNewStep() {
+    try {
+      const nextNum = (this.report.test_scenario_steps?.length || 0) + 1;
+      const newStep = await this.dbService.addStep(this.report.id, nextNum, 'Nuevo paso manual...');
+
+      if (!this.report.test_scenario_steps) this.report.test_scenario_steps = [];
+      this.report.test_scenario_steps.push(newStep);
+      this.toast.success('Nuevo paso añadido');
+      this.cdr.detectChanges();
+    } catch (e) {
+      this.toast.error('Error al añadir el paso');
+    }
+  }
+
+  triggerImageUpload(step: any) {
+    this.currentStepForImage = step;
+    this.stepImageInput.nativeElement.click();
+  }
+
+  async onStepImageSelected(event: any) {
+    const file = event.target.files[0];
+    if (!file || !this.currentStepForImage) return;
+
+    try {
+      this.toast.info('Subiendo evidencia...');
+      const reader = new FileReader();
+      reader.onload = async (e: any) => {
+        const base64 = e.target.result;
+        const order = this.currentStepForImage.numero_paso;
+        await this.dbService.saveImageForStep(this.report.id, this.currentStepForImage.id, base64, file.name, order);
+        this.toast.success('Evidencia cargada exitosamente');
+        await this.loadReport(this.report.id);
+      };
+      reader.readAsDataURL(file);
+    } catch (e) {
+      this.toast.error('Error al cargar la evidencia');
+    } finally {
+      this.currentStepForImage = null;
+      event.target.value = '';
+    }
+  }
+
   async exportToExcel() {
     this.toast.info('Generando matriz de pruebas...');
     const success = await this.excelService.downloadExcelReport(this.report);
@@ -1197,7 +1298,7 @@ export class EvidenceReportDetailComponent implements OnInit {
     try {
       this.toast.info('Gemini está procesando...');
       const refinedData = await this.aiService.refineAnalysis(this.report, this.refinementInstruction).toPromise();
-      
+
       if (!refinedData) throw new Error('Sin respuesta');
 
       await this.dbService.updateScenario(this.report.id, {
@@ -1211,7 +1312,7 @@ export class EvidenceReportDetailComponent implements OnInit {
       this.showRefiner = false;
       this.refinementInstruction = '';
       this.loadReport(this.report.id);
-      
+
     } catch (e) {
       this.toast.error('Fallo al refinar');
     } finally {

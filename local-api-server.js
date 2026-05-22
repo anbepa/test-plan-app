@@ -27,6 +27,46 @@ const MODEL_NAME = 'gemini-2.5-flash-lite';
 console.log(`[0] [MODEL] Using ${MODEL_NAME} (v1 REST API)`);
 console.log('[0] ');
 
+async function resolveImageUrls(apiBody) {
+    if (!apiBody || !apiBody.contents) return;
+
+    for (const content of apiBody.contents) {
+        if (!content.parts) continue;
+
+        const resolvedParts = [];
+        for (const part of content.parts) {
+            if (part.image_url) {
+                const url = part.image_url;
+                try {
+                    console.log(`[PROXY-LOCAL] Resolviendo imagen: ${url}`);
+                    const res = await fetch(url);
+
+                    if (!res.ok) {
+                        console.error(`[PROXY-LOCAL] Error descarga (${res.status}): ${url}`);
+                        continue;
+                    }
+
+                    const buffer = await res.buffer();
+                    const mimeType = res.headers.get('content-type') || 'image/jpeg';
+                    const base64 = buffer.toString('base64');
+
+                    resolvedParts.push({
+                        inline_data: {
+                            mime_type: mimeType,
+                            data: base64
+                        }
+                    });
+                } catch (e) {
+                    console.error(`[PROXY-LOCAL] Error procesando URL:`, e.message);
+                }
+            } else {
+                resolvedParts.push(part);
+            }
+        }
+        content.parts = resolvedParts;
+    }
+}
+
 // Proxy para Gemini
 app.post('/api/gemini-proxy', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -44,6 +84,9 @@ app.post('/api/gemini-proxy', async (req, res) => {
     try {
         const { payload } = req.body;
         const apiBody = payload || req.body;
+
+        // RESOLVER URLs ANTES DE LLAMAR A GEMINI
+        await resolveImageUrls(apiBody);
 
         console.log(`[API] Calling Original Google API - Model: ${MODEL_NAME}`);
 

@@ -116,6 +116,56 @@ function getErrorMessage(error: any): { userMessage: string; technicalDetails: s
   };
 }
 
+async function resolveImageUrls(apiBody: any): Promise<void> {
+  if (!apiBody || !apiBody.contents) return;
+
+  for (const content of apiBody.contents) {
+    if (!content.parts) continue;
+
+    // Filtramos y transformamos las partes
+    const resolvedParts = [];
+
+    for (const part of content.parts) {
+      if (part.image_url) {
+        const url = part.image_url;
+        try {
+          console.log(`[PROXY] Resolviendo imagen: ${url}`);
+          const res = await fetch(url);
+
+          if (!res.ok) {
+            console.error(`[PROXY] Error descarga (${res.status}): ${url}`);
+            continue; // Si falla, no incluimos esta parte para no romper el JSON
+          }
+
+          let buffer;
+          if (typeof (res as any).buffer === 'function') {
+            buffer = await (res as any).buffer();
+          } else {
+            const arrayBuffer = await res.arrayBuffer();
+            buffer = Buffer.from(arrayBuffer);
+          }
+
+          const mimeType = res.headers.get('content-type') || 'image/jpeg';
+          const base64 = buffer.toString('base64');
+
+          resolvedParts.push({
+            inline_data: {
+              mime_type: mimeType,
+              data: base64
+            }
+          });
+        } catch (e) {
+          console.error(`[PROXY] Error procesando URL:`, e);
+        }
+      } else {
+        // Mantener partes de texto originales
+        resolvedParts.push(part);
+      }
+    }
+    content.parts = resolvedParts;
+  }
+}
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse
@@ -159,6 +209,9 @@ export default async function handler(
         technicalDetails: 'Missing required fields: contents or generationConfig'
       });
     }
+
+    // RESOLVER URLs ANTES DE LLAMAR A GEMINI
+    await resolveImageUrls(apiBody);
 
     const result = await callGeminiRestWithRetry(
       apiKey,
