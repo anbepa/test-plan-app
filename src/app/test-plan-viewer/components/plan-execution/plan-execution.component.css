@@ -35,6 +35,8 @@
 .btn-save-exec:hover { opacity: 0.88; }
 .btn-export { display: inline-flex; align-items: center; gap: 5px; padding: 8px 14px; border-radius: 10px; border: 1.5px solid rgba(0,122,255,.3); background: var(--background-color, #fff); color: var(--primary-color, #007AFF); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 200ms; white-space: nowrap; }
 .btn-export:hover { background: rgba(0,122,255,.09); }
+.btn-export-pdf { border-color: rgba(220,38,38,.35); color: #dc2626; }
+.btn-export-pdf:hover { background: rgba(220,38,38,.07); }
 .btn-tb-danger { display: inline-flex; align-items: center; padding: 8px 14px; border-radius: 10px; border: 1.5px solid #E85D4D; background: var(--background-color, #fff); color: #E85D4D; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 200ms; }
 .btn-tb-danger:hover { background: rgba(232,93,77,.08); }
 .btn-save { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 10px; border: 1.5px solid rgba(0,122,255,.3); background: var(--background-color, #fff); color: var(--primary-color, #007AFF); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 200ms; }

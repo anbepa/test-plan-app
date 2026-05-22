@@ -78,6 +78,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   isExporting = false;
   exportProgress = 0;      // casos procesados
   exportTotal = 0;         // total de casos
+  /** Estado de exportación PDF */
+  isExportingPdf = false;
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -886,6 +888,28 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.isExporting = false;
       this.exportProgress = 0;
       this.exportTotal = 0;
+      this.cdr.markForCheck();
+    }
+  }
+
+  async exportToPDF(): Promise<void> {
+    if (!this.execution || this.isExportingPdf) return;
+
+    try {
+      this.isExportingPdf = true;
+      this.cdr.markForCheck();
+
+      await this.exportService.exportExecutionToPDF(
+        this.execution,
+        this.execution.testCases.findIndex((_: any, i: number) => i === this.activeTestCaseIndex) ?? 0,
+        (current, total) => { this.cdr.markForCheck(); }
+      );
+
+      this.toastService.success('Ejecución exportada a PDF exitosamente');
+    } catch (error) {
+      this.toastService.error('Error al exportar la ejecución a PDF');
+    } finally {
+      this.isExportingPdf = false;
       this.cdr.markForCheck();
     }
   }
