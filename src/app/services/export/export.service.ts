@@ -641,7 +641,7 @@ export class ExportService {
                         if (fallbackImg) stepImages = [fallbackImg];
                     }
                 }
-                
+
                 const evidenceContent: (Paragraph | Table)[] = [];
 
                 if (stepImages.length > 0) {
@@ -724,9 +724,9 @@ export class ExportService {
             const buffer = await response.arrayBuffer();
             const contentType = response.headers.get('content-type') || 'image/png';
             const type = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
-            
+
             const bytes = new Uint8Array(buffer);
-            
+
             // Get original dimensions to prevent pixelation on export
             const blob = new Blob([buffer], { type: contentType });
             const objUrl = URL.createObjectURL(blob);
@@ -1145,7 +1145,7 @@ export class ExportService {
 
             const tableBody = [];
             const stepLayouts: any[] = []; // Guardar info de layout por fila
-            
+
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
             const innerPadding = 15;
@@ -1177,7 +1177,7 @@ export class ExportService {
 
                 const colWidth = (cellWidthCol2 - (validCols + 1) * innerPadding) / validCols;
                 const maxW = Math.min(colWidth, validCols === 1 ? 900 : 900 / validCols);
-                const maxH = validCols === 1 
+                const maxH = validCols === 1
                     ? (validRows === 1 ? 675 : Math.min(675, 1100 / validRows))
                     : Math.min(450, 1100 / validRows);
 
@@ -1344,12 +1344,12 @@ export class ExportService {
                                                 const imgW = ev.naturalWidth || 1280;
                                                 const imgH = ev.naturalHeight || 720;
                                                 const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
-                                                
+
                                                 const imageX = currentX + (layout.colWidth - dims.width) / 2;
                                                 const imageY = currentY + (rowH - dims.height) / 2;
-                                                
+
                                                 doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
-                                                
+
                                                 // Draw border around image (only when no grid cell border already drawn)
                                                 if (layout.cols === 1 && layout.rows === 1) {
                                                     doc.setDrawColor(0);
@@ -1381,14 +1381,20 @@ export class ExportService {
                 }
             });
 
-            // Expected Results
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(11);
-            const expectedY = (doc as any).lastAutoTable.finalY + 30;
-            doc.text('Resultado Esperado: ', margin, expectedY);
-            const prefixW = doc.getTextWidth('Resultado Esperado: ');
-            doc.setFont('helvetica', 'normal');
-            doc.text(testCase.expectedResults || 'N/A', margin + prefixW, expectedY);
+            // Resultado Esperado (Usando autoTable para asegurar ajuste perfecto y saltos de página)
+            const finalY = (doc as any).lastAutoTable.finalY;
+            autoTable(doc, {
+                startY: finalY + 30,
+                margin: { left: margin, right: margin },
+                body: [
+                    [
+                        { content: 'Resultado Esperado:', styles: { fontStyle: 'bold', cellWidth: 120 } },
+                        { content: testCase.expectedResults || 'N/A', styles: { fontStyle: 'normal' } }
+                    ]
+                ],
+                theme: 'plain',
+                styles: { fontSize: 11, cellPadding: 5, overflow: 'linebreak' }
+            });
         }
 
         const filename = this.escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.pdf`);
@@ -1482,7 +1488,7 @@ export class ExportService {
             const steps = report.test_scenario_steps || [];
             const tableBody = [];
             const stepLayouts: any[] = [];
-            
+
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
             const innerPadding = 15;
@@ -1493,7 +1499,7 @@ export class ExportService {
 
                 // Filter report images for this step
                 let stepImages = report.report_images?.filter((img: any) => img.step_id === step.id) || [];
-                
+
                 // Fallback
                 if (stepImages.length === 0 && step.imagen_referencia) {
                     const match = step.imagen_referencia.match(/\d+/);
@@ -1608,7 +1614,7 @@ export class ExportService {
                                         const format = img.type.toUpperCase() || 'PNG';
                                         const imageX = cellX + (cellWidthCol2 - dims.width) / 2;
                                         doc.addImage(img.base64Data, format, imageX, currentY, dims.width, dims.height);
-                                        
+
                                         // Draw border
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
@@ -1624,14 +1630,20 @@ export class ExportService {
                 });
             }
 
-            // Expected Results
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(11);
-            const expectedY = (doc as any).lastAutoTable.finalY + 30;
-            doc.text('Resultado Esperado: ', margin, expectedY);
-            const prefixW = doc.getTextWidth('Resultado Esperado: ');
-            doc.setFont('helvetica', 'normal');
-            doc.text(report.resultado_obtenido || 'Exitoso', margin + prefixW, expectedY);
+            // Resultado Esperado (Usando autoTable para asegurar ajuste perfecto y saltos de página)
+            const finalYEvid = (doc as any).lastAutoTable.finalY;
+            autoTable(doc, {
+                startY: finalYEvid + 30,
+                margin: { left: margin, right: margin },
+                body: [
+                    [
+                        { content: 'Resultado Esperado:', styles: { fontStyle: 'bold', cellWidth: 120 } },
+                        { content: report.resultado_obtenido || 'Exitoso', styles: { fontStyle: 'normal' } }
+                    ]
+                ],
+                theme: 'plain',
+                styles: { fontSize: 11, cellPadding: 5, overflow: 'linebreak' }
+            });
         }
 
         const filename = this.escapeFilename(`Reporte_Evidencias_HU_${huNumber}.pdf`);

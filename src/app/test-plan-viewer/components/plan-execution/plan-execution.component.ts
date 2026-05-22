@@ -40,6 +40,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   showImageViewer = false;
   showDataEditor = false;
   showDeleteModal = false;
+  showDeleteTestCaseModal = false;
+  testCaseToDelete: TestCaseExecution | null = null;
   showUploadMenu = false;
   showReportSettings = false;
   uploadMenuPos: { top: number; left: number } = { top: 0, left: 0 };
@@ -163,6 +165,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   onFilterChange(): void {
     this.currentPage = 1;
   }
+
+  draggedStepIndex: number | null = null;
+  draggedTestCaseIndex: number | null = null;
+  editingTestCaseId: string | null = null;
+  editingStepId: string | null = null;
 
   constructor(
     private router: Router,
@@ -411,33 +418,33 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.hasUnsavedChanges = true;
     await this.autoSaveExecutionState();
     this.hasUnsavedChanges = false;
-    
+
     // Auto-mark test case as completed if all steps are completed
     await this.updateTestCaseStatusIfAllStepsCompleted(this.currentTestCase);
-    
+
     await this.updateStats();
-    
+
     // Force change detection to update the completed class binding
     this.cdr.markForCheck();
   }
 
   private async updateTestCaseStatusIfAllStepsCompleted(testCase: TestCaseExecution): Promise<void> {
     if (!testCase || !testCase.steps || testCase.steps.length === 0) return;
-    
+
     const allStepsCompleted = testCase.steps.every(step => step.status === 'completed');
     if (allStepsCompleted && testCase.status !== 'completed') {
       testCase.status = 'completed';
       testCase.completedAt = Date.now();
-      
+
       // Guardar ejecución con el nuevo estado del test case
       if (this.execution) {
         this.execution.updatedAt = Date.now();
         await this.storageService.saveExecution(this.execution);
       }
-      
+
       // Pequeño delay para asegurar que BD actualizó
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // Forzar change detection en zona segura
       this.cdr.markForCheck();
       this.cdr.detectChanges();
@@ -1496,7 +1503,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const failed = this.getCountByStatus('failed');
     const inProgress = this.getCountByStatus('in-progress');
     const pending = this.getCountByStatus('pending');
-    
+
     return {
       passRate: total ? Math.round((passed / total) * 100) : 0,
       failRate: total ? Math.round((failed / total) * 100) : 0,
@@ -1520,5 +1527,183 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       case 'in-progress': return 'En Progreso';
       default: return 'Pendiente';
     }
+  }
+
+  deleteTestCase(tc: TestCaseExecution, event: MouseEvent): void {
+    event.stopPropagation();
+    this.testCaseToDelete = tc;
+    this.showDeleteTestCaseModal = true;
+  }
+
+  async confirmDeleteTestCase(): Promise<void> {
+    if (!this.execution || !this.testCaseToDelete) return;
+
+    try {
+      // 1. Collect all evidence IDs inside this test case to delete them from storage
+      const evidenceIds: string[] = [];
+      this.testCaseToDelete.steps.forEach(step => {
+        if (step.evidences) {
+          step.evidences.forEach(ev => evidenceIds.push(ev.id));
+        }
+      });
+
+      // 2. Delete evidences from Supabase storage
+      if (evidenceIds.length > 0) {
+        await this.storageService.cleanupOrphanedImages(evidenceIds);
+      }
+
+      // 3. Remove from local execution object
+      const index = this.execution.testCases.indexOf(this.testCaseToDelete);
+      if (index >= 0) {
+        this.execution.testCases.splice(index, 1);
+
+        // Adjust active indexes if necessary
+        if (this.activeTestCaseIndex >= this.execution.testCases.length) {
+          this.activeTestCaseIndex = Math.max(0, this.execution.testCases.length - 1);
+        }
+        this.activeStepIndex = 0;
+      }
+
+      // 4. Save updated execution to Supabase
+      this.execution.updatedAt = Date.now();
+      await this.storageService.saveExecution(this.execution);
+
+      // 5. Update UI stats and state
+      this.persistExecutionContext();
+      await this.updateStats();
+      this.syncTestRunStatus();
+
+      this.toastService.success('Escenario eliminado de la ejecución');
+    } catch (error) {
+      console.error('Error al eliminar escenario:', error);
+      this.toastService.error('Error al eliminar el escenario');
+    } finally {
+      this.testCaseToDelete = null;
+      this.showDeleteTestCaseModal = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  startEditingTitle(tc: TestCaseExecution, event: MouseEvent, el: HTMLElement): void {
+    event.stopPropagation();
+    this.editingTestCaseId = tc.testCaseId;
+    setTimeout(() => {
+      el.focus();
+      // Seleccionar todo el texto para facilitar la edición
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }, 0);
+  }
+
+  async finishEditingTitle(tc: TestCaseExecution, event: any): Promise<void> {
+    this.editingTestCaseId = null;
+    const newTitle = event.target.innerText.trim();
+    if (newTitle && newTitle !== tc.title) {
+      tc.title = newTitle;
+      await this.autoSaveExecutionState();
+      this.toastService.success('Título actualizado');
+    } else {
+      // Restaurar el texto original si se dejó vacío o no cambió
+      event.target.innerText = tc.title;
+    }
+  }
+
+  startEditingStepAction(step: ExecutionStep, event: MouseEvent, el: HTMLElement): void {
+    event.stopPropagation();
+    this.editingStepId = step.stepId;
+    setTimeout(() => {
+      el.focus();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }, 0);
+  }
+
+  async finishEditingStepAction(step: ExecutionStep, event: any): Promise<void> {
+    this.editingStepId = null;
+    const newAction = event.target.innerText.trim();
+    if (newAction && newAction !== step.accion) {
+      step.accion = newAction;
+      await this.autoSaveExecutionState();
+      this.toastService.success('Paso actualizado');
+    } else {
+      event.target.innerText = step.accion;
+    }
+  }
+
+  async updateStepAction(step: ExecutionStep, event: any): Promise<void> {
+    const newAction = event.target.innerText.trim();
+    if (newAction && newAction !== step.accion) {
+      step.accion = newAction;
+      await this.autoSaveExecutionState();
+      this.toastService.success('Paso actualizado');
+    }
+  }
+
+  async deleteStep(tcIndex: number, stepIndex: number, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    if (!this.execution) return;
+    const tc = this.execution.testCases[tcIndex];
+    if (!tc || tc.steps.length <= 1) {
+      this.toastService.warning('Un escenario debe tener al menos un paso');
+      return;
+    }
+
+    const step = tc.steps[stepIndex];
+
+    // Cleanup evidence from storage
+    if (step.evidences && step.evidences.length > 0) {
+      const evidenceIds = step.evidences.map(ev => ev.id);
+      await this.storageService.cleanupOrphanedImages(evidenceIds);
+    }
+
+    tc.steps.splice(stepIndex, 1);
+
+    // Re-number steps
+    tc.steps.forEach((s, idx) => s.numero_paso = idx + 1);
+
+    if (this.activeTestCaseIndex === tcIndex && this.activeStepIndex >= tc.steps.length) {
+      this.activeStepIndex = tc.steps.length - 1;
+    }
+
+    await this.autoSaveExecutionState();
+    await this.updateStats();
+    this.toastService.success('Paso eliminado');
+  }
+
+  // --- Drag & Drop Steps ---
+  onStepDragStart(tcIndex: number, stepIndex: number): void {
+    this.draggedTestCaseIndex = tcIndex;
+    this.draggedStepIndex = stepIndex;
+  }
+
+  onStepDragOver(event: DragEvent): void {
+    event.preventDefault();
+  }
+
+  async onStepDrop(tcIndex: number, targetStepIndex: number): Promise<void> {
+    if (this.draggedTestCaseIndex !== tcIndex ||
+        this.draggedStepIndex === null ||
+        this.draggedStepIndex === targetStepIndex ||
+        !this.execution) return;
+
+    const tc = this.execution.testCases[tcIndex];
+    const movedStep = tc.steps.splice(this.draggedStepIndex, 1)[0];
+    tc.steps.splice(targetStepIndex, 0, movedStep);
+
+    // Re-number
+    tc.steps.forEach((s, idx) => s.numero_paso = idx + 1);
+
+    this.activeStepIndex = targetStepIndex;
+    this.draggedStepIndex = null;
+    this.draggedTestCaseIndex = null;
+
+    await this.autoSaveExecutionState();
+    this.toastService.success('Pasos reordenados');
   }
 }
