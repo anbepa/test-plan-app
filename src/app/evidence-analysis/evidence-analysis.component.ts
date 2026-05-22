@@ -21,19 +21,19 @@ export class EvidenceAnalysisComponent {
 
   files: EvidenceFile[] = [];
   selectedIndices: number[] = [];
-  
+
   isExistingHU = false;
   huFeedback = '';
   isDragging = false;
   isProcessing = false;
-  
+
   // Preview Modal
   showPreview = false;
   previewUrl = '';
-  
+
   // Reordering
   draggedItemIndex: number | null = null;
-  
+
   @ViewChild('fileInput') fileInput!: ElementRef;
 
   constructor(
@@ -103,7 +103,7 @@ export class EvidenceAnalysisComponent {
   async processFiles(fileList: File[]) {
     this.isProcessing = true;
     let duplicates = 0;
-    
+
     try {
       for (const file of fileList) {
         // Detección de duplicados básica por nombre y tamaño
@@ -115,23 +115,26 @@ export class EvidenceAnalysisComponent {
 
         if (file.type.startsWith('image/')) {
           const base64 = await this.readFileAsDataURL(file);
+          // Comprimir imagen antes de guardarla para evitar error 413 en Vercel
+          const compressedBase64 = await this.compressImage(base64);
+
           this.files.push({
             name: file.name,
-            type: file.type,
-            dataURL: base64,
+            type: 'image/jpeg', // Siempre convertimos a jpeg para mejor compresión
+            dataURL: compressedBase64,
             isVideo: false,
             size: file.size
           });
         }
       }
-      
+
       if (duplicates > 0) {
         this.toast.warning(`${duplicates} archivos omitidos por estar duplicados.`);
       }
-      
+
       // Actualizar selección para incluir todos
       this.selectedIndices = this.files.map((_, i) => i);
-      
+
     } catch (e) {
       this.toast.error('Error al procesar archivos');
     } finally {
@@ -166,6 +169,44 @@ export class EvidenceAnalysisComponent {
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(file);
+    });
+  }
+
+  private async compressImage(base64: string, maxWidth = 1280, maxHeight = 1280, quality = 0.7): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Rellenar fondo blanco para JPEGs (evita fondo negro en imágenes con transparencia)
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        // Exportamos como JPEG para reducir drásticamente el tamaño del payload
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(base64); // Fallback al original si falla
     });
   }
 
@@ -209,7 +250,7 @@ export class EvidenceAnalysisComponent {
 
     const movedItem = this.files.splice(this.draggedItemIndex, 1)[0];
     this.files.splice(index, 0, movedItem);
-    
+
     // Reset selection to match new order (simplification)
     this.selectedIndices = this.files.map((_, i) => i);
     this.draggedItemIndex = null;
@@ -233,18 +274,20 @@ export class EvidenceAnalysisComponent {
       const track = stream.getVideoTracks()[0];
       const imageCapture = new (window as any).ImageCapture(track);
       const bitmap = await imageCapture.grabFrame();
-      
+
       const canvas = document.createElement('canvas');
       canvas.width = bitmap.width;
       canvas.height = bitmap.height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(bitmap, 0, 0);
-      
+
       const dataUrl = canvas.toDataURL('image/png');
+      const compressedDataUrl = await this.compressImage(dataUrl);
+
       this.files.push({
-        name: `Captura_${new Date().getTime()}.png`,
-        type: 'image/png',
-        dataURL: dataUrl,
+        name: `Captura_${new Date().getTime()}.jpg`,
+        type: 'image/jpeg',
+        dataURL: compressedDataUrl,
         isVideo: false
       });
       this.selectedIndices.push(this.files.length - 1);
@@ -268,24 +311,31 @@ export class EvidenceAnalysisComponent {
     }
 
     this.isProcessing = true;
-    this.toast.info('Generando análisis con IA...');
+    this.toast.info('Subiendo evidencias y analizando con IA...');
 
     const selectedFiles = this.selectedIndices.map(i => this.files[i]);
-    
+
     try {
+      // 1. Subir imágenes a Supabase Storage primero
+      // Esto evita el error 413 en Vercel porque enviamos URLs en lugar de Base64 pesado
+      for (const file of selectedFiles) {
+        if (!file.publicUrl) {
+          file.publicUrl = await this.dbService.uploadImageToStorage(file.dataURL, file.name);
+        }
+      }
+
+      // 2. Generar el análisis enviando solo las URLs públicas
       const result = await this.analysisService.analyzeEvidences(this.additionalContext, selectedFiles).toPromise();
       console.log('Analysis Result:', result);
-      
-      // 1. Asegurar o crear la HU en la tabla de evidencias
+
+      // 3. Asegurar o crear la HU en la tabla de evidencias
       await this.dbService.getOrCreateEvidenceHU(this.huNumber, this.testTitle);
-      
-      // 2. Guardar el reporte
+
+      // 4. Guardar el reporte (saveEvidenceReport reutilizará las publicUrl ya subidas)
       const reportId = await this.dbService.saveEvidenceReport(result, selectedFiles, this.huNumber);
-      
+
       this.toast.success('Análisis generado y guardado exitosamente');
-      
-      // Navegar a la vista de detalle del reporte (que crearemos a continuación)
-      // Por ahora, si no existe la ruta, al menos no dará el error de "0 rows" en el viewer
+
       this.router.navigate(['/evidence-analysis/report', reportId]);
     } catch (e: any) {
       console.error(e);

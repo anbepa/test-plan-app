@@ -10,6 +10,7 @@ export interface EvidenceFile {
   type: string;
   isVideo: boolean;
   size?: number;
+  publicUrl?: string; // URL opcional si ya está subida a Supabase
 }
 
 @Injectable({
@@ -20,14 +21,20 @@ export class EvidenceAnalysisService {
 
   public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
     const promptText = PROMPT_FLOW_ANALYSIS_FROM_IMAGES(context);
-    
+
     // Enviar un único bloque de texto para asegurar que Gemini respete el contexto
     const parts: any[] = [
       { text: promptText }
     ];
 
     for (const file of evidences) {
-      if (file.dataURL) {
+      if (file.publicUrl) {
+        // Si tenemos URL, la enviamos al proxy para que él la resuelva
+        // Esto evita el error 413 Content Too Large en Vercel
+        parts.push({
+          image_url: file.publicUrl
+        });
+      } else if (file.dataURL) {
         const matches = file.dataURL.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
           parts.push({
@@ -66,11 +73,20 @@ export class EvidenceAnalysisService {
     delete reportForPrompt.user_id;
 
     const promptText = PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT(JSON.stringify(reportForPrompt, null, 2), instruction.trim());
-    
+
     // 1. Obtener imágenes ordenadas por su orden original (fuente de verdad)
     const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
-    
+
     const fetchImages$ = new Observable<any[]>(observer => {
+      // Si ya tenemos URLs en el reporte original, las usamos directamente
+      const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
+
+      if (images.length > 0 && images.every(img => img.image_url)) {
+        observer.next(images.map(img => ({ image_url: img.image_url })));
+        observer.complete();
+        return;
+      }
+
       const imagePromises = images.map(async (img: any) => {
         try {
           const res = await fetch(img.image_url);
@@ -92,17 +108,28 @@ export class EvidenceAnalysisService {
     });
 
     return new Observable(observer => {
-      fetchImages$.subscribe(inlineData => {
-        // Enviar un único bloque de texto para que Gemini no se confunda con el contexto
+      fetchImages$.subscribe(imageData => {
+        // Estructura de partes para maximizar la atención en la instrucción
         const parts: any[] = [
           { text: promptText }
         ];
-        
-        inlineData.forEach(d => parts.push({ inline_data: d }));
+
+        imageData.forEach(d => {
+          if (d.image_url) {
+            parts.push({ image_url: d.image_url });
+          } else {
+            parts.push({ inline_data: d });
+          }
+        });
+
+        // REPETIR LA INSTRUCCIÓN AL FINAL para asegurar que la IA la priorice (Recency Bias positivo)
+        parts.push({
+          text: `\n\n⚠️ RECORDATORIO CRÍTICO - PRIORIDAD MÁXIMA:\nDebes aplicar estrictamente esta instrucción del usuario: "${instruction.trim()}"\nGenera el JSON final reflejando este cambio.`
+        });
 
         const payload = {
           contents: [{ role: 'user', parts }],
-          generationConfig: { 
+          generationConfig: {
             temperature: 0.1,
             topP: 0.95,
             topK: 40

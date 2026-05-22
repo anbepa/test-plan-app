@@ -115,6 +115,23 @@
     background: #fff;
 }
 
+/* Mejora para el campo de contexto adicional */
+.context-textarea {
+    resize: none;
+    min-height: 48px;
+    max-height: 120px;
+    line-height: 1.4;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    transition: min-height 0.3s ease, border-color 0.2s;
+    overflow-y: auto;
+}
+
+.context-textarea:focus {
+    min-height: 80px;
+    resize: vertical;
+}
+
 .hu-input-container {
     width: 120px;
 }
@@ -545,12 +562,12 @@
     .evidence-container {
         padding: 1.5rem;
     }
-    
+
     .context-card {
         flex-direction: column;
         align-items: stretch;
     }
-    
+
     .hu-input-container {
         width: 100%;
     }
