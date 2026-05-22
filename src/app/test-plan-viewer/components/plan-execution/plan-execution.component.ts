@@ -897,12 +897,18 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     try {
       this.isExportingPdf = true;
+      this.exportProgress = 0;
+      this.exportTotal = this.execution.testCases.length;
       this.cdr.markForCheck();
 
       await this.exportService.exportExecutionToPDF(
         this.execution,
-        this.execution.testCases.findIndex((_: any, i: number) => i === this.activeTestCaseIndex) ?? 0,
-        (current, total) => { this.cdr.markForCheck(); }
+        this.hu,
+        (current, total) => {
+          this.exportProgress = current;
+          this.exportTotal = total;
+          this.cdr.markForCheck();
+        }
       );
 
       this.toastService.success('Ejecución exportada a PDF exitosamente');
@@ -910,6 +916,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.toastService.error('Error al exportar la ejecución a PDF');
     } finally {
       this.isExportingPdf = false;
+      this.exportProgress = 0;
+      this.exportTotal = 0;
       this.cdr.markForCheck();
     }
   }
