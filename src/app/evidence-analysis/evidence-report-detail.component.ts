@@ -100,10 +100,15 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
             [(ngModel)]="refinementInstruction"
             [disabled]="isRefining"
           ></textarea>
-          <button class="btn-execute-refine" (click)="refine()" [disabled]="isRefining || !refinementInstruction">
-            <span class="spinner" *ngIf="isRefining"></span>
-            {{ isRefining ? 'Aplicar Refinamiento' : 'Procesar Cambios' }}
-          </button>
+          <div class="drawer-actions">
+            <button class="btn-execute-refine" (click)="refine()" [disabled]="isRefining || !refinementInstruction">
+              <span class="spinner" *ngIf="isRefining"></span>
+              {{ isRefining ? 'Aplicar Refinamiento' : 'Procesar Cambios con IA' }}
+            </button>
+            <button class="btn-save-manual" (click)="saveManualChanges()" [disabled]="isRefining">
+              <span>💾</span> Guardar Cambios Manuales
+            </button>
+          </div>
         </div>
       </div>
 
@@ -808,12 +813,19 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .empty-history { font-size: 12px; color: #86868b; text-align: center; padding: 10px; }
 
     .drawer-hint { font-size: 13px; color: #86868b; line-height: 1.5; margin: 0; }
+
+    .drawer-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
     .btn-execute-refine {
       background: #0071e3; color: white; border: none; padding: 14px; border-radius: 12px;
       font-weight: 700; cursor: pointer; transition: all 0.2s;
     }
-    .btn-execute-refine:hover { opacity: 0.9; }
-    .btn-execute-refine:disabled { background: #d2d2d7; cursor: not-allowed; }
+
+    .btn-save-manual {
+      background: #f5f5f7; color: #1d1d1f; border: 1px solid #d2d2d7; padding: 12px; border-radius: 12px;
+      font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-save-manual:hover { background: #e5e5e7; }
 
     /* Diff View Styles */
     .diff-view { display: flex; flex-direction: column; gap: 8px; }
@@ -1022,13 +1034,19 @@ export class EvidenceReportDetailComponent implements OnInit {
 
   getImageForStep(step: any) {
     if (!this.report) return null;
+
+    // 1. Prioridad: Vínculo directo por ID de paso (asignado al subir o por la IA)
     let img = this.report.report_images?.find((i: any) => i.step_id === step.id);
 
+    // 2. Fallback: Vínculo por número de orden (fuente Gemini)
     if (!img && step.imagen_referencia) {
       const match = step.imagen_referencia.match(/\d+/);
       if (match) {
         const order = parseInt(match[0], 10);
-        img = this.report.report_images?.find((i: any) => i.image_order === order);
+        // Solo recuperar por orden si la imagen no está ya asignada a un paso diferente
+        img = this.report.report_images?.find((i: any) =>
+          i.image_order === order && (!i.step_id || i.step_id === step.id)
+        );
       }
     }
     return img;
@@ -1264,24 +1282,71 @@ export class EvidenceReportDetailComponent implements OnInit {
 
   async onStepImageSelected(event: any) {
     const file = event.target.files[0];
-    if (!file || !this.currentStepForImage) return;
+    const step = this.currentStepForImage; // Capturar el paso en una variable local
+
+    if (!file || !step) {
+      this.currentStepForImage = null;
+      return;
+    }
 
     try {
       this.toast.info('Subiendo evidencia...');
       const reader = new FileReader();
+
       reader.onload = async (e: any) => {
-        const base64 = e.target.result;
-        const order = this.currentStepForImage.numero_paso;
-        await this.dbService.saveImageForStep(this.report.id, this.currentStepForImage.id, base64, file.name, order);
-        this.toast.success('Evidencia cargada exitosamente');
-        await this.loadReport(this.report.id);
+        try {
+          const base64 = e.target.result;
+          const order = step.numero_paso;
+
+          await this.dbService.saveImageForStep(this.report.id, step.id, base64, file.name, order);
+
+          this.toast.success('Evidencia cargada exitosamente');
+          // Recargar para sincronizar estado de imágenes
+          await this.loadReport(this.report.id);
+        } catch (err) {
+          console.error('Error al procesar la imagen:', err);
+          this.toast.error('Error al subir la imagen');
+        }
       };
+
+      reader.onerror = () => {
+        this.toast.error('Error al leer el archivo');
+      };
+
       reader.readAsDataURL(file);
     } catch (e) {
+      console.error('Error en onStepImageSelected:', e);
       this.toast.error('Error al cargar la evidencia');
     } finally {
+      // Limpiar el estado y el input
       this.currentStepForImage = null;
       event.target.value = '';
+    }
+  }
+
+  async saveManualChanges() {
+    if (!this.report) return;
+
+    try {
+      this.toast.info('Guardando cambios manuales...');
+
+      const scenarioData = {
+        nombre_del_escenario: this.report.nombre_del_escenario,
+        resultado_obtenido: this.report.resultado_obtenido,
+        precondiciones: this.report.precondiciones,
+        estado_general: this.report.estado_general
+      };
+
+      // Si hay pasos, sincronizarlos
+      const steps = this.report.test_scenario_steps || [];
+
+      await this.dbService.updateScenario(this.report.id, scenarioData, steps);
+
+      this.toast.success('Cambios manuales guardados exitosamente');
+      await this.loadReport(this.report.id);
+    } catch (e) {
+      console.error('Error al guardar cambios manuales:', e);
+      this.toast.error('Error al guardar los cambios');
     }
   }
 

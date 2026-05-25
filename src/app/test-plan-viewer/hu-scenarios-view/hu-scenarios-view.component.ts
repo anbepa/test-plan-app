@@ -291,12 +291,17 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       if (!data) return;
 
       const testCases = (data.test_cases || []).map((tc: any) => ({
+        dbId: tc.id,
         title: tc.title,
         preconditions: tc.preconditions,
         expectedResults: tc.expected_results,
         steps: (tc.test_case_steps || [])
           .sort((a: any, b: any) => (a.step_number || 0) - (b.step_number || 0))
-          .map((s: any) => ({ accion: s.action })),
+          .map((s: any) => ({
+            dbId: s.id,
+            numero_paso: s.step_number,
+            accion: s.action
+          })),
         isExpanded: false
       }));
 
@@ -524,7 +529,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   async saveEditTestCase(index: number): Promise<void> {
     this.editingTestCaseIndex = null;
-    
+
     const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
     if (!userStoryId || !this.hu || !this.hu.detailedTestCases) {
       this.toastService.error('Error de sistema: ID de HU no válido para guardado');
@@ -532,11 +537,11 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     }
 
     const testCase = this.hu.detailedTestCases[index];
-    
+
     try {
       // Usar la función optimizada para guardar solo este caso
       const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, testCase, index);
-      
+
       // Actualizar el modelo en memoria con el ID (por si era nuevo) y pasos limpios
       this.hu.detailedTestCases[index] = {
         ...updatedCase,
@@ -546,15 +551,15 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       };
 
       this.toastService.success(`Escenario guardado correctamente`);
-      
+
       // Notificar cambios al resto de la app
       this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer');
-      
+
     } catch (error) {
       console.error('Error guardando escenario:', error);
       this.toastService.error('Error al guardar el escenario');
     }
-    
+
     this.cdr.detectChanges();
   }
 
@@ -741,7 +746,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   private async saveData(): Promise<boolean> {
     // Intentar usar dbUuid o id (si el id es un UUID)
     const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
-    
+
     if (!userStoryId) {
       console.error('❌ No se puede guardar: No hay un UUID válido para la HU');
       this.toastService.error('Error de sistema: ID de HU no válido para guardado');
@@ -750,9 +755,9 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
     const cases = this.hu!.detailedTestCases || [];
 
-    console.log(`🚀 Intentando guardar HU: ${userStoryId}`, { 
+    console.log(`🚀 Intentando guardar HU: ${userStoryId}`, {
       count: cases.length,
-      cases: cases 
+      cases: cases
     });
 
     try {
@@ -760,8 +765,27 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       console.log('✅ Guardado exitoso. Registros en BD:', result);
       this.toastService.success(`${cases.length} escenarios guardados en base de datos`);
 
-      // Actualizar modelo en memoria para consistencia (sin re-fetch)
-      if (this.hu) {
+      // ── Recargar desde BD para obtener los dbIds reales ──
+      // Esto asegura que la sincronización con PlanExecution (reconciliation) funcione correctamente
+      const fullHuDb = await this.databaseService.getUserStoryWithTestCases(userStoryId);
+
+      if (fullHuDb && this.hu) {
+        this.hu.detailedTestCases = (fullHuDb.test_cases || []).map((tc: any) => ({
+          dbId: tc.id,
+          title: tc.title,
+          preconditions: tc.preconditions,
+          expectedResults: tc.expected_results,
+          steps: (tc.test_case_steps || [])
+            .sort((a: any, b: any) => (a.step_number || 0) - (b.step_number || 0))
+            .map((s: any) => ({
+              dbId: s.id,
+              numero_paso: s.step_number,
+              accion: s.action
+            })),
+          isExpanded: false
+        }));
+      } else if (this.hu) {
+        // Fallback si falla el re-fetch (no ideal)
         this.hu.detailedTestCases = cases.map((tc, idx) => ({
           ...tc,
           steps: (tc.steps || [])
@@ -774,7 +798,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       if (this.hu) {
         this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer');
       }
-      
+
       return true;
 
     } catch (error: any) {

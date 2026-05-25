@@ -491,33 +491,44 @@ export class EvidenceDatabaseService {
   async updateScenario(id: string, data: any, steps?: any[]): Promise<void> {
     try {
       // 1. CAPTURAR ASOCIACIONES ACTUALES (Mapear numero_paso -> [image_ids])
+      // Y también capturar por descripción para mayor robustez
       const { data: currentImages } = await this.supabase
         .from('report_images')
-        .select('id, step_id')
+        .select('id, step_id, image_order')
         .eq('report_id', id);
 
       const { data: currentSteps } = await this.supabase
         .from('test_scenario_steps')
-        .select('id, numero_paso')
+        .select('id, numero_paso, descripcion_accion_observada')
         .eq('scenario_id', id);
 
       const stepToImagesMap = new Map<number, string[]>();
+      const descToImagesMap = new Map<string, string[]>();
+
       if (currentImages && currentSteps) {
         currentSteps.forEach(s => {
           const imgs = currentImages.filter(img => img.step_id === s.id).map(img => img.id);
-          if (imgs.length > 0) stepToImagesMap.set(s.numero_paso, imgs);
+          if (imgs.length > 0) {
+            stepToImagesMap.set(s.numero_paso, imgs);
+            if (s.descripcion_accion_observada) {
+              descToImagesMap.set(s.descripcion_accion_observada.trim().toLowerCase(), imgs);
+            }
+          }
         });
       }
 
       // 2. Actualizar datos básicos del escenario
       const { error: scenarioError } = await this.supabase
         .from('test_scenarios')
-        .update(data)
+        .update({
+          ...data,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (scenarioError) throw scenarioError;
 
-      if (steps && steps.length > 0) {
+      if (steps && steps.length >= 0) {
         // 2.5. Desvincular las imágenes temporalmente para evitar que el ON DELETE CASCADE las destruya
         const { error: detachError } = await this.supabase
           .from('report_images')
@@ -542,39 +553,47 @@ export class EvidenceDatabaseService {
           imagen_referencia: step.imagen_referencia || 'N/A'
         }));
 
-        const { data: insertedSteps, error: stepsError } = await this.supabase
-          .from('test_scenario_steps')
-          .insert(stepsToInsert)
-          .select();
+        if (stepsToInsert.length > 0) {
+          const { data: insertedSteps, error: stepsError } = await this.supabase
+            .from('test_scenario_steps')
+            .insert(stepsToInsert)
+            .select();
 
-        if (stepsError) throw stepsError;
+          if (stepsError) throw stepsError;
 
-        // 5. RESTAURAR ASOCIACIONES DE IMÁGENES
-        // Estrategia combinada: numero_paso + imagen_referencia
-        if (insertedSteps && insertedSteps.length > 0) {
-          for (const step of insertedSteps) {
-            // A. Intentar por mapeo de número de paso (lo más robusto si el orden no cambió)
-            const imageIds = stepToImagesMap.get(step.numero_paso);
-            if (imageIds && imageIds.length > 0) {
-              for (const imageId of imageIds) {
-                await this.supabase
-                  .from('report_images')
-                  .update({ step_id: step.id })
-                  .eq('id', imageId);
+          // 5. RESTAURAR ASOCIACIONES DE IMÁGENES
+          if (insertedSteps && insertedSteps.length > 0) {
+            for (const step of insertedSteps) {
+              // A. Intentar por descripción exacta (mejor si hubo reordenamiento manual)
+              const desc = (step.descripcion_accion_observada || '').trim().toLowerCase();
+              let imageIds = descToImagesMap.get(desc);
+
+              // B. Intentar por número de paso (si la descripción cambió pero el orden se mantuvo)
+              if (!imageIds || imageIds.length === 0) {
+                imageIds = stepToImagesMap.get(step.numero_paso);
               }
-              continue; // Ya vinculado
-            }
 
-            // B. Intentar por referencia de texto (si Gemini cambió el orden o añadió pasos)
-            if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
-              const match = step.imagen_referencia.match(/\d+/);
-              if (match) {
-                const order = parseInt(match[0], 10);
-                await this.supabase
-                  .from('report_images')
-                  .update({ step_id: step.id })
-                  .eq('report_id', id)
-                  .eq('image_order', order);
+              if (imageIds && imageIds.length > 0) {
+                for (const imageId of imageIds) {
+                  await this.supabase
+                    .from('report_images')
+                    .update({ step_id: step.id })
+                    .eq('id', imageId);
+                }
+                continue;
+              }
+
+              // C. Intentar por referencia de texto (imagen_referencia)
+              if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
+                const match = step.imagen_referencia.match(/\d+/);
+                if (match) {
+                  const order = parseInt(match[0], 10);
+                  await this.supabase
+                    .from('report_images')
+                    .update({ step_id: step.id })
+                    .eq('report_id', id)
+                    .eq('image_order', order);
+                }
               }
             }
           }
