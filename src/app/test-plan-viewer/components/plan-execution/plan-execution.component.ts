@@ -1213,35 +1213,23 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // ── Guard: skip reconciliation if HU structure hasn't changed ──
-    // Compare titles+steps of HU against current execution to detect real changes.
-    // We now take ALL test cases from updated HU to support adding new ones automatically.
-    const relevantHuCases = updatedHu.detailedTestCases;
-
-    const huFingerprint = relevantHuCases
-      .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
-      .join(';;');
-
-    // We also need to check if the number of test cases changed (e.g. 2 vs 6)
-    if (this.execution.testCases.length === relevantHuCases.length) {
-      const execFingerprint = this.execution.testCases
-        .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
-        .join(';;');
-
-      if (huFingerprint === execFingerprint) {
-        // HU structure is identical — only update title if needed, no reconcile/save
-        if (this.execution.huTitle !== updatedHu.title) {
-          this.execution.huTitle = updatedHu.title;
-          await this.fastSaveExecutionState();
-        }
-        return;
+    // ── Guard: Si la ejecución ya fue creada y tiene casos, NUNCA sincronizamos con la HU original. ──
+    // Según la regla de negocio: una ejecución (Test Run) es un snapshot estático en el tiempo.
+    // Una vez en "manual-execution", se desvincula de los cambios en tiempo real de la HU (/viewer/hu-scenarios).
+    if (this.execution && this.execution.testCases && this.execution.testCases.length > 0) {
+      if (this.execution.huTitle !== updatedHu.title) {
+        this.execution.huTitle = updatedHu.title;
+        await this.fastSaveExecutionState();
       }
+      return;
     }
-
+    
+    // Si llegamos aquí, es porque la ejecución AÚN no tiene casos (recién creada o en blanco).
+    // En este caso excepcional sí copiamos la estructura inicial de la HU.
     this.execution.huTitle = updatedHu.title;
     this.execution.testCases = await this.reconcileExecutionWithHu(
       this.execution.testCases,
-      relevantHuCases
+      updatedHu.detailedTestCases || []
     );
 
     this.execution.updatedAt = Date.now();

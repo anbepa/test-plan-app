@@ -113,6 +113,10 @@ export class EvidenceAnalysisComponent {
           continue;
         }
 
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        const isCSV = extension === 'csv' || file.type === 'text/csv';
+        const isXLSX = extension === 'xlsx' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
         if (file.type.startsWith('image/')) {
           const base64 = await this.readFileAsDataURL(file);
           // Comprimir imagen antes de guardarla para evitar error 413 en Vercel
@@ -122,6 +126,15 @@ export class EvidenceAnalysisComponent {
             name: file.name,
             type: 'image/jpeg', // Siempre convertimos a jpeg para mejor compresión
             dataURL: compressedBase64,
+            isVideo: false,
+            size: file.size
+          });
+        } else if (isCSV || isXLSX) {
+          const base64 = await this.readFileAsDataURL(file);
+          this.files.push({
+            name: file.name,
+            type: isCSV ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            dataURL: base64,
             isVideo: false,
             size: file.size
           });

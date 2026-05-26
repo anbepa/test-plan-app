@@ -39,7 +39,7 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
 
     **CONTEXTO:**
     Actúas como un **QA Lead Expert Full Stack**.
-    Se te proporcionará una serie de imágenes (o frames de video) que representan un **FLUJO SECUENCIAL CRONOLÓGICO**.
+    Se te proporcionará una serie de imágenes, frames de video o archivos de datos (como planillas .csv, .xlsx) que representan un **FLUJO SECUENCIAL CRONOLÓGICO** o datos de prueba.
 
     **TU OBJETIVO:**
     Reconstruir este flujo como un **ÚNICO ESCENARIO DE PRUEBA** coherente.
@@ -114,7 +114,7 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
            - Incluye todos los datos relevantes que veas en la evidencia
            - Ejemplo: "En 'Solicitud mantenimiento' seleccionar: Fecha mantenimiento '27/11/2025', Categoría 'Modificación a las condiciones iniciales', Número de caso '12', Tipo 'Cambio fecha de vencimiento total', Causal 'Solicitud del cliente' y hacer clic en 'Continuar'"
 
-        c) **imagen_referencia** (string, OBLIGATORIO): "Evidencia 1", "Evidencia 2", etc.
+        c) **imagen_referencia** (string, OBLIGATORIO): "Evidencia 1", "Evidencia 2", etc. (usa "Evidencia 1 y 2" si un paso se demuestra con múltiples evidencias).
 
     5.  **RESULTADO ESPERADO (FASE 1 - Deducción Lógica ANTES de validar):**
         - Analiza el PROPÓSITO del flujo observando las primeras imágenes.

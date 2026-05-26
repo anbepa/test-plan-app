@@ -7,6 +7,7 @@ import { EvidenceAnalysisService } from '../services/ai/evidence-analysis.servic
 import { EvidenceExcelService } from '../services/core/evidence-excel.service';
 import { ToastService } from '../services/core/toast.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import * as XLSX from 'xlsx';
 
 @Component({
   selector: 'app-evidence-report-detail',
@@ -157,6 +158,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                     </div>
                   </td>
                   <td>
+                    <div style="font-size: 10px; color: red; margin-bottom: 4px;">[Ref: {{ step.imagen_referencia }}]</div>
                     <div
                       class="step-text"
                       [class.regenerating]="isRefining"
@@ -183,42 +185,61 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
                       (drop)="onDrop($event, step)"
                       [class.dragging-over]="draggedStep && draggedStep.id !== step.id"
                     >
-                      <ng-container *ngIf="getImageForStep(step) as img">
-                        <div
-                          class="evidence-thumb-container"
-                          [attr.data-img-url]="img.image_url"
-                          (click)="onThumbClick(step, img)"
-                        >
-                          <!-- ESTADO 1: No activada aún (src no asignado, cero descargas) -->
-                          <div class="thumb-placeholder" *ngIf="!isActivated(img)">
-                            <span class="placeholder-icon">🖼</span>
-                          </div>
-
-                          <!-- ESTADO 2 + 3: Activada → img con src real -->
-                          <ng-container *ngIf="isActivated(img)">
-                            <img
-                              [src]="getThumbSrc(img)"
-                              class="step-thumb"
-                              [class.thumb-fading]="!isLoaded(img)"
-                              alt="Evidencia"
-                              decoding="async"
-                              (load)="onImageLoad(img)"
-                              (error)="onImageError(img)"
-                            >
-                            <!-- ESTADO 2: Descargando (spinner girando) -->
-                            <div class="thumb-load-overlay" *ngIf="!isLoaded(img)">
-                              <div class="thumb-spinner"></div>
-                              <span class="thumb-load-hint">Cargando...</span>
+                      <!-- Mostrar TODAS las evidencias del paso -->
+                      <ng-container *ngIf="getImagesForStep(step).length > 0">
+                        <div class="multi-evidence-row">
+                          <div
+                            *ngFor="let img of getImagesForStep(step)"
+                            class="evidence-thumb-container"
+                            [attr.data-img-url]="img.image_url"
+                            (click)="onThumbClick(step, img)"
+                          >
+                            <!-- ESTADO 1: No activada aún -->
+                            <div class="thumb-placeholder" *ngIf="!isActivated(img)">
+                              <span class="placeholder-icon" *ngIf="img.file_type?.includes('csv')">📄 CSV</span>
+                              <span class="placeholder-icon" *ngIf="img.file_type?.includes('sheet') || img.file_type?.includes('excel')">📊 XLSX</span>
+                              <span class="placeholder-icon" *ngIf="!img.file_type?.includes('csv') && !img.file_type?.includes('sheet') && !img.file_type?.includes('excel')">🖼</span>
                             </div>
-                          </ng-container>
 
-                          <button *ngIf="showRefiner" class="btn-delete-evidence" (click)="deleteEvidence(img, $event)" title="Eliminar evidencia">
-                            <span style="font-size: 10px;">🗑</span>
-                          </button>
+                            <!-- ESTADO 2 + 3: Activada -->
+                            <ng-container *ngIf="isActivated(img)">
+                              <img
+                                *ngIf="!img.file_type?.includes('csv') && !img.file_type?.includes('sheet') && !img.file_type?.includes('excel')"
+                                [src]="getThumbSrc(img)"
+                                class="step-thumb"
+                                [class.thumb-fading]="!isLoaded(img)"
+                                alt="Evidencia"
+                                decoding="async"
+                                (load)="onImageLoad(img)"
+                                (error)="onImageError(img)"
+                              >
+
+                              <!-- Si es CSV/XLSX -->
+                              <div
+                                *ngIf="img.file_type?.includes('csv') || img.file_type?.includes('sheet') || img.file_type?.includes('excel')"
+                                class="step-doc-icon"
+                                [class.csv]="img.file_type?.includes('csv')"
+                                [class.xlsx]="img.file_type?.includes('sheet') || img.file_type?.includes('excel')"
+                              >
+                                <span class="doc-badge">{{ getExtension(img.file_name) }}</span>
+                                <span class="doc-emoji">📊</span>
+                              </div>
+
+                              <!-- Spinner descargando -->
+                              <div class="thumb-load-overlay" *ngIf="!isLoaded(img) && !img.file_type?.includes('csv') && !img.file_type?.includes('sheet') && !img.file_type?.includes('excel')">
+                                <div class="thumb-spinner"></div>
+                                <span class="thumb-load-hint">Cargando...</span>
+                              </div>
+                            </ng-container>
+
+                            <button *ngIf="showRefiner" class="btn-delete-evidence" (click)="deleteEvidence(img, $event)" title="Eliminar evidencia">
+                              <span style="font-size: 10px;">🗑</span>
+                            </button>
+                          </div>
                         </div>
                       </ng-container>
 
-                      <ng-container *ngIf="!getImageForStep(step)">
+                      <ng-container *ngIf="getImagesForStep(step).length === 0">
                         <div class="empty-evidence-slot" *ngIf="showRefiner" (click)="triggerImageUpload(step)">
                           <span style="font-size: 1.2rem;">+</span>
                           <span>Subir</span>
@@ -282,15 +303,67 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       </div>
     </main>
 
-      <!-- Image Modal -->
+      <!-- Image/Spreadsheet Modal -->
       <div class="modal-overlay" *ngIf="selectedImage" (click)="selectedImage = null">
-        <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-content" [class.spreadsheet-modal]="selectedImage.file_type?.includes('csv') || selectedImage.file_type?.includes('sheet') || selectedImage.file_type?.includes('excel')" (click)="$event.stopPropagation()">
           <header class="modal-header">
             <span>{{ selectedImage.file_name }}</span>
-            <button class="btn-close-modal" (click)="selectedImage = null"><i class="pi pi-times"></i></button>
+            <div class="modal-header-actions">
+              <ng-container *ngIf="selectedImage.file_type?.includes('csv') || selectedImage.file_type?.includes('sheet') || selectedImage.file_type?.includes('excel')">
+                <div class="spreadsheet-search-wrap">
+                  <input type="text" class="spreadsheet-search-input" placeholder="Buscar en datos..." [(ngModel)]="spreadsheetSearchTerm">
+                </div>
+                <a [href]="selectedImage.image_url" target="_blank" download class="btn-download-sm" title="Descargar archivo original">
+                  📥 Descargar
+                </a>
+              </ng-container>
+              <button class="btn-close-modal" (click)="selectedImage = null">&times;</button>
+            </div>
           </header>
           <div class="modal-body">
-            <img [src]="selectedImage.image_url" [alt]="selectedImage.file_name">
+            <!-- Si es imagen -->
+            <img *ngIf="!selectedImage.file_type?.includes('csv') && !selectedImage.file_type?.includes('sheet') && !selectedImage.file_type?.includes('excel')" [src]="selectedImage.image_url" [alt]="selectedImage.file_name">
+
+            <!-- Si es CSV/XLSX - Visor de tabla -->
+            <div *ngIf="selectedImage.file_type?.includes('csv') || selectedImage.file_type?.includes('sheet') || selectedImage.file_type?.includes('excel')" class="spreadsheet-viewer">
+              <div class="spreadsheet-loading" *ngIf="isLoadingSpreadsheet">
+                <div class="spreadsheet-spinner"></div>
+                <span>Cargando datos del archivo...</span>
+              </div>
+              <div class="spreadsheet-empty" *ngIf="!isLoadingSpreadsheet && spreadsheetData.length === 0">
+                <div class="doc-download-card">
+                  <div class="doc-card-icon" [class.csv]="selectedImage.file_type?.includes('csv')" [class.xlsx]="selectedImage.file_type?.includes('sheet') || selectedImage.file_type?.includes('excel')">
+                    📊
+                  </div>
+                  <div class="doc-card-info">
+                    <h3>{{ selectedImage.file_name }}</h3>
+                    <p>No se pudo previsualizar. Puedes descargarlo directamente.</p>
+                    <a [href]="selectedImage.image_url" target="_blank" download class="btn-download-file">
+                      <span>📥</span> Descargar archivo
+                    </a>
+                  </div>
+                </div>
+              </div>
+              <div class="spreadsheet-table-wrap" *ngIf="!isLoadingSpreadsheet && spreadsheetData.length > 0">
+                <table class="spreadsheet-table">
+                  <thead *ngIf="filteredSpreadsheetRows.length > 0">
+                    <tr>
+                      <th class="row-num-header">#</th>
+                      <th *ngFor="let cell of filteredSpreadsheetRows[0]">{{ cell }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of filteredSpreadsheetRows.slice(1); let i = index">
+                      <td class="row-num">{{ i + 1 }}</td>
+                      <td *ngFor="let cell of row" [class.cell-numeric]="isNumericCell(cell)">{{ cell }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="spreadsheet-footer">
+                  <span class="spreadsheet-count">{{ filteredSpreadsheetRows.length - 1 }} filas · {{ (filteredSpreadsheetRows[0] || []).length }} columnas</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -557,6 +630,14 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
       padding: 6px;
       position: relative;
+    }
+
+    .multi-evidence-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
     }
 
     .evidence-cell[draggable="true"] { cursor: grab; }
@@ -835,6 +916,154 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     .regenerating { filter: blur(4px); opacity: 0.5; pointer-events: none; transition: all 0.4s; }
     .refining-placeholder { color: #0071e3; font-weight: 700; font-style: italic; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+    /* CSS para documentos en reporte */
+    .step-doc-icon {
+      width: 74px;
+      height: 74px;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: linear-gradient(135deg, #f5f5f7 0%, #e5e5e7 100%);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      border: 2px solid #ffffff;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .step-doc-icon:hover {
+      transform: scale(1.1);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+    .step-doc-icon.csv {
+      background: linear-gradient(135deg, #e6f4ea 0%, #ceead6 100%);
+    }
+    .step-doc-icon.xlsx {
+      background: linear-gradient(135deg, #e6f4ea 0%, #a7f3d0 100%);
+    }
+    .step-doc-icon .doc-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 8px;
+      font-weight: 800;
+      color: white;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .step-doc-icon.csv .doc-badge { background-color: #217346; }
+    .step-doc-icon.xlsx .doc-badge { background-color: #107c41; }
+    .step-doc-icon .doc-emoji { font-size: 24px; }
+
+    /* Modal download card */
+    .doc-download-card {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 32px;
+      background: #f5f5f7;
+      border-radius: 16px;
+      min-width: 350px;
+    }
+    .doc-card-icon {
+      font-size: 48px;
+      width: 80px;
+      height: 80px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.06);
+    }
+    .doc-card-icon.csv { background: #e6f4ea; color: #217346; }
+    .doc-card-icon.xlsx { background: #e6f4ea; color: #107c41; }
+    .doc-card-info h3 { margin: 0 0 6px 0; font-size: 16px; font-weight: 700; color: #1d1d1f; }
+    .doc-card-info p { margin: 0 0 16px 0; font-size: 13px; color: #86868b; }
+    .btn-download-file {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #0071e3;
+      color: white;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0,113,227,0.25);
+      transition: all 0.2s;
+    }
+    .btn-download-file:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0,113,227,0.35);
+    }
+
+    /* Spreadsheet Modal */
+    .spreadsheet-modal { width: 95vw; max-width: 95vw; height: 85vh; max-height: 85vh; }
+    .spreadsheet-modal .modal-body { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header-actions { display: flex; align-items: center; gap: 12px; }
+    .spreadsheet-search-wrap { position: relative; }
+    .spreadsheet-search-input {
+      background: #f5f5f7; border: 1px solid #e5e5ea; border-radius: 8px;
+      padding: 6px 12px; font-size: 13px; color: #1d1d1f; width: 220px;
+      transition: all 0.2s;
+    }
+    .spreadsheet-search-input:focus { outline: none; border-color: #0071e3; background: white; box-shadow: 0 0 0 3px rgba(0,113,227,0.1); }
+    .btn-download-sm {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #0071e3; color: white; text-decoration: none;
+      padding: 6px 14px; border-radius: 8px; font-weight: 600; font-size: 12px;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .btn-download-sm:hover { background: #0077ED; transform: translateY(-1px); }
+
+    /* Spreadsheet Viewer */
+    .spreadsheet-viewer { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+    .spreadsheet-loading {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 60px; color: #86868b; font-size: 14px;
+    }
+    .spreadsheet-spinner {
+      width: 32px; height: 32px; border: 3px solid #e5e5ea;
+      border-top-color: #0071e3; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spreadsheet-empty { display: flex; align-items: center; justify-content: center; padding: 40px; }
+    .spreadsheet-table-wrap { flex: 1; overflow: auto; padding: 0; }
+    .spreadsheet-table {
+      width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0;
+      font-size: 12px; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    }
+    .spreadsheet-table thead { position: sticky; top: 0; z-index: 2; }
+    .spreadsheet-table th {
+      background: #1d1d1f; color: white; padding: 8px 14px;
+      text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; white-space: nowrap; border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .spreadsheet-table .row-num-header {
+      background: #1d1d1f; color: #86868b; width: 50px; text-align: center;
+      position: sticky; left: 0; z-index: 3;
+    }
+    .spreadsheet-table td {
+      padding: 6px 14px; border-bottom: 1px solid #f0f0f2; white-space: nowrap;
+      max-width: 300px; overflow: hidden; text-overflow: ellipsis; color: #1d1d1f;
+    }
+    .spreadsheet-table .row-num {
+      background: #fafafa; color: #86868b; text-align: center; font-size: 10px;
+      position: sticky; left: 0; z-index: 1; border-right: 1px solid #e5e5ea;
+    }
+    .spreadsheet-table tbody tr:nth-child(even) { background: #fafbfc; }
+    .spreadsheet-table tbody tr:hover { background: #e8f0fe; }
+    .spreadsheet-table .cell-numeric { text-align: right; font-variant-numeric: tabular-nums; }
+    .spreadsheet-footer {
+      padding: 8px 16px; background: #f5f5f7; border-top: 1px solid #e5e5ea;
+      font-size: 11px; color: #86868b; display: flex; align-items: center;
+    }
   `]
 })
 export class EvidenceReportDetailComponent implements OnInit {
@@ -869,6 +1098,11 @@ export class EvidenceReportDetailComponent implements OnInit {
 
   @ViewChild('stepImageInput') stepImageInput!: any;
   currentStepForImage: any = null;
+
+  // Spreadsheet viewer state
+  spreadsheetData: any[][] = [];
+  isLoadingSpreadsheet = false;
+  spreadsheetSearchTerm = '';
 
   constructor(
     private route: ActivatedRoute,
@@ -1028,6 +1262,12 @@ export class EvidenceReportDetailComponent implements OnInit {
 
 
 
+  getExtension(filename: string): string {
+    if (!filename) return 'FILE';
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts.pop()!.toUpperCase() : 'FILE';
+  }
+
   goBack() {
     this.router.navigate(['/evidence-reports']);
   }
@@ -1052,10 +1292,55 @@ export class EvidenceReportDetailComponent implements OnInit {
     return img;
   }
 
+  /**
+   * Devuelve TODAS las evidencias asociadas a un paso (imagen, CSV, XLSX, etc.).
+   */
+  getImagesForStep(step: any): any[] {
+    if (!this.report) return [];
+
+    // 1. Todas las que tienen step_id directo
+    const byId = (this.report.report_images || []).filter((i: any) => i.step_id === step.id);
+    if (byId.length > 0) return byId;
+
+    // 2. Fallback por imagen_referencia (solo si ninguna imagen tiene step_id asignado a este paso)
+    if (step.imagen_referencia) {
+      const fallbacks: any[] = [];
+      
+      // A. Buscar por nombre de archivo
+      const byName = this.report.report_images?.find((i: any) => i.file_name && (i.file_name === step.imagen_referencia || step.imagen_referencia.includes(i.file_name)));
+      if (byName && (!byName.step_id || byName.step_id === step.id)) {
+        fallbacks.push(byName);
+      } else {
+        // B. Extraer número limpiando fechas y extensiones comunes
+        const cleanRef = step.imagen_referencia
+          .replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '')
+          .replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+          
+        const matches = cleanRef.match(/\d+/g);
+        if (matches) {
+          matches.forEach((m: string) => {
+            const order = parseInt(m, 10);
+            const fallback = this.report.report_images?.find((i: any) =>
+              i.image_order === order && (!i.step_id || i.step_id === step.id)
+            );
+            if (fallback) fallbacks.push(fallback);
+          });
+        }
+      }
+      
+      if (fallbacks.length > 0) return fallbacks;
+    }
+    return [];
+  }
+
   viewImageForStep(step: any) {
     const img = this.getImageForStep(step);
     if (img) {
-      this.selectedImage = img;
+      if (img.file_type?.includes('csv') || img.file_type?.includes('sheet') || img.file_type?.includes('excel')) {
+        this.openSpreadsheetModal(img);
+      } else {
+        this.selectedImage = img;
+      }
     } else {
       this.toast.info('No hay imagen asociada a este paso');
     }
@@ -1068,8 +1353,11 @@ export class EvidenceReportDetailComponent implements OnInit {
     return this.activatedUrls.has(img.image_url);
   }
 
-  /** La imagen ya terminó de descargarse en el browser */
+  /** La imagen ya terminó de descargarse en el browser o es un documento CSV/XLSX */
   isLoaded(img: any): boolean {
+    if (img.file_type?.includes('csv') || img.file_type?.includes('sheet') || img.file_type?.includes('excel')) {
+      return true;
+    }
     return this.loadedUrls.has(img.image_url);
   }
 
@@ -1104,11 +1392,15 @@ export class EvidenceReportDetailComponent implements OnInit {
 
   /**
    * Clic en el thumbnail:
-   * - Imagen descargada → abre modal
+   * - Imagen descargada o documento → abre modal
    * - Activada pero descargando → registra pending, el (load) abrirá el modal
    * - No activada → activa ahora (fuerza descarga) + registra pending
    */
   onThumbClick(step: any, img: any) {
+    if (img.file_type?.includes('csv') || img.file_type?.includes('sheet') || img.file_type?.includes('excel')) {
+      this.openSpreadsheetModal(img);
+      return;
+    }
     if (this.isLoaded(img)) {
       this.selectedImage = img;
       return;
@@ -1119,6 +1411,91 @@ export class EvidenceReportDetailComponent implements OnInit {
       this.activatedUrls.add(img.image_url);
       this.cdr.detectChanges();
     }
+  }
+
+  // ─── Spreadsheet viewer ────────────────────────────────────────────
+  async openSpreadsheetModal(img: any) {
+    this.selectedImage = img;
+    this.spreadsheetData = [];
+    this.isLoadingSpreadsheet = true;
+    this.spreadsheetSearchTerm = '';
+    this.cdr.detectChanges();
+
+    try {
+      const response = await fetch(img.image_url);
+      const arrayBuffer = await response.arrayBuffer();
+
+      const isCSV = img.file_type?.includes('csv') || img.file_name?.toLowerCase().endsWith('.csv');
+
+      let workbook: XLSX.WorkBook;
+      if (isCSV) {
+        let text: string;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(arrayBuffer);
+        } catch {
+          text = new TextDecoder('windows-1252').decode(arrayBuffer);
+        }
+        workbook = XLSX.read(text, { type: 'string', cellDates: true });
+      } else {
+        workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
+      }
+
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+      const headers = json[0] || [];
+      this.spreadsheetData = json.map((row, rIndex) => {
+        if (rIndex === 0) return row.map((h: any) => h !== undefined && h !== null ? String(h) : '');
+        return (row || []).map((cell: any, cIndex: number) => {
+          const header = String(headers[cIndex] || '').toLowerCase();
+          if (typeof cell === 'number') {
+            const isDateCol = header.includes('date') || header.includes('_at');
+            if (isDateCol && cell > 30000) {
+              cell = new Date(Math.round((cell - 25569) * 86400 * 1000));
+            } else {
+              const isIdOrCode = header.includes('account') ||
+                header === 'nit' ||
+                header.includes('product_id') ||
+                header.includes('id_reference') ||
+                header.includes('transactional_id');
+              if (isIdOrCode) return String(cell);
+              return cell.toLocaleString('en-US', { maximumFractionDigits: 3 });
+            }
+          }
+          if (cell instanceof Date) {
+            const d = cell;
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            return `${dateStr} ${timeStr}`;
+          }
+          return cell !== undefined && cell !== null ? String(cell) : '';
+        });
+      });
+    } catch (err) {
+      console.error('Error loading spreadsheet:', err);
+      this.toast.error('Error al cargar el archivo. Puedes descargarlo directamente.');
+    } finally {
+      this.isLoadingSpreadsheet = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  get filteredSpreadsheetRows(): any[][] {
+    if (!this.spreadsheetSearchTerm || !this.spreadsheetData.length) return this.spreadsheetData;
+    const term = this.spreadsheetSearchTerm.toLowerCase();
+    const [header, ...dataRows] = this.spreadsheetData;
+    const filtered = dataRows.filter(row =>
+      row.some((cell: any) => String(cell).toLowerCase().includes(term))
+    );
+    return [header, ...filtered];
+  }
+
+  isNumericCell(value: any): boolean {
+    if (value === null || value === undefined || value === '') return false;
+    const str = String(value).replace(/,/g, '');
+    return !isNaN(Number(str)) && str.trim() !== '';
   }
 
   // --- Drag & Drop Handlers ---

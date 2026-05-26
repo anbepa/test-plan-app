@@ -78,19 +78,46 @@ export class EvidenceDatabaseService {
       const userId = await this.getCurrentUserId();
       if (!userId) throw new Error('Usuario no autenticado para subir archivos');
 
-      // 1. COMPRESIÓN A WEBP
-      const compressedBlob = await this.compressToWebP(fileData);
+      const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = matches ? matches[1] : 'application/octet-stream';
 
-      // Limpiar nombre de archivo
-      const cleanName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const path = `${userId}/${Date.now()}_${cleanName}.webp`;
+      let bodyBlob: Blob;
+      let contentType = mimeType;
+      let path = '';
 
-      console.log(`[STORAGE] Intentando subir a evidence-analysis: ${path}`);
+      const isCSV = mimeType.includes('csv') || fileName.endsWith('.csv');
+      const isXLSX = mimeType.includes('sheet') || mimeType.includes('excel') || fileName.endsWith('.xlsx');
+
+      if (!isCSV && !isXLSX && mimeType.startsWith('image/') && !mimeType.includes('svg')) {
+        // 1. COMPRESIÓN A WEBP
+        bodyBlob = await this.compressToWebP(fileData);
+        contentType = 'image/webp';
+        const cleanName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        path = `${userId}/${Date.now()}_${cleanName}.webp`;
+      } else {
+        // 2. ARCHIVO DE DATOS (CSV, XLSX, etc) - NO COMPRIMIR
+        const base64Data = matches ? matches[2] : fileData;
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        bodyBlob = new Blob([byteArray], { type: mimeType });
+        
+        // Mantener extensión original para archivos de datos
+        const extension = fileName.includes('.') ? fileName.split('.').pop() : (isCSV ? 'csv' : 'xlsx');
+        const baseName = fileName.includes('.') ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+        const cleanName = baseName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        path = `${userId}/${Date.now()}_${cleanName}.${extension}`;
+      }
+
+      console.log(`[STORAGE] Intentando subir a evidence-analysis: ${path} (Tipo: ${contentType})`);
 
       const { data, error } = await this.supabase.storage
         .from('evidence-analysis')
-        .upload(path, compressedBlob, {
-          contentType: 'image/webp',
+        .upload(path, bodyBlob, {
+          contentType: contentType,
           cacheControl: '3600',
           upsert: true
         });
@@ -223,7 +250,7 @@ export class EvidenceDatabaseService {
       .eq('user_id', userId);
 
     if (huFilter) {
-      query = query.ilike('historia_usuario', `%${huFilter}%`);
+      query = query.eq('historia_usuario', huFilter.toString().trim());
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -261,7 +288,7 @@ export class EvidenceDatabaseService {
       .eq('user_id', userId);
 
     if (params.huFilter) {
-      query = query.ilike('historia_usuario', `%${params.huFilter}%`);
+      query = query.eq('historia_usuario', params.huFilter.toString().trim());
     }
 
     if (params.textFilter) {
@@ -352,21 +379,34 @@ export class EvidenceDatabaseService {
     const associations: { stepId: string, imageIndex: number }[] = [];
     steps.forEach(step => {
       if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
-        const match = step.imagen_referencia.match(/\d+/);
-        if (match) {
-          const imageIndex = parseInt(match[0], 10) - 1; // 0-based
-          if (imageIndex >= 0 && imageIndex < files.length) {
-            associations.push({ stepId: step.id, imageIndex });
+        // 1. Intentar hacer match directo con el nombre del archivo
+        const matchedByName = files.findIndex(f => f.name && (f.name === step.imagen_referencia || step.imagen_referencia.includes(f.name)));
+        if (matchedByName >= 0) {
+          associations.push({ stepId: step.id, imageIndex: matchedByName });
+        } else {
+          // 2. Limpiar fechas y nombres de archivo con extensiones para evitar capturar números incorrectos
+          const cleanRef = step.imagen_referencia
+            .replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '')
+            .replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+          
+          const matches = cleanRef.match(/\d+/g);
+          if (matches) {
+            matches.forEach((m: string) => {
+              const imageIndex = parseInt(m, 10) - 1; // 0-based
+              if (imageIndex >= 0 && imageIndex < files.length) {
+                associations.push({ stepId: step.id, imageIndex });
+              }
+            });
           }
         }
       }
     });
 
-    // 2. Procesar cada archivo de imagen
+    // 2. Procesar cada archivo de imagen/documento
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       // Si no hay URL pública ni dataURL, saltar
-      if (!file.publicUrl && (!file.dataURL || !file.dataURL.startsWith('data:image'))) continue;
+      if (!file.publicUrl && (!file.dataURL || !file.dataURL.startsWith('data:'))) continue;
 
       try {
         // Reutilizar la URL si ya se subió previamente en el componente
@@ -380,8 +420,8 @@ export class EvidenceDatabaseService {
             imagesToInsert.push({
               report_id: scenarioId,
               step_id: assoc.stepId,
-              file_name: file.name || `evidencia_${i+1}.webp`,
-              file_type: 'image/webp',
+              file_name: file.name || `evidencia_${i+1}`,
+              file_type: file.type || 'image/webp',
               image_url: imageUrl,
               image_order: i + 1,
               is_video: file.isVideo || false,
@@ -394,8 +434,8 @@ export class EvidenceDatabaseService {
           imagesToInsert.push({
             report_id: scenarioId,
             step_id: null,
-            file_name: file.name || `evidencia_${i+1}.webp`,
-            file_type: 'image/webp',
+            file_name: file.name || `evidencia_${i+1}`,
+            file_type: file.type || 'image/webp',
             image_url: imageUrl,
             image_order: i + 1,
             is_video: file.isVideo || false,
@@ -585,14 +625,30 @@ export class EvidenceDatabaseService {
 
               // C. Intentar por referencia de texto (imagen_referencia)
               if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
-                const match = step.imagen_referencia.match(/\d+/);
-                if (match) {
-                  const order = parseInt(match[0], 10);
+                const imgByName = currentImages?.find((img: any) => img.file_name && (img.file_name === step.imagen_referencia || step.imagen_referencia.includes(img.file_name)));
+                if (imgByName) {
                   await this.supabase
                     .from('report_images')
                     .update({ step_id: step.id })
                     .eq('report_id', id)
-                    .eq('image_order', order);
+                    .eq('id', imgByName.id);
+                } else {
+                  // 2. Extraer orden limpiando el string de fechas y extensiones
+                  const cleanRef = step.imagen_referencia
+                    .replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '')
+                    .replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+                    
+                  const matches = cleanRef.match(/\d+/g);
+                  if (matches) {
+                    for (const m of matches) {
+                      const order = parseInt(m, 10);
+                      await this.supabase
+                        .from('report_images')
+                        .update({ step_id: step.id })
+                        .eq('report_id', id)
+                        .eq('image_order', order);
+                    }
+                  }
                 }
               }
             }

@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { GeminiClientService } from './gemini-client.service';
 import { PROMPT_FLOW_ANALYSIS_FROM_IMAGES, PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT } from './evidence-prompts.config';
+import * as XLSX from 'xlsx';
 
 export interface EvidenceFile {
   name: string;
@@ -19,48 +20,128 @@ export interface EvidenceFile {
 export class EvidenceAnalysisService {
   constructor(private geminiClient: GeminiClientService) { }
 
-  public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
-    const promptText = PROMPT_FLOW_ANALYSIS_FROM_IMAGES(context);
+  private async convertSpreadsheetToText(file: EvidenceFile): Promise<string> {
+    if (!file.dataURL) {
+      if (file.publicUrl) {
+        try {
+          const res = await fetch(file.publicUrl);
+          const arrayBuffer = await res.arrayBuffer();
+          return this.parseArrayBufferToText(arrayBuffer, file.name);
+        } catch (e: any) {
+          console.error('Error fetching publicUrl to convert to text:', e);
+          return `[Error al leer el archivo ${file.name}: ${e.message || e}]`;
+        }
+      }
+      return '';
+    }
 
-    // Enviar un único bloque de texto para asegurar que Gemini respete el contexto
+    try {
+      const matches = file.dataURL.match(/^data:([^;]+);base64,(.+)$/);
+      const base64Data = matches ? matches[2] : file.dataURL;
+      const binaryString = atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return this.parseArrayBufferToText(bytes.buffer, file.name);
+    } catch (e: any) {
+      console.error('Error decodificando base64 a text:', e);
+      return `[Error al decodificar el archivo ${file.name}]`;
+    }
+  }
+
+  private parseArrayBufferToText(arrayBuffer: ArrayBuffer, fileName: string): string {
+    const isCSV = fileName.toLowerCase().endsWith('.csv');
+    try {
+      if (isCSV) {
+        let text: string;
+        try {
+          text = new TextDecoder('utf-8', { fatal: true }).decode(arrayBuffer);
+        } catch (e) {
+          text = new TextDecoder('windows-1252').decode(arrayBuffer);
+        }
+        return `Nombre del archivo: ${fileName}\nContenido CSV:\n${text}`;
+      } else {
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        let resultText = `Nombre del archivo: ${fileName}\n`;
+        
+        workbook.SheetNames.forEach(sheetName => {
+          const worksheet = workbook.Sheets[sheetName];
+          const csvText = XLSX.utils.sheet_to_csv(worksheet);
+          resultText += `--- Hoja: ${sheetName} ---\n${csvText}\n`;
+        });
+        return resultText;
+      }
+    } catch (error: any) {
+      console.error('Error parseando planilla a texto:', error);
+      return `[Error al interpretar la planilla ${fileName}: ${error.message || error}]`;
+    }
+  }
+
+  private async prepareParts(context: string, evidences: EvidenceFile[]): Promise<any[]> {
+    const promptText = PROMPT_FLOW_ANALYSIS_FROM_IMAGES(context);
     const parts: any[] = [
       { text: promptText }
     ];
 
     for (const file of evidences) {
-      if (file.publicUrl) {
-        // Si tenemos URL, la enviamos al proxy para que él la resuelva
-        // Esto evita el error 413 Content Too Large en Vercel
+      const isCSV = file.type?.includes('csv') || file.name?.toLowerCase().endsWith('.csv');
+      const isXLSX = file.type?.includes('sheet') || file.type?.includes('excel') || file.name?.toLowerCase().endsWith('.xlsx');
+
+      if (isCSV || isXLSX) {
+        const textContent = await this.convertSpreadsheetToText(file);
         parts.push({
-          image_url: file.publicUrl
+          text: `\n\n[Evidencia de datos adjunta]\n${textContent}\n`
         });
-      } else if (file.dataURL) {
-        const matches = file.dataURL.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) {
+      } else {
+        if (file.publicUrl) {
           parts.push({
-            inline_data: {
-              mime_type: matches[1],
-              data: matches[2]
-            }
+            image_url: file.publicUrl
           });
+        } else if (file.dataURL) {
+          const matches = file.dataURL.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            parts.push({
+              inline_data: {
+                mime_type: matches[1],
+                data: matches[2]
+              }
+            });
+          }
         }
       }
     }
 
-    const payload = {
-      contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0.1 }
-    };
+    return parts;
+  }
 
-    return this.geminiClient.callGemini('generateTextCases', payload).pipe(
-      map(response => {
-        let textContent = '';
-        if (response.candidates && response.candidates[0]?.content?.parts) {
-          textContent = response.candidates[0].content.parts.map((p: any) => p.text).join('');
-        }
-        return this.parseAndExtractJson(textContent);
-      })
-    );
+  public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
+    return new Observable(observer => {
+      this.prepareParts(context, evidences).then(parts => {
+        const payload = {
+          contents: [{ role: 'user', parts }],
+          generationConfig: { temperature: 0.1 }
+        };
+
+        this.geminiClient.callGemini('generateTextCases', payload).subscribe({
+          next: response => {
+            let textContent = '';
+            if (response.candidates && response.candidates[0]?.content?.parts) {
+              textContent = response.candidates[0].content.parts.map((p: any) => p.text).join('');
+            }
+            try {
+              observer.next(this.parseAndExtractJson(textContent));
+              observer.complete();
+            } catch (e) {
+              observer.error(e);
+            }
+          },
+          error: err => observer.error(err)
+        });
+      }).catch(err => observer.error(err));
+    });
   }
 
   public refineAnalysis(originalReport: any, instruction: string): Observable<any> {
@@ -78,10 +159,15 @@ export class EvidenceAnalysisService {
     const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
 
     const fetchImages$ = new Observable<any[]>(observer => {
-      // Si ya tenemos URLs en el reporte original, las usamos directamente
-      const images = [...(originalReport.report_images || [])].sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
+      const hasDoc = images.some(img => 
+        img.file_type?.includes('csv') || 
+        img.file_type?.includes('sheet') || 
+        img.file_type?.includes('excel') ||
+        img.file_name?.toLowerCase().endsWith('.csv') ||
+        img.file_name?.toLowerCase().endsWith('.xlsx')
+      );
 
-      if (images.length > 0 && images.every(img => img.image_url)) {
+      if (!hasDoc && images.length > 0 && images.every(img => img.image_url)) {
         observer.next(images.map(img => ({ image_url: img.image_url })));
         observer.complete();
         return;
@@ -90,17 +176,36 @@ export class EvidenceAnalysisService {
       const imagePromises = images.map(async (img: any) => {
         try {
           const res = await fetch(img.image_url);
-          const blob = await res.blob();
-          return new Promise<{mime_type: string, data: string}>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = (reader.result as string).split(',')[1];
-              resolve({ mime_type: blob.type, data: base64 });
+          const arrayBuffer = await res.arrayBuffer();
+
+          const isCSV = img.file_type?.includes('csv') || img.file_name?.toLowerCase().endsWith('.csv');
+          const isXLSX = img.file_type?.includes('sheet') || img.file_type?.includes('excel') || img.file_name?.toLowerCase().endsWith('.xlsx');
+
+          if (isCSV || isXLSX) {
+            const docText = this.parseArrayBufferToText(arrayBuffer, img.file_name || 'documento');
+            return {
+              isDoc: true,
+              docText: docText,
+              mime_type: img.file_type,
+              data: ''
             };
-            reader.readAsDataURL(blob);
-          });
-        } catch (e) { return null; }
+          } else {
+            return new Promise<any>((resolve) => {
+              const blob = new Blob([arrayBuffer], { type: img.file_type || 'image/jpeg' });
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = (reader.result as string).split(',')[1];
+                resolve({ mime_type: blob.type, data: base64 });
+              };
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (e) { 
+          console.error('Error fetching image for refinement:', e);
+          return null; 
+        }
       });
+
       Promise.all(imagePromises).then(data => {
         observer.next(data.filter(d => d !== null));
         observer.complete();
@@ -115,10 +220,14 @@ export class EvidenceAnalysisService {
         ];
 
         imageData.forEach(d => {
-          if (d.image_url) {
-            parts.push({ image_url: d.image_url });
+          if (d.isDoc) {
+            parts.push({ text: `\n\n[Evidencia de datos adjunta]\n${d.docText}\n` });
           } else {
-            parts.push({ inline_data: d });
+            if (d.image_url) {
+              parts.push({ image_url: d.image_url });
+            } else {
+              parts.push({ inline_data: d });
+            }
           }
         });
 

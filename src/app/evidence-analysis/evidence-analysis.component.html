@@ -52,7 +52,7 @@
                 </svg>
             </div>
             <h3>Haz clic o arrastra evidencias</h3>
-            <p>Soporta imágenes (PNG, JPG) y videos. También puedes pegar (Ctrl+V) desde el portapapeles.</p>
+            <p>Soporta imágenes (PNG, JPG), videos y archivos de datos (.csv, .xlsx). También puedes pegar (Ctrl+V) desde el portapapeles.</p>
         </div>
 
         <!-- Galería de Evidencias -->
@@ -97,7 +97,7 @@
 
                     <!-- Acciones rápidas (Hover) -->
                     <div class="card-actions-overlay">
-                        <button class="btn-action-circle" (click)="openPreview(file.dataURL, $event)" title="Previsualizar">
+                        <button class="btn-action-circle" (click)="openPreview(file.dataURL, $event)" title="Previsualizar" *ngIf="!file.type.includes('csv') && !file.type.includes('sheet') && !file.type.includes('excel')">
                             👁️
                         </button>
                         <button class="btn-action-circle danger" (click)="removeFile(i, $event)" title="Eliminar">
@@ -106,9 +106,14 @@
                     </div>
 
                     <div class="image-container">
-                        <img [src]="file.dataURL" *ngIf="!file.isVideo" class="thumbnail" loading="lazy">
+                        <img [src]="file.dataURL" *ngIf="!file.isVideo && !file.type.includes('csv') && !file.type.includes('sheet') && !file.type.includes('excel')" class="thumbnail" loading="lazy">
                         <div *ngIf="file.isVideo" class="video-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        </div>
+                        <!-- Icono premium para CSV y XLSX -->
+                        <div *ngIf="file.type.includes('csv') || file.type.includes('sheet') || file.type.includes('excel')" class="document-icon" [class.csv]="file.type.includes('csv')" [class.xlsx]="file.type.includes('sheet') || file.type.includes('excel')">
+                            <span class="doc-badge">{{ getExtension(file.name) }}</span>
+                            <span class="doc-emoji">📊</span>
                         </div>
                     </div>
 
@@ -121,7 +126,7 @@
             </div>
         </div>
 
-        <input type="file" #fileInput multiple (change)="onFileSelected($event)" style="display: none;" accept="image/*,video/*">
+        <input type="file" #fileInput multiple (change)="onFileSelected($event)" style="display: none;" accept="image/*,video/*,.csv,.xlsx">
     </div>
 
     <!-- Preview Modal -->

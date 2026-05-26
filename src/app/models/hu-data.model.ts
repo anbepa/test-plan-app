@@ -75,6 +75,7 @@ export interface PlanExecution {
   testCases: TestCaseExecution[];
   deletedTestCaseDbIds?: string[]; // Para rastrear eliminaciones intencionales por ID
   deletedTestCaseTitles?: string[]; // Fallback para rastrear eliminaciones por título si no hay ID
+  huFingerprint?: string; // Para rastrear el estado del blueprint original y evitar reconciliaciones destructivas
   createdAt: number;
   updatedAt: number;
   completedAt?: number;

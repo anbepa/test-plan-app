@@ -553,6 +553,7 @@ export class ExecutionStorageService {
       id: this.generateId(),
       huId,
       huTitle,
+      huFingerprint: (testCases || []).map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`).join(';;'),
       testCases: (testCases || []).map((tc, index) => ({
         testCaseId: `tc_${index}`,
         dbId: tc.dbId,
@@ -976,6 +977,7 @@ export class ExecutionStorageService {
   private compactExecutionForStorage(execution: PlanExecution): PlanExecution {
     return {
       ...execution,
+      huFingerprint: execution.huFingerprint,
       testCases: (execution.testCases || []).map((testCase) => ({
         ...testCase,
         steps: (testCase.steps || []).map((step) => ({
@@ -1010,6 +1012,7 @@ export class ExecutionStorageService {
       huId: row.hu_id || data.huId,
       huDbUuid: data.huDbUuid,
       huTitle: row.hu_title || data.huTitle,
+      huFingerprint: data.huFingerprint,
       testCases: data.testCases || [],
       deletedTestCaseDbIds: data.deletedTestCaseDbIds || [],
       deletedTestCaseTitles: data.deletedTestCaseTitles || [],
