@@ -246,12 +246,12 @@
                     </div>
                     <div class="step-content">
                       <div class="step-action-wrapper" (click)="$event.stopPropagation()">
-                        <div class="step-action-text"
-                             [attr.contenteditable]="editingStepId === step.stepId ? true : null"
-                             (blur)="finishEditingStepAction(step, $event)"
-                             #stepSpan>
+                        <div class="step-action-text-wrap">
                           <span class="step-field-label">Acción</span>
-                          {{ step.accion }}
+                          <div class="step-action-text"
+                               [attr.contenteditable]="editingStepId === step.stepId ? true : null"
+                               (blur)="finishEditingStepAction(step, $event)"
+                               #stepSpan>{{ step.accion }}</div>
                         </div>
                         <button *ngIf="editingStepId !== step.stepId"
                                 class="btn-edit-step-minimal"

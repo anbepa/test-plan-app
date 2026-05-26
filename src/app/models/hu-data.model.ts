@@ -44,6 +44,7 @@ export interface AssetEvidence {
 
 export interface ExecutionStep {
   stepId: string;
+  dbId?: string;
   numero_paso: number;
   accion: string;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
@@ -55,6 +56,7 @@ export interface ExecutionStep {
 
 export interface TestCaseExecution {
   testCaseId: string;
+  dbId?: string;
   title: string;
   preconditions: string;
   steps: ExecutionStep[];
@@ -68,8 +70,12 @@ export interface TestCaseExecution {
 export interface PlanExecution {
   id: string;
   huId: string;
+  huDbUuid?: string; // UUID de la tabla user_stories
   huTitle: string;
   testCases: TestCaseExecution[];
+  deletedTestCaseDbIds?: string[]; // Para rastrear eliminaciones intencionales por ID
+  deletedTestCaseTitles?: string[]; // Fallback para rastrear eliminaciones por título si no hay ID
+  huFingerprint?: string; // Para rastrear el estado del blueprint original y evitar reconciliaciones destructivas
   createdAt: number;
   updatedAt: number;
   completedAt?: number;

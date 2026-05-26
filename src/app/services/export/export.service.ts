@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import * as XLSX from 'xlsx';
 import { HUData, PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 import { saveAs } from 'file-saver';
@@ -634,11 +635,19 @@ export class ExportService {
 
                 // FALLBACK: Si no hay imágenes por ID (común tras refinar), buscar por referencia/orden
                 if (stepImages.length === 0 && step.imagen_referencia) {
-                    const match = step.imagen_referencia.match(/\d+/);
-                    if (match) {
-                        const order = parseInt(match[0], 10);
-                        const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
-                        if (fallbackImg) stepImages = [fallbackImg];
+                    const imgByName = report.report_images?.find((img: any) => img.file_name && (img.file_name === step.imagen_referencia || step.imagen_referencia.includes(img.file_name)));
+                    if (imgByName) {
+                        stepImages.push(imgByName);
+                    } else {
+                        const cleanRef = step.imagen_referencia.replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '').replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+                        const matches = cleanRef.match(/\d+/g);
+                        if (matches) {
+                            matches.forEach((m: string) => {
+                                const order = parseInt(m, 10);
+                                const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
+                                if (fallbackImg) stepImages.push(fallbackImg);
+                            });
+                        }
                     }
                 }
 
@@ -648,20 +657,62 @@ export class ExportService {
                     for (const imgData of stepImages) {
                         if (imgData.image_url) {
                             try {
-                                const imgRes = await this.fetchImageAsUint8Array(imgData.image_url);
-                                if (imgRes) {
-                                    const dims = this.scaleImageDimensions(imgRes.width, imgRes.height, 900, 675);
-                                    evidenceContent.push(new Paragraph({
-                                        alignment: AlignmentType.CENTER,
-                                        spacing: { before: 120, after: 120 },
-                                        children: [
-                                            new ImageRun({
-                                                data: imgRes.bytes,
-                                                transformation: { width: dims.width, height: dims.height },
-                                                type: imgRes.type as any
-                                            })
-                                        ]
-                                    }));
+                                const isCSV = imgData.file_type?.includes('csv') || imgData.file_name?.toLowerCase().endsWith('.csv');
+                                const isXLSX = imgData.file_type?.includes('sheet') || imgData.file_type?.includes('excel') || imgData.file_name?.toLowerCase().endsWith('.xlsx');
+
+                                if (isCSV || isXLSX) {
+                                    // Renderizar como tabla en el DOCX
+                                    const tabularData = await this.fetchSpreadsheetTabularData(imgData.image_url, imgData.file_type);
+                                    if (tabularData && tabularData.length > 0) {
+                                        // Construir tabla Word
+                                        const tableRows: TableRow[] = tabularData.map((row, rIdx) => {
+                                            const cells: TableCell[] = row.map((cell: any) => new TableCell({
+                                                shading: rIdx === 0 ? { fill: 'F1F5F9', type: ShadingType.CLEAR } : undefined,
+                                                children: [new Paragraph({
+                                                    children: [new TextRun({ text: String(cell || ''), bold: rIdx === 0, size: 16 })],
+                                                    alignment: AlignmentType.CENTER
+                                                })]
+                                            }));
+                                            return new TableRow({ children: cells });
+                                        });
+                                        const wordTable = new Table({
+                                            width: { size: 100, type: WidthType.PERCENTAGE },
+                                            rows: tableRows,
+                                            borders: {
+                                                top: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+                                                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+                                                left: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+                                                right: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+                                                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+                                                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'E2E8F0' }
+                                            }
+                                        });
+                                        evidenceContent.push(wordTable);
+                                        evidenceContent.push(new Paragraph(''));
+                                    } else {
+                                        evidenceContent.push(new Paragraph({
+                                            alignment: AlignmentType.CENTER,
+                                            spacing: { before: 120, after: 120 },
+                                            children: [new TextRun({ text: `[${imgData.file_name || 'Archivo CSV/XLSX'}]`, bold: true })]
+                                        }));
+                                    }
+                                } else {
+                                    // Es imagen normal
+                                    const imgRes = await this.fetchImageAsUint8Array(imgData.image_url);
+                                    if (imgRes) {
+                                        const dims = this.scaleImageDimensions(imgRes.width, imgRes.height, 900, 675);
+                                        evidenceContent.push(new Paragraph({
+                                            alignment: AlignmentType.CENTER,
+                                            spacing: { before: 120, after: 120 },
+                                            children: [
+                                                new ImageRun({
+                                                    data: imgRes.bytes,
+                                                    transformation: { width: dims.width, height: dims.height },
+                                                    type: imgRes.type as any
+                                                })
+                                            ]
+                                        }));
+                                    }
                                 }
                             } catch (err) {}
                         }
@@ -716,6 +767,26 @@ export class ExportService {
         const blob = await Packer.toBlob(doc);
         const filename = this.escapeFilename(`Reporte_Evidencias_HU_${huNumber}.docx`);
         saveAs(blob, filename);
+    }
+
+    /**
+     * Descarga un CSV o XLSX desde una URL y devuelve sus datos tabulares como string[][].
+     */
+    private async fetchSpreadsheetTabularData(url: string, fileType?: string): Promise<string[][] | null> {
+        try {
+            const response = await fetch(url);
+            const buffer = await response.arrayBuffer();
+            const data = new Uint8Array(buffer);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            if (!sheetName) return null;
+            const sheet = workbook.Sheets[sheetName];
+            const rows: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as string[][];
+            return rows.length > 0 ? rows : null;
+        } catch (e) {
+            console.error('Error al parsear spreadsheet para exportación:', e);
+            return null;
+        }
     }
 
     private async fetchImageAsUint8Array(url: string): Promise<{ bytes: Uint8Array, type: string, width: number, height: number } | null> {
@@ -1502,32 +1573,56 @@ export class ExportService {
 
                 // Fallback
                 if (stepImages.length === 0 && step.imagen_referencia) {
-                    const match = step.imagen_referencia.match(/\d+/);
-                    if (match) {
-                        const order = parseInt(match[0], 10);
-                        const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
-                        if (fallbackImg) stepImages = [fallbackImg];
+                    const imgByName = report.report_images?.find((img: any) => img.file_name && (img.file_name === step.imagen_referencia || step.imagen_referencia.includes(img.file_name)));
+                    if (imgByName) {
+                        stepImages.push(imgByName);
+                    } else {
+                        const cleanRef = step.imagen_referencia.replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '').replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+                        const matches = cleanRef.match(/\d+/g);
+                        if (matches) {
+                            matches.forEach((m: string) => {
+                                const order = parseInt(m, 10);
+                                const fallbackImg = report.report_images?.find((img: any) => img.image_order === order);
+                                if (fallbackImg) stepImages.push(fallbackImg);
+                            });
+                        }
                     }
                 }
 
-                // Pre-fetch images to base64 with original dimensions
-                const loadedImages = [];
+                // Pre-fetch assets (images or spreadsheet tabular data)
+                const loadedImages: any[] = [];
+                const loadedSpreadsheets: any[] = [];
+
                 for (const img of stepImages) {
                     if (img.image_url) {
-                        try {
-                            const res = await this.fetchImageAsUint8Array(img.image_url);
-                            if (res) {
-                                const binary = Array.from(res.bytes).map(b => String.fromCharCode(b)).join('');
-                                const b64 = window.btoa(binary);
-                                loadedImages.push({
-                                    base64Data: `data:image/${res.type};base64,${b64}`,
-                                    type: res.type,
-                                    width: res.width,
-                                    height: res.height
-                                });
+                        const isCSV = img.file_type?.includes('csv') || img.file_name?.toLowerCase().endsWith('.csv');
+                        const isXLSX = img.file_type?.includes('sheet') || img.file_type?.includes('excel') || img.file_name?.toLowerCase().endsWith('.xlsx');
+
+                        if (isCSV || isXLSX) {
+                            try {
+                                const tabularData = await this.fetchSpreadsheetTabularData(img.image_url, img.file_type);
+                                if (tabularData && tabularData.length > 0) {
+                                    loadedSpreadsheets.push({ tabularData, fileName: img.file_name });
+                                }
+                            } catch (err) {
+                                console.error('Error loading spreadsheet for PDF:', err);
                             }
-                        } catch (err) {
-                            console.error('Error loading evidence image for PDF:', err);
+                        } else {
+                            try {
+                                const res = await this.fetchImageAsUint8Array(img.image_url);
+                                if (res) {
+                                    const binary = Array.from(res.bytes).map(b => String.fromCharCode(b)).join('');
+                                    const b64 = window.btoa(binary);
+                                    loadedImages.push({
+                                        base64Data: `data:image/${res.type};base64,${b64}`,
+                                        type: res.type,
+                                        width: res.width,
+                                        height: res.height
+                                    });
+                                }
+                            } catch (err) {
+                                console.error('Error loading evidence image for PDF:', err);
+                            }
                         }
                     }
                 }
@@ -1535,28 +1630,37 @@ export class ExportService {
                 // Calculate vertical stack layout
                 let totalCellHeight = 0;
                 const scaledDimensions: any[] = [];
+                const hasContent = loadedImages.length > 0 || loadedSpreadsheets.length > 0;
 
-                if (loadedImages.length === 0) {
+                if (!hasContent) {
                     totalCellHeight = 40; // placeholder height
                 } else {
-                    const maxH = loadedImages.length === 1 ? 675 : Math.min(675, 1100 / loadedImages.length);
+                    // Estimate height for spreadsheets (rows * row-height + padding)
+                    let spreadsheetsH = 0;
+                    for (const ss of loadedSpreadsheets) {
+                        spreadsheetsH += (ss.tabularData.length * 14) + 20;
+                    }
+
+                    const maxH = loadedImages.length === 1 ? 675 : Math.min(675, 1100 / Math.max(loadedImages.length, 1));
                     let imagesH = 0;
                     for (const img of loadedImages) {
                         const dims = this.scaleImageDimensions(img.width, img.height, 900, maxH);
                         scaledDimensions.push(dims);
                         imagesH += dims.height;
                     }
-                    totalCellHeight = imagesH + (loadedImages.length + 1) * innerPadding;
+                    totalCellHeight = imagesH + spreadsheetsH + (loadedImages.length + loadedSpreadsheets.length + 1) * innerPadding;
+                    if (totalCellHeight < 40) totalCellHeight = 40;
                 }
 
                 tableBody.push([
                     { content: `${step.numero_paso}. ${stepAction}`, styles: { minCellHeight: totalCellHeight } },
-                    { content: loadedImages.length === 0 ? this.EVIDENCE_PLACEHOLDER : '', styles: { minCellHeight: totalCellHeight } }
+                    { content: !hasContent ? this.EVIDENCE_PLACEHOLDER : '', styles: { minCellHeight: totalCellHeight } }
                 ]);
 
                 stepLayouts.push({
                     rowIndex: j,
                     images: loadedImages,
+                    spreadsheets: loadedSpreadsheets,
                     dims: scaledDimensions,
                     totalHeight: totalCellHeight
                 });
@@ -1591,8 +1695,9 @@ export class ExportService {
 
                             const cellX = data.cell.x;
                             const cellY = data.cell.y;
+                            const hasContent = layout.images.length > 0 || layout.spreadsheets.length > 0;
 
-                            if (layout.images.length === 0) {
+                            if (!hasContent) {
                                 // Draw placeholder text
                                 doc.setFont('helvetica', 'bold');
                                 doc.setFontSize(11);
@@ -1605,8 +1710,38 @@ export class ExportService {
                                 doc.setLineWidth(0.5);
                                 doc.line(textX, textY + 2, textX + textW, textY + 2);
                             } else {
-                                // Draw all images stacked vertically
                                 let currentY = cellY + innerPadding;
+
+                                // Draw spreadsheets first (CSV/XLSX as nested tables)
+                                for (const ss of layout.spreadsheets) {
+                                    const hasHeader = true;
+                                    const csvRightMargin = pageSize - (cellX + cellWidthCol2);
+                                    autoTable(doc, {
+                                        startY: currentY,
+                                        margin: { left: cellX + innerPadding, right: Math.max(csvRightMargin + innerPadding, 0) },
+                                        head: hasHeader ? [ss.tabularData[0]] : undefined,
+                                        body: hasHeader ? ss.tabularData.slice(1) : ss.tabularData,
+                                        theme: 'grid',
+                                        styles: {
+                                            fontSize: 6,
+                                            cellPadding: 1.5,
+                                            lineWidth: 0.3,
+                                            lineColor: [226, 232, 240],
+                                            overflow: 'linebreak',
+                                            minCellWidth: 15
+                                        },
+                                        headStyles: {
+                                            fillColor: [241, 245, 249],
+                                            textColor: [0, 0, 0],
+                                            fontStyle: 'bold',
+                                            fontSize: 6
+                                        }
+                                    });
+                                    const ssHeight = (ss.tabularData.length * 14) + 20;
+                                    currentY += ssHeight + innerPadding;
+                                }
+
+                                // Draw all images stacked vertically
                                 for (let imgIdx = 0; imgIdx < layout.images.length; imgIdx++) {
                                     const img = layout.images[imgIdx];
                                     const dims = layout.dims[imgIdx];

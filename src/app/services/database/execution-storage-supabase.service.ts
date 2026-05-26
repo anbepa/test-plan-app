@@ -103,17 +103,17 @@ export class ExecutionStorageService {
    */
   private async withRetry<T>(operation: () => Promise<{ data: T | null; error: any }>): Promise<{ data: T | null; error: any }> {
     let result = await operation();
-    
+
     if (result.error && (result.error.code === '403' || result.error.code === '401' || result.error.code === 'PGRST301' || result.error.message?.includes('violates row-level security policy'))) {
       console.warn('⚠️ Error de autenticación detectado (403/401). Forzando refresh de token y reintentando...');
       // Forzar refresh de token
       await this.supabase.auth.getUser();
       this.cachedUserId = null; // Invalidar caché
-      
+
       // Reintentar operación
       result = await operation();
     }
-    
+
     return result;
   }
 
@@ -220,6 +220,23 @@ export class ExecutionStorageService {
 
       this.saveDebounceMap.set(snapshot.id, timeoutId);
     });
+  }
+
+  /**
+   * Guarda inmediatamente sin debounce. Útil para acciones críticas como eliminar
+   * o cambios de título donde se requiere persistencia inmediata ante recargas.
+   */
+  async saveExecutionNow(execution: PlanExecution): Promise<void> {
+    const snapshot: PlanExecution = JSON.parse(JSON.stringify(execution));
+
+    // Cancelar cualquier guardado pendiente para esta ejecución
+    if (this.saveDebounceMap.has(snapshot.id)) {
+      clearTimeout(this.saveDebounceMap.get(snapshot.id));
+      this.saveDebounceMap.delete(snapshot.id);
+      this.pendingSaves.delete(snapshot.id);
+    }
+
+    return this.doSaveExecution(snapshot);
   }
 
   private async doSaveExecution(execution: PlanExecution): Promise<void> {
@@ -536,12 +553,15 @@ export class ExecutionStorageService {
       id: this.generateId(),
       huId,
       huTitle,
+      huFingerprint: (testCases || []).map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`).join(';;'),
       testCases: (testCases || []).map((tc, index) => ({
         testCaseId: `tc_${index}`,
+        dbId: tc.dbId,
         title: tc.title,
         preconditions: tc.preconditions,
         steps: (tc.steps || []).map((step, stepIndex) => ({
           stepId: `${tc.title.replace(/\s+/g, '_')}_step_${stepIndex}`,
+          dbId: step.dbId,
           numero_paso: step.numero_paso,
           accion: step.accion,
           status: 'pending' as const,
@@ -927,7 +947,7 @@ export class ExecutionStorageService {
   private clearCacheForExecution(executionId: string): void {
     // No podemos saber exactamente cuáles imágenes son de esta ejecución por ID,
     // pero si se va a eliminar la ejecución completa eso es OK.
-    // La caché se limpiará progresivamente. 
+    // La caché se limpiará progresivamente.
     // En un enfoque más robusto recopilaríamos los IDs de las evidencias antes de borrar.
   }
 
@@ -957,6 +977,7 @@ export class ExecutionStorageService {
   private compactExecutionForStorage(execution: PlanExecution): PlanExecution {
     return {
       ...execution,
+      huFingerprint: execution.huFingerprint,
       testCases: (execution.testCases || []).map((testCase) => ({
         ...testCase,
         steps: (testCase.steps || []).map((step) => ({
@@ -989,8 +1010,12 @@ export class ExecutionStorageService {
     return {
       id: row.id || data.id,
       huId: row.hu_id || data.huId,
+      huDbUuid: data.huDbUuid,
       huTitle: row.hu_title || data.huTitle,
+      huFingerprint: data.huFingerprint,
       testCases: data.testCases || [],
+      deletedTestCaseDbIds: data.deletedTestCaseDbIds || [],
+      deletedTestCaseTitles: data.deletedTestCaseTitles || [],
       createdAt: data.createdAt || new Date(row.created_at).getTime(),
       updatedAt: data.updatedAt || new Date(row.updated_at).getTime(),
       completedAt: data.completedAt

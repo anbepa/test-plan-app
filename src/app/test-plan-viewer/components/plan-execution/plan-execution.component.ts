@@ -8,6 +8,7 @@ import { DataEditorComponent } from '../data-editor/data-editor.component';
 import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
 import { HUData, PlanExecution, AssetEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
 import { ExecutionStorageService } from '../../../services/database/execution-storage-supabase.service';
+import { DatabaseService } from '../../../services/database/database.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
@@ -174,6 +175,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   constructor(
     private router: Router,
     private storageService: ExecutionStorageService,
+    private databaseService: DatabaseService,
     private toastService: ToastService,
     private exportService: ExportService,
     private huSyncService: HuSyncService,
@@ -202,6 +204,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
       const forceNew = state?.forceNewExecution === true;
 
+      // Determinación de la ejecución a cargar
       if (forceNew && this.hu) {
         // New test run: create a fresh execution from scratch
         await this.createNewExecution();
@@ -213,47 +216,67 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           }
         }
       } else {
-      // Si tenemos un executionId específico, cargarlo directamente (evita confundir ejecuciones de HUs con mismo nombre)
-      if (state?.testRunId) {
-        const directExecution = await this.storageService.getExecution(state.testRunId);
-        if (directExecution) {
-          this.execution = directExecution;
-          this.storageService.setActiveExecutionId(this.execution.id);
-          if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
-            this.hu = this.buildHuFromExecution(this.execution);
+        // --- 1. Intentar cargar por executionId directo del contexto restaurado (Prioridad Máxima) ---
+        if (restoredContext?.executionId) {
+          console.log(`[EXEC] Intentando carga directa por executionId: ${restoredContext.executionId}`);
+          const directExec = await this.storageService.getExecution(restoredContext.executionId);
+          if (directExec) {
+            this.execution = directExec;
+            this.storageService.setActiveExecutionId(this.execution.id);
           }
         }
-      }
 
-      // Fallback: buscar por HU si no se encontró ejecución directa
-      if (!this.execution) {
-        const allExecutions = await this.storageService
-          .getExecutionsByHU((this.hu?.id || restoredContext?.huId || ''));
+        // --- 2. Si no se cargó, intentar resolver desde testRunId ---
+        if (!this.execution && this.testRunId) {
+          let executionIdToLoad = this.testRunId;
 
-        const existingExecutions = allExecutions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+          // Si el ID no empieza por 'exec_', asumimos que es un ID de la tabla 'test_runs'
+          if (!this.testRunId.startsWith('exec_')) {
+            console.log(`[EXEC] Resolviendo execution_id desde testRunId: ${this.testRunId}`);
+            try {
+              const { data: runData } = await this.storageService['supabaseClient'].supabase
+                .from('test_runs')
+                .select('execution_id')
+                .eq('id', this.testRunId)
+                .single();
 
-        const preferredExecution = restoredContext?.executionId
-          ? existingExecutions.find((exec) => exec.id === restoredContext.executionId)
-          : null; // Ya no hacer fallback a testRunId aquí, se manejó arriba
+              if (runData?.execution_id) {
+                executionIdToLoad = runData.execution_id;
+              }
+            } catch (e) {
+              console.error('Error al obtener execution_id del test_run:', e);
+            }
+          }
 
-        if (existingExecutions.length > 0 && (preferredExecution || !state?.testRunId)) {
-          this.execution = preferredExecution || existingExecutions[0];
-          this.storageService.setActiveExecutionId(this.execution.id);
-
-          if (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0) {
-            this.hu = this.buildHuFromExecution(this.execution);
+          const directExecution = await this.storageService.getExecution(executionIdToLoad);
+          if (directExecution) {
+            this.execution = directExecution;
+            this.storageService.setActiveExecutionId(this.execution.id);
           }
         }
-      }
 
-      // Si aún no hay ejecución, crear una nueva
-      if (!this.execution) {
-        await this.createNewExecution();
-      }
+        // --- 3. Fallback: buscar por HU ID (último recurso) ---
+        if (!this.execution) {
+          const huId = this.hu?.id || restoredContext?.huId || '';
+          console.log(`[EXEC] Fallback: buscando ejecuciones para HU: ${huId}`);
+          const allExecutions = await this.storageService.getExecutionsByHU(huId);
 
-      if (this.execution) {
-        this.storageService.setActiveExecutionId((this.execution as any).id);
-      }
+          if (allExecutions.length > 0) {
+            const existingExecutions = allExecutions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            this.execution = existingExecutions[0];
+            this.storageService.setActiveExecutionId(this.execution.id);
+          }
+        }
+
+        // Garantizar que this.hu esté poblado para la reconciliación
+        if (this.execution && (!this.hu || !this.hu.detailedTestCases || this.hu.detailedTestCases.length === 0)) {
+          this.hu = this.buildHuFromExecution(this.execution);
+        }
+
+        // Si aún no hay ejecución, crear una nueva
+        if (!this.execution && this.hu) {
+          await this.createNewExecution();
+        }
       }
 
       if (restoredContext) {
@@ -325,7 +348,13 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.hu.title,
       this.hu.detailedTestCases
     );
-    await this.storageService.saveExecution(this.execution);
+
+    // Almacenar el UUID de la base de datos para facilitar re-sincronizaciones
+    if (this.hu.dbUuid) {
+      this.execution.huDbUuid = this.hu.dbUuid;
+    }
+
+    await this.storageService.saveExecutionNow(this.execution);
   }
 
   /** Links an execution ID back to the test_runs table */
@@ -362,17 +391,30 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       if (allDone) status = hasFailed ? 'Failed' : 'Completed';
       else if (hasInProgress || completed > 0) status = 'In Progress';
 
-      await this.storageService['supabaseClient'].supabase
+      // Detectar si el ID es un test_run_id o un execution_id y filtrar en consecuencia
+      let query = this.storageService['supabaseClient'].supabase
         .from('test_runs')
         .update({
           status,
           completed_test_cases: completed,
           total_test_cases: total,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', this.testRunId)
-        .eq('user_id', userId);
-    } catch (_) {}
+        });
+
+      if (this.testRunId.startsWith('exec_')) {
+        query = query.eq('execution_id', this.testRunId);
+      } else {
+        query = query.eq('id', this.testRunId);
+      }
+
+      const { error } = await query.eq('user_id', userId);
+
+      if (error) {
+        console.warn('⚠️ No se pudo sincronizar el estado en test_runs:', error);
+      }
+    } catch (e) {
+      console.error('Error en syncTestRunStatus:', e);
+    }
   }
 
   get currentTestCase() {
@@ -439,7 +481,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       // Guardar ejecución con el nuevo estado del test case
       if (this.execution) {
         this.execution.updatedAt = Date.now();
-        await this.storageService.saveExecution(this.execution);
+        await this.storageService.saveExecutionNow(this.execution);
       }
 
       // Pequeño delay para asegurar que BD actualizó
@@ -943,7 +985,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     // Las evidencias ya se suben de manera individual e inmediata al crearse/modificarse.
     // await this.syncExecutionImagesToStorage();
     this.execution.updatedAt = Date.now();
-    await this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecutionNow(this.execution);
     this.persistExecutionContext();
     this.syncTestRunStatus();
   }
@@ -952,7 +994,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   private async fastSaveExecutionState(): Promise<void> {
     if (!this.execution) return;
     this.execution.updatedAt = Date.now();
-    await this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecutionNow(this.execution);
     this.persistExecutionContext();
   }
 
@@ -1083,7 +1125,62 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   private async applyLatestHuSnapshot(): Promise<void> {
     if (!this.hu?.id) return;
 
-    const latestHu = this.huSyncService.getLatestHu(this.hu.id);
+    // 1. Intentar obtener del servicio de sincronización (cache rápido)
+    let latestHu = this.huSyncService.getLatestHu(this.hu.id);
+
+    // 2. Si no hay datos detallados o faltan IDs de BD, forzar descarga desde la base de datos (Fuente de Verdad)
+    const hasDetailedData = latestHu &&
+                            latestHu.detailedTestCases &&
+                            latestHu.detailedTestCases.length > 0 &&
+                            latestHu.detailedTestCases.every(tc => !!tc.dbId);
+
+    if (!hasDetailedData) {
+      try {
+        // Prioridad para encontrar el UUID de la HU: dbUuid -> execution.huDbUuid -> id (si es UUID)
+        const huUuid = this.hu.dbUuid || this.execution?.huDbUuid || (this.hu.id.length > 30 ? this.hu.id : null);
+
+        if (huUuid) {
+          console.log(`[SYNC] Forzando descarga de HU ${huUuid} desde DB para asegurar todos los escenarios...`);
+          const fullHuDb = await this.databaseService.getUserStoryWithTestCases(huUuid);
+          if (fullHuDb) {
+            latestHu = {
+              id: fullHuDb.custom_id || fullHuDb.id,
+              dbUuid: fullHuDb.id,
+              title: fullHuDb.title,
+              sprint: fullHuDb.sprint || '',
+              originalInput: {
+                generationMode: fullHuDb.generation_mode || 'text',
+                description: fullHuDb.description || '',
+                acceptanceCriteria: fullHuDb.acceptance_criteria || ''
+              },
+              detailedTestCases: (fullHuDb.test_cases || []).map((tc: any) => ({
+                dbId: tc.id,
+                title: tc.title,
+                preconditions: tc.preconditions,
+                steps: (tc.test_case_steps || []).map((step: any) => ({
+                  dbId: step.id,
+                  numero_paso: step.step_number,
+                  accion: step.action
+                })),
+                expectedResults: tc.expected_results
+              }))
+            };
+
+            // Si el execution no tenía el UUID, asignárselo ahora
+            if (this.execution && !this.execution.huDbUuid) {
+              this.execution.huDbUuid = fullHuDb.id;
+              await this.storageService.saveExecutionNow(this.execution);
+            }
+
+            // Actualizar el servicio de sincronización con la verdad de la DB
+            this.huSyncService.publishHuUpdate(latestHu, this.testPlanId, 'execution');
+          }
+        }
+      } catch (err) {
+        console.error('Error al descargar HU desde DB para sincronización:', err);
+      }
+    }
+
     if (!latestHu) return;
 
     await this.applyHuChanges(latestHu, false);
@@ -1116,41 +1213,27 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // ── Guard: skip reconciliation if HU structure hasn't changed ──
-    // Compare titles+steps of HU against current execution to detect real changes.
-    // Only consider HU test cases that already exist in the execution (handles filtered/partial executions)
-    const executionTitles = new Set(this.execution.testCases.map(tc => tc.title.trim()));
-    const relevantHuCases = updatedHu.detailedTestCases.filter(tc => executionTitles.has(tc.title.trim()));
-
-    // If no overlap at all, skip to avoid wiping the execution
-    if (relevantHuCases.length === 0 && this.execution.testCases.length > 0) {
-      return;
-    }
-
-    const huFingerprint = relevantHuCases
-      .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
-      .join(';;');
-    const execFingerprint = this.execution.testCases
-      .map(tc => `${tc.title}|${(tc.steps || []).map(s => s.accion).join(',')}`)
-      .join(';;');
-
-    if (huFingerprint === execFingerprint) {
-      // HU structure is identical — only update title if needed, no reconcile/save
+    // ── Guard: Si la ejecución ya fue creada y tiene casos, NUNCA sincronizamos con la HU original. ──
+    // Según la regla de negocio: una ejecución (Test Run) es un snapshot estático en el tiempo.
+    // Una vez en "manual-execution", se desvincula de los cambios en tiempo real de la HU (/viewer/hu-scenarios).
+    if (this.execution && this.execution.testCases && this.execution.testCases.length > 0) {
       if (this.execution.huTitle !== updatedHu.title) {
         this.execution.huTitle = updatedHu.title;
         await this.fastSaveExecutionState();
       }
       return;
     }
-
+    
+    // Si llegamos aquí, es porque la ejecución AÚN no tiene casos (recién creada o en blanco).
+    // En este caso excepcional sí copiamos la estructura inicial de la HU.
     this.execution.huTitle = updatedHu.title;
     this.execution.testCases = await this.reconcileExecutionWithHu(
       this.execution.testCases,
-      relevantHuCases
+      updatedHu.detailedTestCases || []
     );
 
     this.execution.updatedAt = Date.now();
-    await this.storageService.saveExecution(this.execution);
+    await this.storageService.saveExecutionNow(this.execution);
     this.persistExecutionContext();
     this.normalizeActiveSelection();
     await this.updateStats();
@@ -1161,26 +1244,67 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     updatedCases: DetailedTestCase[]
   ): Promise<TestCaseExecution[]> {
     const evidenceIdsToKeep = new Set<string>();
+    const reconciledCases: TestCaseExecution[] = [];
 
-    // Primero, construir los nuevos casos reconciliados
-    const reconciledCases: TestCaseExecution[] = (updatedCases || []).map((tc, tcIndex) => {
-      // Intentar buscar el caso de prueba actual por título para mayor estabilidad si hay reordenamientos
-      let currentTc = currentCases.find(c => c.title.trim() === tc.title.trim());
+    // Asegurar que las listas de eliminados existen
+    const deletedDbIds = new Set(this.execution?.deletedTestCaseDbIds || []);
+    const deletedTitles = new Set((this.execution?.deletedTestCaseTitles || []).map(t => t.toLowerCase().trim()));
 
-      // Si no hay coincidencia por título (ej: se editó el título), usar el índice como fallback
+    console.log(`[SYNC] Iniciando reconciliación. Casos actuales: ${currentCases.length}, Casos HU: ${updatedCases.length}`);
+    console.log(`[SYNC] Escenarios eliminados registrados: IDs=${deletedDbIds.size}, Títulos=${deletedTitles.size}`);
+
+    // Mapear casos actuales por dbId y por título para búsquedas rápidas
+    const currentByDbId = new Map(currentCases.filter(c => !!c.dbId).map(c => [c.dbId!, c]));
+    const currentByTitle = new Map(currentCases.map(c => [c.title.trim().toLowerCase(), c]));
+
+    for (let tcIndex = 0; tcIndex < (updatedCases || []).length; tcIndex++) {
+      const tc = updatedCases[tcIndex];
+      const normalizedTcTitle = tc.title.trim().toLowerCase();
+
+      // 1. SI EL CASO ESTÁ MARCADO COMO ELIMINADO (por ID o por TÍTULO), SALTARLO
+      if (tc.dbId && deletedDbIds.has(tc.dbId)) {
+        console.log(`[SYNC] 🚫 Saltando caso '${tc.title}' (ID: ${tc.dbId}) porque fue eliminado intencionalmente.`);
+        continue;
+      }
+
+      if (deletedTitles.has(normalizedTcTitle)) {
+        console.log(`[SYNC] 🚫 Saltando caso '${tc.title}' (Título) porque fue eliminado intencionalmente.`);
+        continue;
+      }
+
+      // 2. Intentar buscar por dbId (Fuente de Verdad más estable)
+      let currentTc = tc.dbId ? currentByDbId.get(tc.dbId) : null;
+
+      // 3. Si no hay dbId o no se encontró, intentar por título exacto
       if (!currentTc) {
+        currentTc = currentByTitle.get(normalizedTcTitle);
+      }
+
+      // 4. Fallback al índice SOLO si el número de casos coincide exactamente
+      if (!currentTc && currentCases.length === updatedCases.length) {
         currentTc = currentCases[tcIndex];
       }
 
-      const currentSteps = currentTc?.steps || [];
+      // IMPORTANTE: Si la ejecución ya tiene casos y NO encontramos este caso del HU en ella
+      if (!currentTc && currentCases.length > 0) {
+        const titleExistsSomewhere = currentCases.some(c => c.title.trim().toLowerCase() === normalizedTcTitle);
+        const dbIdExistsSomewhere = tc.dbId && currentCases.some(c => c.dbId === tc.dbId);
 
+        if (!titleExistsSomewhere && !dbIdExistsSomewhere && (tc.dbId || tcIndex < currentCases.length)) {
+          console.log(`[SYNC] Saltando caso '${tc.title}' porque no está en la ejecución actual y parece eliminado.`);
+          continue;
+        }
+      }
+
+      const currentSteps = currentTc?.steps || [];
       const reconciledSteps: ExecutionStep[] = (tc.steps || []).map((step, stepIndex) => {
-        const matchedStep = this.matchStep(currentSteps, step.accion, stepIndex);
+        const matchedStep = this.matchStep(currentSteps, step, stepIndex);
 
         const stepResult: ExecutionStep = {
           stepId: matchedStep?.stepId || `${tc.title.replace(/\s+/g, '_')}_step_${stepIndex}`,
+          dbId: step.dbId,
           numero_paso: step.numero_paso,
-          accion: step.accion,
+          accion: matchedStep ? matchedStep.accion : step.accion,
           status: matchedStep?.status || 'pending',
           notes: matchedStep?.notes || '',
           evidences: matchedStep?.evidences || [],
@@ -1188,7 +1312,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           evidenceRows: matchedStep?.evidenceRows
         };
 
-        // Track evidence IDs that we are keeping
         if (stepResult.evidences) {
           stepResult.evidences.forEach(ev => evidenceIdsToKeep.add(ev.id));
         }
@@ -1196,18 +1319,19 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         return stepResult;
       });
 
-      return {
+      reconciledCases.push({
         testCaseId: currentTc?.testCaseId || `tc_${tcIndex}`,
-        title: tc.title,
-        preconditions: tc.preconditions,
+        dbId: tc.dbId || currentTc?.dbId,
+        title: currentTc ? currentTc.title : tc.title,
+        preconditions: currentTc ? currentTc.preconditions : tc.preconditions,
         steps: reconciledSteps,
-        expectedResults: tc.expectedResults,
+        expectedResults: currentTc ? currentTc.expectedResults : tc.expectedResults,
         startedAt: currentTc?.startedAt,
         completedAt: currentTc?.completedAt,
         notes: currentTc?.notes,
         status: currentTc?.status || 'pending'
-      };
-    });
+      });
+    }
 
     // Ahora, identificar evidencias huérfanas
     const orphanedEvidenceIds: string[] = [];
@@ -1234,24 +1358,30 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     return reconciledCases;
   }
 
-  private matchStep(currentSteps: ExecutionStep[], action: string, stepIndex: number): ExecutionStep | null {
+  private matchStep(currentSteps: ExecutionStep[], targetStep: any, stepIndex: number): ExecutionStep | null {
     if (!currentSteps || currentSteps.length === 0) return null;
 
-    const normalize = (value: string) => (value || '').trim().toLowerCase();
-    const targetAction = normalize(action);
+    // 1. Coincidencia por dbId
+    if (targetStep.dbId) {
+      const byDbId = currentSteps.find(s => s.dbId === targetStep.dbId);
+      if (byDbId) return byDbId;
+    }
 
-    // 1. Coincidencia exacta por acción
+    const normalize = (value: string) => (value || '').trim().toLowerCase();
+    const targetAction = normalize(targetStep.accion);
+
+    // 2. Coincidencia exacta por acción
     const byAction = currentSteps.find((step) => normalize(step.accion) === targetAction);
     if (byAction) return byAction;
 
-    // 2. Coincidencia difusa (si la acción contiene la otra o es muy similar)
+    // 3. Coincidencia difusa
     const fuzzyMatch = currentSteps.find(step => {
       const stepAction = normalize(step.accion);
       return stepAction.includes(targetAction) || targetAction.includes(stepAction);
     });
     if (fuzzyMatch) return fuzzyMatch;
 
-    // 3. Fallback por índice si es razonable
+    // 4. Fallback por índice si es razonable
     return currentSteps[stepIndex] || null;
   }
 
@@ -1349,6 +1479,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   private buildHuFromExecution(execution: PlanExecution): HUData {
     return {
       id: execution.huId,
+      dbUuid: execution.huDbUuid,
       title: execution.huTitle,
       sprint: '',
       originalInput: {
@@ -1357,9 +1488,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         acceptanceCriteria: ''
       },
       detailedTestCases: (execution.testCases || []).map((tc) => ({
+        dbId: tc.dbId,
         title: tc.title,
         preconditions: tc.preconditions,
         steps: (tc.steps || []).map((step) => ({
+          dbId: step.dbId,
           numero_paso: step.numero_paso,
           accion: step.accion
         })),
@@ -1552,8 +1685,28 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         await this.storageService.cleanupOrphanedImages(evidenceIds);
       }
 
-      // 3. Remove from local execution object
-      const index = this.execution.testCases.indexOf(this.testCaseToDelete);
+      // 3. Mark as deleted in the execution object to prevent re-sync
+      if (!this.execution.deletedTestCaseDbIds) this.execution.deletedTestCaseDbIds = [];
+      if (!this.execution.deletedTestCaseTitles) this.execution.deletedTestCaseTitles = [];
+
+      if (this.testCaseToDelete.dbId) {
+        if (!this.execution.deletedTestCaseDbIds.includes(this.testCaseToDelete.dbId)) {
+          this.execution.deletedTestCaseDbIds.push(this.testCaseToDelete.dbId);
+        }
+      }
+
+      // Siempre guardar el título como fallback de eliminación
+      const normalizedTitle = this.testCaseToDelete.title.trim().toLowerCase();
+      if (!this.execution.deletedTestCaseTitles.includes(normalizedTitle)) {
+        this.execution.deletedTestCaseTitles.push(normalizedTitle);
+      }
+
+      // 4. Remove from local execution object
+      const index = this.execution.testCases.findIndex(tc =>
+        (this.testCaseToDelete?.dbId && tc.dbId === this.testCaseToDelete.dbId) ||
+        tc.testCaseId === this.testCaseToDelete?.testCaseId
+      );
+
       if (index >= 0) {
         this.execution.testCases.splice(index, 1);
 
@@ -1564,11 +1717,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         this.activeStepIndex = 0;
       }
 
-      // 4. Save updated execution to Supabase
+      // 5. Save updated execution to Supabase IMMEDIATELY (bypass debounce)
       this.execution.updatedAt = Date.now();
-      await this.storageService.saveExecution(this.execution);
+      await this.storageService.saveExecutionNow(this.execution);
 
-      // 5. Update UI stats and state
+      // 6. Update UI stats and state
       this.persistExecutionContext();
       await this.updateStats();
       this.syncTestRunStatus();
@@ -1603,7 +1756,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const newTitle = event.target.innerText.trim();
     if (newTitle && newTitle !== tc.title) {
       tc.title = newTitle;
-      await this.autoSaveExecutionState();
+      this.execution!.updatedAt = Date.now();
+      await this.storageService.saveExecutionNow(this.execution!);
+      this.persistExecutionContext();
       this.toastService.success('Título actualizado');
     } else {
       // Restaurar el texto original si se dejó vacío o no cambió
@@ -1629,7 +1784,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const newAction = event.target.innerText.trim();
     if (newAction && newAction !== step.accion) {
       step.accion = newAction;
-      await this.autoSaveExecutionState();
+      this.execution!.updatedAt = Date.now();
+      await this.storageService.saveExecutionNow(this.execution!);
+      this.persistExecutionContext();
       this.toastService.success('Paso actualizado');
     } else {
       event.target.innerText = step.accion;

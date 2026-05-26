@@ -150,6 +150,13 @@
   width: 100%;
 }
 
+.step-action-text-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .btn-edit-step-minimal {
   background: none;
   border: none;

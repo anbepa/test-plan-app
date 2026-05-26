@@ -78,19 +78,46 @@ export class EvidenceDatabaseService {
       const userId = await this.getCurrentUserId();
       if (!userId) throw new Error('Usuario no autenticado para subir archivos');
 
-      // 1. COMPRESIÓN A WEBP
-      const compressedBlob = await this.compressToWebP(fileData);
+      const matches = fileData.match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = matches ? matches[1] : 'application/octet-stream';
 
-      // Limpiar nombre de archivo
-      const cleanName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const path = `${userId}/${Date.now()}_${cleanName}.webp`;
+      let bodyBlob: Blob;
+      let contentType = mimeType;
+      let path = '';
 
-      console.log(`[STORAGE] Intentando subir a evidence-analysis: ${path}`);
+      const isCSV = mimeType.includes('csv') || fileName.endsWith('.csv');
+      const isXLSX = mimeType.includes('sheet') || mimeType.includes('excel') || fileName.endsWith('.xlsx');
+
+      if (!isCSV && !isXLSX && mimeType.startsWith('image/') && !mimeType.includes('svg')) {
+        // 1. COMPRESIÓN A WEBP
+        bodyBlob = await this.compressToWebP(fileData);
+        contentType = 'image/webp';
+        const cleanName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        path = `${userId}/${Date.now()}_${cleanName}.webp`;
+      } else {
+        // 2. ARCHIVO DE DATOS (CSV, XLSX, etc) - NO COMPRIMIR
+        const base64Data = matches ? matches[2] : fileData;
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        bodyBlob = new Blob([byteArray], { type: mimeType });
+        
+        // Mantener extensión original para archivos de datos
+        const extension = fileName.includes('.') ? fileName.split('.').pop() : (isCSV ? 'csv' : 'xlsx');
+        const baseName = fileName.includes('.') ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+        const cleanName = baseName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        path = `${userId}/${Date.now()}_${cleanName}.${extension}`;
+      }
+
+      console.log(`[STORAGE] Intentando subir a evidence-analysis: ${path} (Tipo: ${contentType})`);
 
       const { data, error } = await this.supabase.storage
         .from('evidence-analysis')
-        .upload(path, compressedBlob, {
-          contentType: 'image/webp',
+        .upload(path, bodyBlob, {
+          contentType: contentType,
           cacheControl: '3600',
           upsert: true
         });
@@ -223,7 +250,7 @@ export class EvidenceDatabaseService {
       .eq('user_id', userId);
 
     if (huFilter) {
-      query = query.ilike('historia_usuario', `%${huFilter}%`);
+      query = query.eq('historia_usuario', huFilter.toString().trim());
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -261,7 +288,7 @@ export class EvidenceDatabaseService {
       .eq('user_id', userId);
 
     if (params.huFilter) {
-      query = query.ilike('historia_usuario', `%${params.huFilter}%`);
+      query = query.eq('historia_usuario', params.huFilter.toString().trim());
     }
 
     if (params.textFilter) {
@@ -352,21 +379,34 @@ export class EvidenceDatabaseService {
     const associations: { stepId: string, imageIndex: number }[] = [];
     steps.forEach(step => {
       if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
-        const match = step.imagen_referencia.match(/\d+/);
-        if (match) {
-          const imageIndex = parseInt(match[0], 10) - 1; // 0-based
-          if (imageIndex >= 0 && imageIndex < files.length) {
-            associations.push({ stepId: step.id, imageIndex });
+        // 1. Intentar hacer match directo con el nombre del archivo
+        const matchedByName = files.findIndex(f => f.name && (f.name === step.imagen_referencia || step.imagen_referencia.includes(f.name)));
+        if (matchedByName >= 0) {
+          associations.push({ stepId: step.id, imageIndex: matchedByName });
+        } else {
+          // 2. Limpiar fechas y nombres de archivo con extensiones para evitar capturar números incorrectos
+          const cleanRef = step.imagen_referencia
+            .replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '')
+            .replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+          
+          const matches = cleanRef.match(/\d+/g);
+          if (matches) {
+            matches.forEach((m: string) => {
+              const imageIndex = parseInt(m, 10) - 1; // 0-based
+              if (imageIndex >= 0 && imageIndex < files.length) {
+                associations.push({ stepId: step.id, imageIndex });
+              }
+            });
           }
         }
       }
     });
 
-    // 2. Procesar cada archivo de imagen
+    // 2. Procesar cada archivo de imagen/documento
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       // Si no hay URL pública ni dataURL, saltar
-      if (!file.publicUrl && (!file.dataURL || !file.dataURL.startsWith('data:image'))) continue;
+      if (!file.publicUrl && (!file.dataURL || !file.dataURL.startsWith('data:'))) continue;
 
       try {
         // Reutilizar la URL si ya se subió previamente en el componente
@@ -380,8 +420,8 @@ export class EvidenceDatabaseService {
             imagesToInsert.push({
               report_id: scenarioId,
               step_id: assoc.stepId,
-              file_name: file.name || `evidencia_${i+1}.webp`,
-              file_type: 'image/webp',
+              file_name: file.name || `evidencia_${i+1}`,
+              file_type: file.type || 'image/webp',
               image_url: imageUrl,
               image_order: i + 1,
               is_video: file.isVideo || false,
@@ -394,8 +434,8 @@ export class EvidenceDatabaseService {
           imagesToInsert.push({
             report_id: scenarioId,
             step_id: null,
-            file_name: file.name || `evidencia_${i+1}.webp`,
-            file_type: 'image/webp',
+            file_name: file.name || `evidencia_${i+1}`,
+            file_type: file.type || 'image/webp',
             image_url: imageUrl,
             image_order: i + 1,
             is_video: file.isVideo || false,
@@ -491,33 +531,44 @@ export class EvidenceDatabaseService {
   async updateScenario(id: string, data: any, steps?: any[]): Promise<void> {
     try {
       // 1. CAPTURAR ASOCIACIONES ACTUALES (Mapear numero_paso -> [image_ids])
+      // Y también capturar por descripción para mayor robustez
       const { data: currentImages } = await this.supabase
         .from('report_images')
-        .select('id, step_id')
+        .select('id, step_id, image_order')
         .eq('report_id', id);
 
       const { data: currentSteps } = await this.supabase
         .from('test_scenario_steps')
-        .select('id, numero_paso')
+        .select('id, numero_paso, descripcion_accion_observada')
         .eq('scenario_id', id);
 
       const stepToImagesMap = new Map<number, string[]>();
+      const descToImagesMap = new Map<string, string[]>();
+
       if (currentImages && currentSteps) {
         currentSteps.forEach(s => {
           const imgs = currentImages.filter(img => img.step_id === s.id).map(img => img.id);
-          if (imgs.length > 0) stepToImagesMap.set(s.numero_paso, imgs);
+          if (imgs.length > 0) {
+            stepToImagesMap.set(s.numero_paso, imgs);
+            if (s.descripcion_accion_observada) {
+              descToImagesMap.set(s.descripcion_accion_observada.trim().toLowerCase(), imgs);
+            }
+          }
         });
       }
 
       // 2. Actualizar datos básicos del escenario
       const { error: scenarioError } = await this.supabase
         .from('test_scenarios')
-        .update(data)
+        .update({
+          ...data,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id);
 
       if (scenarioError) throw scenarioError;
 
-      if (steps && steps.length > 0) {
+      if (steps && steps.length >= 0) {
         // 2.5. Desvincular las imágenes temporalmente para evitar que el ON DELETE CASCADE las destruya
         const { error: detachError } = await this.supabase
           .from('report_images')
@@ -542,39 +593,63 @@ export class EvidenceDatabaseService {
           imagen_referencia: step.imagen_referencia || 'N/A'
         }));
 
-        const { data: insertedSteps, error: stepsError } = await this.supabase
-          .from('test_scenario_steps')
-          .insert(stepsToInsert)
-          .select();
+        if (stepsToInsert.length > 0) {
+          const { data: insertedSteps, error: stepsError } = await this.supabase
+            .from('test_scenario_steps')
+            .insert(stepsToInsert)
+            .select();
 
-        if (stepsError) throw stepsError;
+          if (stepsError) throw stepsError;
 
-        // 5. RESTAURAR ASOCIACIONES DE IMÁGENES
-        // Estrategia combinada: numero_paso + imagen_referencia
-        if (insertedSteps && insertedSteps.length > 0) {
-          for (const step of insertedSteps) {
-            // A. Intentar por mapeo de número de paso (lo más robusto si el orden no cambió)
-            const imageIds = stepToImagesMap.get(step.numero_paso);
-            if (imageIds && imageIds.length > 0) {
-              for (const imageId of imageIds) {
-                await this.supabase
-                  .from('report_images')
-                  .update({ step_id: step.id })
-                  .eq('id', imageId);
+          // 5. RESTAURAR ASOCIACIONES DE IMÁGENES
+          if (insertedSteps && insertedSteps.length > 0) {
+            for (const step of insertedSteps) {
+              // A. Intentar por descripción exacta (mejor si hubo reordenamiento manual)
+              const desc = (step.descripcion_accion_observada || '').trim().toLowerCase();
+              let imageIds = descToImagesMap.get(desc);
+
+              // B. Intentar por número de paso (si la descripción cambió pero el orden se mantuvo)
+              if (!imageIds || imageIds.length === 0) {
+                imageIds = stepToImagesMap.get(step.numero_paso);
               }
-              continue; // Ya vinculado
-            }
 
-            // B. Intentar por referencia de texto (si Gemini cambió el orden o añadió pasos)
-            if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
-              const match = step.imagen_referencia.match(/\d+/);
-              if (match) {
-                const order = parseInt(match[0], 10);
-                await this.supabase
-                  .from('report_images')
-                  .update({ step_id: step.id })
-                  .eq('report_id', id)
-                  .eq('image_order', order);
+              if (imageIds && imageIds.length > 0) {
+                for (const imageId of imageIds) {
+                  await this.supabase
+                    .from('report_images')
+                    .update({ step_id: step.id })
+                    .eq('id', imageId);
+                }
+                continue;
+              }
+
+              // C. Intentar por referencia de texto (imagen_referencia)
+              if (step.imagen_referencia && step.imagen_referencia !== 'N/A') {
+                const imgByName = currentImages?.find((img: any) => img.file_name && (img.file_name === step.imagen_referencia || step.imagen_referencia.includes(img.file_name)));
+                if (imgByName) {
+                  await this.supabase
+                    .from('report_images')
+                    .update({ step_id: step.id })
+                    .eq('report_id', id)
+                    .eq('id', imgByName.id);
+                } else {
+                  // 2. Extraer orden limpiando el string de fechas y extensiones
+                  const cleanRef = step.imagen_referencia
+                    .replace(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g, '')
+                    .replace(/\(\d+\)\.(?:xlsx|csv|jpg|png|jpeg)/gi, '');
+                    
+                  const matches = cleanRef.match(/\d+/g);
+                  if (matches) {
+                    for (const m of matches) {
+                      const order = parseInt(m, 10);
+                      await this.supabase
+                        .from('report_images')
+                        .update({ step_id: step.id })
+                        .eq('report_id', id)
+                        .eq('image_order', order);
+                    }
+                  }
+                }
               }
             }
           }

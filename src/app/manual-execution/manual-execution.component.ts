@@ -420,7 +420,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
       try {
         this.isLoadingTestCases = true;
         this.cdr.detectChanges();
-        
+
         const fullHuDb = await this.databaseService.getUserStoryWithTestCases(huNode.dbUuid || '');
         if (fullHuDb) {
           huNode.hu.detailedTestCases = (fullHuDb.test_cases || []).map((tc: any) => ({
@@ -631,7 +631,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
         hu: huForExecution,
         testPlanId: run.testPlanId || '',
         testPlanTitle: run.testPlanTitle || '',
-        testRunId: run.executionId || run.id,
+        testRunId: run.id,
         testRunName: run.name,
         forceNewExecution: !run.executionId,
         origin: 'manual-execution'
