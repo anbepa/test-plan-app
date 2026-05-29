@@ -28,20 +28,20 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
         <div class="filters-bar">
           <div class="search-box" style="flex: 1.5; min-width: 220px;">
             <span class="search-icon">🔍</span>
-            <input 
-              type="text" 
-              class="search-input" 
-              [(ngModel)]="huFilter" 
-              placeholder="ID de HU (Ej: 15834)..." 
+            <input
+              type="text"
+              class="search-input"
+              [(ngModel)]="huFilter"
+              placeholder="ID de HU (Ej: 15834)..."
               (keyup.enter)="onSearch()"
             >
           </div>
           <div class="search-box" style="flex: 2.5; min-width: 280px;">
             <span class="search-icon">🔍</span>
-            <input 
-              type="text" 
-              class="search-input" 
-              [(ngModel)]="textFilter" 
+            <input
+              type="text"
+              class="search-input"
+              [(ngModel)]="textFilter"
               placeholder="Filtrar por nombre del escenario o palabra clave..."
               (keyup.enter)="onSearch()"
             >
@@ -67,7 +67,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
               <span class="hu-display-name" *ngIf="huName">{{ huName }}</span>
             </div>
           </div>
-          
+
           <div class="hu-actions-group">
             <div class="export-btn-group">
               <button class="export-trigger" (click)="exportAllExcel()" [disabled]="reports.length === 0">
@@ -219,7 +219,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
       color: #86868b;
       font-size: 0.9rem;
     }
-    
+
     .back-pill {
       width: 32px; height: 32px; border-radius: 10px; border: 1.5px solid #d2d2d7;
       background: white; color: #007AFF; font-size: 1.2rem; cursor: pointer;
@@ -363,7 +363,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
 
     .hu-info-group { display: flex; flex-direction: column; gap: 0.25rem; }
     .hu-pill-group { display: flex; align-items: center; gap: 0.75rem; }
-    
+
     .hu-pill {
       background: #007AFF;
       color: white;
@@ -382,7 +382,7 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     }
 
     .hu-actions-group { display: flex; align-items: center; gap: 0.75rem; }
-    
+
     .export-btn-group {
       display: flex;
       background: #ffffff;
@@ -671,15 +671,15 @@ import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-m
     }
 
     /* Progress Overlay Styles - Global scope */
-    .global-loading-overlay { 
-      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
-      background: rgba(0,0,0,.4); backdrop-filter: blur(8px); 
-      display: flex; align-items: center; justify-content: center; z-index: 9999; 
+    .global-loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,.4); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; z-index: 9999;
     }
-    .loading-box { 
-      background: white; padding: 28px 44px; border-radius: 16px; 
-      display: flex; flex-direction: column; align-items: center; gap: 18px; 
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,.1); 
+    .loading-box {
+      background: white; padding: 28px 44px; border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,.1);
     }
     .export-progress-overlay {
       background: rgba(0, 0, 0, 0.55);
@@ -744,12 +744,19 @@ export class EvidenceReportListComponent implements OnInit {
   textFilter: string = '';
   statusFilter: string = '';
   selectedReports: string[] = [];
-  
+
+  // Filtros aplicados realmente (para exportación consistente)
+  private lastAppliedFilters = {
+    hu: '',
+    text: '',
+    status: ''
+  };
+
   // Pagination
   currentPage: number = 1;
   pageSize: number = 5;
   totalItems: number = 0;
-  
+
   // Estado de exportación
   isExporting = false;
   exportProgress = 0;
@@ -842,6 +849,13 @@ export class EvidenceReportListComponent implements OnInit {
         pageSize: this.pageSize
       });
 
+      // Guardar filtros aplicados para las exportaciones
+      this.lastAppliedFilters = {
+        hu: this.huFilter,
+        text: this.textFilter,
+        status: this.statusFilter
+      };
+
       const reports = result.data;
       this.totalItems = result.total;
 
@@ -860,7 +874,7 @@ export class EvidenceReportListComponent implements OnInit {
       // Usamos 'Todas las historias' si no hay filtro para que el *ngIf="appliedHuFilter" muestre la tabla
       this.appliedHuFilter = this.huFilter ? this.huFilter : 'Todas las historias';
       this.huName = foundHU ? foundHU.title : (this.huFilter ? '' : 'Todos los escenarios');
-      
+
     } catch (e) {
       this.toast.error('Error al cargar la información');
     }
@@ -968,23 +982,23 @@ export class EvidenceReportListComponent implements OnInit {
 
   async exportAllExcel() {
     if (this.reports.length === 0) return;
-    
+
     this.isExporting = true;
     this.exportType = 'Excel';
     this.exportProgress = 0;
     this.cdr.detectChanges();
 
     try {
-      // Obtener TODOS los registros que coinciden con los filtros (sin paginación)
+      // Obtener TODOS los registros que coinciden con los filtros aplicados (sin paginación)
       const result = await this.dbService.getReportsPaginated({
-        huFilter: this.huFilter,
-        textFilter: this.textFilter,
-        statusFilter: this.statusFilter,
+        huFilter: this.lastAppliedFilters.hu,
+        textFilter: this.lastAppliedFilters.text,
+        statusFilter: this.lastAppliedFilters.status,
         page: 1,
         pageSize: 10000
       });
       const allMatchingReports = result.data;
-      
+
       this.exportTotal = allMatchingReports.length;
       if (this.exportTotal === 0) {
         this.isExporting = false;
@@ -1025,7 +1039,7 @@ export class EvidenceReportListComponent implements OnInit {
 
   async exportAllDocx() {
     if (this.reports.length === 0) return;
-    
+
     this.isExporting = true;
     this.exportType = 'DOCX';
     this.exportProgress = 0;
@@ -1033,14 +1047,14 @@ export class EvidenceReportListComponent implements OnInit {
 
     try {
       const result = await this.dbService.getReportsPaginated({
-        huFilter: this.huFilter,
-        textFilter: this.textFilter,
-        statusFilter: this.statusFilter,
+        huFilter: this.lastAppliedFilters.hu,
+        textFilter: this.lastAppliedFilters.text,
+        statusFilter: this.lastAppliedFilters.status,
         page: 1,
         pageSize: 10000
       });
       const allMatchingReports = result.data;
-      
+
       this.exportTotal = allMatchingReports.length;
       if (this.exportTotal === 0) {
         this.isExporting = false;
@@ -1061,8 +1075,8 @@ export class EvidenceReportListComponent implements OnInit {
       this.cdr.detectChanges();
 
       await this.exportService.exportEvidenceAnalysisToDOCX(
-        fullReports, 
-        this.appliedHuFilter, 
+        fullReports,
+        this.appliedHuFilter,
         this.huName,
         (current, total) => {
           this.exportProgress = current;
@@ -1089,9 +1103,9 @@ export class EvidenceReportListComponent implements OnInit {
 
     try {
       const result = await this.dbService.getReportsPaginated({
-        huFilter: this.huFilter,
-        textFilter: this.textFilter,
-        statusFilter: this.statusFilter,
+        huFilter: this.lastAppliedFilters.hu,
+        textFilter: this.lastAppliedFilters.text,
+        statusFilter: this.lastAppliedFilters.status,
         page: 1,
         pageSize: 10000
       });

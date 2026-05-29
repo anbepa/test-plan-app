@@ -236,13 +236,23 @@ import * as XLSX from 'xlsx';
                               <span style="font-size: 10px;">🗑</span>
                             </button>
                           </div>
+                          <!-- Botón para añadir más evidencias al paso -->
+                          <div
+                            *ngIf="showRefiner"
+                            class="evidence-thumb-container add-more-slot"
+                            (click)="triggerImageUpload(step)"
+                            title="Añadir más evidencia (img, CSV, XLSX)"
+                          >
+                            <span style="font-size: 1.2rem; color: #888;">+</span>
+                          </div>
                         </div>
                       </ng-container>
 
                       <ng-container *ngIf="getImagesForStep(step).length === 0">
-                        <div class="empty-evidence-slot" *ngIf="showRefiner" (click)="triggerImageUpload(step)">
+                        <div class="empty-evidence-slot" *ngIf="showRefiner" (click)="triggerImageUpload(step)" title="Subir imagen, CSV o XLSX">
                           <span style="font-size: 1.2rem;">+</span>
                           <span>Subir</span>
+                          <span style="font-size: 0.65rem; color: #aaa; display: block; line-height: 1.1;">img / csv / xlsx</span>
                         </div>
                         <button *ngIf="!showRefiner" class="btn-view-no-evidence" disabled>
                           <span style="font-size: 1.2rem;">🖼</span>
@@ -299,7 +309,7 @@ import * as XLSX from 'xlsx';
           </div>
         </section>
 
-        <input type="file" #stepImageInput style="display: none;" (change)="onStepImageSelected($event)" accept="image/*">
+        <input type="file" #stepImageInput style="display: none;" (change)="onStepImageSelected($event)" accept="image/*,.csv,.xlsx,.xls">
       </div>
     </main>
 
@@ -719,6 +729,23 @@ import * as XLSX from 'xlsx';
       cursor: pointer;
     }
     .evidence-thumb-container:hover { transform: translateY(-2px); }
+
+    .add-more-slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed #555;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      color: #888;
+      transition: border-color 0.2s, background 0.2s;
+      flex-shrink: 0;
+    }
+    .add-more-slot:hover {
+      border-color: #a78bfa;
+      background: rgba(167,139,250,0.08);
+      color: #a78bfa;
+    }
 
     .step-thumb {
       width: 100%;
@@ -1658,8 +1685,8 @@ export class EvidenceReportDetailComponent implements OnInit {
   }
 
   async onStepImageSelected(event: any) {
-    const file = event.target.files[0];
-    const step = this.currentStepForImage; // Capturar el paso en una variable local
+    const file: File = event.target.files[0];
+    const step = this.currentStepForImage;
 
     if (!file || !step) {
       this.currentStepForImage = null;
@@ -1668,6 +1695,17 @@ export class EvidenceReportDetailComponent implements OnInit {
 
     try {
       this.toast.info('Subiendo evidencia...');
+
+      // Detect the real file type
+      const fileName = file.name.toLowerCase();
+      const isCSV = file.type.includes('csv') || fileName.endsWith('.csv');
+      const isXLSX = file.type.includes('sheet') || file.type.includes('excel') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+      const mimeType = isCSV
+        ? 'text/csv'
+        : isXLSX
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : file.type || 'image/png';
+
       const reader = new FileReader();
 
       reader.onload = async (e: any) => {
@@ -1675,14 +1713,13 @@ export class EvidenceReportDetailComponent implements OnInit {
           const base64 = e.target.result;
           const order = step.numero_paso;
 
-          await this.dbService.saveImageForStep(this.report.id, step.id, base64, file.name, order);
+          await this.dbService.saveImageForStep(this.report.id, step.id, base64, file.name, order, mimeType);
 
           this.toast.success('Evidencia cargada exitosamente');
-          // Recargar para sincronizar estado de imágenes
           await this.loadReport(this.report.id);
         } catch (err) {
-          console.error('Error al procesar la imagen:', err);
-          this.toast.error('Error al subir la imagen');
+          console.error('Error al procesar la evidencia:', err);
+          this.toast.error('Error al subir la evidencia');
         }
       };
 
@@ -1695,7 +1732,6 @@ export class EvidenceReportDetailComponent implements OnInit {
       console.error('Error en onStepImageSelected:', e);
       this.toast.error('Error al cargar la evidencia');
     } finally {
-      // Limpiar el estado y el input
       this.currentStepForImage = null;
       event.target.value = '';
     }
