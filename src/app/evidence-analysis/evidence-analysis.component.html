@@ -28,7 +28,7 @@
             <div class="form-group flex-2">
                 <label><b>Contexto adicional (Opcional)</b></label>
                 <textarea [(ngModel)]="additionalContext"
-                          placeholder="Ej: Analizar solo los cálculos o ignorar el login..."
+                          placeholder="Ej: Analizar solo los cálculos, ignorar el login, el resultado debería ser Fallido..."
                           class="input-field context-textarea"
                           [disabled]="isProcessing"
                           rows="1"></textarea>
@@ -53,6 +53,19 @@
             </div>
             <h3>Haz clic o arrastra evidencias</h3>
             <p>Soporta imágenes (PNG, JPG), videos y archivos de datos (.csv, .xlsx). También puedes pegar (Ctrl+V) desde el portapapeles.</p>
+
+            <div class="upload-divider">
+                <span>o</span>
+            </div>
+
+            <button class="btn-projection" (click)="startProjection(); $event.stopPropagation()" [disabled]="isProjecting">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Captura desde pantalla
+            </button>
         </div>
 
         <!-- Galería de Evidencias -->
@@ -82,6 +95,17 @@
                     <div class="add-icon">+</div>
                     <span class="add-text">Añadir evidencias</span>
                 </div>
+                <!-- Projection card en la galería -->
+                <div class="evidence-card add-card projection-card" (click)="!isProcessing && !isProjecting && startProjection()" *ngIf="!isProjecting">
+                    <div class="add-icon projection-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                    </div>
+                    <span class="add-text">Capturar pantalla</span>
+                </div>
                 <div class="evidence-card" *ngFor="let file of files; let i = index"
                      [class.selected]="selectedIndices.includes(i)"
                      [draggable]="!isProcessing"
@@ -97,7 +121,7 @@
 
                     <!-- Acciones rápidas (Hover) -->
                     <div class="card-actions-overlay">
-                        <button class="btn-action-circle" (click)="openPreview(file.dataURL, $event)" title="Previsualizar" *ngIf="!file.type.includes('csv') && !file.type.includes('sheet') && !file.type.includes('excel')">
+                        <button class="btn-action-circle" (click)="openPreview(i, $event)" title="Previsualizar" *ngIf="!file.type.includes('csv') && !file.type.includes('sheet') && !file.type.includes('excel')">
                             👁️
                         </button>
                         <button class="btn-action-circle danger" (click)="removeFile(i, $event)" title="Eliminar">
@@ -129,11 +153,47 @@
         <input type="file" #fileInput multiple (change)="onFileSelected($event)" style="display: none;" accept="image/*,video/*,.csv,.xlsx">
     </div>
 
-    <!-- Preview Modal -->
+    <!-- Preview Modal (Image Editor) -->
     <div class="preview-modal-overlay" *ngIf="showPreview" (click)="showPreview = false">
-        <div class="preview-modal-content" (click)="$event.stopPropagation()">
+        <div class="preview-modal-content image-editor-content" (click)="$event.stopPropagation()">
             <button class="btn-close-preview" (click)="showPreview = false">&times;</button>
-            <img [src]="previewUrl" class="full-preview-image">
+            <app-image-editor 
+                *ngIf="showPreview"
+                [imageBase64]="previewUrl" 
+                (imageSaved)="onImageSaved($event)">
+            </app-image-editor>
+        </div>
+    </div>
+
+    <!-- Floating Projection Panel -->
+    <div class="projection-panel" *ngIf="isProjecting" [class.minimized]="projectionMinimized">
+        <div class="projection-panel-header">
+            <div class="projection-status">
+                <span class="projection-dot"></span>
+                <span class="projection-label">Proyección activa</span>
+                <span class="capture-badge" *ngIf="captureCount > 0">{{ captureCount }}</span>
+            </div>
+            <div class="projection-header-actions">
+                <button class="btn-projection-action" (click)="toggleProjectionMinimize()" title="{{ projectionMinimized ? 'Expandir' : 'Minimizar' }}">
+                    <svg *ngIf="!projectionMinimized" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+                    <svg *ngIf="projectionMinimized" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+                </button>
+                <button class="btn-projection-action danger" (click)="stopProjection()" title="Detener proyección">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="projection-video-wrapper" *ngIf="!projectionMinimized">
+            <video #projectionVideo autoplay playsinline muted class="projection-video"></video>
+            <div class="projection-controls">
+                <button class="btn-capture-main" (click)="captureFromProjection()" [disabled]="isCapturing" [class.capturing]="isCapturing">
+                    <div class="capture-ring">
+                        <div class="capture-inner" [class.pulse]="isCapturing"></div>
+                    </div>
+                    <span>{{ isCapturing ? 'Capturando...' : 'Capturar' }}</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>

@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild } from '@angular/core';
+import { Component, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EvidenceAnalysisService, EvidenceFile } from '../services/ai/evidence-analysis.service';
@@ -6,11 +6,13 @@ import { DatabaseService, DbTestCaseWithRelations } from '../services/database/d
 import { EvidenceDatabaseService } from '../services/database/evidence-database.service';
 import { ToastService } from '../services/core/toast.service';
 import { Router } from '@angular/router';
+import { ImageEditorComponent } from '../test-plan-viewer/components/image-editor/image-editor.component';
+
 
 @Component({
   selector: 'app-evidence-analysis',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ImageEditorComponent],
   templateUrl: './evidence-analysis.component.html',
   styleUrls: ['./evidence-analysis.component.css']
 })
@@ -30,17 +32,27 @@ export class EvidenceAnalysisComponent {
   // Preview Modal
   showPreview = false;
   previewUrl = '';
+  previewIndex: number = -1;
 
   // Reordering
   draggedItemIndex: number | null = null;
 
+  // Screen Projection
+  isProjecting = false;
+  projectionStream: MediaStream | null = null;
+  captureCount = 0;
+  isCapturing = false;
+  projectionMinimized = false;
+
   @ViewChild('fileInput') fileInput!: ElementRef;
+  @ViewChild('projectionVideo') projectionVideo!: ElementRef<HTMLVideoElement>;
 
   constructor(
     private analysisService: EvidenceAnalysisService,
     private dbService: EvidenceDatabaseService,
     private toast: ToastService,
-    private router: Router
+    private router: Router,
+    private ngZone: NgZone
   ) {
     this.setupPasteListener();
   }
@@ -88,6 +100,10 @@ export class EvidenceAnalysisComponent {
     if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
       this.processFiles(Array.from(event.dataTransfer.files));
     }
+  }
+
+  getBuiltContext(): string {
+    return this.additionalContext.trim();
   }
 
   onFileSelected(event: any) {
@@ -246,6 +262,8 @@ export class EvidenceAnalysisComponent {
     this.selectedIndices = this.selectedIndices
       .filter(i => i !== index)
       .map(i => i > index ? i - 1 : i);
+
+
   }
 
   // Drag & Drop Reordering
@@ -269,10 +287,20 @@ export class EvidenceAnalysisComponent {
     this.draggedItemIndex = null;
   }
 
-  openPreview(url: string, event: Event) {
+  openPreview(index: number, event: Event) {
     event.stopPropagation();
-    this.previewUrl = url;
+    this.previewIndex = index;
+    this.previewUrl = this.files[index].dataURL;
     this.showPreview = true;
+  }
+
+  onImageSaved(event: { base64: string, stateJson: string }) {
+    if (this.previewIndex !== -1 && this.files[this.previewIndex]) {
+      this.files[this.previewIndex].dataURL = event.base64;
+      this.toast.success('Imagen editada correctamente');
+      this.showPreview = false;
+      this.previewIndex = -1;
+    }
   }
 
   getExtension(filename: string): string {
@@ -281,34 +309,92 @@ export class EvidenceAnalysisComponent {
     return parts.length > 1 ? parts.pop()!.toUpperCase() : 'IMG';
   }
 
-  async captureScreen() {
+  async startProjection() {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false
+      } as any);
+
+      this.projectionStream = stream;
+      this.isProjecting = true;
+      this.captureCount = 0;
+      this.projectionMinimized = false;
+
+      // Listen for when user stops sharing via browser UI
       const track = stream.getVideoTracks()[0];
-      const imageCapture = new (window as any).ImageCapture(track);
-      const bitmap = await imageCapture.grabFrame();
+      track.onended = () => {
+        this.ngZone.run(() => {
+          this.stopProjection();
+        });
+      };
 
+      // Wait for the video element to be rendered, then attach the stream
+      setTimeout(() => {
+        if (this.projectionVideo?.nativeElement) {
+          this.projectionVideo.nativeElement.srcObject = stream;
+        }
+      }, 100);
+
+      this.toast.success('Proyección iniciada. Captura las evidencias que necesites.');
+    } catch (e: any) {
+      if (e.name !== 'NotAllowedError') {
+        console.error(e);
+        this.toast.error('No se pudo iniciar la proyección de pantalla');
+      }
+    }
+  }
+
+  stopProjection() {
+    if (this.projectionStream) {
+      this.projectionStream.getTracks().forEach(track => track.stop());
+      this.projectionStream = null;
+    }
+    this.isProjecting = false;
+    if (this.captureCount > 0) {
+      this.toast.info(`Proyección finalizada. ${this.captureCount} capturas añadidas.`);
+    }
+  }
+
+  toggleProjectionMinimize() {
+    this.projectionMinimized = !this.projectionMinimized;
+  }
+
+  async captureFromProjection() {
+    if (!this.projectionStream || this.isCapturing) return;
+    this.isCapturing = true;
+
+    try {
+      const video = this.projectionVideo.nativeElement;
       const canvas = document.createElement('canvas');
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
-      ctx?.drawImage(bitmap, 0, 0);
+      if (!ctx) return;
 
+      ctx.drawImage(video, 0, 0);
       const dataUrl = canvas.toDataURL('image/png');
       const compressedDataUrl = await this.compressImage(dataUrl);
 
+      this.captureCount++;
+      const timestamp = new Date();
+      const timeStr = timestamp.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
       this.files.push({
-        name: `Captura_${new Date().getTime()}.jpg`,
+        name: `Captura_${this.captureCount}_${timeStr.replace(/:/g, '-')}.jpg`,
         type: 'image/jpeg',
         dataURL: compressedDataUrl,
-        isVideo: false
+        isVideo: false,
+        size: compressedDataUrl.length
       });
       this.selectedIndices.push(this.files.length - 1);
 
-      track.stop();
+      this.toast.success(`📸 Captura ${this.captureCount} añadida`);
     } catch (e) {
       console.error(e);
-      this.toast.error('No se pudo capturar la pantalla');
+      this.toast.error('Error al capturar la pantalla');
+    } finally {
+      this.isCapturing = false;
     }
   }
 
@@ -338,7 +424,8 @@ export class EvidenceAnalysisComponent {
       }
 
       // 2. Generar el análisis enviando solo las URLs públicas
-      const result = await this.analysisService.analyzeEvidences(this.additionalContext, selectedFiles).toPromise();
+      const builtContext = this.getBuiltContext();
+      const result = await this.analysisService.analyzeEvidences(builtContext, selectedFiles).toPromise();
       console.log('Analysis Result:', result);
 
       // 3. Asegurar o crear la HU en la tabla de evidencias
