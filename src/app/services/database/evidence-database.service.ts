@@ -761,7 +761,9 @@ export class EvidenceDatabaseService {
   /**
    * Sube una imagen y la asocia directamente a un paso
    */
-  async saveImageForStep(scenarioId: string, stepId: string, fileData: string, fileName: string, order: number): Promise<void> {
+  async saveImageForStep(scenarioId: string, stepId: string, fileData: string, fileName: string, order: number, fileType?: string): Promise<void> {
+    // Resolve the actual MIME type: use provided param, then sniff from data URL, then fallback
+    const detectedMime = fileType || (fileData.match(/^data:([^;]+);/)?.[1]) || 'image/webp';
     const imageUrl = await this.uploadImageToStorage(fileData, fileName);
 
     const { error } = await this.supabase
@@ -770,7 +772,7 @@ export class EvidenceDatabaseService {
         report_id: scenarioId,
         step_id: stepId,
         file_name: fileName,
-        file_type: 'image/webp',
+        file_type: detectedMime,
         image_url: imageUrl,
         image_order: order,
         is_video: false,

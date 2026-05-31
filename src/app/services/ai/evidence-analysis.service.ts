@@ -86,14 +86,19 @@ export class EvidenceAnalysisService {
       { text: promptText }
     ];
 
-    for (const file of evidences) {
+    for (let i = 0; i < evidences.length; i++) {
+      const file = evidences[i];
       const isCSV = file.type?.includes('csv') || file.name?.toLowerCase().endsWith('.csv');
       const isXLSX = file.type?.includes('sheet') || file.type?.includes('excel') || file.name?.toLowerCase().endsWith('.xlsx');
+
+      parts.push({
+        text: `\n\n--- INICIO EVIDENCIA ${i + 1} (${file.name}) ---\n`
+      });
 
       if (isCSV || isXLSX) {
         const textContent = await this.convertSpreadsheetToText(file);
         parts.push({
-          text: `\n\n[Evidencia de datos adjunta]\n${textContent}\n`
+          text: `[Evidencia de datos adjunta]\n${textContent}\n`
         });
       } else {
         if (file.publicUrl) {
@@ -120,10 +125,16 @@ export class EvidenceAnalysisService {
   public analyzeEvidences(context: string, evidences: EvidenceFile[]): Observable<any> {
     return new Observable(observer => {
       this.prepareParts(context, evidences).then(parts => {
-        const payload = {
+        const payload: any = {
           contents: [{ role: 'user', parts }],
           generationConfig: { temperature: 0.1 }
         };
+
+        if (context.trim()) {
+          payload.system_instruction = {
+            parts: [{ text: `🛑🛑🛑 INSTRUCCIÓN DE PRIORIDAD MÁXIMA DEL USUARIO 🛑🛑🛑\nEl usuario ha especificado las siguientes instrucciones OBLIGATORIAS que debes aplicar a todo tu análisis:\n"${context.trim()}"\nSi hay alguna contradicción entre estas instrucciones y lo que observas en las evidencias, PREVALECEN LAS INSTRUCCIONES DEL USUARIO.` }]
+          };
+        }
 
         this.geminiClient.callGemini('generateTextCases', payload).subscribe({
           next: response => {
@@ -219,9 +230,12 @@ export class EvidenceAnalysisService {
           { text: promptText }
         ];
 
-        imageData.forEach(d => {
+        imageData.forEach((d, i) => {
+          parts.push({
+            text: `\n\n--- INICIO EVIDENCIA ${i + 1} ---\n`
+          });
           if (d.isDoc) {
-            parts.push({ text: `\n\n[Evidencia de datos adjunta]\n${d.docText}\n` });
+            parts.push({ text: `[Evidencia de datos adjunta]\n${d.docText}\n` });
           } else {
             if (d.image_url) {
               parts.push({ image_url: d.image_url });
@@ -231,12 +245,7 @@ export class EvidenceAnalysisService {
           }
         });
 
-        // REPETIR LA INSTRUCCIÓN AL FINAL para asegurar que la IA la priorice (Recency Bias positivo)
-        parts.push({
-          text: `\n\n⚠️ RECORDATORIO CRÍTICO - PRIORIDAD MÁXIMA:\nDebes aplicar estrictamente esta instrucción del usuario: "${instruction.trim()}"\nGenera el JSON final reflejando este cambio.`
-        });
-
-        const payload = {
+        const payload: any = {
           contents: [{ role: 'user', parts }],
           generationConfig: {
             temperature: 0.1,
@@ -244,6 +253,12 @@ export class EvidenceAnalysisService {
             topK: 40
           }
         };
+
+        if (instruction.trim()) {
+          payload.system_instruction = {
+            parts: [{ text: `🛑🛑🛑 INSTRUCCIÓN DE REFINAMIENTO (PRIORIDAD ABSOLUTA) 🛑🛑🛑\nEl usuario exige que modifiques el reporte estrictamente de acuerdo a esta instrucción:\n"${instruction.trim()}"\nNingún resultado anterior ni evidencia visual debe sobreponerse a esta orden.` }]
+          };
+        }
 
         this.geminiClient.callGemini('generateTextCases', payload).subscribe({
           next: response => {

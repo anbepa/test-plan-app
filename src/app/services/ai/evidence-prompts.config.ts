@@ -1,7 +1,4 @@
 export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
-    🛑 CONTEXTO DEL USUARIO Y REQUERIMIENTOS PRIORITARIOS:
-    ${annotationsContext ? `"${annotationsContext}"\n    (Debes considerar y priorizar estrictamente este contexto en todo tu análisis)` : 'Ninguno proporcionado por el usuario.'}
-
     **FORMATO DE RESPUESTA OBLIGATORIO - LEE ESTO PRIMERO:**
 
     Debes responder EXACTAMENTE con este formato JSON. USA ESTOS NOMBRES DE CAMPOS, NO OTROS:
@@ -200,7 +197,12 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
     4. ✅ USA EXACTAMENTE: "numero_paso", "descripcion", "imagen_referencia"
     5. Retorna SOLO el JSON válido, sin texto adicional antes o después.
 
-    PROCEDE A GENERAR EL ANÁLISIS INTEGRAL:`;
+    ${annotationsContext ? `🛑 RECORDATORIO FINAL - CONTEXTO DEL USUARIO (PRIORIDAD MÁXIMA):
+    Antes de generar el JSON, debes aplicar estrictamente las siguientes instrucciones del usuario:
+    "${annotationsContext}"
+    Asegúrate de que el análisis, los pasos, el resultado esperado, el resultado obtenido y el estado general reflejen este contexto.
+
+    ` : ''}PROCEDE A GENERAR EL ANÁLISIS INTEGRAL:`;
 
 export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReportContextJSON: string, instruction: string) => `
     Eres un **QA Lead Expert Full Stack**.

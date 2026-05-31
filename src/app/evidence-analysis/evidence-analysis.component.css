@@ -115,7 +115,7 @@
     background: #fff;
 }
 
-/* Mejora para el campo de contexto adicional */
+
 .context-textarea {
     resize: none;
     min-height: 48px;
@@ -540,7 +540,21 @@
     position: relative;
     max-width: 90%;
     max-height: 90%;
+    border-radius: 12px;
 }
+
+.preview-modal-content.image-editor-content {
+    width: 90vw;
+    height: 90vh;
+    max-width: 1200px;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    cursor: default;
+}
+
 .full-preview-image {
     max-width: 100%;
     max-height: 90vh;
@@ -628,3 +642,322 @@
     background-color: #107c41;
 }
 
+/* ========================================
+   SCREEN PROJECTION STYLES
+   ======================================== */
+
+/* Upload divider */
+.upload-divider {
+    display: flex;
+    align-items: center;
+    width: 60%;
+    margin: 0 auto;
+    gap: 1rem;
+}
+
+.upload-divider::before,
+.upload-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #d2d2d7;
+}
+
+.upload-divider span {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #86868b;
+    text-transform: uppercase;
+}
+
+/* Projection button in upload area */
+.btn-projection {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1.6rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    margin-top: 0.5rem;
+}
+
+.btn-projection:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.45);
+}
+
+.btn-projection:active {
+    transform: translateY(0);
+}
+
+.btn-projection:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Projection card in gallery */
+.projection-card {
+    border-color: rgba(102, 126, 234, 0.3) !important;
+    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+}
+
+.projection-card:hover {
+    border-color: #667eea !important;
+    background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+}
+
+.projection-icon {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    font-size: 1.2rem !important;
+}
+
+.projection-card:hover .projection-icon {
+    transform: scale(1.1);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+}
+
+/* ========================================
+   FLOATING PROJECTION PANEL
+   ======================================== */
+.projection-panel {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 420px;
+    background: rgba(28, 28, 30, 0.92);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 20px;
+    box-shadow:
+        0 25px 50px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    z-index: 1500;
+    overflow: hidden;
+    animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: width 0.3s ease, height 0.3s ease;
+}
+
+.projection-panel.minimized {
+    width: 260px;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.projection-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.projection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.projection-dot {
+    width: 8px;
+    height: 8px;
+    background: #ff3b30;
+    border-radius: 50%;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+    box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+.projection-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 0.02em;
+}
+
+.capture-badge {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+    animation: badgePop 0.3s ease;
+}
+
+@keyframes badgePop {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+.projection-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-projection-action {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-projection-action:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+.btn-projection-action.danger:hover {
+    background: rgba(255, 59, 48, 0.2);
+    color: #ff6961;
+}
+
+/* Video wrapper */
+.projection-video-wrapper {
+    position: relative;
+}
+
+.projection-video {
+    width: 100%;
+    display: block;
+    border-radius: 0 0 0 0;
+    background: #000;
+    max-height: 260px;
+    object-fit: contain;
+}
+
+/* Projection Controls overlay */
+.projection-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
+/* Capture button with camera ring */
+.btn-capture-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 10px 22px;
+    border-radius: 50px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.02em;
+}
+
+.btn-capture-main:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.btn-capture-main:active {
+    transform: scale(0.97);
+}
+
+.btn-capture-main:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.btn-capture-main.capturing {
+    background: rgba(102, 126, 234, 0.3);
+    border-color: rgba(102, 126, 234, 0.5);
+}
+
+/* Capture ring animation */
+.capture-ring {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.btn-capture-main:hover .capture-ring {
+    border-color: white;
+}
+
+.capture-inner {
+    width: 16px;
+    height: 16px;
+    background: #ff3b30;
+    border-radius: 50%;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.4);
+}
+
+.capture-inner.pulse {
+    animation: capturePulse 0.6s ease;
+}
+
+@keyframes capturePulse {
+    0% { transform: scale(1); box-shadow: 0 0 10px rgba(255, 59, 48, 0.4); }
+    50% { transform: scale(0.5); box-shadow: 0 0 30px rgba(255, 59, 48, 0.8); }
+    100% { transform: scale(1); box-shadow: 0 0 10px rgba(255, 59, 48, 0.4); }
+}
+
+.btn-capture-main:hover .capture-inner {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(255, 59, 48, 0.6);
+}
+
+/* Responsive for projection panel */
+@media (max-width: 768px) {
+    .projection-panel {
+        width: calc(100vw - 32px);
+        right: 16px;
+        bottom: 16px;
+    }
+
+    .projection-panel.minimized {
+        width: 220px;
+    }
+}

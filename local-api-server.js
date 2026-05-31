@@ -90,7 +90,7 @@ app.post('/api/gemini-proxy', async (req, res) => {
 
         console.log(`[API] Calling Original Google API - Model: ${MODEL_NAME}`);
 
-        const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
             method: 'POST',

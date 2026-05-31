@@ -24,7 +24,7 @@ async function callGeminiRestWithRetry(
   maxRetries = 3
 ): Promise<any> {
   let lastError: Error | null = null;
-  const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL_VERSION}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_VERSION}:generateContent?key=${apiKey}`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
