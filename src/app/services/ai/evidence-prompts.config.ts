@@ -40,13 +40,13 @@ export const PROMPT_FLOW_ANALYSIS_FROM_IMAGES = (annotationsContext = '') => `
 
     **TU OBJETIVO:**
     Reconstruir este flujo como un **ÚNICO ESCENARIO DE PRUEBA** coherente.
-    Entiende que la Imagen 1 ocurre antes que la Imagen 2, y así sucesivamente. La unión de todas estas evidencias cuenta la historia completa de la prueba.
+    ATENCIÓN: Las evidencias pueden haber sido adjuntadas en desorden. Tu tarea es deducir el orden cronológico y lógico real del flujo de negocio.
 
     **INSTRUCCIONES:**
-    1.  **ANÁLISIS DE SECUENCIA (Storyboard):**
-        *   Observa la progresión temporal entre las imágenes.
-        *   Identifica qué cambió de una imagen a la siguiente (ej: "Se llenó el campo", "Se hizo clic", "Apareció el modal").
-        *   Conecta estos cambios para narrar el paso a paso del escenario.
+    1.  **ANÁLISIS DE SECUENCIA LÓGICA (Storyboard):**
+        *   Observa todas las imágenes e identifica cuál es lógicamente el inicio del flujo y cuál es el final.
+        *   Reordena mentalmente las evidencias para reconstruir la historia de forma coherente.
+        *   Conecta los cambios para narrar el paso a paso, asignando como Paso 1 lo que realmente sucede primero (sin importar si es la Evidencia 4 o la 1).
         - Si ves JSON/XML: Analiza como prueba de integración (códigos de estado HTTP, estructura de respuesta).
 
     2.  **Conexión Lógica (End-to-End):**
@@ -219,8 +219,9 @@ export const PROMPT_REFINE_FLOW_ANALYSIS_FROM_IMAGES_AND_CONTEXT = (editedReport
 
     **TU TAREA (ORDEN DE PRIORIDAD):**
     1. **OBEDIENCIA TOTAL A LA INSTRUCCIÓN:** Si el usuario pide algo que contradice el análisis visual original, PREVALECE LA INSTRUCCIÓN. Por ejemplo, si pide "solo un paso", debes resumir todo el flujo en un único paso, ignorando la cantidad de imágenes.
-    2. **MODIFICACIÓN DEL REPORTE:** Modifica, agrega o elimina pasos, precondiciones o resultados basándote en la instrucción sobre el JSON actual.
-    3. **FORMATO:** Mantén el formato JSON estricto sin añadir explicaciones fuera del JSON.
+    2. **ORDEN CRONOLÓGICO LÓGICO:** Si vas a reconstruir o modificar los pasos, asegúrate de deducir el orden cronológico y lógico real del flujo de negocio. Asigna como Paso 1 lo que lógicamente sucede primero, sin importar el número de la Evidencia referenciada (las evidencias pueden estar en desorden).
+    3. **MODIFICACIÓN DEL REPORTE:** Modifica, agrega o elimina pasos, precondiciones o resultados basándote en la instrucción sobre el JSON actual.
+    4. **FORMATO:** Mantén el formato JSON estricto sin añadir explicaciones fuera del JSON.
 
     **REGLAS ESTRICTAS DE FORMATO:**
 
