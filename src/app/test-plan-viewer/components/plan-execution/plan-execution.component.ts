@@ -187,6 +187,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     try {
       const state = this.router.getCurrentNavigation()?.extras.state || history.state;
       const restoredContext = this.restoreExecutionContext();
+      const hasExplicitNavigationTarget = !!(state?.testRunId || state?.executionId || state?.hu);
 
       if (state?.hu || restoredContext) {
       if (state?.hu) {
@@ -216,9 +217,20 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           }
         }
       } else {
-        // --- 1. Intentar cargar por executionId directo del contexto restaurado (Prioridad Máxima) ---
-        if (restoredContext?.executionId) {
-          console.log(`[EXEC] Intentando carga directa por executionId: ${restoredContext.executionId}`);
+        // --- 1. Intentar cargar por executionId explícito de navegación ---
+        const navigationExecutionId = typeof state?.executionId === 'string' ? state.executionId : '';
+        if (navigationExecutionId) {
+          console.log(`[EXEC] Intentando carga directa por executionId (state): ${navigationExecutionId}`);
+          const directExec = await this.storageService.getExecution(navigationExecutionId);
+          if (directExec) {
+            this.execution = directExec;
+            this.storageService.setActiveExecutionId(this.execution.id);
+          }
+        }
+
+        // --- 2. Si no hay destino explícito, usar executionId del contexto restaurado ---
+        if (!this.execution && !hasExplicitNavigationTarget && restoredContext?.executionId) {
+          console.log(`[EXEC] Intentando carga directa por executionId (contexto): ${restoredContext.executionId}`);
           const directExec = await this.storageService.getExecution(restoredContext.executionId);
           if (directExec) {
             this.execution = directExec;
@@ -226,7 +238,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           }
         }
 
-        // --- 2. Si no se cargó, intentar resolver desde testRunId ---
+        // --- 3. Si no se cargó, intentar resolver desde testRunId ---
         if (!this.execution && this.testRunId) {
           let executionIdToLoad = this.testRunId;
 
@@ -255,7 +267,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           }
         }
 
-        // --- 3. Fallback: buscar por HU ID (último recurso) ---
+        // --- 4. Fallback: buscar por HU ID (último recurso) ---
         if (!this.execution) {
           const huId = this.hu?.id || restoredContext?.huId || '';
           console.log(`[EXEC] Fallback: buscando ejecuciones para HU: ${huId}`);
@@ -279,7 +291,15 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         }
       }
 
-      if (restoredContext) {
+      const canRestoreSelectionFromContext =
+        !!restoredContext &&
+        (
+          !hasExplicitNavigationTarget ||
+          (!!this.execution?.id && restoredContext.executionId === this.execution.id) ||
+          (!!this.testRunId && restoredContext.testRunId === this.testRunId)
+        );
+
+      if (canRestoreSelectionFromContext && restoredContext) {
         this.activeTestCaseIndex = restoredContext.activeTestCaseIndex;
         this.activeStepIndex = restoredContext.activeStepIndex;
       }
