@@ -129,35 +129,72 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// ── ADD EVIDENCE: upload one evidence file to existing Gist ──
+// ── ADD EVIDENCE: upload one or more evidence files to existing Gist ──
 async function handleAddEvidence(req: VercelRequest, res: VercelResponse) {
   try {
-    const { gistId, name, base64 } = req.body || {};
-    if (!gistId || !name || !base64) {
-      return res.status(400).json({ error: 'Se requiere gistId, name y base64' });
+    const { gistId, files } = req.body || {};
+    if (!gistId || !files || !Array.isArray(files) || files.length === 0) {
+      // Legacy single-file format
+      const { name, base64 } = req.body || {};
+      if (!gistId || !name || !base64) {
+        return res.status(400).json({ error: 'Se requiere gistId y files[] o (name + base64)' });
+      }
+      return await patchGistFile(gistId, name, base64, res, 0);
     }
 
-    // GitHub Gist PATCH: add/update a single file
-    const patchRes = await gh(`/gists/${gistId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        files: {
-          [name]: { content: base64 },
-        },
-      }),
-    });
-
-    if (!patchRes.ok) {
-      const err = await patchRes.text();
-      console.error('[serenity-report] Error agregando evidencia al gist:', patchRes.status, err);
-      return res.status(502).json({ error: `Error al agregar evidencia: ${patchRes.status}` });
+    // Batch: patch all files in one GitHub API call
+    const filesObj: Record<string, { content: string }> = {};
+    for (const f of files) {
+      if (f.name && f.base64) {
+        filesObj[f.name] = { content: f.base64 };
+      }
     }
 
-    return res.status(200).json({ success: true, name });
+    if (Object.keys(filesObj).length === 0) {
+      return res.status(400).json({ error: 'No hay archivos válidos en files[]' });
+    }
+
+    return await patchGistFiles(gistId, filesObj, res, 0);
   } catch (e: any) {
     console.error('[serenity-report] Excepción en handleAddEvidence:', e);
     return res.status(502).json({ error: 'Error al agregar evidencia' });
   }
+}
+
+async function patchGistFiles(
+  gistId: string,
+  filesObj: Record<string, { content: string }>,
+  res: VercelResponse,
+  attempt: number
+): Promise<any> {
+  const patchRes = await gh(`/gists/${gistId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ files: filesObj }),
+  });
+
+  if (!patchRes.ok) {
+    const err = await patchRes.text();
+    console.error(`[serenity-report] Error patcheando gist (attempt ${attempt}):`, patchRes.status, err);
+
+    if (patchRes.status === 403 && attempt < 2) {
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      return patchGistFiles(gistId, filesObj, res, attempt + 1);
+    }
+
+    return res.status(502).json({ error: `Error al agregar evidencia: ${patchRes.status}` });
+  }
+
+  return res.status(200).json({ success: true, count: Object.keys(filesObj).length });
+}
+
+async function patchGistFile(
+  gistId: string,
+  name: string,
+  base64: string,
+  res: VercelResponse,
+  attempt: number
+): Promise<any> {
+  return patchGistFiles(gistId, { [name]: { content: base64 } }, res, attempt);
 }
 
 // ── DISPATCH: trigger GitHub Actions workflow ──

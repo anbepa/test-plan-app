@@ -88,7 +88,7 @@ export class SerenityReportService {
       const gistId = startResult.gistId as string;
       const jobId = startResult.jobId as string;
 
-      // ── Fase 4: Subir evidencias al Gist una por una ──
+      // ── Fase 4: Subir evidencias al Gist en batches ──
       if (evidenceUploads.length > 0) {
         this.state = {
           phase: 'uploading',
@@ -99,19 +99,32 @@ export class SerenityReportService {
         };
 
         let uploaded = 0;
-        const BATCH_SIZE = 3;
+        const BATCH_SIZE = 8; // subir de a 8 archivos por PATCH (reduce requests a GitHub)
 
         for (let i = 0; i < evidenceUploads.length; i += BATCH_SIZE) {
           const batch = evidenceUploads.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map(ev =>
-            firstValueFrom(
-              this.http.post<any>(`${this.apiUrl}?action=evidence`, {
-                gistId, name: ev.name, base64: ev.base64,
-              })
-            ).catch(() => null)
-          ));
 
-          uploaded += batch.length;
+          const result = await firstValueFrom(
+            this.http.post<any>(`${this.apiUrl}?action=evidence`, {
+              gistId,
+              files: batch.map(ev => ({ name: ev.name, base64: ev.base64 })),
+            })
+          ).catch(() => null);
+
+          if (!result?.success) {
+            // Reintentar archivos individuales si el batch falló
+            for (const ev of batch) {
+              await firstValueFrom(
+                this.http.post<any>(`${this.apiUrl}?action=evidence`, {
+                  gistId, name: ev.name, base64: ev.base64,
+                })
+              ).catch(() => null);
+              uploaded++;
+            }
+          } else {
+            uploaded += batch.length;
+          }
+
           this.state = {
             ...this.state,
             phase: 'uploading',
@@ -122,6 +135,11 @@ export class SerenityReportService {
               percentage: Math.round((Math.min(uploaded, evidenceUploads.length) / evidenceUploads.length) * 100),
             },
           };
+
+          // Pequeña pausa entre batches para no saturar la API de GitHub
+          if (i + BATCH_SIZE < evidenceUploads.length) {
+            await new Promise(r => setTimeout(r, 600));
+          }
         }
       }
 
