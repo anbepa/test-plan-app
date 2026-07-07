@@ -5,8 +5,6 @@ const GH_TOKEN = process.env['GH_DISPATCH_TOKEN'] || '';
 const GH_OWNER = process.env['GH_DISPATCH_OWNER'] || '';
 const GH_REPO = process.env['GH_DISPATCH_REPO'] || '';
 const GH_WORKFLOW_ID = process.env['GH_DISPATCH_WORKFLOW_ID'] || 'serenity-report.yml';
-const SUPABASE_URL = process.env['SUPABASE_URL'] || '';
-const SUPABASE_SERVICE_KEY = process.env['SUPABASE_SERVICE_KEY'] || '';
 
 function gh(path: string, opts: RequestInit = {}): Promise<Response> {
   return fetch(`https://api.github.com${path}`, {
@@ -22,9 +20,7 @@ function gh(path: string, opts: RequestInit = {}): Promise<Response> {
 
 async function findRunByJobId(jobId: string): Promise<string | null> {
   try {
-    const res = await gh(
-      `/repos/${GH_OWNER}/${GH_REPO}/actions/runs?event=repository_dispatch&per_page=10`
-    );
+    const res = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs?event=repository_dispatch&per_page=10`);
     if (res.ok) {
       const data = await res.json() as any;
       const match = data.workflow_runs?.find(
@@ -34,9 +30,7 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
       if (match) return String(match.id);
     }
 
-    const wfRes = await gh(
-      `/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_ID)}/runs?per_page=5`
-    );
+    const wfRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_ID)}/runs?per_page=5`);
     if (wfRes.ok) {
       const wfData = await wfRes.json() as any;
       const match = wfData.workflow_runs?.find(
@@ -53,56 +47,72 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
-    return res.status(500).json({
-      error: 'GH_DISPATCH_TOKEN, GH_DISPATCH_OWNER y GH_DISPATCH_REPO son requeridos',
-    });
+    return res.status(500).json({ error: 'GH_DISPATCH_TOKEN, GH_DISPATCH_OWNER y GH_DISPATCH_REPO son requeridos' });
   }
 
-  if (req.method === 'GET') {
-    return handlePoll(req, res);
-  }
-
-  if (req.method === 'POST') {
-    return handleStart(req, res);
-  }
-
+  if (req.method === 'GET') return handlePoll(req, res);
+  if (req.method === 'POST') return handleStart(req, res);
   return res.status(405).json({ error: 'Method not allowed.' });
 }
 
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
-    const { jobId: clientJobId, storagePath, executionId } = req.body || {};
-    if (!storagePath) {
-      return res.status(400).json({ error: 'Se requiere storagePath' });
+    // Read binary body (gzipped bundle JSON)
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    const compressed = Buffer.concat(chunks);
+
+    if (compressed.length === 0) {
+      return res.status(400).json({ error: 'Body vacio' });
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-      console.error('[serenity-report] Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en Vercel env vars');
-      return res.status(500).json({ error: 'SUPABASE_URL y SUPABASE_SERVICE_KEY son requeridos en Vercel' });
-    }
+    const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    const jobId = clientJobId || `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const bucket = 'execution-evidence';
+    // Base64-encode the gzipped content for Gist storage
+    const contentBase64 = compressed.toString('base64');
 
-    // Disparar workflow con la ruta del bundle en Supabase + credenciales
-    // El workflow descarga el bundle directamente usando la service key (sin signed URL)
+    console.log(`[serenity-report] Bundle comprimido: ${compressed.length} bytes, base64: ${contentBase64.length} chars`);
+
+    // Create Gist with the compressed bundle
+    let gistId: string;
     try {
-      const payload: Record<string, string> = {
-        job_id: jobId,
-        bundle_storage_path: `${bucket}/${storagePath}`,
-        supabase_url: SUPABASE_URL,
-        supabase_service_key: SUPABASE_SERVICE_KEY,
-        evidence_bucket: bucket,
-      };
-      if (executionId) {
-        payload.execution_id = executionId;
+      const gistRes = await gh('/gists', {
+        method: 'POST',
+        body: JSON.stringify({
+          description: `Serenity bundle — ${jobId}`,
+          public: false,
+          files: {
+            'bundle.json.gz': { content: contentBase64 },
+          },
+        }),
+      });
+
+      if (!gistRes.ok) {
+        const err = await gistRes.text();
+        console.error('[serenity-report] Error creando gist:', gistRes.status, err);
+        return res.status(502).json({ error: `Error al crear gist: ${gistRes.status}` });
       }
 
+      const gist = await gistRes.json() as any;
+      gistId = gist.id;
+      console.log(`[serenity-report] Gist creado: ${gistId}`);
+    } catch (e: any) {
+      console.error('[serenity-report] Excepción creando gist:', e);
+      return res.status(502).json({ error: 'Error al crear gist' });
+    }
+
+    // Dispatch workflow
+    try {
       const dispRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
         method: 'POST',
         body: JSON.stringify({
           event_type: 'serenity-report',
-          client_payload: payload,
+          client_payload: {
+            job_id: jobId,
+            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/bundle.json.gz`,
+          },
         }),
       });
 
@@ -123,6 +133,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       success: true,
       phase: runId ? 'running' : 'dispatched',
       jobId,
+      gistId,
       runId: runId || null,
       message: runId ? 'Workflow en ejecución' : 'Workflow disparado.',
     });
@@ -137,50 +148,28 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
   if (!runId && jobId) {
     const foundRunId = await findRunByJobId(jobId);
-    if (foundRunId) {
-      runId = foundRunId;
-      console.log(`[serenity-report] Run encontrado por jobId: ${runId}`);
-    }
+    if (foundRunId) { runId = foundRunId; }
   }
 
   if (!runId) {
-    return res.status(202).json({
-      status: 'running',
-      phase: 'queued',
-      conclusion: null,
-      message: 'Buscando run del workflow...',
-    });
+    return res.status(202).json({ status: 'running', phase: 'queued', conclusion: null, message: 'Buscando run...' });
   }
 
   try {
     const runRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}`);
-
     if (!runRes.ok) {
-      return res.status(502).json({
-        status: 'error',
-        message: `Error consultando run: ${runRes.status}`,
-      });
+      return res.status(502).json({ status: 'error', message: `Error consultando run: ${runRes.status}` });
     }
 
     const runData = await runRes.json() as any;
     const status = runData.status as string;
     const conclusion = runData.conclusion as string | null;
 
-    console.log(`[serenity-report] Run ${runId}: status=${status}, conclusion=${conclusion}`);
-
     if (status === 'completed') {
       if (conclusion === 'success') {
-        const artifactsRes = await gh(
-          `/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}/artifacts`
-        );
-
+        const artifactsRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}/artifacts`);
         if (!artifactsRes.ok) {
-          return res.status(502).json({
-            status: 'done',
-            phase: 'completed_no_artifacts',
-            conclusion,
-            message: 'Workflow completado pero no se pudieron listar los artifacts.',
-          });
+          return res.status(502).json({ status: 'done', phase: 'completed_no_artifacts', conclusion });
         }
 
         const artifactsData = await artifactsRes.json() as any;
@@ -190,45 +179,24 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
         if (!targetArtifact) {
           return res.status(200).json({
-            status: 'done',
-            phase: 'completed_no_target',
-            conclusion,
+            status: 'done', phase: 'completed_no_target', conclusion,
             artifacts: artifactsData.artifacts?.map((a: any) => a.name) || [],
-            message: 'Workflow completado pero no se encontró el artifact target.zip.',
           });
         }
 
-        const dlRes = await gh(
-          `/repos/${GH_OWNER}/${GH_REPO}/actions/artifacts/${targetArtifact.id}/zip`,
-          { redirect: 'manual' }
-        );
-
+        const dlRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/artifacts/${targetArtifact.id}/zip`, { redirect: 'manual' });
         const artifactDownloadUrl = dlRes.headers.get('location') || '';
 
-        return res.status(200).json({
-          status: 'done',
-          phase: 'completed',
-          conclusion,
-          artifactName: targetArtifact.name,
-          artifactDownloadUrl,
-          message: 'Reporte generado exitosamente.',
-        });
+        if (gistId) { try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {} }
+
+        return res.status(200).json({ status: 'done', phase: 'completed', conclusion, artifactDownloadUrl });
       }
 
-      return res.status(200).json({
-        status: 'done',
-        phase: 'failed',
-        conclusion,
-        message: `El workflow falló con conclusión: ${conclusion}.`,
-      });
+      if (gistId) { try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {} }
+      return res.status(200).json({ status: 'done', phase: 'failed', conclusion });
     }
 
-    return res.status(200).json({
-      status: 'running',
-      phase: status,
-      conclusion: null,
-      message: status === 'queued' ? 'Workflow en cola...' : 'Generando reporte...',
-    });
+    return res.status(200).json({ status: 'running', phase: status, conclusion: null });
   } catch (e: any) {
     console.error('[serenity-report] Error en handlePoll:', e);
     return res.status(500).json({ error: 'Error interno del servidor' });

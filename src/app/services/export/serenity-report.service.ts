@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 import { SerenityExportService } from './serenity-export.service';
 import { TestRun } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
-import { SupabaseClientService } from '../database/supabase-client.service';
 
 export interface HydrateProgress {
   current: number;
@@ -13,7 +12,7 @@ export interface HydrateProgress {
 }
 
 export interface SerenityReportState {
-  phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
+  phase: 'idle' | 'hydrating' | 'building' | 'compressing' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
   gistId?: string;
   runId?: string;
@@ -33,7 +32,6 @@ export class SerenityReportService {
     private http: HttpClient,
     private serenityExport: SerenityExportService,
     private storage: ExecutionStorageService,
-    private supabaseClient: SupabaseClientService,
   ) {}
 
   async generateReport(run: TestRun): Promise<void> {
@@ -44,7 +42,6 @@ export class SerenityReportService {
         throw new Error('Esta ejecucion no tiene datos ejecutados todavia.');
       }
 
-      // ── Fase 1: Hidratar evidencias ──
       this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
 
       const execution = await this.storage.getExecution(run.executionId);
@@ -73,42 +70,30 @@ export class SerenityReportService {
         },
       });
 
-      // ── Fase 2: Construir metadata bundle + subir a Supabase ──
-      this.state = { phase: 'building', statusMessage: 'Construyendo bundle del reporte...' };
+      this.state = { phase: 'building', statusMessage: 'Construyendo bundle...' };
 
-      const { data: sessionData } = await this.supabaseClient.supabase.auth.getSession();
-      const userId = sessionData?.session?.user?.id;
-      if (!userId) throw new Error('No se pudo obtener el usuario autenticado');
+      const fullBundle = this.serenityExport.buildFullBundle(execution, run);
+      const bundleJson = JSON.stringify(fullBundle);
+      const rawSize = bundleJson.length;
 
-      const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-      const metadataBundle = this.serenityExport.buildMetadataBundle(execution, run, userId);
-      const bundleJson = JSON.stringify(metadataBundle);
-      const storagePath = `${userId}/temp/${jobId}.json`;
+      this.state = {
+        phase: 'compressing',
+        statusMessage: `Comprimiendo bundle (${(rawSize / 1024 / 1024).toFixed(1)} MB)...`,
+      };
 
-      // Subir metadata bundle (pequeño, sin base64) a Supabase Storage
-      const { error: uploadError } = await this.supabaseClient.supabase.storage
-        .from('execution-evidence')
-        .upload(storagePath, new Blob([bundleJson], { type: 'application/json' }), {
-          upsert: true,
-          cacheControl: '3600',
-        });
+      const compressed = await this.gzip(bundleJson);
+      const compressedSize = compressed.byteLength;
 
-      if (uploadError) {
-        throw new Error(`Error al subir bundle: ${uploadError.message}`);
-      }
-
-      // ── Fase 3: Enviar a Vercel → signed URL → dispatch ──
       this.state = {
         phase: 'dispatching',
-        statusMessage: 'Enviando datos al workflow...',
+        statusMessage: `Enviando bundle comprimido (${(compressedSize / 1024).toFixed(0)} KB)...`,
         hydrateProgress: undefined,
       };
 
       const startResult = await firstValueFrom(
-        this.http.post<any>(`${this.apiUrl}?action=start`, {
-          jobId,
-          storagePath,
-          executionId: execution.id,
+        this.http.post<any>(this.apiUrl, compressed, {
+          headers: { 'Content-Type': 'application/octet-stream' },
+          params: { action: 'start', rawSize: rawSize.toString(), compressedSize: compressedSize.toString() },
         })
       );
 
@@ -119,7 +104,7 @@ export class SerenityReportService {
       this.state = {
         phase: 'polling',
         statusMessage: 'Generando reporte en GitHub Actions...',
-        jobId: startResult.jobId || jobId,
+        jobId: startResult.jobId,
         gistId: startResult.gistId,
         runId: startResult.runId,
       };
@@ -129,6 +114,34 @@ export class SerenityReportService {
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
     }
+  }
+
+  /** Gzip-compress a string using the browser's CompressionStream API. */
+  private async gzip(data: string): Promise<Uint8Array> {
+    const encoder = new TextEncoder();
+    const compressed = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(data));
+        controller.close();
+      },
+    }).pipeThrough(new CompressionStream('gzip'));
+
+    const reader = compressed.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+    const result = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) {
+      result.set(c, offset);
+      offset += c.length;
+    }
+    return result;
   }
 
   private startPolling(): void {
@@ -170,46 +183,21 @@ export class SerenityReportService {
             artifactDownloadUrl: result.artifactDownloadUrl,
           };
           this.downloadArtifact(result.artifactDownloadUrl);
-          this.state = {
-            ...this.state,
-            phase: 'done',
-            statusMessage: 'Reporte descargado exitosamente',
-            hydrateProgress: undefined,
-          };
+          this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
         } else {
-          this.state = {
-            ...this.state,
-            phase: 'error',
-            error: result.message || 'No se encontro el artifact del reporte',
-          };
+          this.state = { ...this.state, phase: 'error', error: result.message || 'No se encontro el artifact' };
         }
       } else if (result.phase === 'queued') {
-        this.state = {
-          ...this.state,
-          phase: 'polling',
-          statusMessage: 'Workflow en cola, esperando runner...',
-        };
+        this.state = { ...this.state, phase: 'polling', statusMessage: 'Workflow en cola...' };
       } else if (result.status === 'running') {
-        this.state = {
-          ...this.state,
-          phase: 'polling',
-          statusMessage: 'Generando reporte Serenity...',
-        };
+        this.state = { ...this.state, phase: 'polling', statusMessage: 'Generando reporte...' };
       } else {
         this.stopPolling();
-        this.state = {
-          ...this.state,
-          phase: 'error',
-          error: result.message || 'Estado desconocido del workflow',
-        };
+        this.state = { ...this.state, phase: 'error', error: result.message || 'Estado desconocido' };
       }
     } catch (err: any) {
       this.stopPolling();
-      this.state = {
-        ...this.state,
-        phase: 'error',
-        error: err?.message || 'Error al consultar el estado del reporte',
-      };
+      this.state = { ...this.state, phase: 'error', error: err?.message || 'Error al consultar estado' };
     }
   }
 
@@ -222,15 +210,6 @@ export class SerenityReportService {
     document.body.removeChild(a);
   }
 
-  stopPolling(): void {
-    if (this.pollTimer) {
-      clearInterval(this.pollTimer);
-      this.pollTimer = null;
-    }
-  }
-
-  reset(): void {
-    this.stopPolling();
-    this.state = { phase: 'idle' };
-  }
+  stopPolling(): void { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; } }
+  reset(): void { this.stopPolling(); this.state = { phase: 'idle' }; }
 }
