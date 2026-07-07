@@ -10,6 +10,7 @@ import { TestPlanMapperService } from '../services/database/test-plan-mapper.ser
 import { ExecutionStorageService } from '../services/database/execution-storage-supabase.service';
 import { SupabaseClientService } from '../services/database/supabase-client.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import { SerenityExportService } from '../services/export/serenity-export.service';
 
 interface PlanNode {
   id: string;
@@ -76,6 +77,9 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   // Selection
   selectedRunIds: string[] = [];
 
+  // Serenity report export
+  exportingRunId: string | null = null;
+
   // Delete modal
   showDeleteModal = false;
   runToDelete: TestRun | null = null;
@@ -94,6 +98,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     private mapperService: TestPlanMapperService,
     private storageService: ExecutionStorageService,
     private supabaseClient: SupabaseClientService,
+    private serenityExport: SerenityExportService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -637,6 +642,33 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
         origin: 'manual-execution'
       }
     });
+  }
+
+  // ── Serenity Report Export ──
+
+  canDownloadReport(run: TestRun): boolean {
+    return !!run.executionId &&
+      (run.status === 'Completed' || run.status === 'Failed' || run.completedTestCases > 0);
+  }
+
+  async downloadSerenityReport(run: TestRun): Promise<void> {
+    if (this.exportingRunId) return;
+    if (!run.executionId) {
+      this.toastService.warning('Ejecuta esta prueba y carga evidencias antes de descargar el reporte.');
+      return;
+    }
+    this.exportingRunId = run.id;
+    this.cdr.detectChanges();
+    try {
+      await this.serenityExport.downloadBundle(run);
+      this.toastService.success('Reporte JSON descargado. Subelo en webapp para generar el reporte Serenity.');
+    } catch (err: any) {
+      console.error('Error exporting serenity bundle:', err);
+      this.toastService.error(err?.message || 'Error al generar el reporte JSON');
+    } finally {
+      this.exportingRunId = null;
+      this.cdr.detectChanges();
+    }
   }
 
   confirmDeleteRun(run: TestRun): void {

@@ -1133,3 +1133,32 @@
   .plan-tree-sidebar { width: 160px; }
   .plan-hu-selector-inner { height: 280px; }
 }
+
+
+/* ── Serenity report export button ── */
+.serenity-report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.serenity-report-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+.serenity-report-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.report-na {
+  color: #9ca3af;
+}
