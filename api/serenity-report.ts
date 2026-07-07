@@ -5,6 +5,8 @@ const GH_TOKEN = process.env['GH_DISPATCH_TOKEN'] || '';
 const GH_OWNER = process.env['GH_DISPATCH_OWNER'] || '';
 const GH_REPO = process.env['GH_DISPATCH_REPO'] || '';
 const GH_WORKFLOW_ID = process.env['GH_DISPATCH_WORKFLOW_ID'] || 'serenity-report.yml';
+const SUPABASE_URL = process.env['SUPABASE_URL'] || '';
+const SUPABASE_SERVICE_KEY = process.env['SUPABASE_SERVICE_KEY'] || '';
 
 function gh(path: string, opts: RequestInit = {}): Promise<Response> {
   return fetch(`https://api.github.com${path}`, {
@@ -50,15 +52,13 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
 }
 
 // ── Routing ──
-// POST /api/serenity-report             → ?action=start    → create gist with metadata
-// POST /api/serenity-report?action=evidence → add evidence file to gist
-// POST /api/serenity-report?action=dispatch → dispatch workflow
-// GET  /api/serenity-report?runId=...   → poll / download artifact
+// POST /api/serenity-report?action=start  → upload bundle ref + dispatch workflow
+// GET  /api/serenity-report?runId=...      → poll / download artifact
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
     return res.status(500).json({
-      error: 'GH_DISPATCH_TOKEN, GH_DISPATCH_OWNER y GH_DISPATCH_REPO son requeridos en Vercel env vars',
+      error: 'GH_DISPATCH_TOKEN, GH_DISPATCH_OWNER y GH_DISPATCH_REPO son requeridos',
     });
   }
 
@@ -67,146 +67,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const action = (req.query as any).action || 'start';
-    if (action === 'evidence') return handleAddEvidence(req, res);
-    if (action === 'dispatch') return handleDispatch(req, res);
     return handleStart(req, res);
   }
 
   return res.status(405).json({ error: 'Method not allowed.' });
 }
 
-// ── START: create Gist with metadata bundle (SMALL — no base64 evidence) ──
+// ── START: upload bundle to Supabase → dispatch workflow ──
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
-    const { bundle } = req.body || {};
-    if (!bundle) {
-      return res.status(400).json({ error: 'Se requiere un bundle en el body' });
+    const { jobId: clientJobId, storagePath } = req.body || {};
+    if (!storagePath) {
+      return res.status(400).json({ error: 'Se requiere storagePath' });
     }
 
-    const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const jobId = clientJobId || `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    // Crear gist secreto solo con el bundle de metadata
-    let gistId: string;
+    // Generar signed URL desde Supabase Storage (válido 2 horas)
+    let bundleUrl: string;
     try {
-      const gistRes = await gh('/gists', {
-        method: 'POST',
-        body: JSON.stringify({
-          description: `Serenity bundle — ${jobId}`,
-          public: false,
-          files: {
-            'serenity-bundle.json': {
-              content: JSON.stringify(bundle, null, 2),
-            },
+      if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+        throw new Error('SUPABASE_URL o SUPABASE_SERVICE_KEY no configurados en Vercel');
+      }
+
+      // Usar REST API directamente (evita dependencia de @supabase/supabase-js)
+      const bucket = 'execution-evidence';
+      const signRes = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${encodeURIComponent(storagePath)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({ expiresIn: 7200 }),
+        }
+      );
 
-      if (!gistRes.ok) {
-        const err = await gistRes.text();
-        console.error('[serenity-report] Error creando gist:', gistRes.status, err);
-        return res.status(502).json({ error: `Error al crear gist: ${gistRes.status}` });
+      if (!signRes.ok) {
+        const signErr = await signRes.text();
+        console.error('[serenity-report] Error creando signed URL:', signRes.status, signErr);
+        throw new Error(`Supabase sign error: ${signRes.status}`);
       }
 
-      const gist = await gistRes.json() as any;
-      gistId = gist.id;
-      console.log(`[serenity-report] Gist creado: ${gistId}`);
+      const signData = await signRes.json() as any;
+      bundleUrl = signData.signedURL || signData.signedUrl;
+      if (!bundleUrl) throw new Error('No se recibio signedURL de Supabase');
+
+      console.log(`[serenity-report] Signed URL generada para ${storagePath}`);
     } catch (e: any) {
-      console.error('[serenity-report] Excepción creando gist:', e);
-      return res.status(502).json({ error: 'Error al crear gist' });
+      console.error('[serenity-report] Error signed URL:', e.message);
+      return res.status(502).json({ error: `Error generando URL firmada: ${e.message}` });
     }
 
-    return res.status(200).json({
-      success: true,
-      phase: 'gist_created',
-      jobId,
-      gistId,
-      evidenceCount: bundle.meta?.totalEvidences || 0,
-    });
-  } catch (e: any) {
-    console.error('[serenity-report] Error fatal en handleStart:', e);
-    return res.status(500).json({ error: 'Error interno del servidor' });
-  }
-}
-
-// ── ADD EVIDENCE: upload one or more evidence files to existing Gist ──
-async function handleAddEvidence(req: VercelRequest, res: VercelResponse) {
-  try {
-    const { gistId, files } = req.body || {};
-    if (!gistId || !files || !Array.isArray(files) || files.length === 0) {
-      // Legacy single-file format
-      const { name, base64 } = req.body || {};
-      if (!gistId || !name || !base64) {
-        return res.status(400).json({ error: 'Se requiere gistId y files[] o (name + base64)' });
-      }
-      return await patchGistFile(gistId, name, base64, res, 0);
-    }
-
-    // Batch: patch all files in one GitHub API call
-    const filesObj: Record<string, { content: string }> = {};
-    for (const f of files) {
-      if (f.name && f.base64) {
-        filesObj[f.name] = { content: f.base64 };
-      }
-    }
-
-    if (Object.keys(filesObj).length === 0) {
-      return res.status(400).json({ error: 'No hay archivos válidos en files[]' });
-    }
-
-    return await patchGistFiles(gistId, filesObj, res, 0);
-  } catch (e: any) {
-    console.error('[serenity-report] Excepción en handleAddEvidence:', e);
-    return res.status(502).json({ error: 'Error al agregar evidencia' });
-  }
-}
-
-async function patchGistFiles(
-  gistId: string,
-  filesObj: Record<string, { content: string }>,
-  res: VercelResponse,
-  attempt: number
-): Promise<any> {
-  const patchRes = await gh(`/gists/${gistId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ files: filesObj }),
-  });
-
-  if (!patchRes.ok) {
-    const err = await patchRes.text();
-    console.error(`[serenity-report] Error patcheando gist (attempt ${attempt}):`, patchRes.status, err);
-
-    if (patchRes.status === 403 && attempt < 2) {
-      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-      return patchGistFiles(gistId, filesObj, res, attempt + 1);
-    }
-
-    return res.status(502).json({ error: `Error al agregar evidencia: ${patchRes.status}` });
-  }
-
-  return res.status(200).json({ success: true, count: Object.keys(filesObj).length });
-}
-
-async function patchGistFile(
-  gistId: string,
-  name: string,
-  base64: string,
-  res: VercelResponse,
-  attempt: number
-): Promise<any> {
-  return patchGistFiles(gistId, { [name]: { content: base64 } }, res, attempt);
-}
-
-// ── DISPATCH: trigger GitHub Actions workflow ──
-async function handleDispatch(req: VercelRequest, res: VercelResponse) {
-  try {
-    const { gistId, jobId } = req.body || {};
-    if (!gistId || !jobId) {
-      return res.status(400).json({ error: 'Se requiere gistId y jobId' });
-    }
-
-    const gistUrl = `https://gist.github.com/${GH_OWNER}/${gistId}.git`;
-
+    // Disparar repository_dispatch con la URL firmada del bundle
     try {
       const dispRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
         method: 'POST',
@@ -214,8 +128,7 @@ async function handleDispatch(req: VercelRequest, res: VercelResponse) {
           event_type: 'serenity-report',
           client_payload: {
             job_id: jobId,
-            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
-            gist_clone_url: gistUrl,
+            bundle_url: bundleUrl,
           },
         }),
       });
@@ -238,12 +151,11 @@ async function handleDispatch(req: VercelRequest, res: VercelResponse) {
       success: true,
       phase: runId ? 'running' : 'dispatched',
       jobId,
-      gistId,
       runId: runId || null,
-      message: runId ? 'Workflow en ejecución' : 'Workflow disparado. Run no encontrado aún.',
+      message: runId ? 'Workflow en ejecución' : 'Workflow disparado.',
     });
   } catch (e: any) {
-    console.error('[serenity-report] Error en handleDispatch:', e);
+    console.error('[serenity-report] Error fatal:', e);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 }
@@ -322,15 +234,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
         const artifactDownloadUrl = dlRes.headers.get('location') || '';
 
-        if (gistId) {
-          try {
-            await gh(`/gists/${gistId}`, { method: 'DELETE' });
-            console.log(`[serenity-report] Gist ${gistId} eliminado`);
-          } catch (e: any) {
-            console.error('[serenity-report] Error borrando gist:', e);
-          }
-        }
-
         return res.status(200).json({
           status: 'done',
           phase: 'completed',
@@ -339,10 +242,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
           artifactDownloadUrl,
           message: 'Reporte generado exitosamente.',
         });
-      }
-
-      if (gistId) {
-        try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {}
       }
 
       return res.status(200).json({

@@ -2,8 +2,9 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SerenityExportService } from './serenity-export.service';
-import { TestRun, PlanExecution } from '../../models/hu-data.model';
+import { TestRun } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
+import { SupabaseClientService } from '../database/supabase-client.service';
 
 export interface HydrateProgress {
   current: number;
@@ -32,6 +33,7 @@ export class SerenityReportService {
     private http: HttpClient,
     private serenityExport: SerenityExportService,
     private storage: ExecutionStorageService,
+    private supabaseClient: SupabaseClientService,
   ) {}
 
   async generateReport(run: TestRun): Promise<void> {
@@ -50,10 +52,13 @@ export class SerenityReportService {
         throw new Error('No se encontro la ejecucion en la base de datos.');
       }
 
+      const totalEvidence = execution.testCases.reduce((sum, tc) =>
+        sum + tc.steps.reduce((s, step) => s + (step.evidences?.length || 0), 0), 0);
+
       this.state = {
         phase: 'hydrating',
         statusMessage: 'Descargando evidencias...',
-        hydrateProgress: { current: 0, total: 0, percentage: 0 },
+        hydrateProgress: { current: 0, total: totalEvidence, percentage: 0 },
       };
 
       await this.storage.hydrateAllEvidence(execution, {
@@ -68,104 +73,63 @@ export class SerenityReportService {
         },
       });
 
-      // ── Fase 2: Construir bundle metadata (SIN base64) ──
+      // ── Fase 2: Construir bundle completo + subir a Supabase Storage ──
       this.state = { phase: 'building', statusMessage: 'Construyendo bundle del reporte...' };
 
-      const bundle = this.serenityExport.buildMetadataBundle(execution, run);
-      const evidenceUploads = this.serenityExport.getEvidenceUploads(execution, run);
+      const fullBundle = this.serenityExport.buildFullBundle(execution, run);
+      const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-      // ── Fase 3: Crear Gist con metadata ──
-      this.state = { phase: 'uploading', statusMessage: 'Creando Gist con metadata...' };
+      // Obtener userId para la ruta en Storage
+      const { data: sessionData } = await this.supabaseClient.supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) throw new Error('No se pudo obtener el usuario autenticado');
 
+      const bundleJson = JSON.stringify(fullBundle);
+      const storagePath = `${userId}/temp/${jobId}.json`;
+
+      this.state = {
+        phase: 'uploading',
+        statusMessage: 'Subiendo bundle a Supabase Storage...',
+        hydrateProgress: { current: 0, total: 100, percentage: 0 },
+      };
+
+      // Subir bundle a Supabase Storage
+      const { error: uploadError } = await this.supabaseClient.supabase.storage
+        .from('execution-evidence')
+        .upload(storagePath, new Blob([bundleJson], { type: 'application/json' }), {
+          upsert: true,
+          cacheControl: '3600',
+        });
+
+      if (uploadError) {
+        throw new Error(`Error al subir bundle a Storage: ${uploadError.message}`);
+      }
+
+      this.state = {
+        phase: 'dispatching',
+        statusMessage: 'Enviando a workflow...',
+        hydrateProgress: undefined,
+      };
+
+      // ── Fase 3: Enviar a Vercel → crea signed URL → dispara workflow ──
       const startResult = await firstValueFrom(
-        this.http.post<any>(`${this.apiUrl}?action=start`, { bundle })
+        this.http.post<any>(`${this.apiUrl}?action=start`, {
+          jobId,
+          storagePath,
+          bundleFileSize: bundleJson.length,
+        })
       );
 
       if (!startResult.success) {
-        throw new Error(startResult.error || 'Error al crear el Gist');
-      }
-
-      const gistId = startResult.gistId as string;
-      const jobId = startResult.jobId as string;
-
-      // ── Fase 4: Subir evidencias al Gist en batches ──
-      if (evidenceUploads.length > 0) {
-        this.state = {
-          phase: 'uploading',
-          statusMessage: `Subiendo evidencias al Gist (0/${evidenceUploads.length})...`,
-          gistId,
-          jobId,
-          hydrateProgress: { current: 0, total: evidenceUploads.length, percentage: 0 },
-        };
-
-        let uploaded = 0;
-        const BATCH_SIZE = 8; // subir de a 8 archivos por PATCH (reduce requests a GitHub)
-
-        for (let i = 0; i < evidenceUploads.length; i += BATCH_SIZE) {
-          const batch = evidenceUploads.slice(i, i + BATCH_SIZE);
-
-          const result = await firstValueFrom(
-            this.http.post<any>(`${this.apiUrl}?action=evidence`, {
-              gistId,
-              files: batch.map(ev => ({ name: ev.name, base64: ev.base64 })),
-            })
-          ).catch(() => null);
-
-          if (!result?.success) {
-            // Reintentar archivos individuales si el batch falló
-            for (const ev of batch) {
-              await firstValueFrom(
-                this.http.post<any>(`${this.apiUrl}?action=evidence`, {
-                  gistId, name: ev.name, base64: ev.base64,
-                })
-              ).catch(() => null);
-              uploaded++;
-            }
-          } else {
-            uploaded += batch.length;
-          }
-
-          this.state = {
-            ...this.state,
-            phase: 'uploading',
-            statusMessage: `Subiendo evidencias (${Math.min(uploaded, evidenceUploads.length)}/${evidenceUploads.length})...`,
-            hydrateProgress: {
-              current: Math.min(uploaded, evidenceUploads.length),
-              total: evidenceUploads.length,
-              percentage: Math.round((Math.min(uploaded, evidenceUploads.length) / evidenceUploads.length) * 100),
-            },
-          };
-
-          // Pequeña pausa entre batches para no saturar la API de GitHub
-          if (i + BATCH_SIZE < evidenceUploads.length) {
-            await new Promise(r => setTimeout(r, 600));
-          }
-        }
-      }
-
-      // ── Fase 5: Disparar workflow ──
-      this.state = {
-        phase: 'dispatching',
-        statusMessage: 'Disparando workflow en GitHub Actions...',
-        gistId,
-        jobId,
-      };
-
-      const dispatchResult = await firstValueFrom(
-        this.http.post<any>(`${this.apiUrl}?action=dispatch`, { gistId, jobId })
-      );
-
-      if (!dispatchResult.success) {
-        throw new Error(dispatchResult.error || 'Error al disparar el workflow');
+        throw new Error(startResult.error || 'Error al iniciar el reporte');
       }
 
       this.state = {
         phase: 'polling',
         statusMessage: 'Generando reporte en GitHub Actions...',
-        jobId,
-        gistId,
-        runId: dispatchResult.runId,
-        hydrateProgress: undefined,
+        jobId: startResult.jobId || jobId,
+        gistId: startResult.gistId,
+        runId: startResult.runId,
       };
 
       this.startPolling();
