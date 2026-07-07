@@ -126,7 +126,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
           event_type: 'serenity-report',
           client_payload: {
             job_id: jobId,
-            bundle_gist_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
+            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
           },
         }),
       });
