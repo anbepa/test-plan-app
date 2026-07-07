@@ -11,6 +11,7 @@ import { ExecutionStorageService } from '../../../services/database/execution-st
 import { DatabaseService } from '../../../services/database/database.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
+import { SerenityReportService, SerenityReportState } from '../../../services/export/serenity-report.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
 import { Subscription } from 'rxjs';
 
@@ -83,6 +84,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   exportTotal = 0;         // total de casos
   /** Estado de exportación PDF */
   isExportingPdf = false;
+  /** Estado de generacion de reporte Serenity remoto */
+  isExportingSerenity = false;
+  serenityReportPhase: string = '';
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -178,6 +182,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private databaseService: DatabaseService,
     private toastService: ToastService,
     private exportService: ExportService,
+    private serenityReportService: SerenityReportService,
     private huSyncService: HuSyncService,
     private cdr: ChangeDetectorRef
   ) { }
@@ -987,6 +992,77 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.isExportingPdf = false;
       this.exportProgress = 0;
       this.exportTotal = 0;
+      this.cdr.markForCheck();
+    }
+  }
+
+  async downloadSerenityReport(): Promise<void> {
+    if (!this.execution || this.isExportingSerenity) return;
+
+    try {
+      this.isExportingSerenity = true;
+      this.serenityReportPhase = 'Preparando bundle...';
+      this.cdr.markForCheck();
+
+      const run = {
+        id: this.testRunId || this.execution.id,
+        executionId: this.execution.id,
+        name: this.execution.huTitle || 'Reporte Serenity',
+        huTitle: this.execution.huTitle || '',
+        testPlanTitle: this.testPlanTitle || '',
+        status: '',
+        completedTestCases: 0,
+        totalTestCases: 0,
+        createdAt: new Date().toISOString(),
+      };
+
+      await this.serenityReportService.generateReport(run as any);
+
+      // Monitorear el estado para feedback en UI
+      const checkInterval = setInterval(() => {
+        const state = this.serenityReportService.state;
+        const phaseLabels: Record<string, string> = {
+          building: 'Preparando bundle...',
+          dispatching: 'Enviando a workflow...',
+          polling: 'Generando reporte...',
+          downloading: 'Descargando...',
+          done: 'Completado',
+          error: state.error || 'Error',
+        };
+        this.serenityReportPhase = phaseLabels[state.phase] || state.phase;
+        this.cdr.markForCheck();
+
+        if (state.phase === 'done') {
+          clearInterval(checkInterval);
+          this.isExportingSerenity = false;
+          this.serenityReportPhase = '';
+          this.toastService.success('Reporte Serenity descargado');
+          this.cdr.markForCheck();
+        }
+        if (state.phase === 'error') {
+          clearInterval(checkInterval);
+          this.isExportingSerenity = false;
+          this.serenityReportPhase = '';
+          this.toastService.error(state.error || 'Error al generar reporte Serenity');
+          this.cdr.markForCheck();
+        }
+      }, 500);
+
+      // Timeout de seguridad a 10 minutos
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (this.isExportingSerenity) {
+          this.isExportingSerenity = false;
+          this.serenityReportPhase = '';
+          this.serenityReportService.stopPolling();
+          this.toastService.warning('Timeout: el reporte está tardando demasiado');
+          this.cdr.markForCheck();
+        }
+      }, 600000);
+    } catch (err: any) {
+      this.isExportingSerenity = false;
+      this.serenityReportPhase = '';
+      this.toastService.error(err?.message || 'Error al iniciar reporte Serenity');
       this.cdr.markForCheck();
     }
   }

@@ -11,6 +11,7 @@ import { ExecutionStorageService } from '../services/database/execution-storage-
 import { SupabaseClientService } from '../services/database/supabase-client.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { SerenityExportService } from '../services/export/serenity-export.service';
+import { SerenityReportService, SerenityReportState } from '../services/export/serenity-report.service';
 
 interface PlanNode {
   id: string;
@@ -79,6 +80,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
 
   // Serenity report export
   exportingRunId: string | null = null;
+  generatingReportFor: Set<string> = new Set();
 
   // Delete modal
   showDeleteModal = false;
@@ -99,6 +101,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     private storageService: ExecutionStorageService,
     private supabaseClient: SupabaseClientService,
     private serenityExport: SerenityExportService,
+    private serenityReportService: SerenityReportService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -651,22 +654,51 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
       (run.status === 'Completed' || run.status === 'Failed' || run.completedTestCases > 0);
   }
 
+  isGeneratingReport(runId: string): boolean {
+    return this.generatingReportFor.has(runId);
+  }
+
   async downloadSerenityReport(run: TestRun): Promise<void> {
-    if (this.exportingRunId) return;
+    if (this.generatingReportFor.has(run.id)) return;
     if (!run.executionId) {
-      this.toastService.warning('Ejecuta esta prueba y carga evidencias antes de descargar el reporte.');
+      this.toastService.warning('Ejecuta esta prueba y carga evidencias antes de generar el reporte.');
       return;
     }
-    this.exportingRunId = run.id;
+
+    this.generatingReportFor.add(run.id);
     this.cdr.detectChanges();
+
     try {
-      await this.serenityExport.downloadBundle(run);
-      this.toastService.success('Reporte JSON descargado. Subelo en webapp para generar el reporte Serenity.');
+      await this.serenityReportService.generateReport(run);
+
+      const checkInterval = setInterval(() => {
+        const state = this.serenityReportService.state;
+        if (state.phase === 'done') {
+          clearInterval(checkInterval);
+          this.generatingReportFor.delete(run.id);
+          this.toastService.success('Reporte Serenity descargado');
+          this.cdr.detectChanges();
+        }
+        if (state.phase === 'error') {
+          clearInterval(checkInterval);
+          this.generatingReportFor.delete(run.id);
+          this.toastService.error(state.error || 'Error al generar reporte Serenity');
+          this.cdr.detectChanges();
+        }
+      }, 500);
+
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (this.generatingReportFor.has(run.id)) {
+          this.generatingReportFor.delete(run.id);
+          this.serenityReportService.stopPolling();
+          this.toastService.warning('Timeout: el reporte está tardando demasiado');
+          this.cdr.detectChanges();
+        }
+      }, 600000);
     } catch (err: any) {
-      console.error('Error exporting serenity bundle:', err);
-      this.toastService.error(err?.message || 'Error al generar el reporte JSON');
-    } finally {
-      this.exportingRunId = null;
+      this.generatingReportFor.delete(run.id);
+      this.toastService.error(err?.message || 'Error al iniciar reporte Serenity');
       this.cdr.detectChanges();
     }
   }

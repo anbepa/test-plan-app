@@ -51,6 +51,11 @@ export class SerenityExportService {
     return this.convert(execution, run);
   }
 
+  /** Converts an already-hydrated execution into the bundle object (public). */
+  buildBundleFromExecution(execution: PlanExecution, run: TestRun): any {
+    return this.convert(execution, run);
+  }
+
   // ── Conversion ──────────────────────────────────────────────
 
   private convert(execution: PlanExecution, run: TestRun): any {

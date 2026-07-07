@@ -97,10 +97,10 @@
               <td data-label="Reporte">
                 <button type="button" class="serenity-report-btn"
                   *ngIf="canDownloadReport(run)"
-                  [disabled]="exportingRunId === run.id"
+                  [disabled]="isGeneratingReport(run.id)"
                   (click)="downloadSerenityReport(run)"
-                  title="Descargar reporte Serenity (JSON) para generarlo en webapp">
-                  {{ exportingRunId === run.id ? '⏳ Generando...' : '⬇ Serenity' }}
+                  title="Generar reporte Serenity">
+                  {{ isGeneratingReport(run.id) ? '⏳ Generando...' : '⬇ Serenity' }}
                 </button>
                 <span *ngIf="!canDownloadReport(run)" class="report-na" title="Ejecuta y carga evidencias primero">—</span>
               </td>
