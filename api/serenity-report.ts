@@ -33,7 +33,8 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
     if (res.ok) {
       const data = await res.json() as any;
       const match = data.workflow_runs?.find(
-        (r: any) => r.name?.includes('Serenity') && r.name?.includes(jobId)
+        (r: any) => (r.name?.includes('Serenity') || r.display_title?.includes('Serenity'))
+          && (r.name?.includes(jobId) || r.display_title?.includes(jobId))
       );
       if (match) return String(match.id);
     }
@@ -45,7 +46,8 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
     if (wfRes.ok) {
       const wfData = await wfRes.json() as any;
       const match = wfData.workflow_runs?.find(
-        (r: any) => r.name?.includes('Serenity') && r.name?.includes(jobId)
+        (r: any) => (r.name?.includes('Serenity') || r.display_title?.includes('Serenity'))
+          && (r.name?.includes(jobId) || r.display_title?.includes(jobId))
       );
       if (match) return String(match.id);
     }
