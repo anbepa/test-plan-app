@@ -656,42 +656,64 @@ export class ExecutionStorageService {
   /**
    * Hidrata TODAS las evidencias de una ejecución descargándolas de Storage.
    * Se usa al abrir la vista de ejecución para tener todas las imágenes lisas.
+   *
+   * @param execution - La ejecución a hidratar (mutada in-place).
+   * @param opts.onProgress - Callback (current, total) invocado tras cada descarga.
+   * @param opts.maxConcurrent - Concurrencia máxima (default 6 para hidratación masiva).
    */
-  async hydrateAllEvidence(execution: PlanExecution): Promise<void> {
-    const allEvidenceIds: string[] = [];
+  async hydrateAllEvidence(
+    execution: PlanExecution,
+    opts?: { onProgress?: (current: number, total: number) => void; maxConcurrent?: number }
+  ): Promise<void> {
+    const onProgress = opts?.onProgress;
+    const maxConcurrent = opts?.maxConcurrent ?? 6;
 
-    for (const tc of execution.testCases) {
-      for (const step of tc.steps) {
-        for (const ev of (step.evidences || [])) {
-          if (ev.id && !this.imageCache.has(ev.id)) {
-            allEvidenceIds.push(ev.id);
+    // 1) Recolectar evidencias a descargar y mapear evidencia → step para reasignación
+    type EvSlot = { tcIdx: number; stepIdx: number; evIdx: number };
+    const pending: { id: string; slot: EvSlot }[] = [];
+
+    for (let ti = 0; ti < execution.testCases.length; ti++) {
+      const steps = execution.testCases[ti].steps;
+      for (let si = 0; si < steps.length; si++) {
+        const evs = steps[si].evidences || [];
+        for (let ei = 0; ei < evs.length; ei++) {
+          const ev = evs[ei];
+          if (ev && ev.id && !this.imageCache.has(ev.id)) {
+            pending.push({ id: ev.id, slot: { tcIdx: ti, stepIdx: si, evIdx: ei } });
           }
         }
       }
     }
 
-    if (allEvidenceIds.length === 0) return;
+    if (pending.length === 0) return;
 
-    // Descargar en paralelo con throttle
-    await this.runWithThrottle(
-      allEvidenceIds.map(id => () => this.getImage(id).then(() => { })),
-      this.MAX_CONCURRENT_UPLOADS
-    );
+    // 2) Asegurar índice construido una sola vez
+    await this.buildStorageIndex();
 
-    // Re-asignar base64 a cada evidencia
-    for (const tc of execution.testCases) {
-      for (const step of tc.steps) {
-        step.evidences = (step.evidences || []).map(ev => {
-          const cached = this.imageCache.get(ev.id);
-          if (cached) {
-            return {
-              ...ev,
-              ...cached,
-              stepId: ev.stepId // preservar stepId original
-            };
-          }
-          return ev;
-        });
+    // 3) Descargar en paralelo con throttle + progress
+    let completed = 0;
+    const total = pending.length;
+    const tasks = pending.map(p => async () => {
+      await this.getImage(p.id).catch(() => {});
+      completed++;
+      onProgress?.(completed, total);
+    });
+
+    await this.runWithThrottle(tasks, maxConcurrent);
+
+    // 4) Re-asignar base64 a cada evidencia (una sola pasada sobre los slots pendientes)
+    for (const p of pending) {
+      const step = execution.testCases[p.slot.tcIdx]?.steps[p.slot.stepIdx];
+      if (!step) continue;
+      const ev = step.evidences[p.slot.evIdx];
+      if (!ev) continue;
+      const cached = this.imageCache.get(ev.id);
+      if (cached) {
+        step.evidences[p.slot.evIdx] = {
+          ...ev,
+          ...cached,
+          stepId: ev.stepId,
+        };
       }
     }
   }

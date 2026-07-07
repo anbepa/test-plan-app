@@ -5,13 +5,21 @@ import { SerenityExportService } from './serenity-export.service';
 import { TestRun, PlanExecution } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 
+export interface HydrateProgress {
+  current: number;
+  total: number;
+  percentage: number;
+}
+
 export interface SerenityReportState {
-  phase: 'idle' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
+  phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
   gistId?: string;
   runId?: string;
   artifactDownloadUrl?: string;
   error?: string;
+  hydrateProgress?: HydrateProgress;
+  statusMessage?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -30,21 +38,44 @@ export class SerenityReportService {
     if (this.state.phase === 'polling' || this.state.phase === 'dispatching') return;
 
     try {
-      this.state = { phase: 'building' };
-
       if (!run.executionId) {
         throw new Error('Esta ejecucion no tiene datos ejecutados todavia.');
       }
+
+      this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
 
       const execution = await this.storage.getExecution(run.executionId);
       if (!execution) {
         throw new Error('No se encontro la ejecucion en la base de datos.');
       }
 
-      await this.storage.hydrateAllEvidence(execution);
+      this.state = {
+        phase: 'hydrating',
+        statusMessage: 'Descargando evidencias...',
+        hydrateProgress: { current: 0, total: 0, percentage: 0 },
+      };
+
+      await this.storage.hydrateAllEvidence(execution, {
+        maxConcurrent: 6,
+        onProgress: (current, total) => {
+          this.state = {
+            ...this.state,
+            phase: 'hydrating',
+            statusMessage: `Descargando evidencias (${current}/${total})...`,
+            hydrateProgress: {
+              current,
+              total,
+              percentage: total > 0 ? Math.round((current / total) * 100) : 0,
+            },
+          };
+        },
+      });
+
+      this.state = { phase: 'building', statusMessage: 'Construyendo bundle del reporte...' };
+
       const bundle = this.serenityExport.buildBundleFromExecution(execution, run);
 
-      this.state = { phase: 'dispatching' };
+      this.state = { phase: 'dispatching', statusMessage: 'Enviando datos al workflow...' };
 
       const startResult = await firstValueFrom(
         this.http.post<any>(this.apiUrl, { bundle })
@@ -53,6 +84,7 @@ export class SerenityReportService {
       if (startResult.success) {
         this.state = {
           phase: 'polling',
+          statusMessage: 'Generando reporte en GitHub Actions...',
           jobId: startResult.jobId,
           gistId: startResult.gistId,
           runId: startResult.runId,
@@ -92,7 +124,6 @@ export class SerenityReportService {
         this.http.get<any>(`${this.apiUrl}?${params.toString()}`)
       );
 
-      // El backend puede devolvernos un runId que no teníamos
       if (result.runId && !this.state.runId) {
         this.state = { ...this.state, runId: result.runId };
       }
@@ -103,10 +134,16 @@ export class SerenityReportService {
           this.state = {
             ...this.state,
             phase: 'downloading',
+            statusMessage: 'Descargando reporte Serenity...',
             artifactDownloadUrl: result.artifactDownloadUrl,
           };
           this.downloadArtifact(result.artifactDownloadUrl);
-          this.state = { ...this.state, phase: 'done' };
+          this.state = {
+            ...this.state,
+            phase: 'done',
+            statusMessage: 'Reporte descargado exitosamente',
+            hydrateProgress: undefined,
+          };
         } else {
           this.state = {
             ...this.state,
@@ -114,8 +151,18 @@ export class SerenityReportService {
             error: result.message || 'No se encontro el artifact del reporte',
           };
         }
+      } else if (result.phase === 'queued') {
+        this.state = {
+          ...this.state,
+          phase: 'polling',
+          statusMessage: 'Workflow en cola, esperando runner...',
+        };
       } else if (result.status === 'running') {
-        this.state = { ...this.state, phase: 'polling' };
+        this.state = {
+          ...this.state,
+          phase: 'polling',
+          statusMessage: 'Generando reporte Serenity...',
+        };
       } else {
         this.stopPolling();
         this.state = {

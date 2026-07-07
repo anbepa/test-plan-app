@@ -1001,7 +1001,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     try {
       this.isExportingSerenity = true;
-      this.serenityReportPhase = 'Preparando bundle...';
+      this.serenityReportPhase = 'Cargando ejecucion...';
       this.cdr.markForCheck();
 
       const run = {
@@ -1018,18 +1018,22 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
       await this.serenityReportService.generateReport(run as any);
 
-      // Monitorear el estado para feedback en UI
       const checkInterval = setInterval(() => {
         const state = this.serenityReportService.state;
         const phaseLabels: Record<string, string> = {
-          building: 'Preparando bundle...',
+          hydrating: state.statusMessage || 'Descargando evidencias...',
+          building: 'Construyendo bundle...',
           dispatching: 'Enviando a workflow...',
           polling: 'Generando reporte...',
           downloading: 'Descargando...',
           done: 'Completado',
           error: state.error || 'Error',
         };
-        this.serenityReportPhase = phaseLabels[state.phase] || state.phase;
+        this.serenityReportPhase = phaseLabels[state.phase] || state.statusMessage || state.phase;
+        // Track progress percentage if available
+        if (state.hydrateProgress) {
+          this.serenityReportPhase = `${phaseLabels[state.phase]} (${state.hydrateProgress.percentage}%)`;
+        }
         this.cdr.markForCheck();
 
         if (state.phase === 'done') {
@@ -1048,14 +1052,13 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         }
       }, 500);
 
-      // Timeout de seguridad a 10 minutos
       setTimeout(() => {
         clearInterval(checkInterval);
         if (this.isExportingSerenity) {
           this.isExportingSerenity = false;
           this.serenityReportPhase = '';
           this.serenityReportService.stopPolling();
-          this.toastService.warning('Timeout: el reporte está tardando demasiado');
+          this.toastService.warning('Timeout: el reporte esta tardando demasiado');
           this.cdr.markForCheck();
         }
       }, 600000);

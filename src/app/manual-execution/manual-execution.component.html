@@ -95,14 +95,28 @@
                 </div>
               </td>
               <td data-label="Reporte">
-                <button type="button" class="serenity-report-btn"
-                  *ngIf="canDownloadReport(run)"
-                  [disabled]="isGeneratingReport(run.id)"
-                  (click)="downloadSerenityReport(run)"
-                  title="Generar reporte Serenity">
-                  {{ isGeneratingReport(run.id) ? '⏳ Generando...' : '⬇ Serenity' }}
-                </button>
-                <span *ngIf="!canDownloadReport(run)" class="report-na" title="Ejecuta y carga evidencias primero">—</span>
+                <ng-container *ngIf="isGeneratingReport(run.id) && showSerenityProgress; else normalBtn">
+                  <div class="serenity-progress-cell">
+                    <div class="serenity-progress-label">{{ serenityStatusMessage }}</div>
+                    <div class="serenity-progress-bar-bg" *ngIf="serenityReportState?.hydrateProgress">
+                      <div class="serenity-progress-bar-fill" [style.width.%]="serenityProgressPercent"></div>
+                    </div>
+                    <div class="serenity-progress-bar-bg serenity-pulse" *ngIf="!serenityReportState?.hydrateProgress && serenityReportState?.phase !== 'done'"></div>
+                    <div class="serenity-progress-percent" *ngIf="serenityReportState?.hydrateProgress">
+                      {{ serenityProgressPercent }}% ({{ serenityReportState?.hydrateProgress?.current }}/{{ serenityReportState?.hydrateProgress?.total }})
+                    </div>
+                  </div>
+                </ng-container>
+                <ng-template #normalBtn>
+                  <button type="button" class="serenity-report-btn"
+                    *ngIf="canDownloadReport(run)"
+                    [disabled]="isGeneratingReport(run.id)"
+                    (click)="downloadSerenityReport(run)"
+                    title="Generar reporte Serenity">
+                    {{ isGeneratingReport(run.id) ? '⏳ Generando...' : '⬇ Serenity' }}
+                  </button>
+                  <span *ngIf="!canDownloadReport(run)" class="report-na" title="Ejecuta y carga evidencias primero">—</span>
+                </ng-template>
               </td>
             </tr>
           </tbody>

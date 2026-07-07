@@ -81,6 +81,8 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   // Serenity report export
   exportingRunId: string | null = null;
   generatingReportFor: Set<string> = new Set();
+  serenityReportState: SerenityReportState | null = null;
+  private serenityStateCheckInterval: any = null;
 
   // Delete modal
   showDeleteModal = false;
@@ -666,21 +668,38 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     }
 
     this.generatingReportFor.add(run.id);
+    this.serenityReportState = { phase: 'hydrating', statusMessage: 'Iniciando...' };
     this.cdr.detectChanges();
+
+    // Monitorear el estado del servicio cada 300ms para feedback en tiempo real
+    this.serenityStateCheckInterval = setInterval(() => {
+      const state = this.serenityReportService.state;
+      this.serenityReportState = { ...state };
+      this.cdr.detectChanges();
+    }, 300);
 
     try {
       await this.serenityReportService.generateReport(run);
 
-      const checkInterval = setInterval(() => {
+      const doneInterval = setInterval(() => {
+        if (!this.serenityStateCheckInterval) {
+          clearInterval(doneInterval);
+          return;
+        }
         const state = this.serenityReportService.state;
+        this.serenityReportState = { ...state };
+        this.cdr.detectChanges();
+
         if (state.phase === 'done') {
-          clearInterval(checkInterval);
+          clearInterval(doneInterval);
+          this.clearSerenityState();
           this.generatingReportFor.delete(run.id);
           this.toastService.success('Reporte Serenity descargado');
           this.cdr.detectChanges();
         }
         if (state.phase === 'error') {
-          clearInterval(checkInterval);
+          clearInterval(doneInterval);
+          this.clearSerenityState();
           this.generatingReportFor.delete(run.id);
           this.toastService.error(state.error || 'Error al generar reporte Serenity');
           this.cdr.detectChanges();
@@ -688,19 +707,44 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
       }, 500);
 
       setTimeout(() => {
-        clearInterval(checkInterval);
+        clearInterval(doneInterval);
         if (this.generatingReportFor.has(run.id)) {
+          this.clearSerenityState();
           this.generatingReportFor.delete(run.id);
           this.serenityReportService.stopPolling();
-          this.toastService.warning('Timeout: el reporte está tardando demasiado');
+          this.toastService.warning('Timeout: el reporte esta tardando demasiado');
           this.cdr.detectChanges();
         }
       }, 600000);
     } catch (err: any) {
+      this.clearSerenityState();
       this.generatingReportFor.delete(run.id);
       this.toastService.error(err?.message || 'Error al iniciar reporte Serenity');
       this.cdr.detectChanges();
     }
+  }
+
+  private clearSerenityState(): void {
+    if (this.serenityStateCheckInterval) {
+      clearInterval(this.serenityStateCheckInterval);
+      this.serenityStateCheckInterval = null;
+    }
+    this.serenityReportState = null;
+  }
+
+  get serenityStatusMessage(): string {
+    return this.serenityReportState?.statusMessage
+      || this.serenityReportState?.error
+      || '';
+  }
+
+  get serenityProgressPercent(): number {
+    return this.serenityReportState?.hydrateProgress?.percentage ?? 0;
+  }
+
+  get showSerenityProgress(): boolean {
+    const phase = this.serenityReportState?.phase;
+    return phase === 'hydrating' || phase === 'building' || phase === 'dispatching' || phase === 'polling' || phase === 'downloading';
   }
 
   confirmDeleteRun(run: TestRun): void {

@@ -1162,3 +1162,52 @@
 .report-na {
   color: #9ca3af;
 }
+
+/* ═══ Serenity progress in table cell ═══ */
+.serenity-progress-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 140px;
+  max-width: 200px;
+}
+
+.serenity-progress-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.serenity-progress-bar-bg {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.serenity-progress-bar-bg.serenity-pulse {
+  background: linear-gradient(90deg, #e5e7eb 25%, #c7d2fe 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: serenity-pulse 1.5s infinite;
+}
+
+@keyframes serenity-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.serenity-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #4f46e5);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.serenity-progress-percent {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  white-space: nowrap;
+}
