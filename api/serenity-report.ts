@@ -18,15 +18,8 @@ function gh(path: string, opts: RequestInit = {}): Promise<Response> {
   });
 }
 
-interface JobIdPayload {
-  jobId: string;
-  gistId: string;
-  runId: string;
-}
-
 async function findRunByJobId(jobId: string): Promise<string | null> {
   try {
-    // Buscar en runs de repository_dispatch recientes
     const res = await gh(
       `/repos/${GH_OWNER}/${GH_REPO}/actions/runs?event=repository_dispatch&per_page=10`
     );
@@ -39,7 +32,6 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
       if (match) return String(match.id);
     }
 
-    // Fallback: buscar en el workflow específico
     const wfRes = await gh(
       `/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_ID)}/runs?per_page=5`
     );
@@ -57,8 +49,11 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
   return null;
 }
 
-// POST /api/serenity-report  →  start pipeline
-// GET  /api/serenity-report?runId=...&gistId=...&jobId=...  →  poll / download artifact
+// ── Routing ──
+// POST /api/serenity-report             → ?action=start    → create gist with metadata
+// POST /api/serenity-report?action=evidence → add evidence file to gist
+// POST /api/serenity-report?action=dispatch → dispatch workflow
+// GET  /api/serenity-report?runId=...   → poll / download artifact
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
@@ -67,17 +62,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  if (req.method === 'POST') {
-    return handleStart(req, res);
-  }
   if (req.method === 'GET') {
     return handlePoll(req, res);
   }
 
-  return res.status(405).json({ error: 'Method not allowed. Use POST or GET.' });
+  if (req.method === 'POST') {
+    const action = (req.query as any).action || 'start';
+    if (action === 'evidence') return handleAddEvidence(req, res);
+    if (action === 'dispatch') return handleDispatch(req, res);
+    return handleStart(req, res);
+  }
+
+  return res.status(405).json({ error: 'Method not allowed.' });
 }
 
-// ── START ──
+// ── START: create Gist with metadata bundle (SMALL — no base64 evidence) ──
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
     const { bundle } = req.body || {};
@@ -86,9 +85,8 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
     }
 
     const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const runName = bundle?.run?.name || 'Reporte Serenity';
 
-    // 1. Crear gist secreto
+    // Crear gist secreto solo con el bundle de metadata
     let gistId: string;
     try {
       const gistRes = await gh('/gists', {
@@ -118,7 +116,60 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'Error al crear gist' });
     }
 
-    // 2. Disparar repository_dispatch
+    return res.status(200).json({
+      success: true,
+      phase: 'gist_created',
+      jobId,
+      gistId,
+      evidenceCount: bundle.meta?.totalEvidences || 0,
+    });
+  } catch (e: any) {
+    console.error('[serenity-report] Error fatal en handleStart:', e);
+    return res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+// ── ADD EVIDENCE: upload one evidence file to existing Gist ──
+async function handleAddEvidence(req: VercelRequest, res: VercelResponse) {
+  try {
+    const { gistId, name, base64 } = req.body || {};
+    if (!gistId || !name || !base64) {
+      return res.status(400).json({ error: 'Se requiere gistId, name y base64' });
+    }
+
+    // GitHub Gist PATCH: add/update a single file
+    const patchRes = await gh(`/gists/${gistId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        files: {
+          [name]: { content: base64 },
+        },
+      }),
+    });
+
+    if (!patchRes.ok) {
+      const err = await patchRes.text();
+      console.error('[serenity-report] Error agregando evidencia al gist:', patchRes.status, err);
+      return res.status(502).json({ error: `Error al agregar evidencia: ${patchRes.status}` });
+    }
+
+    return res.status(200).json({ success: true, name });
+  } catch (e: any) {
+    console.error('[serenity-report] Excepción en handleAddEvidence:', e);
+    return res.status(502).json({ error: 'Error al agregar evidencia' });
+  }
+}
+
+// ── DISPATCH: trigger GitHub Actions workflow ──
+async function handleDispatch(req: VercelRequest, res: VercelResponse) {
+  try {
+    const { gistId, jobId } = req.body || {};
+    if (!gistId || !jobId) {
+      return res.status(400).json({ error: 'Se requiere gistId y jobId' });
+    }
+
+    const gistUrl = `https://gist.github.com/${GH_OWNER}/${gistId}.git`;
+
     try {
       const dispRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
         method: 'POST',
@@ -127,6 +178,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
           client_payload: {
             job_id: jobId,
             bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
+            gist_clone_url: gistUrl,
           },
         }),
       });
@@ -141,33 +193,20 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'Error al disparar workflow' });
     }
 
-    // 3. Buscar el run generado (por nombre Serenity <jobId>)
+    // Buscar el run
     await new Promise(r => setTimeout(r, 3000));
     const runId = await findRunByJobId(jobId);
 
-    if (!runId) {
-      // No pudimos encontrar el run, pero el dispatch fue exitoso.
-      // Devolvemos jobId y el cliente puede reintentar.
-      return res.status(200).json({
-        success: true,
-        phase: 'dispatched',
-        jobId,
-        gistId,
-        runId: null,
-        message: 'Workflow disparado. Run no encontrado aún, reintenta en unos segundos.',
-      });
-    }
-
     return res.status(200).json({
       success: true,
-      phase: 'running',
+      phase: runId ? 'running' : 'dispatched',
       jobId,
       gistId,
-      runId,
-      runName,
+      runId: runId || null,
+      message: runId ? 'Workflow en ejecución' : 'Workflow disparado. Run no encontrado aún.',
     });
   } catch (e: any) {
-    console.error('[serenity-report] Error fatal en handleStart:', e);
+    console.error('[serenity-report] Error en handleDispatch:', e);
     return res.status(500).json({ error: 'Error interno del servidor' });
   }
 }
@@ -177,7 +216,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
   let { runId, gistId, jobId } = req.query as Record<string, string>;
 
   if (!runId && jobId) {
-    // Buscar el run por jobId (el dispatch pudo no haber creado el run al momento del POST)
     const foundRunId = await findRunByJobId(jobId);
     if (foundRunId) {
       runId = foundRunId;
@@ -195,7 +233,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 1. Consultar estado del run
     const runRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}`);
 
     if (!runRes.ok) {
@@ -206,14 +243,13 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
     }
 
     const runData = await runRes.json() as any;
-    const status = runData.status as string;  // queued | in_progress | completed
-    const conclusion = runData.conclusion as string | null; // success | failure | null
+    const status = runData.status as string;
+    const conclusion = runData.conclusion as string | null;
 
     console.log(`[serenity-report] Run ${runId}: status=${status}, conclusion=${conclusion}`);
 
     if (status === 'completed') {
       if (conclusion === 'success') {
-        // 2. Obtener artifact (target.zip)
         const artifactsRes = await gh(
           `/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}/artifacts`
         );
@@ -242,7 +278,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        // 3. Obtener la URL de descarga del artifact (redirect a Azure)
         const dlRes = await gh(
           `/repos/${GH_OWNER}/${GH_REPO}/actions/artifacts/${targetArtifact.id}/zip`,
           { redirect: 'manual' }
@@ -250,7 +285,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
         const artifactDownloadUrl = dlRes.headers.get('location') || '';
 
-        // 4. Borrar gist
         if (gistId) {
           try {
             await gh(`/gists/${gistId}`, { method: 'DELETE' });
@@ -270,11 +304,8 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // Falló
       if (gistId) {
-        try {
-          await gh(`/gists/${gistId}`, { method: 'DELETE' });
-        } catch (_) {}
+        try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {}
       }
 
       return res.status(200).json({
@@ -285,7 +316,6 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Si está queued o in_progress
     return res.status(200).json({
       status: 'running',
       phase: status,

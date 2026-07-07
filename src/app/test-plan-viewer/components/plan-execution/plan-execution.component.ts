@@ -1023,6 +1023,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         const phaseLabels: Record<string, string> = {
           hydrating: state.statusMessage || 'Descargando evidencias...',
           building: 'Construyendo bundle...',
+          uploading: state.statusMessage || 'Subiendo evidencias...',
           dispatching: 'Enviando a workflow...',
           polling: 'Generando reporte...',
           downloading: 'Descargando...',

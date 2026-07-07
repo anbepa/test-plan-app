@@ -8,6 +8,8 @@ interface BundleStep { keyword: string; text: string; }
 interface BundleScenario { name: string; type: string; tags: string[]; steps: BundleStep[]; }
 /** One evidence file carried inline as a base64 data URL. */
 interface BundleEvidence { name: string; base64: string; }
+/** Lightweight evidence ref (no base64) for the metadata-only bundle. */
+interface BundleEvidenceRef { name: string; ext: string; }
 
 /**
  * Converts a manual PlanExecution (test cases + steps + evidences stored in
@@ -54,6 +56,52 @@ export class SerenityExportService {
   /** Converts an already-hydrated execution into the bundle object (public). */
   buildBundleFromExecution(execution: PlanExecution, run: TestRun): any {
     return this.convert(execution, run);
+  }
+
+  /**
+   * Returns the evidence items that need to be uploaded separately
+   * (to avoid exceeding Vercel request body limits for large executions).
+   * Each item has { name, base64 } and is uploaded individually to the Gist.
+   */
+  getEvidenceUploads(execution: PlanExecution, run: TestRun): { name: string; base64: string }[] {
+    const uploads: { name: string; base64: string }[] = [];
+    const usedNames = new Set<string>();
+
+    (execution.testCases || []).forEach((tc, sIdx) => {
+      (tc.steps || []).forEach((step, i) => {
+        (step.evidences || []).forEach((ev, evIdx) => {
+          const dataUrl = ev.base64Data || ev.originalBase64;
+          if (ev.type === 'image' && dataUrl) {
+            const ext = this.extFromDataUrl(dataUrl);
+            const name = `ev-${sIdx}-${i}-${evIdx}.${ext}`;
+            if (!usedNames.has(name)) {
+              usedNames.add(name);
+              uploads.push({ name, base64: dataUrl });
+            }
+          }
+        });
+      });
+    });
+
+    return uploads;
+  }
+
+  /** Builds the SERENITY BUNDLE WITH embedded base64 evidence (for direct download/import into Manual BDD Studio). */
+  buildFullBundle(execution: PlanExecution, run: TestRun): any {
+    return this.convert(execution, run);
+  }
+
+  /**
+   * Builds a METADATA‑ONLY bundle (no base64) for sending through Vercel API.
+   * Evidence references are kept as { name } only so the Gist can hold them as
+   * separate files and materialize.js can read them from the gist checkout.
+   */
+  buildMetadataBundle(execution: PlanExecution, run: TestRun): any {
+    const full = this.convert(execution, run);
+    if (full.evidences && Array.isArray(full.evidences)) {
+      full.evidences = full.evidences.map((ev: any) => ({ name: ev.name }));
+    }
+    return full;
   }
 
   // ── Conversion ──────────────────────────────────────────────

@@ -12,7 +12,7 @@ export interface HydrateProgress {
 }
 
 export interface SerenityReportState {
-  phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
+  phase: 'idle' | 'hydrating' | 'building' | 'uploading' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
   gistId?: string;
   runId?: string;
@@ -35,13 +35,14 @@ export class SerenityReportService {
   ) {}
 
   async generateReport(run: TestRun): Promise<void> {
-    if (this.state.phase === 'polling' || this.state.phase === 'dispatching') return;
+    if (this.state.phase === 'polling' || this.state.phase === 'dispatching' || this.state.phase === 'uploading') return;
 
     try {
       if (!run.executionId) {
         throw new Error('Esta ejecucion no tiene datos ejecutados todavia.');
       }
 
+      // ── Fase 1: Hidratar evidencias ──
       this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
 
       const execution = await this.storage.getExecution(run.executionId);
@@ -62,37 +63,94 @@ export class SerenityReportService {
             ...this.state,
             phase: 'hydrating',
             statusMessage: `Descargando evidencias (${current}/${total})...`,
-            hydrateProgress: {
-              current,
-              total,
-              percentage: total > 0 ? Math.round((current / total) * 100) : 0,
-            },
+            hydrateProgress: { current, total, percentage: total > 0 ? Math.round((current / total) * 100) : 0 },
           };
         },
       });
 
+      // ── Fase 2: Construir bundle metadata (SIN base64) ──
       this.state = { phase: 'building', statusMessage: 'Construyendo bundle del reporte...' };
 
-      const bundle = this.serenityExport.buildBundleFromExecution(execution, run);
+      const bundle = this.serenityExport.buildMetadataBundle(execution, run);
+      const evidenceUploads = this.serenityExport.getEvidenceUploads(execution, run);
 
-      this.state = { phase: 'dispatching', statusMessage: 'Enviando datos al workflow...' };
+      // ── Fase 3: Crear Gist con metadata ──
+      this.state = { phase: 'uploading', statusMessage: 'Creando Gist con metadata...' };
 
       const startResult = await firstValueFrom(
-        this.http.post<any>(this.apiUrl, { bundle })
+        this.http.post<any>(`${this.apiUrl}?action=start`, { bundle })
       );
 
-      if (startResult.success) {
-        this.state = {
-          phase: 'polling',
-          statusMessage: 'Generando reporte en GitHub Actions...',
-          jobId: startResult.jobId,
-          gistId: startResult.gistId,
-          runId: startResult.runId,
-        };
-        this.startPolling();
-      } else {
-        throw new Error(startResult.error || 'Error al iniciar el reporte');
+      if (!startResult.success) {
+        throw new Error(startResult.error || 'Error al crear el Gist');
       }
+
+      const gistId = startResult.gistId as string;
+      const jobId = startResult.jobId as string;
+
+      // ── Fase 4: Subir evidencias al Gist una por una ──
+      if (evidenceUploads.length > 0) {
+        this.state = {
+          phase: 'uploading',
+          statusMessage: `Subiendo evidencias al Gist (0/${evidenceUploads.length})...`,
+          gistId,
+          jobId,
+          hydrateProgress: { current: 0, total: evidenceUploads.length, percentage: 0 },
+        };
+
+        let uploaded = 0;
+        const BATCH_SIZE = 3;
+
+        for (let i = 0; i < evidenceUploads.length; i += BATCH_SIZE) {
+          const batch = evidenceUploads.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(ev =>
+            firstValueFrom(
+              this.http.post<any>(`${this.apiUrl}?action=evidence`, {
+                gistId, name: ev.name, base64: ev.base64,
+              })
+            ).catch(() => null)
+          ));
+
+          uploaded += batch.length;
+          this.state = {
+            ...this.state,
+            phase: 'uploading',
+            statusMessage: `Subiendo evidencias (${Math.min(uploaded, evidenceUploads.length)}/${evidenceUploads.length})...`,
+            hydrateProgress: {
+              current: Math.min(uploaded, evidenceUploads.length),
+              total: evidenceUploads.length,
+              percentage: Math.round((Math.min(uploaded, evidenceUploads.length) / evidenceUploads.length) * 100),
+            },
+          };
+        }
+      }
+
+      // ── Fase 5: Disparar workflow ──
+      this.state = {
+        phase: 'dispatching',
+        statusMessage: 'Disparando workflow en GitHub Actions...',
+        gistId,
+        jobId,
+      };
+
+      const dispatchResult = await firstValueFrom(
+        this.http.post<any>(`${this.apiUrl}?action=dispatch`, { gistId, jobId })
+      );
+
+      if (!dispatchResult.success) {
+        throw new Error(dispatchResult.error || 'Error al disparar el workflow');
+      }
+
+      this.state = {
+        phase: 'polling',
+        statusMessage: 'Generando reporte en GitHub Actions...',
+        jobId,
+        gistId,
+        runId: dispatchResult.runId,
+        hydrateProgress: undefined,
+      };
+
+      this.startPolling();
     } catch (err: any) {
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
@@ -102,7 +160,7 @@ export class SerenityReportService {
   private startPolling(): void {
     this.stopPolling();
     this.pollTimer = setInterval(() => this.poll(), 5000);
-    this.poll(); // primera inmediata
+    this.poll();
   }
 
   private async poll(): Promise<void> {
