@@ -51,30 +51,6 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
   return null;
 }
 
-async function createSignedUrl(bucket: string, storagePath: string): Promise<string> {
-  const signRes = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${encodeURIComponent(storagePath)}`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ expiresIn: 7200 }),
-    }
-  );
-
-  if (!signRes.ok) {
-    const signErr = await signRes.text();
-    throw new Error(`Supabase sign error ${signRes.status}: ${signErr}`);
-  }
-
-  const signData = await signRes.json() as any;
-  const url = signData.signedURL || signData.signedUrl;
-  if (!url) throw new Error('No se recibio signedURL de Supabase');
-  return url;
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
     return res.status(500).json({
@@ -100,27 +76,20 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Se requiere storagePath' });
     }
 
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      console.error('[serenity-report] Faltan SUPABASE_URL o SUPABASE_SERVICE_KEY en Vercel env vars');
+      return res.status(500).json({ error: 'SUPABASE_URL y SUPABASE_SERVICE_KEY son requeridos en Vercel' });
+    }
+
     const jobId = clientJobId || `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const bucket = 'execution-evidence';
 
-    // Firmar URL para el bundle metadata (pequeño, sin base64)
-    let bundleUrl: string;
-    try {
-      if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-        throw new Error('SUPABASE_URL o SUPABASE_SERVICE_KEY no configurados');
-      }
-      bundleUrl = await createSignedUrl(bucket, storagePath);
-      console.log(`[serenity-report] Signed URL generada para bundle: ${storagePath}`);
-    } catch (e: any) {
-      console.error('[serenity-report] Error signed URL:', e.message);
-      return res.status(502).json({ error: `Error generando URL firmada: ${e.message}` });
-    }
-
-    // Disparar workflow con bundle URL + credenciales Supabase para descargar evidencias
+    // Disparar workflow con la ruta del bundle en Supabase + credenciales
+    // El workflow descarga el bundle directamente usando la service key (sin signed URL)
     try {
       const payload: Record<string, string> = {
         job_id: jobId,
-        bundle_url: bundleUrl,
+        bundle_storage_path: `${bucket}/${storagePath}`,
         supabase_url: SUPABASE_URL,
         supabase_service_key: SUPABASE_SERVICE_KEY,
         evidence_bucket: bucket,
