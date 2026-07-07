@@ -51,9 +51,29 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
   return null;
 }
 
-// ── Routing ──
-// POST /api/serenity-report?action=start  → upload bundle ref + dispatch workflow
-// GET  /api/serenity-report?runId=...      → poll / download artifact
+async function createSignedUrl(bucket: string, storagePath: string): Promise<string> {
+  const signRes = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${encodeURIComponent(storagePath)}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 7200 }),
+    }
+  );
+
+  if (!signRes.ok) {
+    const signErr = await signRes.text();
+    throw new Error(`Supabase sign error ${signRes.status}: ${signErr}`);
+  }
+
+  const signData = await signRes.json() as any;
+  const url = signData.signedURL || signData.signedUrl;
+  if (!url) throw new Error('No se recibio signedURL de Supabase');
+  return url;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
@@ -73,63 +93,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: 'Method not allowed.' });
 }
 
-// ── START: upload bundle to Supabase → dispatch workflow ──
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
-    const { jobId: clientJobId, storagePath } = req.body || {};
+    const { jobId: clientJobId, storagePath, executionId } = req.body || {};
     if (!storagePath) {
       return res.status(400).json({ error: 'Se requiere storagePath' });
     }
 
     const jobId = clientJobId || `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const bucket = 'execution-evidence';
 
-    // Generar signed URL desde Supabase Storage (válido 2 horas)
+    // Firmar URL para el bundle metadata (pequeño, sin base64)
     let bundleUrl: string;
     try {
       if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-        throw new Error('SUPABASE_URL o SUPABASE_SERVICE_KEY no configurados en Vercel');
+        throw new Error('SUPABASE_URL o SUPABASE_SERVICE_KEY no configurados');
       }
-
-      // Usar REST API directamente (evita dependencia de @supabase/supabase-js)
-      const bucket = 'execution-evidence';
-      const signRes = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${encodeURIComponent(storagePath)}`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ expiresIn: 7200 }),
-        }
-      );
-
-      if (!signRes.ok) {
-        const signErr = await signRes.text();
-        console.error('[serenity-report] Error creando signed URL:', signRes.status, signErr);
-        throw new Error(`Supabase sign error: ${signRes.status}`);
-      }
-
-      const signData = await signRes.json() as any;
-      bundleUrl = signData.signedURL || signData.signedUrl;
-      if (!bundleUrl) throw new Error('No se recibio signedURL de Supabase');
-
-      console.log(`[serenity-report] Signed URL generada para ${storagePath}`);
+      bundleUrl = await createSignedUrl(bucket, storagePath);
+      console.log(`[serenity-report] Signed URL generada para bundle: ${storagePath}`);
     } catch (e: any) {
       console.error('[serenity-report] Error signed URL:', e.message);
       return res.status(502).json({ error: `Error generando URL firmada: ${e.message}` });
     }
 
-    // Disparar repository_dispatch con la URL firmada del bundle
+    // Disparar workflow con bundle URL + credenciales Supabase para descargar evidencias
     try {
+      const payload: Record<string, string> = {
+        job_id: jobId,
+        bundle_url: bundleUrl,
+        supabase_url: SUPABASE_URL,
+        supabase_service_key: SUPABASE_SERVICE_KEY,
+        evidence_bucket: bucket,
+      };
+      if (executionId) {
+        payload.execution_id = executionId;
+      }
+
       const dispRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
         method: 'POST',
         body: JSON.stringify({
           event_type: 'serenity-report',
-          client_payload: {
-            job_id: jobId,
-            bundle_url: bundleUrl,
-          },
+          client_payload: payload,
         }),
       });
 
@@ -143,7 +147,6 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(502).json({ error: 'Error al disparar workflow' });
     }
 
-    // Buscar el run
     await new Promise(r => setTimeout(r, 3000));
     const runId = await findRunByJobId(jobId);
 
@@ -160,7 +163,6 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// ── POLL ──
 async function handlePoll(req: VercelRequest, res: VercelResponse) {
   let { runId, gistId, jobId } = req.query as Record<string, string>;
 

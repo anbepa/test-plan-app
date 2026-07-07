@@ -93,15 +93,37 @@ export class SerenityExportService {
 
   /**
    * Builds a METADATA‑ONLY bundle (no base64) for sending through Vercel API.
-   * Evidence references are kept as { name } only so the Gist can hold them as
-   * separate files and materialize.js can read them from the gist checkout.
+   * Evidence references are kept as { name } only and a separate evidenceMap
+   * maps each bundle evidence name → Supabase storage path so the workflow can
+   * download them directly from Supabase.
    */
-  buildMetadataBundle(execution: PlanExecution, run: TestRun): any {
+  buildMetadataBundle(execution: PlanExecution, run: TestRun, userId: string): any {
     const full = this.convert(execution, run);
     if (full.evidences && Array.isArray(full.evidences)) {
       full.evidences = full.evidences.map((ev: any) => ({ name: ev.name }));
     }
+    full.evidenceMap = this.buildEvidenceMap(execution, userId);
     return full;
+  }
+
+  /** Maps bundle evidence name (ev-0-0-0.png) → Supabase storage path (userId/execId/img_123.webp). */
+  private buildEvidenceMap(execution: PlanExecution, userId: string): Record<string, string> {
+    const map: Record<string, string> = {};
+    (execution.testCases || []).forEach((tc, sIdx) => {
+      (tc.steps || []).forEach((step, i) => {
+        (step.evidences || []).forEach((ev, evIdx) => {
+          if (ev.type === 'image' && ev.id) {
+            const dataUrl = ev.base64Data || ev.originalBase64;
+            if (dataUrl) {
+              const ext = this.extFromDataUrl(dataUrl);
+              const bundleName = `ev-${sIdx}-${i}-${evIdx}.${ext}`;
+              map[bundleName] = `${userId}/${execution.id}/${ev.id}.${ext}`;
+            }
+          }
+        });
+      });
+    });
+    return map;
   }
 
   // ── Conversion ──────────────────────────────────────────────

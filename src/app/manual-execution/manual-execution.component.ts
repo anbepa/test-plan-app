@@ -744,7 +744,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
 
   get showSerenityProgress(): boolean {
     const phase = this.serenityReportState?.phase;
-    return phase === 'hydrating' || phase === 'building' || phase === 'uploading' || phase === 'dispatching' || phase === 'polling' || phase === 'downloading';
+    return phase === 'hydrating' || phase === 'building' || phase === 'dispatching' || phase === 'polling' || phase === 'downloading';
   }
 
   confirmDeleteRun(run: TestRun): void {

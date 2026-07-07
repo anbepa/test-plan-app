@@ -13,7 +13,7 @@ export interface HydrateProgress {
 }
 
 export interface SerenityReportState {
-  phase: 'idle' | 'hydrating' | 'building' | 'uploading' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
+  phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
   gistId?: string;
   runId?: string;
@@ -37,7 +37,7 @@ export class SerenityReportService {
   ) {}
 
   async generateReport(run: TestRun): Promise<void> {
-    if (this.state.phase === 'polling' || this.state.phase === 'dispatching' || this.state.phase === 'uploading') return;
+    if (this.state.phase === 'polling' || this.state.phase === 'dispatching') return;
 
     try {
       if (!run.executionId) {
@@ -73,27 +73,19 @@ export class SerenityReportService {
         },
       });
 
-      // ── Fase 2: Construir bundle completo + subir a Supabase Storage ──
+      // ── Fase 2: Construir metadata bundle + subir a Supabase ──
       this.state = { phase: 'building', statusMessage: 'Construyendo bundle del reporte...' };
 
-      const fullBundle = this.serenityExport.buildFullBundle(execution, run);
-      const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-
-      // Obtener userId para la ruta en Storage
       const { data: sessionData } = await this.supabaseClient.supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       if (!userId) throw new Error('No se pudo obtener el usuario autenticado');
 
-      const bundleJson = JSON.stringify(fullBundle);
+      const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const metadataBundle = this.serenityExport.buildMetadataBundle(execution, run, userId);
+      const bundleJson = JSON.stringify(metadataBundle);
       const storagePath = `${userId}/temp/${jobId}.json`;
 
-      this.state = {
-        phase: 'uploading',
-        statusMessage: 'Subiendo bundle a Supabase Storage...',
-        hydrateProgress: { current: 0, total: 100, percentage: 0 },
-      };
-
-      // Subir bundle a Supabase Storage
+      // Subir metadata bundle (pequeño, sin base64) a Supabase Storage
       const { error: uploadError } = await this.supabaseClient.supabase.storage
         .from('execution-evidence')
         .upload(storagePath, new Blob([bundleJson], { type: 'application/json' }), {
@@ -102,21 +94,21 @@ export class SerenityReportService {
         });
 
       if (uploadError) {
-        throw new Error(`Error al subir bundle a Storage: ${uploadError.message}`);
+        throw new Error(`Error al subir bundle: ${uploadError.message}`);
       }
 
+      // ── Fase 3: Enviar a Vercel → signed URL → dispatch ──
       this.state = {
         phase: 'dispatching',
-        statusMessage: 'Enviando a workflow...',
+        statusMessage: 'Enviando datos al workflow...',
         hydrateProgress: undefined,
       };
 
-      // ── Fase 3: Enviar a Vercel → crea signed URL → dispara workflow ──
       const startResult = await firstValueFrom(
         this.http.post<any>(`${this.apiUrl}?action=start`, {
           jobId,
           storagePath,
-          bundleFileSize: bundleJson.length,
+          executionId: execution.id,
         })
       );
 
