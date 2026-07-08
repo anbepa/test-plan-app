@@ -58,11 +58,6 @@ export class SerenityExportService {
     return this.convert(execution, run);
   }
 
-  /** Builds the FULL bundle with optionally compressed evidence images for smaller payload. */
-  async buildFullBundle(execution: PlanExecution, run: TestRun): Promise<any> {
-    return this.convert(execution, run);
-  }
-
   /**
    * Builds a SIZE-OPTIMIZED bundle by re-compressing evidence images.
    * Each image is resized to max 640px wide and re-encoded as WebP at quality 0.5,
@@ -155,11 +150,6 @@ export class SerenityExportService {
     });
 
     return uploads;
-  }
-
-  /** Builds the SERENITY BUNDLE WITH embedded base64 evidence (for direct download/import into Manual BDD Studio). */
-  buildFullBundle(execution: PlanExecution, run: TestRun): any {
-    return this.convert(execution, run);
   }
 
   /**
