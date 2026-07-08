@@ -12,7 +12,7 @@ export interface HydrateProgress {
 }
 
 export interface SerenityReportState {
-  phase: 'idle' | 'hydrating' | 'building' | 'compressing' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
+  phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
   gistId?: string;
   runId?: string;
@@ -70,31 +70,23 @@ export class SerenityReportService {
         },
       });
 
-      this.state = { phase: 'building', statusMessage: 'Construyendo bundle...' };
-
-      const fullBundle = this.serenityExport.buildFullBundle(execution, run);
-      const bundleJson = JSON.stringify(fullBundle);
-      const rawSize = bundleJson.length;
-
       this.state = {
-        phase: 'compressing',
-        statusMessage: `Comprimiendo bundle (${(rawSize / 1024 / 1024).toFixed(1)} MB)...`,
+        phase: 'building',
+        statusMessage: 'Construyendo y comprimiendo imagenes...',
+        hydrateProgress: { current: 0, total: totalEvidence, percentage: 0 },
       };
 
-      const compressed = await this.gzip(bundleJson);
-      const compressedSize = compressed.byteLength;
+      const bundle = await this.serenityExport.buildCompressedBundle(execution, run);
+      const bundleJson = JSON.stringify(bundle);
 
       this.state = {
         phase: 'dispatching',
-        statusMessage: `Enviando bundle comprimido (${(compressedSize / 1024).toFixed(0)} KB)...`,
+        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB)...`,
         hydrateProgress: undefined,
       };
 
       const startResult = await firstValueFrom(
-        this.http.post<any>(this.apiUrl, compressed, {
-          headers: { 'Content-Type': 'application/octet-stream' },
-          params: { action: 'start', rawSize: rawSize.toString(), compressedSize: compressedSize.toString() },
-        })
+        this.http.post<any>(this.apiUrl, { bundle })
       );
 
       if (!startResult.success) {
@@ -117,33 +109,6 @@ export class SerenityReportService {
   }
 
   /** Gzip-compress a string using the browser's CompressionStream API. */
-  private async gzip(data: string): Promise<Uint8Array> {
-    const encoder = new TextEncoder();
-    const compressed = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(data));
-        controller.close();
-      },
-    }).pipeThrough(new CompressionStream('gzip'));
-
-    const reader = compressed.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-
-    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-    const result = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const c of chunks) {
-      result.set(c, offset);
-      offset += c.length;
-    }
-    return result;
-  }
-
   private startPolling(): void {
     this.stopPolling();
     this.pollTimer = setInterval(() => this.poll(), 5000);

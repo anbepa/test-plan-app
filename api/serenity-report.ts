@@ -57,25 +57,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
-    // Read binary body (gzipped bundle JSON)
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-    }
-    const compressed = Buffer.concat(chunks);
-
-    if (compressed.length === 0) {
-      return res.status(400).json({ error: 'Body vacio' });
+    const { bundle } = req.body || {};
+    if (!bundle) {
+      return res.status(400).json({ error: 'Se requiere un bundle' });
     }
 
     const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    // Base64-encode the gzipped content for Gist storage
-    const contentBase64 = compressed.toString('base64');
-
-    console.log(`[serenity-report] Bundle comprimido: ${compressed.length} bytes, base64: ${contentBase64.length} chars`);
-
-    // Create Gist with the compressed bundle
+    // Create Gist with the bundle JSON
     let gistId: string;
     try {
       const gistRes = await gh('/gists', {
@@ -84,7 +73,9 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
           description: `Serenity bundle — ${jobId}`,
           public: false,
           files: {
-            'bundle.json.gz': { content: contentBase64 },
+            'serenity-bundle.json': {
+              content: JSON.stringify(bundle, null, 2),
+            },
           },
         }),
       });
@@ -111,7 +102,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
           event_type: 'serenity-report',
           client_payload: {
             job_id: jobId,
-            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/bundle.json.gz`,
+            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
           },
         }),
       });

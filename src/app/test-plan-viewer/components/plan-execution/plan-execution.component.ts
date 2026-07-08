@@ -1022,8 +1022,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         const state = this.serenityReportService.state;
         const phaseLabels: Record<string, string> = {
           hydrating: state.statusMessage || 'Descargando evidencias...',
-          building: 'Construyendo bundle...',
-          compressing: state.statusMessage || 'Comprimiendo...',
+          building: state.statusMessage || 'Construyendo bundle...',
           dispatching: 'Enviando a workflow...',
           polling: 'Generando reporte...',
           downloading: 'Descargando...',

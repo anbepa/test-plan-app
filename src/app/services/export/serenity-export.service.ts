@@ -58,6 +58,77 @@ export class SerenityExportService {
     return this.convert(execution, run);
   }
 
+  /** Builds the FULL bundle with optionally compressed evidence images for smaller payload. */
+  async buildFullBundle(execution: PlanExecution, run: TestRun): Promise<any> {
+    return this.convert(execution, run);
+  }
+
+  /**
+   * Builds a SIZE-OPTIMIZED bundle by re-compressing evidence images.
+   * Each image is resized to max 640px wide and re-encoded as WebP at quality 0.5,
+   * dramatically reducing the base64 payload for Vercel upload.
+   */
+  async buildCompressedBundle(execution: PlanExecution, run: TestRun): Promise<any> {
+    const compressedEvidences: BundleEvidence[] = [];
+    const usedNames = new Set<string>();
+
+    for (let sIdx = 0; sIdx < (execution.testCases || []).length; sIdx++) {
+      const tc = execution.testCases[sIdx];
+      for (let i = 0; i < (tc.steps || []).length; i++) {
+        const step = tc.steps[i];
+        for (let evIdx = 0; evIdx < (step.evidences || []).length; evIdx++) {
+          const ev = step.evidences[evIdx];
+          const dataUrl = ev.base64Data || ev.originalBase64;
+          if (ev.type === 'image' && dataUrl) {
+            const ext = this.extFromDataUrl(dataUrl);
+            const name = `ev-${sIdx}-${i}-${evIdx}.${ext}`;
+            if (usedNames.has(name)) continue;
+            usedNames.add(name);
+
+            try {
+              const smallBase64 = await this.compressImage(dataUrl, 640, 0.5);
+              compressedEvidences.push({ name, base64: smallBase64 });
+            } catch {
+              compressedEvidences.push({ name, base64: dataUrl });
+            }
+          }
+        }
+      }
+    }
+
+    // Reuse convert() but replace evidences array
+    const fullBundle = this.convert(execution, run);
+    fullBundle.evidences = compressedEvidences;
+    return fullBundle;
+  }
+
+  /**
+   * Compress an image: resize to maxWidth, re-encode as WebP at given quality.
+   * Uses Canvas API — must run in browser context.
+   */
+  private compressImage(dataUrl: string, maxWidth: number, quality: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (w > maxWidth) {
+          h = Math.round(h * (maxWidth / w));
+          w = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/webp', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   /**
    * Returns the evidence items that need to be uploaded separately
    * (to avoid exceeding Vercel request body limits for large executions).
