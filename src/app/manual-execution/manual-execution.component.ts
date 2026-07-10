@@ -10,6 +10,8 @@ import { TestPlanMapperService } from '../services/database/test-plan-mapper.ser
 import { ExecutionStorageService } from '../services/database/execution-storage-supabase.service';
 import { SupabaseClientService } from '../services/database/supabase-client.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import { SerenityExportService } from '../services/export/serenity-export.service';
+import { SerenityReportService, SerenityReportState } from '../services/export/serenity-report.service';
 
 interface PlanNode {
   id: string;
@@ -76,6 +78,12 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   // Selection
   selectedRunIds: string[] = [];
 
+  // Serenity report export
+  exportingRunId: string | null = null;
+  generatingReportFor: Set<string> = new Set();
+  serenityReportState: SerenityReportState | null = null;
+  private serenityStateCheckInterval: any = null;
+
   // Delete modal
   showDeleteModal = false;
   runToDelete: TestRun | null = null;
@@ -94,6 +102,8 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     private mapperService: TestPlanMapperService,
     private storageService: ExecutionStorageService,
     private supabaseClient: SupabaseClientService,
+    private serenityExport: SerenityExportService,
+    private serenityReportService: SerenityReportService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -637,6 +647,104 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
         origin: 'manual-execution'
       }
     });
+  }
+
+  // ── Serenity Report Export ──
+
+  canDownloadReport(run: TestRun): boolean {
+    return !!run.executionId &&
+      (run.status === 'Completed' || run.status === 'Failed' || run.completedTestCases > 0);
+  }
+
+  isGeneratingReport(runId: string): boolean {
+    return this.generatingReportFor.has(runId);
+  }
+
+  async downloadSerenityReport(run: TestRun): Promise<void> {
+    if (this.generatingReportFor.has(run.id)) return;
+    if (!run.executionId) {
+      this.toastService.warning('Ejecuta esta prueba y carga evidencias antes de generar el reporte.');
+      return;
+    }
+
+    this.generatingReportFor.add(run.id);
+    this.serenityReportState = { phase: 'hydrating', statusMessage: 'Iniciando...' };
+    this.cdr.detectChanges();
+
+    // Monitorear el estado del servicio cada 300ms para feedback en tiempo real
+    this.serenityStateCheckInterval = setInterval(() => {
+      const state = this.serenityReportService.state;
+      this.serenityReportState = { ...state };
+      this.cdr.detectChanges();
+    }, 300);
+
+    try {
+      await this.serenityReportService.generateReport(run);
+
+      const doneInterval = setInterval(() => {
+        if (!this.serenityStateCheckInterval) {
+          clearInterval(doneInterval);
+          return;
+        }
+        const state = this.serenityReportService.state;
+        this.serenityReportState = { ...state };
+        this.cdr.detectChanges();
+
+        if (state.phase === 'done') {
+          clearInterval(doneInterval);
+          this.clearSerenityState();
+          this.generatingReportFor.delete(run.id);
+          this.toastService.success('Reporte Serenity descargado');
+          this.cdr.detectChanges();
+        }
+        if (state.phase === 'error') {
+          clearInterval(doneInterval);
+          this.clearSerenityState();
+          this.generatingReportFor.delete(run.id);
+          this.toastService.error(state.error || 'Error al generar reporte Serenity');
+          this.cdr.detectChanges();
+        }
+      }, 500);
+
+      setTimeout(() => {
+        clearInterval(doneInterval);
+        if (this.generatingReportFor.has(run.id)) {
+          this.clearSerenityState();
+          this.generatingReportFor.delete(run.id);
+          this.serenityReportService.stopPolling();
+          this.toastService.warning('Timeout: el reporte esta tardando demasiado');
+          this.cdr.detectChanges();
+        }
+      }, 600000);
+    } catch (err: any) {
+      this.clearSerenityState();
+      this.generatingReportFor.delete(run.id);
+      this.toastService.error(err?.message || 'Error al iniciar reporte Serenity');
+      this.cdr.detectChanges();
+    }
+  }
+
+  private clearSerenityState(): void {
+    if (this.serenityStateCheckInterval) {
+      clearInterval(this.serenityStateCheckInterval);
+      this.serenityStateCheckInterval = null;
+    }
+    this.serenityReportState = null;
+  }
+
+  get serenityStatusMessage(): string {
+    return this.serenityReportState?.statusMessage
+      || this.serenityReportState?.error
+      || '';
+  }
+
+  get serenityProgressPercent(): number {
+    return this.serenityReportState?.hydrateProgress?.percentage ?? 0;
+  }
+
+  get showSerenityProgress(): boolean {
+    const phase = this.serenityReportState?.phase;
+    return phase === 'hydrating' || phase === 'building' || phase === 'dispatching' || phase === 'polling' || phase === 'downloading';
   }
 
   confirmDeleteRun(run: TestRun): void {
