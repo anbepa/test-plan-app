@@ -315,3 +315,22 @@
   (confirm)="deleteRun()"
   (cancel)="cancelDelete()">
 </app-confirmation-modal>
+
+<!-- Serenity report progress overlay -->
+<div class="serenity-overlay" *ngIf="generatingReportFor.size > 0 || (serenityReportState?.phase && serenityReportState?.phase !== 'idle' && serenityReportState?.phase !== 'done' && serenityReportState?.phase !== 'error')">
+  <div class="serenity-modal">
+    <div class="serenity-modal-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </div>
+    <p class="serenity-modal-title">Generando reporte Serenity</p>
+    <p class="serenity-modal-subtitle">{{ serenityStatusMessage }}</p>
+    <div class="serenity-modal-bar-track">
+      <div class="serenity-modal-bar-fill" [style.width.%]="serenityProgressPercent"></div>
+    </div>
+    <p class="serenity-modal-hint">No cierres esta ventana</p>
+  </div>
+</div>

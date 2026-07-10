@@ -568,4 +568,23 @@
       <p class="export-hint">No cierres esta ventana</p>
     </div>
   </div>
+
+  <!-- Serenity report progress overlay -->
+  <div class="global-loading-overlay export-progress-overlay" *ngIf="isExportingSerenity">
+    <div class="loading-box export-progress-box">
+      <div class="export-icon serenity-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </div>
+      <p class="export-title">Generando reporte Serenity</p>
+      <p class="export-subtitle">{{ serenityReportPhase }}</p>
+      <div class="export-bar-track">
+        <div class="export-bar-fill serenity-bar" [style.width.%]="serenityProgressPct"></div>
+      </div>
+      <p class="export-hint">No cierres esta ventana</p>
+    </div>
+  </div>
 </div>

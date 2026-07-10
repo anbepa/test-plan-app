@@ -768,6 +768,9 @@
   border-radius: 99px;
   transition: width 400ms ease;
 }
+.serenity-bar {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+}
 .export-hint {
   font-size: 11px !important;
   color: #94a3b8 !important;
