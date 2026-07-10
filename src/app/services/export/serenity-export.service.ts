@@ -65,71 +65,43 @@ export class SerenityExportService {
    * Evidence names are normalized to .webp to match the actual file format.
    */
   async buildCompressedBundle(execution: PlanExecution, run: TestRun): Promise<any> {
-    // Collect all evidence to compress in parallel (with concurrency limit)
-    interface EvTask { name: string; dataUrl: string; sIdx: number; stepIdx: number; evIdx: number; }
-    const tasks: EvTask[] = [];
-    const usedNames = new Set<string>();
-
-    for (let sIdx = 0; sIdx < (execution.testCases || []).length; sIdx++) {
-      const tc = execution.testCases[sIdx];
-      for (let stepIdx = 0; stepIdx < (tc.steps || []).length; stepIdx++) {
-        const step = tc.steps[stepIdx];
-        for (let evIdx = 0; evIdx < (step.evidences || []).length; evIdx++) {
-          const ev = step.evidences[evIdx];
-          const dataUrl = ev.base64Data || ev.originalBase64;
-          if (ev.type === 'image' && dataUrl) {
-            const name = `ev-${sIdx}-${stepIdx}-${evIdx}.webp`;
-            if (usedNames.has(name)) continue;
-            usedNames.add(name);
-            tasks.push({ name, dataUrl, sIdx, stepIdx, evIdx });
-          }
-        }
-      }
-    }
-
-    // Compress in parallel with concurrency 8
-    const compressedMap = new Map<string, string>();
-    const CONCURRENCY = 8;
-    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
-      const batch = tasks.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map(async (t) => {
-          try {
-            const small = await this.compressImage(t.dataUrl, 640, 0.5);
-            return { name: t.name, base64: small };
-          } catch {
-            return { name: t.name, base64: t.dataUrl };
-          }
-        })
-      );
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          compressedMap.set(r.value.name, r.value.base64);
-        }
-      }
-    }
-
-    // Build full bundle using convert() then patch evidence names + data
+    // 1) Build full bundle (convert handles all naming consistently)
     const fullBundle = this.convert(execution, run);
-    fullBundle.evidences = tasks.map(t => ({
-      name: t.name,
-      base64: compressedMap.get(t.name) || t.dataUrl,
-    }));
 
-    // Patch results: replace evidence names from convert() with .webp names
+    // 2) Collect oldName → newName mapping (png/jpg → webp after compression)
+    const renameMap = new Map<string, string>();
+
+    for (const ev of (fullBundle.evidences || [])) {
+      if (!ev.base64) continue;
+      const oldName = ev.name;
+      const newName = oldName.replace(/\.(png|jpe?g|gif)$/i, '.webp');
+      if (newName !== oldName) {
+        renameMap.set(oldName, newName);
+      }
+    }
+
+    // 3) Compress each evidence and rename to .webp
+    for (const ev of (fullBundle.evidences || [])) {
+      if (!ev.base64) continue;
+      const newName = renameMap.get(ev.name) || ev.name;
+      try {
+        ev.name = newName;
+        ev.base64 = await this.compressImage(ev.base64, 640, 0.5);
+      } catch {
+        ev.name = newName; // rename even if compression fails
+      }
+    }
+
+    // 4) Patch results to use new names
     for (const [scenarioName, sc] of Object.entries(fullBundle.results || {})) {
       for (const [stepIdx, r] of Object.entries((sc as any).steps || {})) {
         const stepResult: any = r;
-        const origEvNames: string[] = Array.isArray(stepResult.evidences) ? stepResult.evidences : (stepResult.evidence ? [stepResult.evidence] : []);
-        const patchedNames: string[] = origEvNames.map(n => {
-          const base = String(n || '').replace(/\.[^.]+$/, '');
-          const newName = `${base}.webp`;
-          return usedNames.has(newName) ? newName : n;
-        });
-        (stepResult as any).evidences = patchedNames;
-        if (patchedNames.length > 0) {
-          (stepResult as any).evidence = patchedNames[0];
-        }
+        const origNames: string[] = Array.isArray(stepResult.evidences)
+          ? stepResult.evidences
+          : (stepResult.evidence ? [stepResult.evidence] : []);
+        const patchedNames = origNames.map(n => renameMap.get(n) || n);
+        stepResult.evidences = patchedNames;
+        if (patchedNames.length > 0) stepResult.evidence = patchedNames[0];
       }
     }
 
