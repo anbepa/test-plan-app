@@ -1211,3 +1211,34 @@
   color: #9ca3af;
   white-space: nowrap;
 }
+
+/* ═══ Serenity Modal Overlay ═══ */
+.serenity-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,.45); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; z-index: 9999;
+}
+.serenity-modal {
+  background: #fff; border-radius: 14px; padding: 2.5rem 3rem;
+  text-align: center; min-width: 340px; max-width: 420px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.18);
+}
+.serenity-modal-icon {
+  color: #7c3aed; margin-bottom: 1rem;
+}
+.serenity-modal-title {
+  font-size: 1.1rem; font-weight: 700; color: #1f2937; margin: 0 0 0.5rem;
+}
+.serenity-modal-subtitle {
+  font-size: 0.85rem; color: #6b7280; margin: 0 0 1.25rem;
+}
+.serenity-modal-bar-track {
+  height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-bottom: 0.75rem;
+}
+.serenity-modal-bar-fill {
+  height: 100%; background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  border-radius: 99px; transition: width 0.4s ease;
+}
+.serenity-modal-hint {
+  font-size: 0.7rem; color: #9ca3af; margin: 0;
+}

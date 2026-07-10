@@ -87,6 +87,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   /** Estado de generacion de reporte Serenity remoto */
   isExportingSerenity = false;
   serenityReportPhase: string = '';
+  serenityProgressPct = 0;
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -1028,11 +1029,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           done: 'Completado',
           error: state.error || 'Error',
         };
-        let label = phaseLabels[state.phase] || state.statusMessage || state.phase;
-        if (state.hydrateProgress) {
-          label = `${label} (${state.hydrateProgress.percentage}%)`;
-        }
-        this.serenityReportPhase = label;
+        this.serenityReportPhase = phaseLabels[state.phase] || state.statusMessage || state.phase;
+        this.serenityProgressPct = state.hydrateProgress?.percentage ?? 0;
         this.cdr.markForCheck();
 
         if (state.phase === 'done' || state.phase === 'error') {
@@ -1048,6 +1046,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           clearInterval(checkInterval);
           this.isExportingSerenity = false;
           this.serenityReportPhase = '';
+          this.serenityProgressPct = 0;
           this.toastService.success('Reporte Serenity descargado');
           this.cdr.markForCheck();
         }
@@ -1055,6 +1054,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           clearInterval(checkInterval);
           this.isExportingSerenity = false;
           this.serenityReportPhase = '';
+          this.serenityProgressPct = 0;
           this.toastService.error(state.error || 'Error al generar reporte Serenity');
           this.cdr.markForCheck();
         }
