@@ -62,38 +62,76 @@ export class SerenityExportService {
    * Builds a SIZE-OPTIMIZED bundle by re-compressing evidence images.
    * Each image is resized to max 640px wide and re-encoded as WebP at quality 0.5,
    * dramatically reducing the base64 payload for Vercel upload.
+   * Evidence names are normalized to .webp to match the actual file format.
    */
   async buildCompressedBundle(execution: PlanExecution, run: TestRun): Promise<any> {
-    const compressedEvidences: BundleEvidence[] = [];
+    // Collect all evidence to compress in parallel (with concurrency limit)
+    interface EvTask { name: string; dataUrl: string; sIdx: number; stepIdx: number; evIdx: number; }
+    const tasks: EvTask[] = [];
     const usedNames = new Set<string>();
 
     for (let sIdx = 0; sIdx < (execution.testCases || []).length; sIdx++) {
       const tc = execution.testCases[sIdx];
-      for (let i = 0; i < (tc.steps || []).length; i++) {
-        const step = tc.steps[i];
+      for (let stepIdx = 0; stepIdx < (tc.steps || []).length; stepIdx++) {
+        const step = tc.steps[stepIdx];
         for (let evIdx = 0; evIdx < (step.evidences || []).length; evIdx++) {
           const ev = step.evidences[evIdx];
           const dataUrl = ev.base64Data || ev.originalBase64;
           if (ev.type === 'image' && dataUrl) {
-            const ext = this.extFromDataUrl(dataUrl);
-            const name = `ev-${sIdx}-${i}-${evIdx}.${ext}`;
+            const name = `ev-${sIdx}-${stepIdx}-${evIdx}.webp`;
             if (usedNames.has(name)) continue;
             usedNames.add(name);
-
-            try {
-              const smallBase64 = await this.compressImage(dataUrl, 640, 0.5);
-              compressedEvidences.push({ name, base64: smallBase64 });
-            } catch {
-              compressedEvidences.push({ name, base64: dataUrl });
-            }
+            tasks.push({ name, dataUrl, sIdx, stepIdx, evIdx });
           }
         }
       }
     }
 
-    // Reuse convert() but replace evidences array
+    // Compress in parallel with concurrency 8
+    const compressedMap = new Map<string, string>();
+    const CONCURRENCY = 8;
+    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      const batch = tasks.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        batch.map(async (t) => {
+          try {
+            const small = await this.compressImage(t.dataUrl, 640, 0.5);
+            return { name: t.name, base64: small };
+          } catch {
+            return { name: t.name, base64: t.dataUrl };
+          }
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          compressedMap.set(r.value.name, r.value.base64);
+        }
+      }
+    }
+
+    // Build full bundle using convert() then patch evidence names + data
     const fullBundle = this.convert(execution, run);
-    fullBundle.evidences = compressedEvidences;
+    fullBundle.evidences = tasks.map(t => ({
+      name: t.name,
+      base64: compressedMap.get(t.name) || t.dataUrl,
+    }));
+
+    // Patch results: replace evidence names from convert() with .webp names
+    for (const [scenarioName, sc] of Object.entries(fullBundle.results || {})) {
+      for (const [stepIdx, r] of Object.entries((sc as any).steps || {})) {
+        const origEvNames: string[] = Array.isArray(r.evidences) ? r.evidences : (r.evidence ? [r.evidence] : []);
+        const patchedNames: string[] = origEvNames.map(n => {
+          const base = String(n || '').replace(/\.[^.]+$/, '');
+          const newName = `${base}.webp`;
+          return usedNames.has(newName) ? newName : n;
+        });
+        (r as any).evidences = patchedNames;
+        if (patchedNames.length > 0) {
+          (r as any).evidence = patchedNames[0];
+        }
+      }
+    }
+
     return fullBundle;
   }
 
