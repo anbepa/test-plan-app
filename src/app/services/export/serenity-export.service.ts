@@ -119,15 +119,16 @@ export class SerenityExportService {
     // Patch results: replace evidence names from convert() with .webp names
     for (const [scenarioName, sc] of Object.entries(fullBundle.results || {})) {
       for (const [stepIdx, r] of Object.entries((sc as any).steps || {})) {
-        const origEvNames: string[] = Array.isArray(r.evidences) ? r.evidences : (r.evidence ? [r.evidence] : []);
+        const stepResult: any = r;
+        const origEvNames: string[] = Array.isArray(stepResult.evidences) ? stepResult.evidences : (stepResult.evidence ? [stepResult.evidence] : []);
         const patchedNames: string[] = origEvNames.map(n => {
           const base = String(n || '').replace(/\.[^.]+$/, '');
           const newName = `${base}.webp`;
           return usedNames.has(newName) ? newName : n;
         });
-        (r as any).evidences = patchedNames;
+        (stepResult as any).evidences = patchedNames;
         if (patchedNames.length > 0) {
-          (r as any).evidence = patchedNames[0];
+          (stepResult as any).evidence = patchedNames[0];
         }
       }
     }
