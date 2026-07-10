@@ -68,31 +68,27 @@ export class SerenityExportService {
     // 1) Build full bundle (convert handles all naming consistently)
     const fullBundle = this.convert(execution, run);
 
-    // 2) Collect oldName → newName mapping (png/jpg → webp after compression)
+    // 2) Compress each evidence. Only rename if compression succeeds.
     const renameMap = new Map<string, string>();
 
     for (const ev of (fullBundle.evidences || [])) {
       if (!ev.base64) continue;
       const oldName = ev.name;
-      const newName = oldName.replace(/\.(png|jpe?g|gif)$/i, '.webp');
-      if (newName !== oldName) {
-        renameMap.set(oldName, newName);
-      }
-    }
-
-    // 3) Compress each evidence and rename to .webp
-    for (const ev of (fullBundle.evidences || [])) {
-      if (!ev.base64) continue;
-      const newName = renameMap.get(ev.name) || ev.name;
+      const isWebp = oldName.endsWith('.webp');
+      const newName = isWebp ? oldName : oldName.replace(/\.(png|jpe?g|gif)$/i, '.webp');
       try {
-        ev.name = newName;
-        ev.base64 = await this.compressImage(ev.base64, 640, 0.5);
+        const compressed = await this.compressImage(ev.base64, 640, 0.5);
+        ev.base64 = compressed;
+        if (newName !== oldName) {
+          ev.name = newName;
+          renameMap.set(oldName, newName);
+        }
       } catch {
-        ev.name = newName; // rename even if compression fails
+        // keep original name + base64 intact
       }
     }
 
-    // 4) Patch results to use new names
+    // 3) Patch results only for evidence that was successfully renamed
     for (const [scenarioName, sc] of Object.entries(fullBundle.results || {})) {
       for (const [stepIdx, r] of Object.entries((sc as any).steps || {})) {
         const stepResult: any = r;
