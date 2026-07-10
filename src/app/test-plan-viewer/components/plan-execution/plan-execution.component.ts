@@ -1001,7 +1001,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     try {
       this.isExportingSerenity = true;
-      this.serenityReportPhase = 'Cargando ejecucion...';
+      this.serenityReportPhase = 'Iniciando...';
       this.cdr.markForCheck();
 
       const run = {
@@ -1016,9 +1016,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         createdAt: new Date().toISOString(),
       };
 
-      await this.serenityReportService.generateReport(run as any);
-
-      const checkInterval = setInterval(() => {
+      // Monitorear estado en paralelo mientras generateReport se ejecuta
+      const monitorInterval = setInterval(() => {
         const state = this.serenityReportService.state;
         const phaseLabels: Record<string, string> = {
           hydrating: state.statusMessage || 'Descargando evidencias...',
@@ -1029,13 +1028,22 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           done: 'Completado',
           error: state.error || 'Error',
         };
-        this.serenityReportPhase = phaseLabels[state.phase] || state.statusMessage || state.phase;
-        // Track progress percentage if available
+        let label = phaseLabels[state.phase] || state.statusMessage || state.phase;
         if (state.hydrateProgress) {
-          this.serenityReportPhase = `${phaseLabels[state.phase]} (${state.hydrateProgress.percentage}%)`;
+          label = `${label} (${state.hydrateProgress.percentage}%)`;
         }
+        this.serenityReportPhase = label;
         this.cdr.markForCheck();
 
+        if (state.phase === 'done' || state.phase === 'error') {
+          clearInterval(monitorInterval);
+        }
+      }, 500);
+
+      await this.serenityReportService.generateReport(run as any);
+
+      const checkInterval = setInterval(() => {
+        const state = this.serenityReportService.state;
         if (state.phase === 'done') {
           clearInterval(checkInterval);
           this.isExportingSerenity = false;
@@ -1050,7 +1058,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           this.toastService.error(state.error || 'Error al generar reporte Serenity');
           this.cdr.markForCheck();
         }
-      }, 500);
+      }, 1000);
 
       setTimeout(() => {
         clearInterval(checkInterval);
