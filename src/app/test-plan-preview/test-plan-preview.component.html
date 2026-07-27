@@ -40,12 +40,12 @@
                     <div class="export-menu-item-wrapper export-item-pdf">
                         <app-word-exporter
                             [testPlanTitle]="testPlan?.title || ''"
-                            [repositoryLink]="testPlan?.repository_link || ''"
+                            [repositoryLink]="repositoryLink"
                             [outOfScopeContent]="testPlan?.out_of_scope || ''"
                             [strategyContent]="testPlan?.strategy || ''"
                             [limitationsContent]="testPlan?.limitations || ''"
                             [assumptionsContent]="testPlan?.assumptions || ''"
-                            [teamContent]="testPlan?.team || ''"
+                            [teamContent]="teamContent"
                             [huList]="huList">
                         </app-word-exporter>
                     </div>

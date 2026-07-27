@@ -37,12 +37,10 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
   editingBuffer = '';
 
   sections: SectionItem[] = [
-    { key: 'repositoryLink', title: 'Repositorio Pruebas VSTS', value: '', editable: true, aiEnabled: false, loadingAI: false, errorAI: null },
     { key: 'outOfScope', title: 'Fuera del Alcance', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null },
     { key: 'strategy', title: 'Estrategia', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null },
     { key: 'limitations', title: 'Limitaciones', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null },
-    { key: 'assumptions', title: 'Supuestos', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null },
-    { key: 'team', title: 'Equipo de Trabajo', value: '', editable: true, aiEnabled: false, loadingAI: false, errorAI: null }
+    { key: 'assumptions', title: 'Supuestos', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null }
   ];
 
   constructor(
@@ -82,12 +80,10 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
       this.testPlanTitle = this.testPlanTitle || plan.title || '';
       this.huList = this.mapper.mapDbTestPlanToHUList(plan);
 
-      this.setSectionValue('repositoryLink', plan.repository_link || '');
       this.setSectionValue('outOfScope', plan.out_of_scope || '');
       this.setSectionValue('strategy', plan.strategy || '');
       this.setSectionValue('limitations', plan.limitations || '');
       this.setSectionValue('assumptions', plan.assumptions || '');
-      this.setSectionValue('team', plan.team || '');
 
     } catch (error) {
       console.error('❌ Error cargando secciones generales:', error);
@@ -227,8 +223,6 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
 
   private buildDbUpdate(key: StaticSectionName, value: string): Partial<DbTestPlan> {
     switch (key) {
-      case 'repositoryLink':
-        return { repository_link: value };
       case 'outOfScope':
         return { out_of_scope: value };
       case 'strategy':
@@ -237,8 +231,6 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
         return { limitations: value };
       case 'assumptions':
         return { assumptions: value };
-      case 'team':
-        return { team: value };
       default:
         return {};
     }

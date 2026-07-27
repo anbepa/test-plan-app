@@ -9,6 +9,8 @@ import { Observable, of, forkJoin } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
+import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
+import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -28,6 +30,8 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
   styleUrls: ['./test-case-generator.component.css']
 })
 export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
+  private readonly AUTO_TECHNIQUE = 'Automática';
+
   @Input() initialGenerationMode: GenerationMode = 'text';
   @Input() initialSprint: string = '';
   @Input() initialCellName: string = '';
@@ -45,9 +49,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   currentSprint: string = '';
   currentDescription: string = '';
   currentAcceptanceCriteria: string = '';
-  currentSelectedTechnique: string = '';
-  refinementTechnique: string = '';
+  currentGenerationContext: string = '';
+  currentSelectedTechnique: string = this.AUTO_TECHNIQUE;
+  refinementTechnique: string = this.AUTO_TECHNIQUE;
   userRefinementContext: string = '';
+  azureUserStoryIdInput: string = '';
+  azureImportLoading: boolean = false;
+  azureImportSuccessMessage: string | null = null;
+  azureImportErrorMessage: string | null = null;
+  azureNodeNameWarning: string | null = null;
 
   get currentHuDataForModal() {
     return {
@@ -98,7 +108,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
     private elRef: ElementRef,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private azureDevOpsIntegrationService: AzureDevOpsIntegrationService
   ) { }
 
   ngOnInit(): void {
@@ -201,19 +212,24 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.componentState = 'initialForm';
     this.formError = null;
     const keptSprint = this.currentSprint || this.initialSprint;
-    const keptTechnique = this.currentSelectedTechnique;
+    const keptTechnique = this.currentSelectedTechnique || this.AUTO_TECHNIQUE;
     const keptMode = this.currentGenerationMode || this.initialGenerationMode;
     this.currentHuId = '';
     this.currentHuTitle = '';
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
+    this.currentGenerationContext = '';
     this.generatedHUData = null;
     this.userRefinementContext = '';
-    this.refinementTechnique = '';
+    this.refinementTechnique = this.AUTO_TECHNIQUE;
     this.loadingScope = false;
     this.loadingScenarios = false;
     this.errorScope = null;
     this.errorScenarios = null;
+    this.azureImportLoading = false;
+    this.azureImportSuccessMessage = null;
+    this.azureImportErrorMessage = null;
+    this.azureNodeNameWarning = null;
 
     this.huFormDirective?.resetForm();
     this.currentGenerationMode = keptMode;
@@ -224,11 +240,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         this.huFormDirective.form.patchValue({
           cellName: this.cellName,
           currentSprint: this.currentSprint,
-          currentSelectedTechnique: this.currentSelectedTechnique,
           currentHuId: '',
           currentHuTitle: '',
           currentDescription: '',
-          currentAcceptanceCriteria: ''
+          currentAcceptanceCriteria: '',
+          currentGenerationContext: ''
         });
         this.huFormDirective.form.updateValueAndValidity();
       }
@@ -238,6 +254,89 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   onCellNameChange(cellName: string): void {
     this.cellNameChanged.emit(cellName);
+  }
+
+  importFromAzureDevOps(): void {
+    this.azureImportSuccessMessage = null;
+    this.azureImportErrorMessage = null;
+    this.azureNodeNameWarning = null;
+
+    const trimmedId = this.azureUserStoryIdInput.trim();
+    const numericId = Number(trimmedId);
+
+    if (!trimmedId || !Number.isInteger(numericId) || numericId <= 0) {
+      this.azureImportErrorMessage = 'Ingresa un ID de HU válido (número entero positivo).';
+      return;
+    }
+
+    this.azureImportLoading = true;
+
+    this.azureDevOpsIntegrationService.importUserStory(numericId)
+      .pipe(
+        finalize(() => {
+          this.azureImportLoading = false;
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
+        next: (importedHu: AzureDevOpsImportedUserStory) => {
+          this.currentHuId = String(importedHu.id);
+          this.currentHuTitle = importedHu.title || '';
+          this.currentSprint = importedHu.sprint || '';
+          this.currentDescription = importedHu.description || '';
+          this.currentAcceptanceCriteria = importedHu.acceptanceCriteria || '';
+
+          const matchedCell = this.resolveCellFromAzureNodeName(importedHu.nodeName);
+          if (matchedCell) {
+            this.cellName = matchedCell;
+            this.onCellNameChange(this.cellName);
+          } else if (importedHu.nodeName?.trim()) {
+            this.azureNodeNameWarning = `No se encontró coincidencia para "${importedHu.nodeName}" en el selector de Nombre Célula. Selecciónala manualmente.`;
+          }
+
+          this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
+          this.azureImportErrorMessage = null;
+        },
+        error: (error: unknown) => {
+          this.azureImportErrorMessage = this.getAzureImportErrorMessage(error);
+          this.azureImportSuccessMessage = null;
+        }
+      });
+  }
+
+  private resolveCellFromAzureNodeName(nodeName: string): string | null {
+    const normalizedNode = nodeName.trim().toLowerCase();
+    if (!normalizedNode) {
+      return null;
+    }
+
+    const exactMatch = this.cellOptions.find((option) => option.trim().toLowerCase() === normalizedNode);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const suffixMatch = this.cellOptions.find((option) => {
+      const normalizedOption = option.trim().toLowerCase();
+      return normalizedNode.endsWith(`- ${normalizedOption}`) || normalizedNode.endsWith(normalizedOption);
+    });
+
+    return suffixMatch ?? null;
+  }
+
+  private getAzureImportErrorMessage(error: unknown): string {
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (error && typeof error === 'object') {
+      const anyError = error as Record<string, any>;
+      const backendMessage = anyError['error']?.['message'] || anyError['message'] || anyError['userMessage'];
+      if (typeof backendMessage === 'string' && backendMessage.trim()) {
+        return backendMessage;
+      }
+    }
+
+    return 'No fue posible importar la HU desde Azure DevOps. Verifica la conexión e intenta nuevamente.';
   }
 
   public autoGrowTextarea(element: any): void {
@@ -344,7 +443,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   isFormInvalidForGeneration(): boolean {
     if (!this.huFormDirective?.form || !this.currentGenerationMode) return true;
-    const commonRequired = !this.currentSprint || !this.currentHuTitle || !this.currentSelectedTechnique;
+    const commonRequired = !this.currentSprint || !this.currentHuTitle;
     return !this.currentHuId || !this.currentDescription || !this.currentAcceptanceCriteria || commonRequired;
   }
 
@@ -377,20 +476,21 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         generationMode: this.currentGenerationMode,
         description: this.currentDescription,
         acceptanceCriteria: this.currentAcceptanceCriteria,
-        selectedTechnique: this.currentSelectedTechnique,
+        selectedTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
+        userRequest: this.currentGenerationContext,
       },
       id: this.currentHuId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
       generatedScope: '',
       detailedTestCases: [],
       generatedTestCaseTitles: '',
-      refinementTechnique: this.currentSelectedTechnique, // Asignar la técnica seleccionada
+      refinementTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
       refinementContext: '',
       editingScope: false,
       loadingScope: false, errorScope: null,
       isScopeDetailsOpen: this.currentGenerationMode === 'text'
     };
     this.generatedHUData = huData;
-    this.refinementTechnique = this.currentSelectedTechnique;
+    this.refinementTechnique = this.currentSelectedTechnique || this.AUTO_TECHNIQUE;
     this.cdr.detectChanges();
 
     // GENERACIÓN EN MODO STREAM (deepseek-reasoner)
@@ -406,7 +506,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.aiService.generateTestCasesSmartStream(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
-        this.currentSelectedTechnique
+        this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
+        this.currentGenerationContext
       ).subscribe({
         next: (event: any) => {
           this.streamingReasoning = event.reasoning || '';
@@ -500,7 +601,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   startRefinementMode(): void {
     if (this.generatedHUData && this.generatedHUData.detailedTestCases) {
       this.componentState = 'editingForRefinement';
-      this.refinementTechnique = this.generatedHUData.originalInput.selectedTechnique || '';
+      this.refinementTechnique = this.generatedHUData.originalInput.selectedTechnique || this.AUTO_TECHNIQUE;
       this.generatedHUData.detailedTestCases.forEach((tc, index) => {
         tc.isExpanded = index === 0;
       });
@@ -527,10 +628,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.formError = "No hay datos generados para refinar.";
       return;
     }
-    if (!this.refinementTechnique) {
-      this.formError = "Por favor, selecciona una técnica para el refinamiento.";
-      return;
-    }
+    this.refinementTechnique = this.refinementTechnique || this.AUTO_TECHNIQUE;
     this.generatedHUData.detailedTestCases.forEach(tc => {
       if (tc.steps) {
         tc.steps.forEach(step => {
@@ -557,7 +655,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.aiService.refineTestCasesDirectStream(
       this.generatedHUData.originalInput,
       casesToRefine,
-      this.refinementTechnique,
+      this.refinementTechnique || this.AUTO_TECHNIQUE,
       this.userRefinementContext
     ).subscribe({
       next: (event: any) => {
@@ -626,7 +724,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   // Handlers para el nuevo componente TestCaseEditor
   handleRefineWithAI(event: { technique: string; context: string }): void {
-    this.refinementTechnique = event.technique;
+    this.refinementTechnique = event.technique || this.AUTO_TECHNIQUE;
     this.userRefinementContext = event.context;
     this.refineHuCasesWithAI();
   }
@@ -889,6 +987,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     dataToEmit.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
       (dataToEmit.detailedTestCases || []).map(tc => tc.title)
     );
+
+    dataToEmit.originalInput.selectedTechnique = dataToEmit.originalInput.selectedTechnique || this.AUTO_TECHNIQUE;
 
     if (this.refinementTechnique && dataToEmit.originalInput.selectedTechnique !== this.refinementTechnique) {
       dataToEmit.originalInput.selectedTechnique = this.refinementTechnique;

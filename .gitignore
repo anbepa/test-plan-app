@@ -75,5 +75,24 @@ src/environments/environment.prod.ts
 .secrets.*
 .npmrc
 
+# Local credential/config snapshots
+*.secret
+*.secrets
+*.credentials
+*.token
+
+# DB local artifacts and dumps
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+*.backup
+
+# Local DB folders/files
+.supabase/
+supabase/.temp/
+
 # SQL scripts should not be committed
 *.sql

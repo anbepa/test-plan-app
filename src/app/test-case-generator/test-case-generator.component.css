@@ -94,6 +94,54 @@
     width: 100%;
 }
 
+.azure-import-block {
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+
+.azure-import-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.azure-import-id-group {
+    flex: 1;
+}
+
+.azure-import-btn {
+    min-width: 180px;
+    height: 44px;
+}
+
+.import-feedback {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.import-success {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+.import-error {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.import-warning {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
 .metadata-block {
     background: #f8fafc;
     border: 1px solid #e5e7eb;
@@ -172,6 +220,15 @@ textarea.form-control {
 
     .metadata-title-group {
         grid-column: span 1;
+    }
+
+    .azure-import-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .azure-import-btn {
+        width: 100%;
     }
 }
 

@@ -117,6 +117,7 @@ export interface HUData {
     description: string;
     acceptanceCriteria: string;
     selectedTechnique?: string;
+    userRequest?: string;
   };
   generatedScope?: string;
   generatedTestCaseTitles?: string;

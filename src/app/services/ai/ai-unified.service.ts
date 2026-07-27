@@ -149,10 +149,11 @@ export class AiUnifiedService {
     public generateTestCasesSmartStream(
         description: string,
         acceptanceCriteria: string,
-        technique: string
+        technique: string,
+        userRequest: string = ''
     ): Observable<StreamEvent> {
         console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
-        return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique);
+        return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
     }
 
     /**

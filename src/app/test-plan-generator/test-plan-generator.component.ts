@@ -12,6 +12,7 @@ import { ExportService } from '../services/export/export.service';
 import { catchError, finalize, tap, of } from 'rxjs';
 import { TestCaseGeneratorComponent } from '../test-case-generator/test-case-generator.component';
 import { ExcelMatrixExporterComponent } from '../excel-matrix-exporter/excel-matrix-exporter.component';
+import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
 
 type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'limitations' | 'assumptions' | 'team';
 
@@ -47,12 +48,12 @@ export class TestPlanGeneratorComponent {
   activeTab: 'generate' | 'scenarios' | 'config' = 'generate';
 
   testPlanTitle: string = '';
-  repositoryLink: string = 'https://dev.azure.com/YOUR_ORG/YOUR_PROJECT/_git/NU0139001_SAF_MR_Test - Repos (visualstudio.com)';
+  repositoryLink: string = '';
   outOfScopeContent: string = 'No se probarán funcionalidades o secciones diferentes a los definidos en el alcance.';
   strategyContent: string = 'Trabajar en coordinación con el equipo de desarrollo para identificar y/o corregir errores en etapas tempranas del proyecto.\nReportar bugs de manera inmediata, con el fin de que sean corregidos lo más pronto posible y no se vean afectadas las fechas planteadas para las entregas que generan valor al cliente.\nEl ambiente de certificación se encuentra estable.';
   limitationsContent: string = 'No tener los permisos requeridos para la aplicación.';
   assumptionsContent: string = 'El equipo de desarrollo ha realizado pruebas unitarias y de aceptación.\nSe cuenta con los insumos necesarios para realizar las pruebas.\nSe cuenta con las herramientas necesarias para la ejecución de las pruebas.\nSe cuenta con los permisos y accesos requeridos para las pruebas.\nEl equipo de desarrollo tendrá disponibilidad para la corrección de errores.';
-  teamContent: string = 'Dueño del Producto – Bancolombia: Diego Fernando Giraldo Hincapie\nAnalista de Desarrollo – Pragma: Eddy Johana Cristancho\nAnalista de Desarrollo – Luis Alfredo Chuscano Remolina\nAnalista de Desarrollo - Kevin David Cuadros Estupinan\nAnalista de Pruebas – TCS: Gabriel Ernesto Montoya Henao\nAnalista de Pruebas – TCS: Andrés Antonio Bernal Padilla';
+  teamContent: string = '';
 
   cellName: string = '';
   cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
@@ -99,15 +100,23 @@ export class TestPlanGeneratorComponent {
     private exportService: ExportService,
     @Inject(PLATFORM_ID) private platformId: Object,
     private cdr: ChangeDetectorRef,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private generalSectionsConfigService: GeneralSectionsConfigService
   ) { }
 
   ngOnInit(): void {
+    this.applyGeneralSectionsDefaults();
     this.loadNavigationContext();
     if (!this.isAppendMode) {
       this.checkForStoredData();
     }
     this.selectInitialMode('text');
+  }
+
+  private applyGeneralSectionsDefaults(): void {
+    const config = this.generalSectionsConfigService.getConfig();
+    this.repositoryLink = config.repositoryLink;
+    this.teamContent = config.teamContent;
   }
 
   goBackToDetail(): void {

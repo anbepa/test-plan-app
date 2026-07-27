@@ -353,9 +353,10 @@ export class DeepSeekService {
     public generateTestCasesSmartStream(
         description: string,
         acceptanceCriteria: string,
-        technique: string
+        technique: string,
+        userRequest: string = ''
     ): Observable<StreamEvent> {
-        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique);
+        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest);
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],

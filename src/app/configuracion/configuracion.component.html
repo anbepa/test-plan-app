@@ -1,0 +1,126 @@
+<section class="config-container">
+  <header class="config-header">
+    <h2>Configuración</h2>
+    <p class="header-subtitle">Administra parámetros globales y conexiones de tu cuenta</p>
+  </header>
+
+  <!-- SECCIÓN 1: Azure DevOps -->
+  <div class="config-section">
+    <div class="section-label">Conexión</div>
+    <div class="config-card">
+    <h3 class="card-title">Azure DevOps</h3>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="organization">Organización</label>
+        <input
+          id="organization"
+          name="organization"
+          class="form-control"
+          type="text"
+          [(ngModel)]="organization"
+          [disabled]="isBusy"
+          placeholder="GrupoBancolombia">
+      </div>
+
+      <div class="form-group">
+        <label for="personalAccessToken">Personal Access Token (PAT)</label>
+        <input
+          id="personalAccessToken"
+          name="personalAccessToken"
+          class="form-control"
+          type="password"
+          [(ngModel)]="personalAccessToken"
+          [disabled]="isBusy"
+          autocomplete="new-password"
+          placeholder="Ingresa o reemplaza tu PAT">
+      </div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn-primary" type="button" (click)="saveConnection()" [disabled]="isBusy">
+        {{ connection ? 'Reemplazar PAT y guardar' : 'Probar y guardar conexión' }}
+      </button>
+      <button class="btn-secondary" type="button" (click)="validateConnection()" [disabled]="isBusy">
+        {{ validatingConnection ? 'Validando...' : 'Validar conexión' }}
+      </button>
+      <button class="btn-danger" type="button" (click)="disconnect()" [disabled]="isBusy || !connection">
+        {{ disconnectingConnection ? 'Desconectando...' : 'Desconectar Azure DevOps' }}
+      </button>
+    </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2: Parámetros Globales -->
+  <div class="config-section">
+    <div class="section-label">Parámetros Globales</div>
+    <div class="config-card">
+    <h3 class="card-title">Parámetros de Secciones Generales</h3>
+    <p class="card-description">Estos valores se usarán por defecto para "Repositorio Pruebas VSTS" y "Equipo de Trabajo" al crear planes.</p>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="repositoryLink">Repositorio Pruebas VSTS</label>
+        <input
+          id="repositoryLink"
+          name="repositoryLink"
+          class="form-control"
+          type="text"
+          [(ngModel)]="repositoryLink"
+          placeholder="https://dev.azure.com/...">
+      </div>
+
+      <div class="form-group full-width">
+        <label for="teamContent">Equipo de Trabajo</label>
+        <textarea
+          id="teamContent"
+          name="teamContent"
+          class="form-control"
+          rows="5"
+          [(ngModel)]="teamContent"
+          placeholder="Lista del equipo responsable"></textarea>
+      </div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn-primary" type="button" (click)="saveGeneralSectionsConfig()">
+        Guardar parámetros
+      </button>
+    </div>
+
+    <p *ngIf="infoMessage" class="message success">{{ infoMessage }}</p>
+    <p *ngIf="errorMessage" class="message error">{{ errorMessage }}</p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 3: Estado -->
+  <div class="config-section" *ngIf="loadingConnection || connection">
+    <div class="section-label">Estado de Conexión</div>
+    <div class="status-card">
+
+    <div *ngIf="loadingConnection" class="status-loading">Consultando conexión...</div>
+
+    <div *ngIf="!loadingConnection && connection" class="status-grid">
+      <div class="status-item">
+        <span class="status-label">Organización</span>
+        <strong>{{ connection.organization }}</strong>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Estado</span>
+        <strong class="status-pill" [attr.data-status]="connection.status">{{ connection.status }}</strong>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Token enmascarado</span>
+        <strong>{{ connection.tokenHint }}</strong>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Última validación</span>
+        <strong>{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
