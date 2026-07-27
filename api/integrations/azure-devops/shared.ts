@@ -1,8 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
-import sanitizeHtml from 'sanitize-html';
-import { htmlToText } from 'html-to-text';
-import { decode } from 'he';
 
 interface AzureConnectionRecord {
   id: string;
@@ -313,28 +310,38 @@ export function cleanHtmlContent(inputHtml: string): string {
     return '';
   }
 
-  const decoded = decode(inputHtml, { isAttributeValue: false });
-  const sanitized = sanitizeHtml(decoded, {
-    allowedTags: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'br', 'strong', 'b', 'em', 'i', 'u'],
-    allowedAttributes: {},
-    disallowedTagsMode: 'discard',
-  });
+  const normalizedHtml = inputHtml
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\s*\/\s*p\s*>/gi, '\n')
+    .replace(/<\s*\/\s*div\s*>/gi, '\n')
+    .replace(/<\s*li\b[^>]*>/gi, '\n- ')
+    .replace(/<\s*\/\s*li\s*>/gi, '\n');
 
-  const plainText = htmlToText(sanitized, {
-    wordwrap: false,
-    preserveNewlines: true,
-    selectors: [
-      { selector: 'a', options: { ignoreHref: true } },
-      { selector: 'img', format: 'skip' }
-    ],
-  });
+  const withoutTags = normalizedHtml.replace(/<[^>]*>/g, ' ');
+  const decoded = decodeHtmlEntities(withoutTags);
 
-  return plainText
+  return decoded
     .replace(/\u00A0/g, ' ')
     .replace(/\t/g, ' ')
     .replace(/[ ]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  const namedMap: Record<string, string> = {
+    nbsp: ' ',
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'"
+  };
+
+  return value
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&([a-zA-Z]+);/g, (match, name) => namedMap[name] ?? match);
 }
 
 export class ApiError extends Error {
