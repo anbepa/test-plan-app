@@ -1,28 +1,28 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import fetch from 'node-fetch';
+import { ApiError, toErrorResponse } from './integrations/azure-devops/shared';
+import { resolveSerenityRuntimeConfig } from './integrations/serenity/shared';
 
-const GH_TOKEN = process.env['GH_DISPATCH_TOKEN'] || '';
-const GH_OWNER = process.env['GH_DISPATCH_OWNER'] || '';
-const GH_REPO = process.env['GH_DISPATCH_REPO'] || '';
-const GH_WORKFLOW_ID = process.env['GH_DISPATCH_WORKFLOW_ID'] || 'serenity-report.yml';
-
-function gh(path: string, opts: RequestInit = {}): Promise<Response> {
-  return fetch(`https://api.github.com${path}`, {
+function gh(path: string, token: string, opts: RequestInit = {}): Promise<Response> {
+  return globalThis.fetch(`https://api.github.com${path}`, {
     ...opts,
     headers: {
-      'Authorization': `token ${GH_TOKEN}`,
-      'Accept': 'application/vnd.github.v3+json',
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
       'User-Agent': 'test-plan-app',
       ...(opts.headers || {}),
     },
   });
 }
 
-async function findRunByJobId(jobId: string): Promise<string | null> {
+async function findRunByJobId(jobId: string, headers: Record<string, string | string[] | undefined>): Promise<string | null> {
   try {
-    const res = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs?event=repository_dispatch&per_page=10`);
-    if (res.ok) {
-      const data = await res.json() as any;
+    const config = await resolveSerenityRuntimeConfig(headers);
+    const workflowRuns = await gh(
+      `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/workflows/${encodeURIComponent(config.workflowFileName)}/runs?event=workflow_dispatch&per_page=10`,
+      config.personalAccessToken
+    );
+    if (workflowRuns.ok) {
+      const data = await workflowRuns.json() as any;
       const match = data.workflow_runs?.find(
         (r: any) => (r.name?.includes('Serenity') || r.display_title?.includes('Serenity'))
           && (r.name?.includes(jobId) || r.display_title?.includes(jobId))
@@ -30,10 +30,13 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
       if (match) return String(match.id);
     }
 
-    const wfRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${encodeURIComponent(GH_WORKFLOW_ID)}/runs?per_page=5`);
-    if (wfRes.ok) {
-      const wfData = await wfRes.json() as any;
-      const match = wfData.workflow_runs?.find(
+    const repoRuns = await gh(
+      `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/runs?event=repository_dispatch&per_page=10`,
+      config.personalAccessToken
+    );
+    if (repoRuns.ok) {
+      const data = await repoRuns.json() as any;
+      const match = data.workflow_runs?.find(
         (r: any) => (r.name?.includes('Serenity') || r.display_title?.includes('Serenity'))
           && (r.name?.includes(jobId) || r.display_title?.includes(jobId))
       );
@@ -46,10 +49,6 @@ async function findRunByJobId(jobId: string): Promise<string | null> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
-    return res.status(500).json({ error: 'GH_DISPATCH_TOKEN, GH_DISPATCH_OWNER y GH_DISPATCH_REPO son requeridos' });
-  }
-
   if (req.method === 'GET') return handlePoll(req, res);
   if (req.method === 'POST') return handleStart(req, res);
   return res.status(405).json({ error: 'Method not allowed.' });
@@ -57,6 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function handleStart(req: VercelRequest, res: VercelResponse) {
   try {
+    const runtimeConfig = await resolveSerenityRuntimeConfig(req.headers);
     const { bundle } = req.body || {};
     if (!bundle) {
       return res.status(400).json({ error: 'Se requiere un bundle' });
@@ -64,10 +64,10 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
 
     const jobId = `serenity-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    // Create Gist with the bundle JSON
     let gistId: string;
+    let bundleUrl: string;
     try {
-      const gistRes = await gh('/gists', {
+      const gistRes = await gh('/gists', runtimeConfig.personalAccessToken, {
         method: 'POST',
         body: JSON.stringify({
           description: `Serenity bundle — ${jobId}`,
@@ -83,42 +83,56 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       if (!gistRes.ok) {
         const err = await gistRes.text();
         console.error('[serenity-report] Error creando gist:', gistRes.status, err);
-        return res.status(502).json({ error: `Error al crear gist: ${gistRes.status}` });
+        const hint = gistRes.status === 401 || gistRes.status === 403
+          ? ' Verifica que el token tenga permiso gist y acceso al repositorio.'
+          : '';
+        return res.status(502).json({ error: `Error al crear gist: ${gistRes.status}.${hint}`.trim() });
       }
 
       const gist = await gistRes.json() as any;
       gistId = gist.id;
+      bundleUrl = gist?.files?.['serenity-bundle.json']?.raw_url || '';
       console.log(`[serenity-report] Gist creado: ${gistId}`);
     } catch (e: any) {
       console.error('[serenity-report] Excepción creando gist:', e);
       return res.status(502).json({ error: 'Error al crear gist' });
     }
 
-    // Dispatch workflow
+    if (!bundleUrl) {
+      return res.status(502).json({ error: 'No se pudo obtener la URL del bundle.' });
+    }
+
     try {
-      const dispRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/dispatches`, {
-        method: 'POST',
-        body: JSON.stringify({
-          event_type: 'serenity-report',
-          client_payload: {
-            job_id: jobId,
-            bundle_url: `https://gist.githubusercontent.com/${GH_OWNER}/${gistId}/raw/serenity-bundle.json`,
-          },
-        }),
-      });
+      const dispRes = await gh(
+        `/repos/${encodeURIComponent(runtimeConfig.repositoryOwner)}/${encodeURIComponent(runtimeConfig.repositoryName)}/actions/workflows/${encodeURIComponent(runtimeConfig.workflowFileName)}/dispatches`,
+        runtimeConfig.personalAccessToken,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ref: runtimeConfig.branch,
+            inputs: {
+              job_id: jobId,
+              bundle_url: bundleUrl,
+            },
+          }),
+        }
+      );
 
       if (dispRes.status !== 204) {
         const err = await dispRes.text();
         console.error('[serenity-report] Error en dispatch:', dispRes.status, err);
-        return res.status(502).json({ error: `Error al disparar workflow: ${dispRes.status}` });
+        const hint = dispRes.status === 401 || dispRes.status === 403
+          ? ' Verifica que el token tenga permisos de Actions y acceso al repositorio.'
+          : '';
+        return res.status(502).json({ error: `Error al disparar workflow: ${dispRes.status}.${hint}`.trim() });
       }
     } catch (e: any) {
       console.error('[serenity-report] Excepción en dispatch:', e);
       return res.status(502).json({ error: 'Error al disparar workflow' });
     }
 
-    await new Promise(r => setTimeout(r, 3000));
-    const runId = await findRunByJobId(jobId);
+    await new Promise((r) => setTimeout(r, 3000));
+    const runId = await findRunByJobId(jobId, req.headers);
 
     return res.status(200).json({
       success: true,
@@ -130,24 +144,28 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
     });
   } catch (e: any) {
     console.error('[serenity-report] Error fatal:', e);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    return res.status(500).json({ error: e instanceof ApiError ? e.message : 'Error interno del servidor' });
   }
 }
 
 async function handlePoll(req: VercelRequest, res: VercelResponse) {
-  let { runId, gistId, jobId } = req.query as Record<string, string>;
-
-  if (!runId && jobId) {
-    const foundRunId = await findRunByJobId(jobId);
-    if (foundRunId) { runId = foundRunId; }
-  }
-
-  if (!runId) {
-    return res.status(202).json({ status: 'running', phase: 'queued', conclusion: null, message: 'Buscando run...' });
-  }
-
   try {
-    const runRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}`);
+    const runtimeConfig = await resolveSerenityRuntimeConfig(req.headers);
+    let { runId, gistId, jobId } = req.query as Record<string, string>;
+
+    if (!runId && jobId) {
+      const foundRunId = await findRunByJobId(jobId, req.headers);
+      if (foundRunId) { runId = foundRunId; }
+    }
+
+    if (!runId) {
+      return res.status(202).json({ status: 'running', phase: 'queued', conclusion: null, message: 'Buscando run...' });
+    }
+
+    const runRes = await gh(
+      `/repos/${encodeURIComponent(runtimeConfig.repositoryOwner)}/${encodeURIComponent(runtimeConfig.repositoryName)}/actions/runs/${runId}`,
+      runtimeConfig.personalAccessToken
+    );
     if (!runRes.ok) {
       return res.status(502).json({ status: 'error', message: `Error consultando run: ${runRes.status}` });
     }
@@ -158,7 +176,10 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
     if (status === 'completed') {
       if (conclusion === 'success') {
-        const artifactsRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/runs/${runId}/artifacts`);
+        const artifactsRes = await gh(
+          `/repos/${encodeURIComponent(runtimeConfig.repositoryOwner)}/${encodeURIComponent(runtimeConfig.repositoryName)}/actions/runs/${runId}/artifacts`,
+          runtimeConfig.personalAccessToken
+        );
         if (!artifactsRes.ok) {
           return res.status(502).json({ status: 'done', phase: 'completed_no_artifacts', conclusion });
         }
@@ -175,21 +196,25 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        const dlRes = await gh(`/repos/${GH_OWNER}/${GH_REPO}/actions/artifacts/${targetArtifact.id}/zip`, { redirect: 'manual' });
+        const dlRes = await gh(
+          `/repos/${encodeURIComponent(runtimeConfig.repositoryOwner)}/${encodeURIComponent(runtimeConfig.repositoryName)}/actions/artifacts/${targetArtifact.id}/zip`,
+          runtimeConfig.personalAccessToken,
+          { redirect: 'manual' }
+        );
         const artifactDownloadUrl = dlRes.headers.get('location') || '';
 
-        if (gistId) { try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {} }
+        if (gistId) { try { await gh(`/gists/${gistId}`, runtimeConfig.personalAccessToken, { method: 'DELETE' }); } catch (_) {} }
 
         return res.status(200).json({ status: 'done', phase: 'completed', conclusion, artifactDownloadUrl });
       }
 
-      if (gistId) { try { await gh(`/gists/${gistId}`, { method: 'DELETE' }); } catch (_) {} }
+      if (gistId) { try { await gh(`/gists/${gistId}`, runtimeConfig.personalAccessToken, { method: 'DELETE' }); } catch (_) {} }
       return res.status(200).json({ status: 'done', phase: 'failed', conclusion });
     }
 
     return res.status(200).json({ status: 'running', phase: status, conclusion: null });
   } catch (e: any) {
     console.error('[serenity-report] Error en handlePoll:', e);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    return res.status(500).json({ error: e instanceof ApiError ? e.message : 'Error interno del servidor' });
   }
 }

@@ -43,6 +43,34 @@
   align-items: center;
 }
 
+.section-toggle {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.section-toggle:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.section-arrow {
+  color: #6b7280;
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.section-arrow.open {
+  transform: rotate(180deg);
+}
+
 .section-label::before {
   content: '';
   display: inline-block;
@@ -225,6 +253,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(240px, 1fr));
   gap: 1rem;
+}
+
+.status-grid--serenity {
+  margin-top: 1rem;
 }
 
 .status-item {

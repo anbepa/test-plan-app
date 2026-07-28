@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SerenityExportService } from './serenity-export.service';
 import { TestRun } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
+import { SupabaseClientService } from '../database/supabase-client.service';
 
 export interface HydrateProgress {
   current: number;
@@ -32,6 +33,7 @@ export class SerenityReportService {
     private http: HttpClient,
     private serenityExport: SerenityExportService,
     private storage: ExecutionStorageService,
+    private supabaseClient: SupabaseClientService,
   ) {}
 
   async generateReport(run: TestRun): Promise<void> {
@@ -85,8 +87,9 @@ export class SerenityReportService {
         hydrateProgress: undefined,
       };
 
+      const headers = await this.buildAuthHeaders();
       const startResult = await firstValueFrom(
-        this.http.post<any>(this.apiUrl, { bundle })
+        this.http.post<any>(this.apiUrl, { bundle }, { headers })
       );
 
       if (!startResult.success) {
@@ -130,8 +133,9 @@ export class SerenityReportService {
         return;
       }
 
+      const headers = await this.buildAuthHeaders();
       const result = await firstValueFrom(
-        this.http.get<any>(`${this.apiUrl}?${params.toString()}`)
+        this.http.get<any>(`${this.apiUrl}?${params.toString()}`, { headers })
       );
 
       if (result.runId && !this.state.runId) {
@@ -164,6 +168,26 @@ export class SerenityReportService {
       this.stopPolling();
       this.state = { ...this.state, phase: 'error', error: err?.message || 'Error al consultar estado' };
     }
+  }
+
+  private async buildAuthHeaders(): Promise<HttpHeaders> {
+    let { data, error } = await this.supabaseClient.supabase.auth.getSession();
+    let session = data.session;
+
+    const isExpired = !!session?.expires_at && session.expires_at * 1000 <= Date.now() + 60_000;
+
+    if ((!session?.access_token || isExpired) && !error) {
+      const refreshed = await this.supabaseClient.supabase.auth.refreshSession();
+      session = refreshed.data.session ?? null;
+      error = refreshed.error ?? null;
+    }
+
+    if (!session?.access_token) {
+      await this.supabaseClient.supabase.auth.signOut().catch(() => undefined);
+      throw new Error('Sesión inválida o expirada. Inicia sesión nuevamente.');
+    }
+
+    return new HttpHeaders({ Authorization: `Bearer ${session.access_token}` });
   }
 
   private downloadArtifact(url: string): void {
