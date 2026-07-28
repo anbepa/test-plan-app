@@ -37,6 +37,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 }
 
 function extractRouteParams(req: VercelRequest): { workItemId: string; action?: string } {
+  const catchAllPath = req.query['path'];
+  if (Array.isArray(catchAllPath) && catchAllPath.length > 0) {
+    return {
+      workItemId: String(catchAllPath[0] || ''),
+      action: catchAllPath[1] ? String(catchAllPath[1]) : undefined
+    };
+  }
+
+  if (typeof catchAllPath === 'string' && catchAllPath.trim()) {
+    const segments = catchAllPath.split('/').filter(Boolean);
+    return {
+      workItemId: segments[0] || '',
+      action: segments[1]
+    };
+  }
+
   // Soporta ambientes donde req.query['0'] no existe y la ruta llega completa en req.url
   const rawQueryCatchAll = req.query['0'];
   if (typeof rawQueryCatchAll === 'string' && rawQueryCatchAll.trim()) {
