@@ -298,8 +298,9 @@ export class ExportService {
     async exportExecutionToDOCX(
         execution: PlanExecution,
         hu: HUData | null,
-        onProgress?: (current: number, total: number) => void
-    ): Promise<void> {
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
         if (!execution.testCases || execution.testCases.length === 0) {
             throw new Error('No hay casos de prueba para exportar');
         }
@@ -503,6 +504,9 @@ export class ExportService {
 
         const blob = await Packer.toBlob(doc);
         const filename = this.escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.docx`);
+        if (returnBlob) {
+            return blob;
+        }
         saveAs(blob, filename);
     }
 
@@ -1119,8 +1123,9 @@ export class ExportService {
     async exportExecutionToPDF(
         execution: PlanExecution,
         hu: HUData | null,
-        onProgress?: (current: number, total: number) => void
-    ): Promise<void> {
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
         if (!execution || !execution.testCases || execution.testCases.length === 0) {
             throw new Error('No hay casos de prueba para exportar');
         }
@@ -1469,6 +1474,9 @@ export class ExportService {
         }
 
         const filename = this.escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.pdf`);
+        if (returnBlob) {
+            return doc.output('blob');
+        }
         doc.save(filename);
     }
 

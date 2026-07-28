@@ -60,9 +60,9 @@ export class SerenityExportService {
 
   /**
    * Builds a SIZE-OPTIMIZED bundle by re-compressing evidence images.
-   * Each image is resized to max 640px wide and re-encoded as WebP at quality 0.5,
+    * Each image is resized to max 640px wide and re-encoded as JPEG at quality 0.5,
    * dramatically reducing the base64 payload for Vercel upload.
-   * Evidence names are normalized to .webp to match the actual file format.
+    * Evidence names are normalized to .jpg to maximize Serenity compatibility.
    */
   async buildCompressedBundle(execution: PlanExecution, run: TestRun): Promise<any> {
     // 1) Build full bundle (convert handles all naming consistently)
@@ -74,8 +74,8 @@ export class SerenityExportService {
     for (const ev of (fullBundle.evidences || [])) {
       if (!ev.base64) continue;
       const oldName = ev.name;
-      const isWebp = oldName.endsWith('.webp');
-      const newName = isWebp ? oldName : oldName.replace(/\.(png|jpe?g|gif)$/i, '.webp');
+      const isJpg = oldName.toLowerCase().endsWith('.jpg') || oldName.toLowerCase().endsWith('.jpeg');
+      const newName = isJpg ? oldName : oldName.replace(/\.(png|jpe?g|gif|webp)$/i, '.jpg');
       try {
         const compressed = await this.compressImage(ev.base64, 640, 0.5);
         ev.base64 = compressed;
@@ -105,7 +105,7 @@ export class SerenityExportService {
   }
 
   /**
-   * Compress an image: resize to maxWidth, re-encode as WebP at given quality.
+    * Compress an image: resize to maxWidth, re-encode as JPEG at given quality.
    * Uses Canvas API — must run in browser context.
    */
   private compressImage(dataUrl: string, maxWidth: number, quality: number): Promise<string> {
@@ -124,7 +124,7 @@ export class SerenityExportService {
         const ctx = canvas.getContext('2d');
         if (!ctx) { resolve(dataUrl); return; }
         ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/webp', quality));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;

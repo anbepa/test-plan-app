@@ -108,6 +108,7 @@ interface MenuItem {
 
               <ul class="menu-list">
                 <li *ngFor="let item of menuItems; let i = index" class="menu-item">
+                  <ng-container *ngIf="!isFeatureHidden(item.route)">
                   <a
                     *ngIf="!item.subItems"
                     [routerLink]="item.route"
@@ -132,6 +133,10 @@ interface MenuItem {
                       </svg>
                       <svg *ngIf="i === 4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <svg *ngIf="i === 5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.351 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.351 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.351 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.37-2.37 1.724 1.724 0 002.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </span>
                     <span class="menu-label">{{ item.label }}</span>
@@ -169,6 +174,7 @@ interface MenuItem {
                       </li>
                     </ul>
                   </div>
+                  </ng-container>
                 </li>
               </ul>
             </nav>
@@ -290,6 +296,11 @@ export class AppComponent {
       icon: '',
       label: 'Mis Análisis',
       route: '/evidence-reports'
+    },
+    {
+      icon: '',
+      label: 'Configuración',
+      route: '/configuracion'
     }
   ];
 
@@ -303,6 +314,14 @@ export class AppComponent {
       return url === '/manual-execution' || url.startsWith('/viewer/execute-plan');
     }
     return url === route || url.startsWith(route + '/');
+  }
+
+  isFeatureHidden(route?: string): boolean {
+    if (!route) {
+      return false;
+    }
+
+    return route === '/evidence-analysis' || route === '/evidence-reports';
   }
 
   // Método para manejar hover en elementos del menú

@@ -48,7 +48,7 @@ export class AuthService {
   }
 
   async ensureSession(): Promise<boolean> {
-    if (this.userSubject.value) {
+    if (this.isSessionUsable(this.sessionSubject.value)) {
       return true;
     }
 
@@ -286,7 +286,30 @@ export class AuthService {
           return null;
         }
 
-        return result.data?.session ?? null;
+        let session = result.data?.session ?? null;
+
+        if (this.isSessionUsable(session)) {
+          return session;
+        }
+
+        const refreshed = await this.supabaseClient.supabase.auth.refreshSession();
+        if (refreshed.error) {
+          console.error(`Error ${context} al refrescar sesión:`, refreshed.error);
+          return null;
+        }
+
+        session = refreshed.data?.session ?? null;
+        if (this.isSessionUsable(session)) {
+          return session;
+        }
+
+        const userResult = await this.supabaseClient.supabase.auth.getUser();
+        if (userResult.error) {
+          console.error(`Error ${context} al validar usuario:`, userResult.error);
+          return null;
+        }
+
+        return userResult.data?.user && session ? session : null;
       } catch (caughtError) {
         console.error(`Error ${context} (excepción):`, caughtError);
         return null;
@@ -296,5 +319,17 @@ export class AuthService {
     })();
 
     return this.sessionReadInFlight;
+  }
+
+  private isSessionUsable(session: Session | null): boolean {
+    if (!session?.user || !session.access_token) {
+      return false;
+    }
+
+    if (!session.expires_at) {
+      return true;
+    }
+
+    return session.expires_at * 1000 > Date.now() + 60_000;
   }
 }

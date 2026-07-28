@@ -89,21 +89,24 @@ export const routes: Routes = [
   },
   {
     path: 'evidence-analysis',
-    loadComponent: () => import('./evidence-analysis/evidence-analysis.component').then(m => m.EvidenceAnalysisComponent),
-    title: 'Análisis de Evidencias',
-    canActivate: [authGuard]
+    redirectTo: 'welcome',
+    pathMatch: 'full'
   },
   {
     path: 'evidence-reports',
-    loadComponent: () => import('./evidence-analysis/evidence-report-list.component').then(m => m.EvidenceReportListComponent),
-    title: 'Escenarios de Prueba',
+    redirectTo: 'welcome',
+    pathMatch: 'full'
+  },
+  {
+    path: 'configuracion',
+    loadComponent: () => import('./configuracion/configuracion.component').then(m => m.ConfiguracionComponent),
+    title: 'Configuración',
     canActivate: [authGuard]
   },
   {
     path: 'evidence-analysis/report/:id',
-    loadComponent: () => import('./evidence-analysis/evidence-report-detail.component').then(m => m.EvidenceReportDetailComponent),
-    title: 'Detalle de Reporte de Evidencias',
-    canActivate: [authGuard]
+    redirectTo: 'welcome',
+    pathMatch: 'full'
   },
   {
     path: '**',

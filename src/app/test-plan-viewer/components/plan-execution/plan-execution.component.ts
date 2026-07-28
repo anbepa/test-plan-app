@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { ImageEditorComponent } from '../image-editor/image-editor.component';
 import { DataEditorComponent } from '../data-editor/data-editor.component';
 import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
+import { EvidenceManagerComponent } from '../../../shared/components/evidence-manager/evidence-manager.component';
 import { HUData, PlanExecution, AssetEvidence, ExecutionStep, DetailedTestCase, TestCaseExecution } from '../../../models/hu-data.model';
 import { ExecutionStorageService } from '../../../services/database/execution-storage-supabase.service';
 import { DatabaseService } from '../../../services/database/database.service';
@@ -18,7 +19,7 @@ import { Subscription } from 'rxjs';
 @Component({
   selector: 'app-plan-execution',
   standalone: true,
-  imports: [CommonModule, FormsModule, ImageEditorComponent, DataEditorComponent, ConfirmationModalComponent],
+  imports: [CommonModule, FormsModule, ImageEditorComponent, DataEditorComponent, ConfirmationModalComponent, EvidenceManagerComponent],
   templateUrl: './plan-execution.component.html',
   styleUrls: ['./plan-execution.component.css']
 })

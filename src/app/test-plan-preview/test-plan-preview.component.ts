@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations } from '../services/database/database.service';
 import { ToastService } from '../services/core/toast.service';
+import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
 import { HUData } from '../models/hu-data.model';
 import { WordExporterComponent } from '../word-exporter/word-exporter.component';
 import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
@@ -23,13 +24,18 @@ export class TestPlanPreviewComponent implements OnInit {
     errorMessage: string = '';
     copiedToClipboard: boolean = false;
     exportMenuOpen: boolean = false;
+    
+    // Propiedades con fallback a configuración global
+    repositoryLink: string = '';
+    teamContent: string = '';
 
     constructor(
         private route: ActivatedRoute,
         private router: Router,
         private databaseService: DatabaseService,
         private mapper: TestPlanMapperService,
-        private toastService: ToastService
+        private toastService: ToastService,
+        private generalSectionsConfig: GeneralSectionsConfigService
     ) { }
 
     ngOnInit(): void {
@@ -53,6 +59,13 @@ export class TestPlanPreviewComponent implements OnInit {
                 // Convertir UserStories a HUData usando el mapper centralizado
                 this.huList = this.mapper.mapDbTestPlanToHUList(plan);
 
+                // Cargar configuración global con fallback
+                const config = this.generalSectionsConfig.getConfig();
+
+                // Preferir config global, caer a plan solo si config global está vacía
+                this.repositoryLink = config.repositoryLink || plan.repository_link || '';
+                this.teamContent = config.teamContent || plan.team || '';
+
                 this.generatePreview();
             } else {
                 this.errorMessage = 'Plan de pruebas no encontrado.';
@@ -71,7 +84,7 @@ export class TestPlanPreviewComponent implements OnInit {
         let html = `<h1>Plan de Pruebas: ${this.testPlan.title}</h1>\n\n`;
 
         // Repositorio
-        html += `<p><strong>Repositorio:</strong> ${this.testPlan.repository_link || 'No especificado'}</p>\n\n`;
+        html += `<p><strong>Repositorio:</strong> ${this.repositoryLink || 'No especificado'}</p>\n\n`;
 
         // 1. ALCANCE
         html += `<h2>1. ALCANCE</h2>\n`;
@@ -120,7 +133,7 @@ export class TestPlanPreviewComponent implements OnInit {
 
         // 7. Equipo de trabajo
         html += `<h2>7. Equipo de trabajo</h2>\n`;
-        html += `<p>${this.testPlan.team || 'No especificado'}</p>\n\n`;
+        html += `<p>${this.teamContent || 'No especificado'}</p>\n\n`;
 
         this.previewHtmlContent = html;
     }

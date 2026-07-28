@@ -53,7 +53,6 @@
               <th>Etiquetas</th>
               <th>Fecha</th>
               <th>Progreso</th>
-              <th>Reporte</th>
             </tr>
           </thead>
           <tbody>
@@ -93,30 +92,6 @@
                   </div>
                   <span class="progress-text">{{ getProgressPercent(run) }}% ({{ run.completedTestCases }}/{{ run.totalTestCases }})</span>
                 </div>
-              </td>
-              <td data-label="Reporte">
-                <ng-container *ngIf="isGeneratingReport(run.id) && showSerenityProgress; else normalBtn">
-                  <div class="serenity-progress-cell">
-                    <div class="serenity-progress-label">{{ serenityStatusMessage }}</div>
-                    <div class="serenity-progress-bar-bg" *ngIf="serenityReportState?.hydrateProgress">
-                      <div class="serenity-progress-bar-fill" [style.width.%]="serenityProgressPercent"></div>
-                    </div>
-                    <div class="serenity-progress-bar-bg serenity-pulse" *ngIf="!serenityReportState?.hydrateProgress && serenityReportState?.phase !== 'done'"></div>
-                    <div class="serenity-progress-percent" *ngIf="serenityReportState?.hydrateProgress">
-                      {{ serenityProgressPercent }}% ({{ serenityReportState?.hydrateProgress?.current }}/{{ serenityReportState?.hydrateProgress?.total }})
-                    </div>
-                  </div>
-                </ng-container>
-                <ng-template #normalBtn>
-                  <button type="button" class="serenity-report-btn"
-                    *ngIf="canDownloadReport(run)"
-                    [disabled]="isGeneratingReport(run.id)"
-                    (click)="downloadSerenityReport(run)"
-                    title="Generar reporte Serenity">
-                    {{ isGeneratingReport(run.id) ? '⏳ Generando...' : '⬇ Serenity' }}
-                  </button>
-                  <span *ngIf="!canDownloadReport(run)" class="report-na" title="Ejecuta y carga evidencias primero">—</span>
-                </ng-template>
               </td>
             </tr>
           </tbody>
@@ -232,7 +207,7 @@
                       <div class="tree-hu-list" *ngIf="plan.expanded">
                         <div *ngFor="let hu of plan.hus"
                           class="tree-hu-item"
-                          [class.selected]="selectedHuNode?.id === hu.id && selectedHuNode?.testPlanId === hu.testPlanId"
+                          [class.selected]="!!selectedHuNode && selectedHuNode.id === hu.id && selectedHuNode.testPlanId === hu.testPlanId"
                           (click)="selectHuNode(hu)">
                           <span class="tree-hu-icon">📄</span>
                           <span class="tree-hu-name" [title]="hu.title">{{ hu.title }}</span>
@@ -315,22 +290,3 @@
   (confirm)="deleteRun()"
   (cancel)="cancelDelete()">
 </app-confirmation-modal>
-
-<!-- Serenity report progress overlay -->
-<div class="serenity-overlay" *ngIf="generatingReportFor.size > 0 || (serenityReportState?.phase && serenityReportState?.phase !== 'idle' && serenityReportState?.phase !== 'done' && serenityReportState?.phase !== 'error')">
-  <div class="serenity-modal">
-    <div class="serenity-modal-icon">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>
-    </div>
-    <p class="serenity-modal-title">Generando reporte Serenity</p>
-    <p class="serenity-modal-subtitle">{{ serenityStatusMessage }}</p>
-    <div class="serenity-modal-bar-track">
-      <div class="serenity-modal-bar-fill" [style.width.%]="serenityProgressPercent"></div>
-    </div>
-    <p class="serenity-modal-hint">No cierres esta ventana</p>
-  </div>
-</div>

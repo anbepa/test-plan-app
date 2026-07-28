@@ -2,7 +2,6 @@ import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDe
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
-import { ToastService } from '../services/core/toast.service';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 
 export interface UIDetailedTestCase extends DetailedTestCase {
@@ -17,11 +16,13 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   imports: [CommonModule, FormsModule, ConfirmationModalComponent]
 })
 export class TestCaseEditorComponent implements OnInit, OnDestroy {
+  private readonly AUTO_TECHNIQUE = 'Automática';
+
   @Input() testCases: UIDetailedTestCase[] = [];
   @Input() huId: string = '';
   @Input() isLoading: boolean = false;
   @Input() isRefining: boolean = false;
-  @Input() refinementTechnique: string = '';
+  @Input() refinementTechnique: string = this.AUTO_TECHNIQUE;
   @Input() userRefinementContext: string = '';
   @Input() showRefinementControls: boolean = true;
 
@@ -44,11 +45,15 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   private readonly DEBOUNCE_TIME = 1000;
 
   constructor(
-    private cdr: ChangeDetectorRef,
-    private toastService: ToastService
+    private cdr: ChangeDetectorRef
   ) { }
 
   ngOnInit() {
+    if (!this.refinementTechnique) {
+      this.refinementTechnique = this.AUTO_TECHNIQUE;
+      this.refinementTechniqueChange.emit(this.refinementTechnique);
+    }
+
     if (this.testCases && this.testCases.length > 0 && !this.testCases.some(tc => tc.isExpanded)) {
       this.testCases[0].isExpanded = true;
     }
@@ -78,13 +83,8 @@ export class TestCaseEditorComponent implements OnInit, OnDestroy {
   }
 
   onRefineWithAI(): void {
-    if (!this.refinementTechnique) {
-      this.toastService.warning('Por favor, selecciona una técnica para el refinamiento');
-      return;
-    }
-
     this.refineWithAI.emit({
-      technique: this.refinementTechnique,
+      technique: this.refinementTechnique || this.AUTO_TECHNIQUE,
       context: this.userRefinementContext
     });
   }

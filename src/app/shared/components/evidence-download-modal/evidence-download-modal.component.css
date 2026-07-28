@@ -1,0 +1,178 @@
+/* ── Backdrop ── */
+.evidence-download-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fdIn 180ms ease;
+}
+@keyframes fdIn { from { opacity:0 } to { opacity:1 } }
+
+/* ── Modal box ── */
+.evidence-download-modal {
+  background: var(--background-color, #fff);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+  width: 460px;
+  max-width: 94vw;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 200ms ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(14px); opacity:0 }
+  to   { transform: translateY(0);    opacity:1 }
+}
+
+/* ── Header ── */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border-color, #E5E5EA);
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-color, #1c1c1e);
+}
+.close-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border: none;
+  background: var(--surface-color, #F5F5F7);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary, #6E6E73);
+  transition: background 150ms;
+}
+.close-btn:hover { background: var(--border-color, #E5E5EA); }
+
+/* ── Body ── */
+.modal-body {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Options ── */
+.download-options { display: flex; flex-direction: column; gap: 8px; }
+
+.download-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px;
+  border: 1.5px solid var(--border-color, #E5E5EA);
+  border-radius: 12px;
+  background: var(--background-color, #fff);
+  cursor: pointer;
+  transition: border-color 150ms, background 150ms;
+  width: 100%;
+  text-align: left;
+}
+.download-option-btn:hover:not(:disabled) {
+  border-color: var(--primary-color, #007AFF);
+  background: rgba(0,122,255,.04);
+}
+.download-option-btn:disabled { opacity:.5; cursor:not-allowed; }
+.download-option-btn.is-loading {
+  border-color: var(--primary-color, #007AFF);
+  background: rgba(0,122,255,.04);
+}
+
+/* icon containers */
+.opt-icon {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.opt-icon-word     { background: rgba(0,122,255,.1);  color: var(--primary-color, #007AFF); }
+.opt-icon-pdf      { background: rgba(255,59,48,.1);   color: #FF3B30; }
+.opt-icon-serenity { background: rgba(52,199,89,.12);  color: #34C759; }
+
+/* text */
+.opt-content { flex:1; display:flex; flex-direction:column; gap:2px; }
+.opt-title   { font-size:13.5px; font-weight:700; color:var(--text-color,#1c1c1e); line-height:1.2; }
+.opt-desc    { font-size:12px; color:var(--text-secondary,#8e8e93); line-height:1.3; }
+
+/* chevron */
+.opt-chevron { color:var(--primary-color,#007AFF); flex-shrink:0; }
+
+/* spinner */
+.opt-spinner {
+  width:16px; height:16px;
+  border: 2px solid var(--border-color,#E5E5EA);
+  border-top-color: var(--primary-color,#007AFF);
+  border-radius:50%;
+  animation: spin .7s linear infinite;
+  flex-shrink:0;
+}
+@keyframes spin { to { transform:rotate(360deg) } }
+
+/* ── Progress ── */
+.download-progress {
+  padding: 13px 15px;
+  background: var(--surface-color, #F5F5F7);
+  border-radius: 10px;
+}
+.progress-message {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #6E6E73);
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 6px;
+  background: var(--border-color, #E5E5EA);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary-color, #007AFF);
+  border-radius: 99px;
+  transition: width 300ms ease;
+}
+.progress-bar-container {
+  width: 100%;
+  height: 4px;
+  background: var(--border-color, #E5E5EA);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+/* ── Footer ── */
+.modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border-color, #E5E5EA);
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-cancel {
+  padding: 8px 20px;
+  border: 1.5px solid var(--border-color, #E5E5EA);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color, #007AFF);
+  cursor: pointer;
+  transition: background 150ms;
+}
+.btn-cancel:hover:not(:disabled) { background: var(--surface-color, #F5F5F7); }
+.btn-cancel:disabled { opacity:.5; cursor:not-allowed; }
+
+@media (max-width: 640px) {
+  .evidence-download-modal { width: 95%; }
+  .modal-header, .modal-body, .modal-footer { padding-left: 16px; padding-right: 16px; }
+}
