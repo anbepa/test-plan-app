@@ -38,11 +38,12 @@ export class AzureDevOpsEvidenceService {
 
     try {
       const headers = await this.buildAuthHeaders();
+      const cacheBuster = Date.now();
       
       // Llamar al endpoint del backend que consulta Azure DevOps
       const response = await firstValueFrom(
         this.http.get<AzureDevOpsWorkItem>(
-          `${this.baseUrl}/work-items/${planId}`,
+          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&_t=${cacheBuster}`,
           { headers }
         )
       );

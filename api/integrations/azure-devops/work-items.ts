@@ -12,6 +12,8 @@ import {
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+
     const { workItemId, action } = extractRouteParams(req);
 
     if (req.method === 'GET' && !['attachments', 'link-attachment'].includes(action || '')) {
@@ -21,6 +23,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (req.method === 'POST' && action === 'attachments') {
       await handleUploadAttachment(req, res, workItemId);
+      return;
+    }
+
+    if (req.method === 'POST' && action === 'upload-evidence') {
+      await handleUploadEvidence(req, res, workItemId);
       return;
     }
 
@@ -37,6 +44,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 }
 
 function extractRouteParams(req: VercelRequest): { workItemId: string; action?: string } {
+  const queryWorkItemId = typeof req.query['workItemId'] === 'string'
+    ? req.query['workItemId'].trim()
+    : '';
+  const queryAction = typeof req.query['action'] === 'string'
+    ? req.query['action'].trim()
+    : undefined;
+
+  if (queryWorkItemId) {
+    return {
+      workItemId: queryWorkItemId,
+      action: queryAction
+    };
+  }
+
   const catchAllPath = req.query['path'];
   if (Array.isArray(catchAllPath) && catchAllPath.length > 0) {
     return {
@@ -194,6 +215,139 @@ async function handleUploadAttachment(req: VercelRequest, res: VercelResponse, w
   } catch (error: any) {
     console.error('Error uploading attachment:', error);
     res.status(500).json({ error: 'Error cargando archivo a Azure DevOps' });
+  }
+}
+
+/**
+ * POST /api/integrations/azure-devops/work-items?workItemId=:id&action=upload-evidence
+ * Empaqueta Serenity + DOCX/PDF en un ZIP y lo carga a Azure DevOps para luego vincularlo.
+ */
+async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, workItemId: string): Promise<void> {
+  const user = await getAuthenticatedUser(req.headers);
+  const artifactDownloadUrl = String(req.body?.artifactDownloadUrl || '').trim();
+  const extraFiles = Array.isArray(req.body?.extraFiles) ? req.body.extraFiles : [];
+  const projectId = String(req.body?.projectId || '').trim();
+  const areaPath = String(req.body?.areaPath || '').trim();
+  const planTitle = String(req.body?.planTitle || '').trim();
+  let fileName = String(req.body?.fileName || 'Evidencia.zip').trim();
+
+  if (!workItemId) {
+    res.status(400).json({ error: 'workItemId requerido' });
+    return;
+  }
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId requerido' });
+    return;
+  }
+  if (!artifactDownloadUrl && extraFiles.length === 0) {
+    res.status(400).json({ error: 'No hay evidencias para cargar' });
+    return;
+  }
+
+  const connection = await getAzureConnectionWithSecret(user.id);
+  if (!connection) {
+    res.status(401).json({ error: 'No hay conexión configurada' });
+    return;
+  }
+
+  if (!/\.zip$/i.test(fileName)) {
+    fileName += '.zip';
+  }
+
+  try {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    // 1) Incluir artifact Serenity original como target.zip
+    if (artifactDownloadUrl) {
+      const artifactRes = await fetch(artifactDownloadUrl);
+      if (!artifactRes.ok) {
+        throw new Error(`No fue posible descargar el reporte de Serenity (${artifactRes.status}).`);
+      }
+      const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
+      zip.file('target.zip', artifactBuffer);
+    }
+
+    // 2) Incluir extras generados en cliente (DOCX/PDF)
+    for (const f of extraFiles) {
+      const name = String(f?.name || '').trim();
+      const base64 = String(f?.base64 || '').trim();
+      if (!name || !base64) continue;
+      zip.file(name, Buffer.from(base64, 'base64'));
+    }
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+
+    const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+    const apiVersion = '7.1';
+
+    // 3) Cargar ZIP a Azure DevOps
+    const attachmentUrl = `https://dev.azure.com/${connection.organization}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath || '')}&api-version=${apiVersion}`;
+    const uploadRes = await fetch(attachmentUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basicToken}`,
+        'Content-Type': 'application/octet-stream',
+        Accept: 'application/json'
+      },
+      body: zipBuffer as any
+    });
+
+    const uploadData = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) {
+      if (uploadRes.status === 401 || uploadRes.status === 403) {
+        res.status(401).json({ error: 'No autorizado para cargar adjuntos' });
+        return;
+      }
+      throw new Error(`Azure DevOps upload error: ${uploadRes.status}`);
+    }
+
+    // 4) Vincular adjunto al plan
+    const patchUrl = `https://dev.azure.com/${connection.organization}/_apis/wit/workitems/${workItemId}?api-version=${apiVersion}`;
+    const patchBody = [
+      {
+        op: 'add',
+        path: '/relations/-',
+        value: {
+          rel: 'AttachedFile',
+          url: uploadData.url,
+          attributes: {
+            comment: `Evidencia adjunta al plan: ${planTitle || workItemId}`
+          }
+        }
+      }
+    ];
+
+    const linkRes = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Basic ${basicToken}`,
+        'Content-Type': 'application/json-patch+json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(patchBody)
+    });
+
+    const linkData = await linkRes.json().catch(() => ({}));
+    if (!linkRes.ok) {
+      if (linkRes.status === 401 || linkRes.status === 403) {
+        res.status(401).json({ error: 'No autorizado para vincular adjuntos' });
+        return;
+      }
+      throw new Error(`Azure DevOps link error: ${linkRes.status}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      attachmentId: uploadData.id,
+      attachmentUrl: uploadData.url,
+      fileName,
+      workItemId: linkData.id,
+      message: `Evidencia "${fileName}" cargada y vinculada al plan ${workItemId}`
+    });
+  } catch (error: any) {
+    console.error('Error uploading evidence ZIP:', error);
+    res.status(500).json({ error: error?.message || 'Error cargando evidencias a Azure DevOps' });
   }
 }
 

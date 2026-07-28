@@ -330,7 +330,7 @@ export class EvidenceUploadOrchestrator {
 
       const response = await firstValueFrom(
         this.http.post<any>(
-          `${this.baseUrl}/work-items/${this.currentValidatedPlan.planId}/upload-evidence`,
+          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(this.currentValidatedPlan.planId)}&action=upload-evidence`,
           {
             artifactDownloadUrl: this.currentArtifactUrl,
             extraFiles: extraFiles,
@@ -433,7 +433,7 @@ export class EvidenceUploadOrchestrator {
 
       const response = await firstValueFrom(
         this.http.post<any>(
-          `${this.baseUrl}/work-items/${this.currentValidatedPlan.planId}/attachments`,
+          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(this.currentValidatedPlan.planId)}&action=attachments`,
           {
             fileName: compressionResult.fileName,
             areaPath: this.currentValidatedPlan.areaPath,
@@ -480,7 +480,7 @@ export class EvidenceUploadOrchestrator {
       
       const response = await firstValueFrom(
         this.http.patch<any>(
-          `${this.baseUrl}/work-items/${this.currentValidatedPlan.planId}/link-attachment`,
+          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(this.currentValidatedPlan.planId)}&action=link-attachment`,
           {
             attachmentUrl: this.currentAttachmentUrl,
             planTitle: this.currentValidatedPlan.planTitle
