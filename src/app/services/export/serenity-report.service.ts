@@ -26,6 +26,8 @@ export interface SerenityReportState {
 @Injectable({ providedIn: 'root' })
 export class SerenityReportService {
   state: SerenityReportState = { phase: 'idle' };
+  /** Cuando es true, no dispara la descarga automática del artifact en el navegador (usado por el flujo de subida a Azure) */
+  suppressAutoDownload = false;
   private pollTimer: any = null;
   private apiUrl = '/api/serenity-report';
 
@@ -151,7 +153,9 @@ export class SerenityReportService {
             statusMessage: 'Descargando reporte Serenity...',
             artifactDownloadUrl: result.artifactDownloadUrl,
           };
-          this.downloadArtifact(result.artifactDownloadUrl);
+          if (!this.suppressAutoDownload) {
+            this.downloadArtifact(result.artifactDownloadUrl);
+          }
           this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
         } else {
           this.state = { ...this.state, phase: 'error', error: result.message || 'No se encontro el artifact' };

@@ -12,7 +12,7 @@ const PORT = 3000;
 
 // Configuración básica
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '150mb' }));
 
 // Logging inicial
 console.log('\n[0] [dotenv@17.2.3] injecting env from .env.local');
@@ -719,6 +719,363 @@ app.post('/api/integrations/azure-devops/work-items/import', async (req, res) =>
             sprint: String(fields['System.IterationLevel3'] || '').trim(),
             description,
             acceptanceCriteria
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+app.get('/api/integrations/azure-devops/work-items/:workItemId', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || '').trim();
+
+        if (!workItemId) {
+            throw apiError(400, 'workItemId requerido');
+        }
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const endpoint = `${buildAzureBaseUrl(connection.organization)}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?$expand=all&api-version=7.1`;
+        const payload = await azureGet(endpoint, connection.personal_access_token);
+
+        return res.status(200).json(payload);
+    } catch (error) {
+        if (error?.status === 404) {
+            return res.status(404).json({ error: 'Work Item no encontrado' });
+        }
+        return sendApiError(res, error);
+    }
+});
+
+app.post('/api/integrations/azure-devops/work-items/:workItemId/attachments', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || '').trim();
+        const fileName = String(req.body?.fileName || '').trim();
+        const areaPath = String(req.body?.areaPath || '').trim();
+        const fileBlob = req.body?.fileBlob;
+
+        if (!workItemId) throw apiError(400, 'workItemId requerido');
+        if (!fileName) throw apiError(400, 'fileName requerido');
+        if (!fileBlob || typeof fileBlob !== 'string') throw apiError(400, 'fileBlob requerido en base64');
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const rawBase64 = fileBlob.includes(',') ? fileBlob.split(',')[1] : fileBlob;
+        const fileBuffer = Buffer.from(rawBase64, 'base64');
+
+        const attachmentUrl = `${buildAzureBaseUrl(connection.organization)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=7.1`;
+        const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+
+        const response = await fetch(attachmentUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/octet-stream',
+                Accept: 'application/json'
+            },
+            body: fileBuffer
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (response.status === 403) throw apiError(403, 'No tienes permisos para cargar adjuntos en Azure DevOps.');
+            if (response.status === 404) throw apiError(404, 'No fue posible cargar el archivo de evidencia.');
+            throw apiError(502, 'No fue posible cargar la evidencia en Azure DevOps.');
+        }
+
+        return res.status(201).json({
+            id: data.id,
+            url: data.url,
+            size: data.size
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+app.patch('/api/integrations/azure-devops/work-items/:workItemId/link-attachment', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || '').trim();
+        const attachmentUrl = String(req.body?.attachmentUrl || '').trim();
+        const planTitle = String(req.body?.planTitle || '').trim();
+
+        if (!workItemId) throw apiError(400, 'workItemId requerido');
+        if (!attachmentUrl) throw apiError(400, 'attachmentUrl requerido');
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const endpoint = `${buildAzureBaseUrl(connection.organization)}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
+        const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+
+        const patchBody = [
+            {
+                op: 'add',
+                path: '/relations/-',
+                value: {
+                    rel: 'AttachedFile',
+                    url: attachmentUrl,
+                    attributes: {
+                        comment: `Evidencia adjunta al plan: ${planTitle || workItemId}`
+                    }
+                }
+            }
+        ];
+
+        const response = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/json-patch+json',
+                Accept: 'application/json'
+            },
+            body: JSON.stringify(patchBody)
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (response.status === 403) throw apiError(403, 'No tienes permisos para vincular adjuntos en Azure DevOps.');
+            if (response.status === 404) throw apiError(404, 'No se encontró el plan para vincular la evidencia.');
+            throw apiError(502, 'No fue posible vincular la evidencia al plan.');
+        }
+
+        return res.status(200).json({
+            success: true,
+            id: data.id,
+            message: `Evidencia vinculada al plan ${workItemId}`
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// Flujo completo: descarga artifact de Serenity, lo sube a Azure y lo vincula al plan
+app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || '').trim();
+        const artifactDownloadUrl = String(req.body?.artifactDownloadUrl || '').trim();
+        const projectId = String(req.body?.projectId || '').trim();
+        const areaPath = String(req.body?.areaPath || '').trim();
+        const planTitle = String(req.body?.planTitle || '').trim();
+        const fileName = String(req.body?.fileName || 'Evidencia.zip').trim();
+
+        if (!workItemId) throw apiError(400, 'workItemId requerido');
+        if (!artifactDownloadUrl) throw apiError(400, 'artifactDownloadUrl requerido');
+        if (!projectId) throw apiError(400, 'projectId requerido');
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+        const baseUrl = buildAzureBaseUrl(connection.organization);
+
+        // 1) Descargar el ZIP del artifact de Serenity (URL firmada de GitHub, sin auth)
+        console.log('[upload-serenity] Descargando artifact:', artifactDownloadUrl.substring(0, 80) + '...');
+        const artifactRes = await fetch(artifactDownloadUrl);
+        if (!artifactRes.ok) {
+            throw apiError(502, `No fue posible descargar el reporte de Serenity (${artifactRes.status}).`);
+        }
+        const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
+        console.log('[upload-serenity] Artifact descargado:', artifactBuffer.length, 'bytes');
+
+        // 2) Subir el archivo a Azure DevOps (con projectId en la ruta, igual que Postman)
+        const attachmentUrl = `${baseUrl}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=7.1`;
+        const uploadRes = await fetch(attachmentUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/octet-stream',
+                Accept: 'application/json'
+            },
+            body: artifactBuffer
+        });
+
+        const uploadData = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) {
+            if (uploadRes.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (uploadRes.status === 403) throw apiError(403, 'No tienes permisos para cargar adjuntos en Azure DevOps.');
+            throw apiError(502, 'No fue posible cargar la evidencia en Azure DevOps.');
+        }
+        console.log('[upload-serenity] Attachment creado:', uploadData.url);
+
+        // 3) Vincular el adjunto al plan (PATCH)
+        const linkEndpoint = `${baseUrl}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
+        const patchBody = [
+            {
+                op: 'add',
+                path: '/relations/-',
+                value: {
+                    rel: 'AttachedFile',
+                    url: uploadData.url,
+                    attributes: {
+                        comment: `Evidencia adjunta al plan: ${planTitle || workItemId}`
+                    }
+                }
+            }
+        ];
+
+        const linkRes = await fetch(linkEndpoint, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/json-patch+json',
+                Accept: 'application/json'
+            },
+            body: JSON.stringify(patchBody)
+        });
+
+        const linkData = await linkRes.json().catch(() => ({}));
+        if (!linkRes.ok) {
+            if (linkRes.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (linkRes.status === 403) throw apiError(403, 'No tienes permisos para vincular adjuntos en Azure DevOps.');
+            throw apiError(502, 'No fue posible vincular la evidencia al plan.');
+        }
+        console.log('[upload-serenity] Evidencia vinculada al plan', workItemId);
+
+        return res.status(200).json({
+            success: true,
+            attachmentId: uploadData.id,
+            attachmentUrl: uploadData.url,
+            fileName,
+            workItemId: linkData.id,
+            message: `Evidencia "${fileName}" cargada y vinculada al plan ${workItemId}`
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// Empaqueta varias evidencias (Serenity + DOCX + PDF) en un solo ZIP, lo sube y lo vincula
+app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence', async (req, res) => {
+    try {
+        const JSZip = require('jszip');
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || '').trim();
+        const artifactDownloadUrl = String(req.body?.artifactDownloadUrl || '').trim();
+        const extraFiles = Array.isArray(req.body?.extraFiles) ? req.body.extraFiles : [];
+        const projectId = String(req.body?.projectId || '').trim();
+        const areaPath = String(req.body?.areaPath || '').trim();
+        const planTitle = String(req.body?.planTitle || '').trim();
+        let fileName = String(req.body?.fileName || 'Evidencia.zip').trim();
+        if (!/\.zip$/i.test(fileName)) fileName += '.zip';
+
+        if (!workItemId) throw apiError(400, 'workItemId requerido');
+        if (!projectId) throw apiError(400, 'projectId requerido');
+        if (!artifactDownloadUrl && extraFiles.length === 0) {
+            throw apiError(400, 'No hay evidencias para cargar');
+        }
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+        const baseUrl = buildAzureBaseUrl(connection.organization);
+
+        // 1) Construir un único ZIP con las evidencias seleccionadas
+        const zip = new JSZip();
+
+        // 1a) Serenity: descargar el artifact (ZIP) y agregarlo como archivo dentro del ZIP final
+        if (artifactDownloadUrl) {
+            console.log('[upload-evidence] Descargando artifact Serenity:', artifactDownloadUrl.substring(0, 80) + '...');
+            const artifactRes = await fetch(artifactDownloadUrl);
+            if (!artifactRes.ok) {
+                throw apiError(502, `No fue posible descargar el reporte de Serenity (${artifactRes.status}).`);
+            }
+            const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
+            console.log('[upload-evidence] Serenity descargado:', artifactBuffer.length, 'bytes');
+            zip.file('target.zip', artifactBuffer);
+        }
+
+        // 1b) DOCX/PDF generados en el cliente (base64)
+        for (const f of extraFiles) {
+            const name = String(f?.name || '').trim();
+            const base64 = String(f?.base64 || '').trim();
+            if (!name || !base64) continue;
+            zip.file(name, Buffer.from(base64, 'base64'));
+        }
+
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+        console.log('[upload-evidence] ZIP final generado:', zipBuffer.length, 'bytes, nombre:', fileName);
+
+        // 2) Subir el ZIP a Azure DevOps (con projectId en la ruta, igual que Postman)
+        const attachmentUrl = `${baseUrl}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=7.1`;
+        const uploadRes = await fetch(attachmentUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/octet-stream',
+                Accept: 'application/json'
+            },
+            body: zipBuffer
+        });
+
+        const uploadData = await uploadRes.json().catch(() => ({}));
+        if (!uploadRes.ok) {
+            if (uploadRes.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (uploadRes.status === 403) throw apiError(403, 'No tienes permisos para cargar adjuntos en Azure DevOps.');
+            throw apiError(502, 'No fue posible cargar la evidencia en Azure DevOps.');
+        }
+        console.log('[upload-evidence] Attachment creado:', uploadData.url);
+
+        // 3) Vincular el adjunto al plan (PATCH)
+        const linkEndpoint = `${baseUrl}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
+        const patchBody = [
+            {
+                op: 'add',
+                path: '/relations/-',
+                value: {
+                    rel: 'AttachedFile',
+                    url: uploadData.url,
+                    attributes: {
+                        comment: `Evidencia adjunta al plan: ${planTitle || workItemId}`
+                    }
+                }
+            }
+        ];
+
+        const linkRes = await fetch(linkEndpoint, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/json-patch+json',
+                Accept: 'application/json'
+            },
+            body: JSON.stringify(patchBody)
+        });
+
+        const linkData = await linkRes.json().catch(() => ({}));
+        if (!linkRes.ok) {
+            if (linkRes.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (linkRes.status === 403) throw apiError(403, 'No tienes permisos para vincular adjuntos en Azure DevOps.');
+            throw apiError(502, 'No fue posible vincular la evidencia al plan.');
+        }
+        console.log('[upload-evidence] Evidencia vinculada al plan', workItemId);
+
+        return res.status(200).json({
+            success: true,
+            attachmentId: uploadData.id,
+            attachmentUrl: uploadData.url,
+            fileName,
+            workItemId: linkData.id,
+            message: `Evidencia "${fileName}" cargada y vinculada al plan ${workItemId}`
         });
     } catch (error) {
         return sendApiError(res, error);

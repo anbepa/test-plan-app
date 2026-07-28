@@ -1,0 +1,309 @@
+{
+  "info": {
+    "_postman_id": "db0cab7d-f67f-42af-8faa-b332f8499a5d",
+    "name": "Azure DevOps - Consultar plan y adjuntar evidencia (ProjectId automatico)",
+    "description": "La consulta del plan extrae automáticamente projectId desde _links.self.href o url; luego carga y vincula la evidencia.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{azureUsername}}",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "{{azurePat}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://dev.azure.com/GrupoBancolombia",
+      "type": "string"
+    },
+    {
+      "key": "planId",
+      "value": "7695070",
+      "type": "string"
+    },
+    {
+      "key": "apiVersion",
+      "value": "7.1",
+      "type": "string"
+    },
+    {
+      "key": "fileName",
+      "value": "target (14).zip",
+      "type": "string"
+    },
+    {
+      "key": "azureUsername",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "azurePat",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "projectId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "areaPath",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "planTitle",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "planDescription",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attachmentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attachmentUrl",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Consultar plan de pruebas",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Consulta exitosa', () => pm.response.to.have.status(200));",
+              "",
+              "const data = pm.response.json();",
+              "const fields = data.fields || {};",
+              "const sourceUrl = data?._links?.self?.href || data?.url || '';",
+              "const projectMatch = sourceUrl.match(/dev\\.azure\\.com\\/[^/]+\\/([0-9a-fA-F-]{36})\\/_apis/i);",
+              "",
+              "if (!projectMatch) {",
+              "    throw new Error('No fue posible extraer projectId desde _links.self.href o url del plan');",
+              "}",
+              "",
+              "pm.collectionVariables.set('planId', String(data.id));",
+              "pm.collectionVariables.set('projectId', projectMatch[1]);",
+              "pm.collectionVariables.set('areaPath', fields['System.AreaPath'] || '');",
+              "pm.collectionVariables.set('planTitle', fields['System.Title'] || '');",
+              "pm.collectionVariables.set('planDescription', fields['System.Description'] || '');",
+              "",
+              "pm.test('projectId extraído automáticamente', function () {",
+              "    pm.expect(pm.collectionVariables.get('projectId')).to.match(/^[0-9a-fA-F-]{36}$/);",
+              "});",
+              "pm.test('System.AreaPath extraído', function () {",
+              "    pm.expect(pm.collectionVariables.get('areaPath')).to.not.be.empty;",
+              "});",
+              "",
+              "console.log('planId:', pm.collectionVariables.get('planId'));",
+              "console.log('projectId:', pm.collectionVariables.get('projectId'));",
+              "console.log('areaPath:', pm.collectionVariables.get('areaPath'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/_apis/wit/workitems/{{planId}}?$expand=all&api-version={{apiVersion}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "_apis",
+            "wit",
+            "workitems",
+            "{{planId}}"
+          ],
+          "query": [
+            {
+              "key": "$expand",
+              "value": "all"
+            },
+            {
+              "key": "api-version",
+              "value": "{{apiVersion}}"
+            }
+          ]
+        },
+        "description": "Consulta el plan con baseUrl de la organización y extrae automáticamente projectId, areaPath, título y descripción."
+      },
+      "response": []
+    },
+    {
+      "name": "02 - Cargar archivo de evidencia",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.collectionVariables.get('projectId')) throw new Error('projectId vacío. Ejecuta primero 01 - Consultar plan de pruebas');",
+              "if (!pm.collectionVariables.get('areaPath')) throw new Error('areaPath vacío. Ejecuta primero 01 - Consultar plan de pruebas');",
+              "if (!pm.collectionVariables.get('fileName')) throw new Error('Configura la variable fileName');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Archivo cargado', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+              "const data = pm.response.json();",
+              "pm.expect(data.id, 'attachmentId').to.exist;",
+              "pm.expect(data.url, 'attachmentUrl').to.exist;",
+              "pm.collectionVariables.set('attachmentId', data.id);",
+              "pm.collectionVariables.set('attachmentUrl', data.url);",
+              "console.log('projectId usado:', pm.collectionVariables.get('projectId'));",
+              "console.log('attachmentUrl:', data.url);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": ""
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/{{projectId}}/_apis/wit/attachments?fileName={{fileName}}&uploadType=Simple&areaPath={{areaPath}}&api-version={{apiVersion}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "{{projectId}}",
+            "_apis",
+            "wit",
+            "attachments"
+          ],
+          "query": [
+            {
+              "key": "fileName",
+              "value": "{{fileName}}"
+            },
+            {
+              "key": "uploadType",
+              "value": "Simple"
+            },
+            {
+              "key": "areaPath",
+              "value": "{{areaPath}}"
+            },
+            {
+              "key": "api-version",
+              "value": "{{apiVersion}}"
+            }
+          ]
+        },
+        "description": "Usa automáticamente projectId y areaPath obtenidos en la petición 01. En Body > binary selecciona el archivo."
+      },
+      "response": []
+    },
+    {
+      "name": "03 - Vincular evidencia al plan",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.collectionVariables.get('attachmentUrl')) throw new Error('attachmentUrl vacío. Ejecuta primero la petición 02');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Evidencia vinculada', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json();",
+              "pm.expect(String(data.id)).to.eql(pm.collectionVariables.get('planId'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json-patch+json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "[\n  {\n    \"op\": \"add\",\n    \"path\": \"/relations/-\",\n    \"value\": {\n      \"rel\": \"AttachedFile\",\n      \"url\": \"{{attachmentUrl}}\",\n      \"attributes\": {\n        \"comment\": \"Evidencia adjunta al plan: {{planTitle}}\"\n      }\n    }\n  }\n]",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/_apis/wit/workitems/{{planId}}?api-version={{apiVersion}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "_apis",
+            "wit",
+            "workitems",
+            "{{planId}}"
+          ],
+          "query": [
+            {
+              "key": "api-version",
+              "value": "{{apiVersion}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

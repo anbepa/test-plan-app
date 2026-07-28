@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
+import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { SerenityIntegrationResponse, SerenityIntegrationService } from '../services/integrations/serenity-integration.service';
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
@@ -11,7 +12,7 @@ import { GeneralSectionsConfigService } from '../services/core/general-sections-
 @Component({
   selector: 'app-configuracion',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConfirmationModalComponent],
   templateUrl: './configuracion.component.html',
   styleUrl: './configuracion.component.css'
 })
@@ -47,11 +48,16 @@ export class ConfiguracionComponent {
   serenityInfoMessage: string | null = null;
   serenityErrorMessage: string | null = null;
 
+  isDisconnectConfirmOpen = false;
+  disconnectTarget: 'azure' | 'serenity' | null = null;
+  disconnectConfirmTitle = 'Confirmar desconexión';
+  disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
+
   accordionOpen: Record<'azure' | 'serenity' | 'global' | 'status', boolean> = {
     azure: true,
-    serenity: true,
-    global: true,
-    status: true,
+    serenity: false,
+    global: false,
+    status: false,
   };
 
   constructor(
@@ -68,7 +74,12 @@ export class ConfiguracionComponent {
   }
 
   toggleSection(section: 'azure' | 'serenity' | 'global' | 'status'): void {
-    this.accordionOpen[section] = !this.accordionOpen[section];
+    const shouldOpen = !this.accordionOpen[section];
+
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'serenity' | 'global' | 'status'>)
+      .forEach((key) => this.accordionOpen[key] = false);
+
+    this.accordionOpen[section] = shouldOpen;
   }
 
   get isBusy(): boolean {
@@ -162,6 +173,36 @@ export class ConfiguracionComponent {
           this.toastService.error(this.errorMessage);
         }
       });
+  }
+
+  requestDisconnect(target: 'azure' | 'serenity'): void {
+    this.disconnectTarget = target;
+    this.disconnectConfirmTitle = target === 'azure'
+      ? 'Desconectar Azure DevOps'
+      : 'Desconectar GitHub + Serenity';
+    this.disconnectConfirmMessage = target === 'azure'
+      ? '¿Deseas desconectar la integración de Azure DevOps?'
+      : '¿Deseas desconectar la integración de GitHub + Serenity?';
+    this.isDisconnectConfirmOpen = true;
+  }
+
+  confirmDisconnect(): void {
+    const target = this.disconnectTarget;
+    this.closeDisconnectConfirm();
+
+    if (target === 'azure') {
+      this.disconnect();
+      return;
+    }
+
+    if (target === 'serenity') {
+      this.disconnectSerenityConfig();
+    }
+  }
+
+  closeDisconnectConfirm(): void {
+    this.isDisconnectConfirmOpen = false;
+    this.disconnectTarget = null;
   }
 
   saveSerenityConfig(): void {
@@ -364,5 +405,79 @@ export class ConfiguracionComponent {
     }
 
     return fallback;
+  }
+
+  get azureStatusLabel(): string {
+    if (!this.connection) {
+      return 'No configurado';
+    }
+
+    switch (this.connection.status) {
+      case 'connected':
+        return 'Conectado';
+      case 'disconnected':
+        return 'Pendiente';
+      case 'invalid':
+      case 'expired':
+        return 'Error';
+      default:
+        return 'No configurado';
+    }
+  }
+
+  get azureStatusTone(): 'success' | 'warning' | 'danger' | 'neutral' {
+    if (!this.connection) {
+      return 'neutral';
+    }
+
+    switch (this.connection.status) {
+      case 'connected':
+        return 'success';
+      case 'disconnected':
+        return 'warning';
+      case 'invalid':
+      case 'expired':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
+  }
+
+  get serenityStatusLabel(): string {
+    if (!this.serenityConnection) {
+      return 'No configurado';
+    }
+
+    switch (this.serenityConnection.status) {
+      case 'connected':
+        return 'Conectado';
+      case 'disconnected':
+      case 'default':
+        return 'Pendiente';
+      case 'invalid':
+      case 'expired':
+        return 'Error';
+      default:
+        return 'No configurado';
+    }
+  }
+
+  get serenityStatusTone(): 'success' | 'warning' | 'danger' | 'neutral' {
+    if (!this.serenityConnection) {
+      return 'neutral';
+    }
+
+    switch (this.serenityConnection.status) {
+      case 'connected':
+        return 'success';
+      case 'disconnected':
+      case 'default':
+        return 'warning';
+      case 'invalid':
+      case 'expired':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
   }
 }

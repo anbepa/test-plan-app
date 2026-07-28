@@ -1,0 +1,73 @@
+<div class="evidence-manager">
+  <!-- Menu principal -->
+  <button 
+    class="btn-evidence-manager"
+    (click)="toggleMenu()"
+    [class.active]="showMenu"
+    [disabled]="isProcessing">
+    <ng-container *ngIf="!isProcessing">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Gestionar evidencias
+    </ng-container>
+    <ng-container *ngIf="isProcessing">
+      <span class="btn-spinner"></span>
+      {{ processingMessage }}
+    </ng-container>
+  </button>
+
+  <!-- Dropdown menu -->
+  <div class="evidence-menu-dropdown" *ngIf="showMenu">
+    <button 
+      class="evidence-menu-option"
+      (click)="selectDownload()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      <span class="option-text">
+        <strong>Descargar evidencias</strong>
+        <small>Word, PDF o Serenity</small>
+      </span>
+    </button>
+
+    <div class="menu-divider"></div>
+
+    <button 
+      class="evidence-menu-option upload"
+      (click)="selectUpload()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <span class="option-text">
+        <strong>Subir a Azure DevOps</strong>
+        <small>Generar, comprimir y vincular</small>
+      </span>
+    </button>
+  </div>
+
+  <!-- Modales -->
+  <app-evidence-download-modal
+    *ngIf="showDownloadModal"
+    [isOpen]="showDownloadModal"
+    [execution]="execution"
+    [testRun]="testRun"
+    [huData]="huData"
+    (closeRequested)="handleDownloadClose()">
+  </app-evidence-download-modal>
+
+  <app-evidence-upload-modal
+    *ngIf="showUploadModal"
+    [execution]="execution"
+    [testRun]="testRun"
+    [huData]="huData"
+    (onClose)="handleUploadClose()"
+    (onProcessing)="setProcessing($event)">
+  </app-evidence-upload-modal>
+</div>

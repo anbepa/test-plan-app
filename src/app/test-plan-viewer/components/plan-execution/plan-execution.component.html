@@ -49,40 +49,11 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
               Guardar
             </button>
-            <button (click)="exportToDOCX()" class="btn-export" [disabled]="isExporting || isExportingPdf" [class.btn-export-loading]="isExporting">
-              <ng-container *ngIf="!isExporting">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Word
-              </ng-container>
-              <ng-container *ngIf="isExporting">
-                <span class="btn-spinner"></span>
-                {{ exportProgress }}/{{ exportTotal }}
-              </ng-container>
-            </button>
-            <button (click)="exportToPDF()" class="btn-export btn-export-pdf" [disabled]="isExporting || isExportingPdf" [class.btn-export-loading]="isExportingPdf">
-              <ng-container *ngIf="!isExportingPdf">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                PDF
-              </ng-container>
-              <ng-container *ngIf="isExportingPdf">
-                <span class="btn-spinner"></span>
-                {{ exportProgress }}/{{ exportTotal }}
-              </ng-container>
-            </button>
-            <button (click)="downloadSerenityReport()" class="btn-export btn-export-serenity" [disabled]="isExporting || isExportingPdf || isExportingSerenity" [class.btn-export-loading]="isExportingSerenity">
-              <ng-container *ngIf="!isExportingSerenity">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Serenity
-              </ng-container>
-              <ng-container *ngIf="isExportingSerenity">
-                <span class="btn-spinner"></span>
-                {{ serenityReportPhase }}
-              </ng-container>
-            </button>
+            <app-evidence-manager
+              [execution]="execution"
+              [testRun]="null"
+              [huData]="hu">
+            </app-evidence-manager>
           </div>
         </div>
       </div>
@@ -145,14 +116,15 @@
                 <input type="checkbox" class="tc-checkbox" (click)="$event.stopPropagation()" />
               </div>
               <div class="tc-col-title">
-                <div class="tc-title-wrapper" (click)="$event.stopPropagation()">
+                <div class="tc-title-wrapper">
                   <span class="tc-title-text"
                         [attr.contenteditable]="editingTestCaseId === tc.testCaseId ? true : null"
+                        (click)="editingTestCaseId === tc.testCaseId ? $event.stopPropagation() : null"
                         (blur)="finishEditingTitle(tc, $event)"
                         #titleSpan>{{ tc.title }}</span>
                   <button *ngIf="editingTestCaseId !== tc.testCaseId"
                           class="btn-edit-title-minimal"
-                          (click)="startEditingTitle(tc, $event, titleSpan)"
+                          (click)="startEditingTitle(tc, $event, titleSpan); $event.stopPropagation()"
                           title="Editar título">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
@@ -214,14 +186,6 @@
             <div class="tc-row-body" *ngIf="expandedTestCaseIndex === getOriginalIndex(tc)">
               <div class="tc-detail-panel">
 
-                <!-- Meta info -->
-                <div class="tc-meta-row" *ngIf="tc.preconditions">
-                  <div class="tc-meta-block tc-preconditions-block">
-                    <span class="meta-label">Precondiciones</span>
-                    <span class="meta-value">{{ tc.preconditions }}</span>
-                  </div>
-                </div>
-
                 <!-- Steps -->
                 <div class="tc-steps-header">
                   <span class="steps-section-label">Pasos de Prueba</span>
@@ -235,11 +199,13 @@
                      (drop)="onStepDrop(getOriginalIndex(tc), si)">
 
                   <div class="step-item-row" (click)="selectStepInAccordion(getOriginalIndex(tc), si)">
-                    <div class="step-num-col">
-                      <div class="step-drag-handle">
-                        <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-                      </div>
-                      <div class="step-num-label">
+                    <div class="step-drag-handle">
+                      <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                    </div>
+
+                    <!-- Badge PASO N + texto acción en la misma fila -->
+                    <div class="step-main-content">
+                      <span class="step-num-label">
                         <span class="step-status-icon" [ngClass]="'ssi-' + step.status">
                           <ng-container *ngIf="step.status === 'completed'">✓</ng-container>
                           <ng-container *ngIf="step.status === 'failed'">✗</ng-container>
@@ -247,39 +213,32 @@
                           <ng-container *ngIf="step.status === 'pending'">·</ng-container>
                         </span>
                         PASO {{ step.numero_paso }}
+                      </span>
+                      <div class="step-action-wrapper">
+                        <div class="step-action-text"
+                             [attr.contenteditable]="editingStepId === step.stepId ? true : null"
+                             (click)="editingStepId === step.stepId ? $event.stopPropagation() : null"
+                             (blur)="finishEditingStepAction(step, $event)"
+                             #stepSpan>{{ step.accion }}</div>
+                        <button *ngIf="editingStepId !== step.stepId"
+                                class="btn-edit-step-minimal"
+                                (click)="startEditingStepAction(step, $event, stepSpan); $event.stopPropagation()"
+                                title="Editar paso">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
                       </div>
+                    </div>
+
+                    <!-- Estado + eliminar -->
+                    <div class="step-item-actions" (click)="$event.stopPropagation()">
                       <select class="step-status-sel" [ngClass]="'st-' + step.status"
                               [ngModel]="step.status"
-                              (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)"
-                              (click)="$event.stopPropagation()">
+                              (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)">
                         <option value="pending">Pendiente</option>
                         <option value="in-progress">En Progreso</option>
                         <option value="completed">Completado</option>
                         <option value="failed">Falló</option>
                       </select>
-                    </div>
-                    <div class="step-content">
-                      <div class="step-action-wrapper" (click)="$event.stopPropagation()">
-                        <div class="step-action-text-wrap">
-                          <span class="step-field-label">Acción</span>
-                          <div class="step-action-text"
-                               [attr.contenteditable]="editingStepId === step.stepId ? true : null"
-                               (blur)="finishEditingStepAction(step, $event)"
-                               #stepSpan>{{ step.accion }}</div>
-                        </div>
-                        <button *ngIf="editingStepId !== step.stepId"
-                                class="btn-edit-step-minimal"
-                                (click)="startEditingStepAction(step, $event, stepSpan)"
-                                title="Editar paso">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                      </div>
-                      <div class="step-expected-text">
-                        <span class="step-field-label">Resultado esperado</span>
-                        {{ tc.expectedResults }}
-                      </div>
-                    </div>
-                    <div class="step-item-actions">
                       <button class="btn-delete-step-minimal" (click)="deleteStep(getOriginalIndex(tc), si, $event)" title="Eliminar paso">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>

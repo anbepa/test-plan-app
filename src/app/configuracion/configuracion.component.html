@@ -11,7 +11,25 @@
       <span class="section-arrow" [class.open]="accordionOpen.azure">▾</span>
     </button>
     <div class="config-card" *ngIf="accordionOpen.azure">
-      <h3 class="card-title">Azure DevOps</h3>
+      <div class="card-header">
+        <h3 class="card-title">Azure DevOps</h3>
+        <span class="connection-badge" [attr.data-tone]="azureStatusTone">{{ azureStatusLabel }}</span>
+      </div>
+
+      <div class="inline-status-grid" *ngIf="connection">
+        <div class="inline-status-item">
+          <span class="inline-status-label">Organización</span>
+          <strong class="inline-status-value">{{ connection.organization }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Token</span>
+          <strong class="inline-status-value">{{ connection.tokenHint }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Última validación</span>
+          <strong class="inline-status-value">{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+        </div>
+      </div>
 
       <div class="form-grid">
         <div class="form-group">
@@ -42,13 +60,13 @@
 
       <div class="actions-row">
         <button class="btn-primary" type="button" (click)="saveConnection()" [disabled]="isBusy">
-          {{ connection ? 'Reemplazar PAT y guardar' : 'Probar y guardar conexión' }}
+          {{ savingConnection ? 'Guardando...' : 'Guardar PAT' }}
         </button>
         <button class="btn-secondary" type="button" (click)="validateConnection()" [disabled]="isBusy">
           {{ validatingConnection ? 'Validando...' : 'Validar conexión' }}
         </button>
-        <button class="btn-danger" type="button" (click)="disconnect()" [disabled]="isBusy || !connection">
-          {{ disconnectingConnection ? 'Desconectando...' : 'Desconectar Azure DevOps' }}
+        <button class="btn-danger" type="button" (click)="requestDisconnect('azure')" [disabled]="isBusy || !connection">
+          {{ disconnectingConnection ? 'Desconectando...' : 'Desconectar' }}
         </button>
       </div>
     </div>
@@ -57,61 +75,87 @@
   <!-- SECCIÓN 2: Serenity -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('serenity')" [attr.aria-expanded]="accordionOpen.serenity">
-      <span class="section-label">Integración Serenity</span>
+      <span class="section-label">Integración GitHub + Serenity</span>
       <span class="section-arrow" [class.open]="accordionOpen.serenity">▾</span>
     </button>
     <div class="config-card" *ngIf="accordionOpen.serenity">
-      <h3 class="card-title">GitHub + Serenity</h3>
+      <div class="card-header">
+        <h3 class="card-title">GitHub + Serenity</h3>
+        <span class="connection-badge" [attr.data-tone]="serenityStatusTone">{{ serenityStatusLabel }}</span>
+      </div>
       <p class="card-description">La configuración queda asociada al usuario autenticado y el token no se expone en frontend.</p>
+
+      <div class="inline-status-grid" *ngIf="serenityConnection">
+        <div class="inline-status-item">
+          <span class="inline-status-label">Usuario</span>
+          <strong class="inline-status-value">{{ serenityConnection.githubUsername }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Repositorio</span>
+          <strong class="inline-status-value">{{ serenityConnection.repositoryOwner }}/{{ serenityConnection.repositoryName }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Workflow · Rama</span>
+          <strong class="inline-status-value">{{ serenityConnection.workflowFileName }} · {{ serenityConnection.branch }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Token</span>
+          <strong class="inline-status-value">{{ serenityConnection.tokenHint }}</strong>
+        </div>
+        <div class="inline-status-item full-width">
+          <span class="inline-status-label">Última validación</span>
+          <strong class="inline-status-value">{{ serenityConnection.lastValidatedAt ? (serenityConnection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+        </div>
+      </div>
 
       <div class="form-grid">
         <div class="form-group">
-          <label for="githubUsername">GitHub Username</label>
+          <label for="githubUsername">Usuario de GitHub</label>
           <input id="githubUsername" name="githubUsername" class="form-control" type="text" [(ngModel)]="githubUsername" [disabled]="isBusy" placeholder="usuario-github">
         </div>
 
         <div class="form-group">
-          <label for="repositoryOwner">Repository Owner</label>
+          <label for="repositoryOwner">Propietario del repositorio</label>
           <input id="repositoryOwner" name="repositoryOwner" class="form-control" type="text" [(ngModel)]="repositoryOwner" [disabled]="isBusy" placeholder="owner-o-org">
         </div>
 
         <div class="form-group">
-          <label for="repositoryName">Repository Name</label>
+          <label for="repositoryName">Nombre del repositorio</label>
           <input id="repositoryName" name="repositoryName" class="form-control" type="text" [(ngModel)]="repositoryName" [disabled]="isBusy" placeholder="nombre-del-repo">
         </div>
 
         <div class="form-group">
-          <label for="workflowFileName">Workflow File Name</label>
+          <label for="workflowFileName">Archivo del workflow</label>
           <input id="workflowFileName" name="workflowFileName" class="form-control" type="text" [(ngModel)]="workflowFileName" [disabled]="isBusy" placeholder="serenity-report.yml">
         </div>
 
         <div class="form-group">
-          <label for="branch">Branch</label>
+          <label for="branch">Rama</label>
           <input id="branch" name="branch" class="form-control" type="text" [(ngModel)]="branch" [disabled]="isBusy" placeholder="main">
         </div>
 
         <div class="form-group">
-          <label for="workflowName">Nombre del Workflow Serenity</label>
+          <label for="workflowName">Nombre del workflow</label>
           <input id="workflowName" name="workflowName" class="form-control" type="text" [(ngModel)]="workflowName" [disabled]="isBusy" placeholder="Serenity Report">
         </div>
 
         <div class="form-group full-width">
           <label for="repositoryUrl">URL del repositorio</label>
-          <input id="repositoryUrl" name="repositoryUrl" class="form-control" type="text" [(ngModel)]="repositoryUrl" [disabled]="isBusy" placeholder="https://github.com/owner/repo">
+          <input id="repositoryUrl" name="repositoryUrl" class="form-control" type="text" [(ngModel)]="repositoryUrl" [disabled]="isBusy" [title]="repositoryUrl" placeholder="https://github.com/owner/repo">
         </div>
 
         <div class="form-group full-width">
-          <label for="serenityPersonalAccessToken">GitHub Personal Access Token</label>
+          <label for="serenityPersonalAccessToken">Personal Access Token de GitHub</label>
           <input id="serenityPersonalAccessToken" name="serenityPersonalAccessToken" class="form-control" type="password" [(ngModel)]="serenityPersonalAccessToken" [disabled]="isBusy" autocomplete="new-password" placeholder="Ingresa el token para GitHub">
         </div>
       </div>
 
       <div class="actions-row">
         <button class="btn-primary" type="button" (click)="saveSerenityConfig()" [disabled]="isBusy">
-          {{ serenityConnection ? 'Actualizar configuración Serenity' : 'Guardar configuración Serenity' }}
+          {{ savingSerenityConnection ? 'Guardando...' : 'Guardar configuración' }}
         </button>
-        <button class="btn-danger" type="button" (click)="disconnectSerenityConfig()" [disabled]="isBusy || !serenityConnection">
-          {{ disconnectingSerenityConnection ? 'Desconectando...' : 'Desconectar Serenity' }}
+        <button class="btn-danger" type="button" (click)="requestDisconnect('serenity')" [disabled]="isBusy || !serenityConnection">
+          {{ disconnectingSerenityConnection ? 'Desconectando...' : 'Desconectar' }}
         </button>
       </div>
 
@@ -123,7 +167,7 @@
   <!-- SECCIÓN 3: Parámetros Globales -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('global')" [attr.aria-expanded]="accordionOpen.global">
-      <span class="section-label">Parámetros Globales</span>
+      <span class="section-label">Parámetros globales</span>
       <span class="section-arrow" [class.open]="accordionOpen.global">▾</span>
     </button>
     <div class="config-card" *ngIf="accordionOpen.global">
@@ -131,7 +175,7 @@
       <p class="card-description">Estos valores se usarán por defecto para "Repositorio Pruebas VSTS" y "Equipo de Trabajo" al crear planes.</p>
 
       <div class="form-grid">
-        <div class="form-group">
+        <div class="form-group full-width">
           <label for="repositoryLink">Repositorio Pruebas VSTS</label>
           <input
             id="repositoryLink"
@@ -139,11 +183,12 @@
             class="form-control"
             type="text"
             [(ngModel)]="repositoryLink"
+            [title]="repositoryLink"
             placeholder="https://dev.azure.com/...">
         </div>
 
         <div class="form-group full-width">
-          <label for="teamContent">Equipo de Trabajo</label>
+          <label for="teamContent">Equipo de trabajo</label>
           <textarea
             id="teamContent"
             name="teamContent"
@@ -165,68 +210,14 @@
     </div>
   </div>
 
-  <!-- SECCIÓN 4: Estado -->
-  <div class="config-section" *ngIf="loadingConnection || connection || loadingSerenityConnection || serenityConnection">
-    <button class="section-toggle" type="button" (click)="toggleSection('status')" [attr.aria-expanded]="accordionOpen.status">
-      <span class="section-label">Estado de Conexión</span>
-      <span class="section-arrow" [class.open]="accordionOpen.status">▾</span>
-    </button>
-    <div class="status-card" *ngIf="accordionOpen.status">
-      <div *ngIf="loadingConnection" class="status-loading">Consultando conexión Azure DevOps...</div>
-      <div *ngIf="!loadingConnection && connection" class="status-grid">
-        <div class="status-item">
-          <span class="status-label">Organización</span>
-          <strong>{{ connection.organization }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Estado</span>
-          <strong class="status-pill" [attr.data-status]="connection.status">{{ connection.status }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Token enmascarado</span>
-          <strong>{{ connection.tokenHint }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Última validación</span>
-          <strong>{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
-        </div>
-      </div>
-
-      <div *ngIf="loadingSerenityConnection" class="status-loading">Consultando conexión Serenity...</div>
-      <div *ngIf="!loadingSerenityConnection && serenityConnection" class="status-grid status-grid--serenity">
-        <div class="status-item">
-          <span class="status-label">GitHub Username</span>
-          <strong>{{ serenityConnection.githubUsername }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Repository</span>
-          <strong>{{ serenityConnection.repositoryOwner }}/{{ serenityConnection.repositoryName }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Workflow</span>
-          <strong>{{ serenityConnection.workflowFileName }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Branch</span>
-          <strong>{{ serenityConnection.branch }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Token enmascarado</span>
-          <strong>{{ serenityConnection.tokenHint }}</strong>
-        </div>
-
-        <div class="status-item">
-          <span class="status-label">Última validación</span>
-          <strong>{{ serenityConnection.lastValidatedAt ? (serenityConnection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
-        </div>
-      </div>
-    </div>
-  </div>
+  <app-confirmation-modal
+    [isOpen]="isDisconnectConfirmOpen"
+    [title]="disconnectConfirmTitle"
+    [message]="disconnectConfirmMessage"
+    confirmText="Desconectar"
+    cancelText="Cancelar"
+    type="danger"
+    (confirm)="confirmDisconnect()"
+    (cancel)="closeDisconnectConfirm()">
+  </app-confirmation-modal>
 </section>
