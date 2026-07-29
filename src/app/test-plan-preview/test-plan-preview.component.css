@@ -69,6 +69,27 @@
     flex-wrap: wrap;
 }
 
+.btn-manage-plan {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    background: #2563eb;
+    border: 1px solid #1d4ed8;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.btn-manage-plan:hover {
+    background: #1d4ed8;
+    box-shadow: 0 2px 4px 0 rgba(37, 99, 235, 0.2);
+}
+
 /* ── Botón Copiar (icono) ── */
 .btn-copy {
     display: inline-flex;

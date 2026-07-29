@@ -31,9 +31,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    if (req.method === 'PATCH' && action === 'link-attachment') {
-      await handleLinkAttachment(req, res, workItemId);
-      return;
+    if (req.method === 'PATCH') {
+      if (action === 'update-fields') {
+        await handleUpdateFields(req, res, workItemId);
+        return;
+      }
+      if (action === 'link-attachment' || !action) {
+        await handleLinkAttachment(req, res, workItemId);
+        return;
+      }
     }
 
     res.status(405).json({ message: 'Método no permitido.' });
@@ -420,5 +426,77 @@ async function handleLinkAttachment(req: VercelRequest, res: VercelResponse, wor
   } catch (error: any) {
     console.error('Error linking attachment:', error);
     res.status(500).json({ error: 'Error vinculando archivo a plan' });
+  }
+}
+
+async function handleUpdateFields(
+  req: VercelRequest,
+  res: VercelResponse,
+  workItemId: string
+): Promise<void> {
+  try {
+    const user = await getAuthenticatedUser(req.headers);
+    const apiVersion = '7.1';
+    const connection = await getAzureConnectionWithSecret(user.id, null);
+
+    if (!connection || connection.status === 'disconnected') {
+      res.status(404).json({ error: 'Azure DevOps no configurado' });
+      return;
+    }
+
+    const { title, description } = req.body || {};
+    const patchBody: any[] = [];
+
+    if (typeof title === 'string' && title.trim()) {
+      patchBody.push({
+        op: 'add',
+        path: '/fields/System.Title',
+        value: title.trim()
+      });
+    }
+
+    if (typeof description === 'string' && description.trim()) {
+      patchBody.push({
+        op: 'add',
+        path: '/fields/System.Description',
+        value: description.trim()
+      });
+    }
+
+    if (patchBody.length === 0) {
+      res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+      return;
+    }
+
+    const patchUrl = `https://dev.azure.com/${encodeURIComponent(connection.organization)}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=${apiVersion}`;
+
+    const response = await fetch(patchUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`:${connection.personal_access_token}`).toString('base64')}`,
+        'Content-Type': 'application/json-patch+json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(patchBody)
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        res.status(401).json({ error: 'No autorizado' });
+        return;
+      }
+      throw new Error(`Azure DevOps error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    res.status(200).json({
+      success: true,
+      id: result.id,
+      rev: result.rev,
+      message: `Plan ${workItemId} actualizado correctamente en Azure DevOps`
+    });
+  } catch (error: any) {
+    console.error('Error updating work item fields:', error);
+    res.status(500).json({ error: 'Error actualizando campos en Azure DevOps' });
   }
 }

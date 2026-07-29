@@ -213,8 +213,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     if (!this.hu) return;
     this.formError = null;
 
-    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim() || !this.editedSelectedTechnique) {
-      this.formError = 'Completa la Descripción, los Criterios de Aceptación y la Técnica ISTQB antes de regenerar.';
+    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim()) {
+      this.formError = 'Completa la Descripción y los Criterios de Aceptación antes de regenerar.';
       return;
     }
 
