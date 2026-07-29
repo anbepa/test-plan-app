@@ -79,7 +79,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   get isFormValid(): boolean {
-    return !!(this.editedTitle?.trim() && this.editedAcceptanceCriteria?.trim() && this.editedSelectedTechnique?.trim());
+    return !!(this.editedTitle?.trim() && this.editedAcceptanceCriteria?.trim());
   }
 
   appendContextTag(tag: string): void {
@@ -385,8 +385,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   async regenerateWithAI(): Promise<void> {
     if (!this.hu) return;
     this.formError = null;
-    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim() || !this.editedSelectedTechnique) {
-      this.formError = 'Completa la Descripción, los Criterios de Aceptación y la Técnica ISTQB antes de regenerar.';
+    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim()) {
+      this.formError = 'Completa la Descripción y los Criterios de Aceptación antes de regenerar.';
       return;
     }
     this.hu.id = this.editedHuId || this.hu.id;

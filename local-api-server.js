@@ -725,10 +725,10 @@ app.post('/api/integrations/azure-devops/work-items/import', async (req, res) =>
     }
 });
 
-app.get('/api/integrations/azure-devops/work-items/:workItemId', async (req, res) => {
+async function handleGetWorkItem(req, res) {
     try {
         const user = await getAuthenticatedUser(req);
-        const workItemId = String(req.params.workItemId || '').trim();
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
 
         if (!workItemId) {
             throw apiError(400, 'workItemId requerido');
@@ -749,12 +749,12 @@ app.get('/api/integrations/azure-devops/work-items/:workItemId', async (req, res
         }
         return sendApiError(res, error);
     }
-});
+}
 
-app.post('/api/integrations/azure-devops/work-items/:workItemId/attachments', async (req, res) => {
+async function handleUploadAttachment(req, res) {
     try {
         const user = await getAuthenticatedUser(req);
-        const workItemId = String(req.params.workItemId || '').trim();
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
         const fileName = String(req.body?.fileName || '').trim();
         const areaPath = String(req.body?.areaPath || '').trim();
         const fileBlob = req.body?.fileBlob;
@@ -800,12 +800,12 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/attachments', as
     } catch (error) {
         return sendApiError(res, error);
     }
-});
+}
 
-app.patch('/api/integrations/azure-devops/work-items/:workItemId/link-attachment', async (req, res) => {
+async function handleLinkAttachment(req, res) {
     try {
         const user = await getAuthenticatedUser(req);
-        const workItemId = String(req.params.workItemId || '').trim();
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
         const attachmentUrl = String(req.body?.attachmentUrl || '').trim();
         const planTitle = String(req.body?.planTitle || '').trim();
 
@@ -860,13 +860,12 @@ app.patch('/api/integrations/azure-devops/work-items/:workItemId/link-attachment
     } catch (error) {
         return sendApiError(res, error);
     }
-});
+}
 
-// Flujo completo: descarga artifact de Serenity, lo sube a Azure y lo vincula al plan
-app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity', async (req, res) => {
+async function handleUploadSerenity(req, res) {
     try {
         const user = await getAuthenticatedUser(req);
-        const workItemId = String(req.params.workItemId || '').trim();
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
         const artifactDownloadUrl = String(req.body?.artifactDownloadUrl || '').trim();
         const projectId = String(req.body?.projectId || '').trim();
         const areaPath = String(req.body?.areaPath || '').trim();
@@ -885,7 +884,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity'
         const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
         const baseUrl = buildAzureBaseUrl(connection.organization);
 
-        // 1) Descargar el ZIP del artifact de Serenity (URL firmada de GitHub, sin auth)
         console.log('[upload-serenity] Descargando artifact:', artifactDownloadUrl.substring(0, 80) + '...');
         const artifactRes = await fetch(artifactDownloadUrl);
         if (!artifactRes.ok) {
@@ -894,7 +892,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity'
         const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
         console.log('[upload-serenity] Artifact descargado:', artifactBuffer.length, 'bytes');
 
-        // 2) Subir el archivo a Azure DevOps (con projectId en la ruta, igual que Postman)
         const attachmentUrl = `${baseUrl}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=7.1`;
         const uploadRes = await fetch(attachmentUrl, {
             method: 'POST',
@@ -914,7 +911,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity'
         }
         console.log('[upload-serenity] Attachment creado:', uploadData.url);
 
-        // 3) Vincular el adjunto al plan (PATCH)
         const linkEndpoint = `${baseUrl}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
         const patchBody = [
             {
@@ -959,14 +955,13 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity'
     } catch (error) {
         return sendApiError(res, error);
     }
-});
+}
 
-// Empaqueta varias evidencias (Serenity + DOCX + PDF) en un solo ZIP, lo sube y lo vincula
-app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence', async (req, res) => {
+async function handleUploadEvidence(req, res) {
     try {
         const JSZip = require('jszip');
         const user = await getAuthenticatedUser(req);
-        const workItemId = String(req.params.workItemId || '').trim();
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
         const artifactDownloadUrl = String(req.body?.artifactDownloadUrl || '').trim();
         const extraFiles = Array.isArray(req.body?.extraFiles) ? req.body.extraFiles : [];
         const projectId = String(req.body?.projectId || '').trim();
@@ -989,10 +984,8 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence'
         const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
         const baseUrl = buildAzureBaseUrl(connection.organization);
 
-        // 1) Construir un único ZIP con las evidencias seleccionadas
         const zip = new JSZip();
 
-        // 1a) Serenity: descargar el artifact (ZIP) y agregarlo como archivo dentro del ZIP final
         if (artifactDownloadUrl) {
             console.log('[upload-evidence] Descargando artifact Serenity:', artifactDownloadUrl.substring(0, 80) + '...');
             const artifactRes = await fetch(artifactDownloadUrl);
@@ -1004,7 +997,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence'
             zip.file('target.zip', artifactBuffer);
         }
 
-        // 1b) DOCX/PDF generados en el cliente (base64)
         for (const f of extraFiles) {
             const name = String(f?.name || '').trim();
             const base64 = String(f?.base64 || '').trim();
@@ -1015,7 +1007,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence'
         const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
         console.log('[upload-evidence] ZIP final generado:', zipBuffer.length, 'bytes, nombre:', fileName);
 
-        // 2) Subir el ZIP a Azure DevOps (con projectId en la ruta, igual que Postman)
         const attachmentUrl = `${baseUrl}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=7.1`;
         const uploadRes = await fetch(attachmentUrl, {
             method: 'POST',
@@ -1035,7 +1026,6 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence'
         }
         console.log('[upload-evidence] Attachment creado:', uploadData.url);
 
-        // 3) Vincular el adjunto al plan (PATCH)
         const linkEndpoint = `${baseUrl}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
         const patchBody = [
             {
@@ -1080,7 +1070,108 @@ app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence'
     } catch (error) {
         return sendApiError(res, error);
     }
+}
+
+async function handleUpdateFields(req, res) {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const workItemId = String(req.params.workItemId || req.query.workItemId || req.body?.workItemId || '').trim();
+        const title = req.body?.title;
+        const description = req.body?.description;
+
+        if (!workItemId) throw apiError(400, 'workItemId requerido');
+
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const patchBody = [];
+        if (title !== undefined && title !== null && String(title).trim() !== '') {
+            patchBody.push({
+                op: 'add',
+                path: '/fields/System.Title',
+                value: String(title).trim()
+            });
+        }
+        if (description !== undefined && description !== null && String(description).trim() !== '') {
+            patchBody.push({
+                op: 'add',
+                path: '/fields/System.Description',
+                value: String(description).trim()
+            });
+        }
+
+        if (patchBody.length === 0) {
+            throw apiError(400, 'No se proporcionaron campos para actualizar en Azure DevOps.');
+        }
+
+        const endpoint = `${buildAzureBaseUrl(connection.organization)}/_apis/wit/workitems/${encodeURIComponent(workItemId)}?api-version=7.1`;
+        const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+
+        const response = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Basic ${basicToken}`,
+                'Content-Type': 'application/json-patch+json',
+                Accept: 'application/json'
+            },
+            body: JSON.stringify(patchBody)
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            if (response.status === 401) throw apiError(401, 'PAT inválido, vencido o revocado.');
+            if (response.status === 403) throw apiError(403, 'No tienes permisos para actualizar campos en Azure DevOps.');
+            if (response.status === 404) throw apiError(404, 'No se encontró el Work Item en Azure DevOps.');
+            throw apiError(502, 'No fue posible actualizar el plan en Azure DevOps.');
+        }
+
+        return res.status(200).json({
+            success: true,
+            id: data.id,
+            rev: data.rev,
+            message: `Plan ${workItemId} actualizado correctamente en Azure DevOps`
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+}
+
+// Rutas GET para work-items (query params & path params)
+app.get('/api/integrations/azure-devops/work-items', handleGetWorkItem);
+app.get('/api/integrations/azure-devops/work-items/:workItemId', handleGetWorkItem);
+
+// Rutas POST para work-items
+app.post('/api/integrations/azure-devops/work-items', async (req, res) => {
+    const action = String(req.query.action || req.body?.action || '').trim();
+    if (action === 'attachments') {
+        return handleUploadAttachment(req, res);
+    } else if (action === 'upload-evidence') {
+        return handleUploadEvidence(req, res);
+    } else if (action === 'upload-serenity') {
+        return handleUploadSerenity(req, res);
+    } else {
+        return res.status(400).json({ error: `Acción '${action}' no válida en POST /work-items` });
+    }
 });
+app.post('/api/integrations/azure-devops/work-items/:workItemId/attachments', handleUploadAttachment);
+app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-serenity', handleUploadSerenity);
+app.post('/api/integrations/azure-devops/work-items/:workItemId/upload-evidence', handleUploadEvidence);
+
+// Rutas PATCH para work-items
+app.patch('/api/integrations/azure-devops/work-items', async (req, res) => {
+    const action = String(req.query.action || req.body?.action || '').trim();
+    if (action === 'update-fields') {
+        return handleUpdateFields(req, res);
+    } else if (action === 'link-attachment') {
+        return handleLinkAttachment(req, res);
+    } else {
+        return res.status(400).json({ error: `Acción '${action}' no válida en PATCH /work-items` });
+    }
+});
+app.patch('/api/integrations/azure-devops/work-items/:workItemId/link-attachment', handleLinkAttachment);
+app.patch('/api/integrations/azure-devops/work-items/:workItemId/update-fields', handleUpdateFields);
 
 app.post('/api/serenity-report', async (req, res) => {
     try {

@@ -114,6 +114,49 @@ export class AzureDevOpsEvidenceService {
   }
 
   /**
+   * Actualiza los campos System.Title y System.Description de un Work Item en Azure DevOps
+   */
+  async updateTestPlanFields(planId: string, title: string, description: string): Promise<any> {
+    const validationError = this.validatePlanIdFormat(planId);
+    if (validationError) {
+      throw validationError;
+    }
+
+    try {
+      const headers = await this.buildAuthHeaders();
+      const payload = { title, description };
+
+      const response = await firstValueFrom(
+        this.http.patch<any>(
+          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=update-fields`,
+          payload,
+          { headers }
+        )
+      );
+
+      return response;
+    } catch (error: any) {
+      console.error('Error updating test plan fields:', error);
+      if (error.status === 401 || error.status === 403) {
+        throw this.createError(
+          'UNAUTHORIZED',
+          'No tienes permisos para actualizar este plan en Azure DevOps.'
+        );
+      }
+      if (error.status === 404) {
+        throw this.createError(
+          'NOT_FOUND',
+          `El plan ${planId} no existe en Azure DevOps.`
+        );
+      }
+      throw this.createError(
+        'UNKNOWN',
+        error?.error?.message || 'Error al actualizar los campos del plan en Azure DevOps'
+      );
+    }
+  }
+
+  /**
    * Valida el formato del ID del plan
    */
   private validatePlanIdFormat(planId: string): PlanValidationError | null {

@@ -5,13 +5,13 @@ import { DatabaseService, DbTestPlanWithRelations } from '../services/database/d
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
 import { HUData } from '../models/hu-data.model';
-import { WordExporterComponent } from '../word-exporter/word-exporter.component';
 import { TestPlanMapperService } from '../services/database/test-plan-mapper.service';
+import { PlanExportModalComponent } from '../shared/components/plan-export-modal/plan-export-modal.component';
 
 @Component({
     selector: 'app-test-plan-preview',
     standalone: true,
-    imports: [CommonModule, WordExporterComponent],
+    imports: [CommonModule, PlanExportModalComponent],
     templateUrl: './test-plan-preview.component.html',
     styleUrls: ['./test-plan-preview.component.css']
 })
@@ -24,6 +24,7 @@ export class TestPlanPreviewComponent implements OnInit {
     errorMessage: string = '';
     copiedToClipboard: boolean = false;
     exportMenuOpen: boolean = false;
+    showExportModal: boolean = false;
     
     // Propiedades con fallback a configuración global
     repositoryLink: string = '';
@@ -226,6 +227,14 @@ ${safeContent}
     private triggerCopied(): void {
         this.copiedToClipboard = true;
         setTimeout(() => { this.copiedToClipboard = false; }, 2000);
+    }
+
+    openExportModal(): void {
+        this.showExportModal = true;
+    }
+
+    closeExportModal(): void {
+        this.showExportModal = false;
     }
 
     toggleExportMenu(): void {
