@@ -256,6 +256,26 @@ VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 - Detén el proceso antes si una pasada completa no detecta omisiones.
 - No muestres estas pasadas ni razonamiento interno en la respuesta.
 
+PRESUPUESTO DE SALIDA — OBLIGATORIO:
+1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
+2. Antes de escribir, estima cuántos casos caben y prioriza en este orden:
+   a) Reglas de negocio y validaciones con resultado observable.
+   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
+   c) Flujos alternos, errores y recuperación.
+   d) Navegación, textos informativos y verificaciones cosméticas.
+3. Si no caben todos los casos, agrupa reglas afines de la misma prioridad en un caso combinado antes que omitirlas.
+4. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
+5. Si tuviste que agrupar u omitir cobertura por espacio, indícalo brevemente al final de "scope".
+6. Sé conciso en title, preconditions y expectedResults; la exhaustividad va en la cobertura, no en la redacción.
+
+TRAZABILIDAD — OBLIGATORIA:
+1. Usa los identificadores CA-01, CA-02, ... asignados en la normalización interna.
+2. En cada caso, lista en "coveredCriteria" los identificadores que ese caso ejecuta y verifica realmente en sus pasos.
+3. No incluyas un criterio que solo se mencione en expectedResults sin ejercitarse en los pasos.
+4. En "technique" indica la técnica realmente aplicada al caso, no la solicitada en el formulario si difiere.
+5. En "criteriaMap" enumera cada identificador con el texto resumido de la regla, para permitir la auditoría.
+6. Todo criterio de "criteriaMap" debe aparecer al menos una vez en algún "coveredCriteria", salvo que no sea comprobable.
+
 REGLAS DE CALIDAD:
 - Título claro, sin identificadores técnicos como TC_001.
 - Entre 2 y 5 pasos; permite 6 solo cuando una secuencia crítica lo requiera.
@@ -272,6 +292,9 @@ SALIDA:
 - Usa exactamente esta estructura para mantener compatibilidad:
 {
   "scope": "Alcance breve de lo cubierto",
+  "criteriaMap": [
+    {"id": "CA-01", "rule": "Resumen breve de la regla atómica"}
+  ],
   "testCases": [
     {
       "title": "Descripción clara del escenario",
@@ -279,7 +302,9 @@ SALIDA:
       "steps": [
         {"numero_paso": 1, "accion": "Acción específica"}
       ],
-      "expectedResults": "Resultado esperado concreto"
+      "expectedResults": "Resultado esperado concreto",
+      "coveredCriteria": ["CA-01"],
+      "technique": "Técnica realmente aplicada"
     }
   ]
 }
@@ -349,6 +374,26 @@ VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 - Detente antes si no aparecen omisiones nuevas.
 - No muestres análisis, mapeos ni razonamiento interno.
 
+PRESUPUESTO DE SALIDA — OBLIGATORIO:
+1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
+2. Debes devolver la matriz completa, incluidos los casos que no cambian; por eso el espacio es crítico.
+3. Si el conjunto no cabe, prioriza en este orden:
+   a) Reglas de negocio y validaciones con resultado observable.
+   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
+   c) Flujos alternos, errores y recuperación.
+   d) Navegación, textos informativos y verificaciones cosméticas.
+4. Antes de omitir cobertura, fusiona casos redundantes o afines de la misma prioridad.
+5. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
+6. Sé conciso al reescribir; no infles textos que ya eran correctos.
+
+TRAZABILIDAD — OBLIGATORIA:
+1. Reasigna identificadores CA-01, CA-02, ... a las reglas atómicas de los requisitos originales.
+2. En cada caso, lista en "coveredCriteria" los identificadores que ese caso ejecuta y verifica realmente en sus pasos.
+3. No incluyas un criterio que solo se mencione en expectedResults sin ejercitarse en los pasos.
+4. En "technique" indica la técnica realmente aplicada al caso, no la solicitada si difiere.
+5. En "criteriaMap" enumera cada identificador con el texto resumido de la regla.
+6. Usa el mapa para verificar que el refinamiento no perdió cobertura respecto a los casos actuales.
+
 CALIDAD:
 - Título claro sin IDs técnicos.
 - Entre 2 y 5 pasos; 6 únicamente para una secuencia crítica.
@@ -359,6 +404,9 @@ CALIDAD:
 SALIDA:
 Devuelve exclusivamente JSON válido, sin markdown, comentarios ni texto adicional:
 {
+  "criteriaMap": [
+    {"id": "CA-01", "rule": "Resumen breve de la regla atómica"}
+  ],
   "testCases": [
     {
       "title": "Descripción clara del escenario",
@@ -366,7 +414,9 @@ Devuelve exclusivamente JSON válido, sin markdown, comentarios ni texto adicion
       "steps": [
         {"numero_paso": 1, "accion": "Acción específica"}
       ],
-      "expectedResults": "Resultado esperado concreto"
+      "expectedResults": "Resultado esperado concreto",
+      "coveredCriteria": ["CA-01"],
+      "technique": "Técnica realmente aplicada"
     }
   ]
 }

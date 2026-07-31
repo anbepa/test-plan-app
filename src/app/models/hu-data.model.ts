@@ -12,6 +12,10 @@ export interface DetailedTestCase {
   preconditions: string;
   steps: TestCaseStep[];
   expectedResults: string;
+  /** Criterios de aceptación atómicos cubiertos por el caso (ej. ["CA-01", "CA-04"]) */
+  coveredCriteria?: string[];
+  /** Técnica de diseño realmente aplicada al caso */
+  technique?: string;
   isExpanded?: boolean;
   dbId?: string;
   position?: number;
