@@ -15,6 +15,15 @@ import { GeminiParserService, PartialParseResult } from './gemini-parser.service
 export class DeepSeekService {
 
     private readonly MODEL = 'deepseek-reasoner';
+    /**
+     * Modelo usado en generación/refinamiento por streaming.
+     * Vercel Hobby limita cada función serverless a 60s, y deepseek-reasoner
+     * suele superar ese límite por el razonamiento interno (CoT), cortando el
+     * stream antes de emitir el JSON final. deepseek-chat responde dentro del límite.
+     */
+    private readonly STREAM_MODEL = 'deepseek-chat';
+    /** Tope de tokens para streaming: suficiente para la matriz y acorde a los 60s. */
+    private readonly STREAM_MAX_TOKENS = 8000;
     private readonly MAX_CONTINUATIONS = 2; // Máximo de llamadas de continuación
     private readonly RISK_STRATEGY_MAX_RETRIES = 1;
 
@@ -358,10 +367,10 @@ export class DeepSeekService {
     ): Observable<StreamEvent> {
         const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest);
         const payload: DeepSeekRequest = {
-            model: this.MODEL,
+            model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 16000,
+            max_tokens: this.STREAM_MAX_TOKENS,
             stream: true
         };
 
@@ -383,10 +392,10 @@ export class DeepSeekService {
 
         const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
         const payload: DeepSeekRequest = {
-            model: this.MODEL,
+            model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 16000,
+            max_tokens: this.STREAM_MAX_TOKENS,
             stream: true
         };
 

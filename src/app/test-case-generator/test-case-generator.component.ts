@@ -536,6 +536,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
               this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
                 rawTestCases.map((tc: any) => tc.title)
               );
+            } else {
+              console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
+              this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';
             }
           }
         },
@@ -581,19 +584,94 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** Parsea el contenido JSON del stream final */
   private parseStreamResult(content: string): any {
     if (!content) return null;
+    const clean = content.trim()
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/, '')
+      .trim();
+
     try {
-      // Intentar parsear directamente
-      const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
       return JSON.parse(clean);
-    } catch {
-      // Intentar extraer JSON del contenido si hay texto extra
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { return JSON.parse(match[0]); } catch {}
-      }
-      console.warn('[GENERATION] No se pudo parsear JSON del stream');
+    } catch { /* continuar con estrategias de recuperación */ }
+
+    // Extraer el bloque JSON más externo
+    const start = clean.indexOf('{');
+    if (start === -1) {
+      console.warn('[GENERATION] No se encontró JSON en el stream');
       return null;
     }
+    const candidate = clean.slice(start);
+    try {
+      return JSON.parse(candidate);
+    } catch { /* posible JSON truncado */ }
+
+    const repaired = this.repairTruncatedJson(candidate);
+    if (repaired) {
+      try {
+        const parsed = JSON.parse(repaired);
+        console.warn('[GENERATION] JSON truncado recuperado parcialmente');
+        return parsed;
+      } catch { /* no recuperable */ }
+    }
+
+    console.warn('[GENERATION] No se pudo parsear JSON del stream');
+    return null;
+  }
+
+  /**
+   * Intenta cerrar un JSON truncado (stream cortado) descartando el último
+   * fragmento incompleto y balanceando llaves/corchetes.
+   */
+  private repairTruncatedJson(text: string): string | null {
+    let inString = false;
+    let escaped = false;
+    const stack: string[] = [];
+    let lastSafeIndex = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (inString) {
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (ch === '"') inString = false;
+        continue;
+      }
+
+      if (ch === '"') { inString = true; continue; }
+      if (ch === '{' || ch === '[') { stack.push(ch === '{' ? '}' : ']'); continue; }
+      if (ch === '}' || ch === ']') {
+        stack.pop();
+        lastSafeIndex = i;
+        continue;
+      }
+    }
+
+    if (stack.length === 0) return null;
+    if (lastSafeIndex === -1) return null;
+
+    // Cortar después del último elemento completo y cerrar lo que falte
+    const truncated = text.slice(0, lastSafeIndex + 1);
+
+    // Recalcular el stack sobre el texto recortado
+    const closers: string[] = [];
+    inString = false;
+    escaped = false;
+    for (let i = 0; i < truncated.length; i++) {
+      const ch = truncated[i];
+      if (inString) {
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') { inString = true; continue; }
+      if (ch === '{') { closers.push('}'); continue; }
+      if (ch === '[') { closers.push(']'); continue; }
+      if (ch === '}' || ch === ']') { closers.pop(); continue; }
+    }
+
+    return truncated + closers.reverse().join('');
   }
 
 

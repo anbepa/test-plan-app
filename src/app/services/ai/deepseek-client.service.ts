@@ -152,6 +152,7 @@ export class DeepSeekClientService {
                 const decoder = new TextDecoder();
                 let buffer = '';
                 let receivedAnyToken = false;
+                let streamError: string | null = null;
 
                 const processLine = (line: string) => {
                     if (!line.startsWith('data: ')) return;
@@ -162,6 +163,10 @@ export class DeepSeekClientService {
                     }
                     try {
                         const parsed = JSON.parse(data);
+                        if (parsed?.error) {
+                            streamError = parsed?.message || parsed?.error?.message || 'Error del proveedor durante el stream';
+                            return;
+                        }
                         const delta = parsed?.choices?.[0]?.delta;
                         if (!delta) return;
 
@@ -207,6 +212,27 @@ export class DeepSeekClientService {
 
                 // Evento final con done=true (cancela el pendingEmit si existía)
                 pendingEmit = false;
+
+                if (streamError) {
+                    this.ngZone.run(() => observer.error({
+                        userMessage: 'La generación se interrumpió antes de finalizar. Intenta nuevamente.',
+                        technicalDetails: streamError
+                    }));
+                    return;
+                }
+
+                if (!accContent.trim()) {
+                    const detail = receivedAnyToken
+                        ? 'El stream terminó con razonamiento pero sin contenido final (posible corte por timeout de la función serverless).'
+                        : 'El stream no devolvió ningún token.';
+                    console.error('[DeepSeek Stream] Contenido vacío.', detail);
+                    this.ngZone.run(() => observer.error({
+                        userMessage: 'La respuesta llegó incompleta. Vuelve a intentar la generación.',
+                        technicalDetails: detail
+                    }));
+                    return;
+                }
+
                 scheduleEmit(true);
 
             }).catch(err => this.ngZone.run(() => observer.error(err)));

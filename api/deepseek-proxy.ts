@@ -174,16 +174,29 @@ export default async function handler(
                 return response.status(dsResponse.status).json(errData);
             }
 
-            response.setHeader('Content-Type', 'text/event-stream');
-            response.setHeader('Cache-Control', 'no-cache');
+            response.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+            response.setHeader('Cache-Control', 'no-cache, no-transform');
             response.setHeader('Connection', 'keep-alive');
+            // Evita que proxies/CDN acumulen el stream en buffer
+            response.setHeader('X-Accel-Buffering', 'no');
+            (response as any).flushHeaders?.();
 
             // Pipe el stream de DeepSeek al cliente
-            for await (const chunk of dsResponse.body as any) {
-                response.write(chunk);
+            let bytes = 0;
+            try {
+                for await (const chunk of dsResponse.body as any) {
+                    bytes += chunk?.length ?? 0;
+                    response.write(chunk);
+                    (response as any).flush?.();
+                }
+            } catch (streamError: any) {
+                console.error('[STREAM] Error durante el SSE:', streamError?.message || streamError);
+                // Emitimos un evento de error para que el cliente no se quede sin señal
+                response.write(`data: ${JSON.stringify({ error: true, message: streamError?.message || 'Stream interrumpido' })}\n\n`);
             }
+            response.write('data: [DONE]\n\n');
             response.end();
-            console.log('[STREAM] SSE completado');
+            console.log(`[STREAM] SSE completado (${bytes} bytes)`);
             return;
         }
 
