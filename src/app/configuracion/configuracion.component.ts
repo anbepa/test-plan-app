@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
-import { SerenityIntegrationResponse, SerenityIntegrationService } from '../services/integrations/serenity-integration.service';
+import { AzureSerenityIntegrationResponse, SerenityIntegrationResponse, SerenityIntegrationService } from '../services/integrations/serenity-integration.service';
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
@@ -34,6 +34,14 @@ export class ConfiguracionComponent {
   connection: AzureDevOpsConnectionView | null = null;
   serenityConnection: SerenityIntegrationResponse | null = null;
 
+  azureSerenityOrg = '';
+  azureSerenityProject = '';
+  azureSerenityReleaseDefinitionId: number | null = null;
+  azureSerenityPipelineName = 'Serenity Report CD';
+  azureSerenityBranch = 'trunk';
+  azureSerenityPat = '';
+  azureSerenityConnection: AzureSerenityIntegrationResponse | null = null;
+
   loadingConnection = false;
   savingConnection = false;
   validatingConnection = false;
@@ -43,19 +51,27 @@ export class ConfiguracionComponent {
   savingSerenityConnection = false;
   disconnectingSerenityConnection = false;
 
+  loadingAzureSerenityConnection = false;
+  savingAzureSerenityConnection = false;
+  disconnectingAzureSerenityConnection = false;
+
   infoMessage: string | null = null;
   errorMessage: string | null = null;
   serenityInfoMessage: string | null = null;
   serenityErrorMessage: string | null = null;
 
+  azureSerenityInfoMessage: string | null = null;
+  azureSerenityErrorMessage: string | null = null;
+
   isDisconnectConfirmOpen = false;
-  disconnectTarget: 'azure' | 'serenity' | null = null;
+  disconnectTarget: 'azure' | 'serenity' | 'azure_serenity' | null = null;
   disconnectConfirmTitle = 'Confirmar desconexión';
   disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
 
-  accordionOpen: Record<'azure' | 'serenity' | 'global' | 'status', boolean> = {
+  accordionOpen: Record<'azure' | 'serenity' | 'azure_serenity' | 'global' | 'status', boolean> = {
     azure: true,
     serenity: false,
+    azure_serenity: false,
     global: false,
     status: false,
   };
@@ -70,13 +86,14 @@ export class ConfiguracionComponent {
   ngOnInit(): void {
     this.fetchConnection();
     this.fetchSerenityConnection();
+    this.fetchAzureSerenityConnection();
     this.loadGeneralSectionsConfig();
   }
 
-  toggleSection(section: 'azure' | 'serenity' | 'global' | 'status'): void {
+  toggleSection(section: 'azure' | 'serenity' | 'azure_serenity' | 'global' | 'status'): void {
     const shouldOpen = !this.accordionOpen[section];
 
-    (Object.keys(this.accordionOpen) as Array<'azure' | 'serenity' | 'global' | 'status'>)
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'serenity' | 'azure_serenity' | 'global' | 'status'>)
       .forEach((key) => this.accordionOpen[key] = false);
 
     this.accordionOpen[section] = shouldOpen;
@@ -84,7 +101,8 @@ export class ConfiguracionComponent {
 
   get isBusy(): boolean {
     return this.loadingConnection || this.savingConnection || this.validatingConnection || this.disconnectingConnection
-      || this.loadingSerenityConnection || this.savingSerenityConnection || this.disconnectingSerenityConnection;
+      || this.loadingSerenityConnection || this.savingSerenityConnection || this.disconnectingSerenityConnection
+      || this.loadingAzureSerenityConnection || this.savingAzureSerenityConnection || this.disconnectingAzureSerenityConnection;
   }
 
   saveConnection(): void {
@@ -175,14 +193,18 @@ export class ConfiguracionComponent {
       });
   }
 
-  requestDisconnect(target: 'azure' | 'serenity'): void {
+  requestDisconnect(target: 'azure' | 'serenity' | 'azure_serenity'): void {
     this.disconnectTarget = target;
     this.disconnectConfirmTitle = target === 'azure'
       ? 'Desconectar Azure DevOps'
-      : 'Desconectar GitHub + Serenity';
+      : target === 'azure_serenity'
+        ? 'Desconectar Azure DevOps + Serenity'
+        : 'Desconectar GitHub + Serenity';
     this.disconnectConfirmMessage = target === 'azure'
       ? '¿Deseas desconectar la integración de Azure DevOps?'
-      : '¿Deseas desconectar la integración de GitHub + Serenity?';
+      : target === 'azure_serenity'
+        ? '¿Deseas desconectar la integración de Azure DevOps + Serenity?'
+        : '¿Deseas desconectar la integración de GitHub + Serenity?';
     this.isDisconnectConfirmOpen = true;
   }
 
@@ -197,6 +219,10 @@ export class ConfiguracionComponent {
 
     if (target === 'serenity') {
       this.disconnectSerenityConfig();
+    }
+
+    if (target === 'azure_serenity') {
+      this.disconnectAzureSerenityConfig();
     }
   }
 
@@ -249,6 +275,97 @@ export class ConfiguracionComponent {
         error: (error: unknown) => {
           this.serenityErrorMessage = this.getErrorMessage(error, 'No se pudo desconectar Serenity.');
           this.toastService.error(this.serenityErrorMessage);
+        }
+      });
+  }
+
+  saveAzureSerenityConfig(): void {
+    this.azureSerenityInfoMessage = null;
+    this.azureSerenityErrorMessage = null;
+
+    const org = this.azureSerenityOrg.trim();
+    const project = this.azureSerenityProject.trim();
+    const releaseDefinitionId = this.azureSerenityReleaseDefinitionId ?? 0;
+    const pat = this.azureSerenityPat.trim();
+
+    if (!org) {
+      this.azureSerenityErrorMessage = 'La organización es obligatoria.';
+      return;
+    }
+
+    if (!project) {
+      this.azureSerenityErrorMessage = 'El proyecto es obligatorio.';
+      return;
+    }
+
+    if (!releaseDefinitionId || releaseDefinitionId <= 0) {
+      this.azureSerenityErrorMessage = 'El Release Definition ID es obligatorio.';
+      return;
+    }
+
+    this.savingAzureSerenityConnection = true;
+    this.serenityService.saveAzureSerenityConfig({
+      azureOrganization: org,
+      azureProject: project,
+      releaseDefinitionId,
+      pipelineName: this.azureSerenityPipelineName.trim() || 'Serenity Report CD',
+      branch: this.azureSerenityBranch.trim() || 'trunk',
+      personalAccessToken: pat || undefined,
+    })
+      .pipe(finalize(() => this.savingAzureSerenityConnection = false))
+      .subscribe({
+        next: (connection) => {
+          this.azureSerenityConnection = connection;
+          this.azureSerenityPat = '';
+          this.azureSerenityInfoMessage = 'Pipeline de Azure DevOps + Serenity guardado y validado correctamente.';
+          this.toastService.success('Pipeline Azure DevOps + Serenity guardado.');
+        },
+        error: (error: unknown) => {
+          this.azureSerenityErrorMessage = this.getErrorMessage(error, 'No se pudo guardar la configuración de Azure DevOps + Serenity.');
+          this.toastService.error(this.azureSerenityErrorMessage);
+        }
+      });
+  }
+
+  disconnectAzureSerenityConfig(): void {
+    this.azureSerenityInfoMessage = null;
+    this.azureSerenityErrorMessage = null;
+
+    this.disconnectingAzureSerenityConnection = true;
+    this.serenityService.disconnectAzureSerenity()
+      .pipe(finalize(() => this.disconnectingAzureSerenityConnection = false))
+      .subscribe({
+        next: () => {
+          this.azureSerenityConnection = null;
+          this.azureSerenityPat = '';
+          this.azureSerenityInfoMessage = 'Pipeline Azure DevOps + Serenity desconectado.';
+          this.toastService.success('Pipeline Azure DevOps + Serenity desconectado.');
+          this.fetchAzureSerenityConnection();
+        },
+        error: (error: unknown) => {
+          this.azureSerenityErrorMessage = this.getErrorMessage(error, 'No se pudo desconectar Azure DevOps + Serenity.');
+          this.toastService.error(this.azureSerenityErrorMessage);
+        }
+      });
+  }
+
+  private fetchAzureSerenityConnection(): void {
+    this.loadingAzureSerenityConnection = true;
+    this.serenityService.getAzureSerenityConfig()
+      .pipe(finalize(() => this.loadingAzureSerenityConnection = false))
+      .subscribe({
+        next: (connection) => {
+          this.azureSerenityConnection = connection;
+          if (connection) {
+            this.azureSerenityOrg = connection.azureOrganization;
+            this.azureSerenityProject = connection.azureProject;
+            this.azureSerenityReleaseDefinitionId = connection.releaseDefinitionId;
+            this.azureSerenityPipelineName = connection.pipelineName;
+            this.azureSerenityBranch = connection.branch;
+          }
+        },
+        error: (error: unknown) => {
+          this.azureSerenityErrorMessage = this.getErrorMessage(error, 'No se pudo cargar la configuración de Azure DevOps + Serenity.');
         }
       });
   }
@@ -405,6 +522,44 @@ export class ConfiguracionComponent {
     }
 
     return fallback;
+  }
+
+  get azureSerenityStatusLabel(): string {
+    if (!this.azureSerenityConnection) {
+      return 'No configurado';
+    }
+
+    switch (this.azureSerenityConnection.status) {
+      case 'connected':
+        return 'Conectado';
+      case 'disconnected':
+      case 'default':
+        return 'Pendiente';
+      case 'invalid':
+      case 'expired':
+        return 'Error';
+      default:
+        return 'No configurado';
+    }
+  }
+
+  get azureSerenityStatusTone(): 'success' | 'warning' | 'danger' | 'neutral' {
+    if (!this.azureSerenityConnection) {
+      return 'neutral';
+    }
+
+    switch (this.azureSerenityConnection.status) {
+      case 'connected':
+        return 'success';
+      case 'disconnected':
+      case 'default':
+        return 'warning';
+      case 'invalid':
+      case 'expired':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
   }
 
   get azureStatusLabel(): string {

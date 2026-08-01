@@ -164,7 +164,89 @@
     </div>
   </div>
 
-  <!-- SECCIÓN 3: Parámetros Globales -->
+  <!-- SECCIÓN 3: Azure DevOps + Serenity -->
+  <div class="config-section">
+    <button class="section-toggle" type="button" (click)="toggleSection('azure_serenity')" [attr.aria-expanded]="accordionOpen.azure_serenity">
+      <span class="section-label">Integración Azure DevOps + Serenity</span>
+      <span class="section-arrow" [class.open]="accordionOpen.azure_serenity">▾</span>
+    </button>
+    <div class="config-card" *ngIf="accordionOpen.azure_serenity">
+      <div class="card-header">
+        <h3 class="card-title">Azure DevOps + Serenity</h3>
+        <span class="connection-badge" [attr.data-tone]="azureSerenityStatusTone">{{ azureSerenityStatusLabel }}</span>
+      </div>
+      <p class="card-description">Configura el pipeline CD de Serenity alojado en Azure DevOps. La organización y el PAT se reutilizan de la conexión principal de Azure DevOps si ya está configurada.</p>
+
+      <div class="inline-status-grid" *ngIf="azureSerenityConnection">
+        <div class="inline-status-item">
+          <span class="inline-status-label">Organización</span>
+          <strong class="inline-status-value">{{ azureSerenityConnection.azureOrganization }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Proyecto · Release Def ID</span>
+          <strong class="inline-status-value">{{ azureSerenityConnection.azureProject }} · #{{ azureSerenityConnection.releaseDefinitionId }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Pipeline · Rama</span>
+          <strong class="inline-status-value">{{ azureSerenityConnection.pipelineName }} · {{ azureSerenityConnection.branch }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Token</span>
+          <strong class="inline-status-value">{{ azureSerenityConnection.tokenHint }}</strong>
+        </div>
+        <div class="inline-status-item full-width">
+          <span class="inline-status-label">Última validación</span>
+          <strong class="inline-status-value">{{ azureSerenityConnection.lastValidatedAt ? (azureSerenityConnection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="azSerOrg">Organización</label>
+          <input id="azSerOrg" name="azSerOrg" class="form-control" type="text" [(ngModel)]="azureSerenityOrg" [disabled]="isBusy" placeholder="GrupoBancolombia">
+        </div>
+
+        <div class="form-group">
+          <label for="azSerProject">Proyecto</label>
+          <input id="azSerProject" name="azSerProject" class="form-control" type="text" [(ngModel)]="azureSerenityProject" [disabled]="isBusy" placeholder="Nombre del proyecto en Azure DevOps">
+        </div>
+
+        <div class="form-group">
+          <label for="azSerReleaseDefId">Release Definition ID</label>
+          <input id="azSerReleaseDefId" name="azSerReleaseDefId" class="form-control" type="number" [(ngModel)]="azureSerenityReleaseDefinitionId" [disabled]="isBusy" placeholder="1234">
+        </div>
+
+        <div class="form-group">
+          <label for="azSerPipelineName">Nombre del pipeline</label>
+          <input id="azSerPipelineName" name="azSerPipelineName" class="form-control" type="text" [(ngModel)]="azureSerenityPipelineName" [disabled]="isBusy" placeholder="Serenity Report CD">
+        </div>
+
+        <div class="form-group">
+          <label for="azSerBranch">Rama</label>
+          <input id="azSerBranch" name="azSerBranch" class="form-control" type="text" [(ngModel)]="azureSerenityBranch" [disabled]="isBusy" placeholder="trunk">
+        </div>
+
+        <div class="form-group full-width">
+          <label for="azSerPat">Personal Access Token de Azure DevOps</label>
+          <input id="azSerPat" name="azSerPat" class="form-control" type="password" [(ngModel)]="azureSerenityPat" [disabled]="isBusy" autocomplete="new-password" placeholder="Ingresa o reemplaza el PAT (se usa el de Azure DevOps si se deja vacío)">
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn-primary" type="button" (click)="saveAzureSerenityConfig()" [disabled]="isBusy">
+          {{ savingAzureSerenityConnection ? 'Guardando...' : 'Guardar configuración' }}
+        </button>
+        <button class="btn-danger" type="button" (click)="requestDisconnect('azure_serenity')" [disabled]="isBusy || !azureSerenityConnection">
+          {{ disconnectingAzureSerenityConnection ? 'Desconectando...' : 'Desconectar' }}
+        </button>
+      </div>
+
+      <p *ngIf="azureSerenityInfoMessage" class="message success">{{ azureSerenityInfoMessage }}</p>
+      <p *ngIf="azureSerenityErrorMessage" class="message error">{{ azureSerenityErrorMessage }}</p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 4: Parámetros Globales -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('global')" [attr.aria-expanded]="accordionOpen.global">
       <span class="section-label">Parámetros globales</span>

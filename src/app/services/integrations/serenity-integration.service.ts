@@ -29,11 +29,34 @@ export interface SerenityIntegrationResponse {
   updatedAt?: string | null;
 }
 
+export interface AzureSerenityIntegrationPayload {
+  azureOrganization: string;
+  azureProject: string;
+  releaseDefinitionId: number;
+  pipelineName?: string;
+  branch?: string;
+  personalAccessToken?: string;
+}
+
+export interface AzureSerenityIntegrationResponse {
+  id: string;
+  azureOrganization: string;
+  azureProject: string;
+  releaseDefinitionId: number;
+  pipelineName: string;
+  branch: string;
+  status: 'connected' | 'invalid' | 'expired' | 'disconnected' | 'default';
+  tokenHint: string;
+  lastValidatedAt: string | null;
+  updatedAt?: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class SerenityIntegrationService {
   private readonly baseUrl = '/api/integrations/serenity/config';
+  private readonly azureConfigUrl = '/api/integrations/serenity/config-azure';
 
   constructor(
     private http: HttpClient,
@@ -50,6 +73,18 @@ export class SerenityIntegrationService {
 
   disconnect(): Observable<{ success: boolean }> {
     return this.authorizedDelete<{ success: boolean }>(this.baseUrl);
+  }
+
+  getAzureSerenityConfig(): Observable<AzureSerenityIntegrationResponse | null> {
+    return this.authorizedGet<AzureSerenityIntegrationResponse | null>(this.azureConfigUrl);
+  }
+
+  saveAzureSerenityConfig(payload: AzureSerenityIntegrationPayload): Observable<AzureSerenityIntegrationResponse> {
+    return this.authorizedPost<AzureSerenityIntegrationResponse>(this.azureConfigUrl, payload);
+  }
+
+  disconnectAzureSerenity(): Observable<{ success: boolean }> {
+    return this.authorizedDelete<{ success: boolean }>(this.azureConfigUrl);
   }
 
   private authorizedGet<T>(url: string): Observable<T> {

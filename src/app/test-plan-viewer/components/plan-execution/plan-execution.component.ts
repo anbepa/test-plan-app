@@ -13,8 +13,9 @@ import { DatabaseService } from '../../../services/database/database.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { SerenityReportService, SerenityReportState } from '../../../services/export/serenity-report.service';
+import { SerenityIntegrationService } from '../../../services/integrations/serenity-integration.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-plan-execution',
@@ -185,6 +186,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private toastService: ToastService,
     private exportService: ExportService,
     private serenityReportService: SerenityReportService,
+    private serenityIntegrationService: SerenityIntegrationService,
     private huSyncService: HuSyncService,
     private cdr: ChangeDetectorRef
   ) { }
@@ -1005,6 +1007,14 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.isExportingSerenity = true;
       this.serenityReportPhase = 'Iniciando...';
       this.cdr.markForCheck();
+
+      // Detectar backend configurado (Azure DevOps o GitHub)
+      try {
+        const azureConfig = await firstValueFrom(this.serenityIntegrationService.getAzureSerenityConfig());
+        this.serenityReportService.backend = azureConfig?.status === 'connected' ? 'azure' : 'github';
+      } catch (_) {
+        this.serenityReportService.backend = 'github';
+      }
 
       const run = {
         id: this.testRunId || this.execution.id,

@@ -12,16 +12,10 @@ export interface HydrateProgress {
   percentage: number;
 }
 
-export type SerenityBackend = 'github' | 'azure';
-
-export interface SerenityReportState {
+export interface SerenityReportAzureState {
   phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
   jobId?: string;
-  gistId?: string;
-  runId?: string;
   buildId?: number;
-  releaseId?: number;
-  releaseUrl?: string;
   artifactDownloadUrl?: string;
   error?: string;
   hydrateProgress?: HydrateProgress;
@@ -29,14 +23,11 @@ export interface SerenityReportState {
 }
 
 @Injectable({ providedIn: 'root' })
-export class SerenityReportService {
-  state: SerenityReportState = { phase: 'idle' };
+export class SerenityReportAzureService {
+  state: SerenityReportAzureState = { phase: 'idle' };
   suppressAutoDownload = false;
-  /** 'github' | 'azure' — se define desde la configuracion */
-  backend: SerenityBackend = 'github';
   private pollTimer: any = null;
-  private readonly ghApiUrl = '/api/serenity-report';
-  private readonly azApiUrl = '/api/serenity-report-azure';
+  private apiUrl = '/api/serenity-report-azure';
 
   constructor(
     private http: HttpClient,
@@ -90,63 +81,33 @@ export class SerenityReportService {
       const bundle = await this.serenityExport.buildCompressedBundle(execution, run);
       const bundleJson = JSON.stringify(bundle);
 
-      const backendLabel = this.backend === 'azure' ? 'Azure DevOps' : 'GitHub Actions';
       this.state = {
         phase: 'dispatching',
-        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a ${backendLabel}...`,
+        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a Azure DevOps...`,
         hydrateProgress: undefined,
       };
 
       const headers = await this.buildAuthHeaders();
+      const startResult = await firstValueFrom(
+        this.http.post<any>(this.apiUrl, { bundle }, { headers })
+      );
 
-      if (this.backend === 'azure') {
-        await this.dispatchAzure(bundle, headers);
-      } else {
-        await this.dispatchGitHub(bundle, headers);
+      if (!startResult.success) {
+        throw new Error(startResult.error || 'Error al iniciar el pipeline de Azure DevOps');
       }
+
+      this.state = {
+        phase: 'polling',
+        statusMessage: 'Generando reporte en Azure DevOps...',
+        jobId: startResult.jobId,
+        buildId: startResult.buildId,
+      };
+
+      this.startPolling();
     } catch (err: any) {
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
     }
-  }
-
-  private async dispatchGitHub(bundle: any, headers: HttpHeaders): Promise<void> {
-    const startResult = await firstValueFrom(
-      this.http.post<any>(this.ghApiUrl, { bundle }, { headers })
-    );
-
-    if (!startResult.success) {
-      throw new Error(startResult.error || 'Error al iniciar el reporte');
-    }
-
-    this.state = {
-      phase: 'polling',
-      statusMessage: 'Generando reporte en GitHub Actions...',
-      jobId: startResult.jobId,
-      gistId: startResult.gistId,
-      runId: startResult.runId,
-    };
-
-    this.startPolling();
-  }
-
-  private async dispatchAzure(bundle: any, headers: HttpHeaders): Promise<void> {
-    const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundle }, { headers })
-    );
-
-    if (!startResult.success) {
-      throw new Error(startResult.error || 'Error al iniciar el release de Azure DevOps');
-    }
-
-    this.state = {
-      phase: 'polling',
-      statusMessage: 'Generando reporte en Azure DevOps...',
-      jobId: startResult.jobId,
-      releaseId: startResult.releaseId,
-    };
-
-    this.startPolling();
   }
 
   private startPolling(): void {
@@ -156,35 +117,23 @@ export class SerenityReportService {
   }
 
   private async poll(): Promise<void> {
-    if (this.backend === 'azure') {
-      return this.pollAzure();
-    }
-    return this.pollGitHub();
-  }
-
-  private async pollGitHub(): Promise<void> {
-    const { jobId, gistId, runId } = this.state;
+    const { jobId, buildId } = this.state;
 
     try {
       const params = new URLSearchParams();
-      if (runId) params.set('runId', runId);
-      if (gistId) params.set('gistId', gistId);
+      if (buildId) params.set('buildId', String(buildId));
       if (jobId) params.set('jobId', jobId);
 
-      if (!jobId) {
-        this.state = { ...this.state, phase: 'error', error: 'Falta jobId.' };
+      if (!buildId) {
+        this.state = { ...this.state, phase: 'error', error: 'Falta buildId.' };
         this.stopPolling();
         return;
       }
 
       const headers = await this.buildAuthHeaders();
       const result = await firstValueFrom(
-        this.http.get<any>(`${this.ghApiUrl}?${params.toString()}`, { headers })
+        this.http.get<any>(`${this.apiUrl}?${params.toString()}`, { headers })
       );
-
-      if (result.runId && !this.state.runId) {
-        this.state = { ...this.state, runId: result.runId };
-      }
 
       if (result.status === 'done') {
         this.stopPolling();
@@ -196,67 +145,25 @@ export class SerenityReportService {
             artifactDownloadUrl: result.artifactDownloadUrl,
           };
           if (!this.suppressAutoDownload) {
-            this.downloadArtifact(result.artifactDownloadUrl);
+            const dlUrl = result.artifactDownloadUrl;
+            const a = document.createElement('a');
+            a.href = dlUrl;
+            a.download = 'serenity-report.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
           }
           this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
         } else {
           this.state = { ...this.state, phase: 'error', error: result.message || 'No se encontro el artifact' };
         }
-      } else if (result.phase === 'queued') {
-        this.state = { ...this.state, phase: 'polling', statusMessage: 'Workflow en cola...' };
-      } else if (result.status === 'running') {
-        this.state = { ...this.state, phase: 'polling', statusMessage: 'Generando reporte...' };
-      } else {
-        this.stopPolling();
-        this.state = { ...this.state, phase: 'error', error: result.message || 'Estado desconocido' };
-      }
-    } catch (err: any) {
-      this.stopPolling();
-      this.state = { ...this.state, phase: 'error', error: err?.message || 'Error al consultar estado' };
-    }
-  }
-
-  private async pollAzure(): Promise<void> {
-    const { jobId, releaseId } = this.state;
-
-    try {
-      const params = new URLSearchParams();
-      if (releaseId) params.set('releaseId', String(releaseId));
-      if (jobId) params.set('jobId', jobId);
-
-      if (!releaseId) {
-        this.state = { ...this.state, phase: 'error', error: 'Falta releaseId.' };
-        this.stopPolling();
-        return;
-      }
-
-      const headers = await this.buildAuthHeaders();
-      const result = await firstValueFrom(
-        this.http.get<any>(`${this.azApiUrl}?${params.toString()}`, { headers })
-      );
-
-      if (result.status === 'done') {
-        this.stopPolling();
-        if (result.releaseUrl) {
-          this.state = {
-            ...this.state,
-            phase: 'downloading',
-            statusMessage: 'Abriendo release de Azure DevOps...',
-            releaseUrl: result.releaseUrl,
-          };
-          if (!this.suppressAutoDownload) {
-            window.open(result.releaseUrl, '_blank');
-          }
-          this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
-        } else {
-          this.state = { ...this.state, phase: 'error', error: result.message || 'Release sin URL' };
-        }
       } else if (result.status === 'running') {
         const phaseLabels: Record<string, string> = {
-          notStarted: 'Release en cola...',
-          inProgress: 'Release en ejecución...',
+          notStarted: 'Pipeline en cola...',
+          inProgress: 'Pipeline en ejecucion...',
+          cancelling: 'Cancelando...',
         };
-        this.state = { ...this.state, phase: 'polling', statusMessage: phaseLabels[result.phase] || 'Release en progreso...' };
+        this.state = { ...this.state, phase: 'polling', statusMessage: phaseLabels[result.phase] || 'Pipeline en progreso...' };
       } else {
         this.stopPolling();
         this.state = { ...this.state, phase: 'error', error: result.message || 'Estado desconocido' };
@@ -285,15 +192,6 @@ export class SerenityReportService {
     }
 
     return new HttpHeaders({ Authorization: `Bearer ${session.access_token}` });
-  }
-
-  private downloadArtifact(url: string): void {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'serenity-report.zip';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
   }
 
   stopPolling(): void { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; } }
