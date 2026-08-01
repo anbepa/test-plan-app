@@ -5,6 +5,7 @@ import { SerenityExportService } from './serenity-export.service';
 import { TestRun } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
+import { SerenityIntegrationService } from '../integrations/serenity-integration.service';
 
 export interface HydrateProgress {
   current: number;
@@ -32,7 +33,14 @@ export interface SerenityReportState {
 export class SerenityReportService {
   state: SerenityReportState = { phase: 'idle' };
   suppressAutoDownload = false;
-  /** 'github' | 'azure' — se define desde la configuracion */
+  /**
+   * Backend activo. Se resuelve automaticamente en cada generateReport():
+   * 'azure' solo si existe una conexion Azure Serenity conectada,
+   * en cualquier otro caso se mantiene 'github'.
+   *
+   * Se puede forzar asignandolo antes de llamar a generateReport(); en ese
+   * caso hay que pasar { autoDetectBackend: false }.
+   */
   backend: SerenityBackend = 'github';
   private pollTimer: any = null;
   private readonly ghApiUrl = '/api/serenity-report';
@@ -43,14 +51,39 @@ export class SerenityReportService {
     private serenityExport: SerenityExportService,
     private storage: ExecutionStorageService,
     private supabaseClient: SupabaseClientService,
+    private serenityIntegration: SerenityIntegrationService,
   ) {}
 
-  async generateReport(run: TestRun): Promise<void> {
+  /**
+   * Determina que backend usar. Ante cualquier duda o error devuelve
+   * 'github', que es el flujo historico y no debe verse afectado.
+   */
+  private async resolveBackend(): Promise<SerenityBackend> {
+    try {
+      const azureConfig = await firstValueFrom(
+        this.serenityIntegration.getAzureSerenityConfig()
+      );
+      return azureConfig?.status === 'connected' ? 'azure' : 'github';
+    } catch {
+      return 'github';
+    }
+  }
+
+  async generateReport(
+    run: TestRun,
+    options: { autoDetectBackend?: boolean } = {}
+  ): Promise<void> {
     if (this.state.phase === 'polling' || this.state.phase === 'dispatching') return;
 
     try {
       if (!run.executionId) {
         throw new Error('Esta ejecucion no tiene datos ejecutados todavia.');
+      }
+
+      // Resolver el backend en cada ejecucion: el servicio es singleton y sin
+      // esto quedaria pegado el valor de la generacion anterior.
+      if (options.autoDetectBackend !== false) {
+        this.backend = await this.resolveBackend();
       }
 
       this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
@@ -237,7 +270,18 @@ export class SerenityReportService {
 
       if (result.status === 'done') {
         this.stopPolling();
-        if (result.releaseUrl) {
+        if (result.artifactDownloadUrl) {
+          this.state = {
+            ...this.state,
+            phase: 'downloading',
+            statusMessage: 'Descargando reporte Serenity...',
+            artifactDownloadUrl: result.artifactDownloadUrl,
+          };
+          if (!this.suppressAutoDownload) {
+            this.downloadArtifact(result.artifactDownloadUrl);
+          }
+          this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
+        } else if (result.releaseUrl) {
           this.state = {
             ...this.state,
             phase: 'downloading',

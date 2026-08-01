@@ -1458,6 +1458,317 @@ app.delete('/api/integrations/serenity/config', async (req, res) => {
     }
 });
 
+// ─── Serenity + Azure DevOps (Release) ───────────────────────────────────
+
+async function getAzureSerenityConnectionWithSecret(userId) {
+    const { adminClient } = getSupabaseClients();
+    const { data, error } = await adminClient.rpc('azure_serenity_get_connection_secret', {
+        p_user_id: userId
+    });
+
+    if (error) throw apiError(500, 'Error al consultar la configuración de Serenity Azure.');
+    return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+function azureReleaseRequest(url, personalAccessToken, method = 'GET', body = null) {
+    const basicToken = Buffer.from(`:${personalAccessToken}`).toString('base64');
+    return fetch(url, {
+        method,
+        headers: {
+            Authorization: `Basic ${basicToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'test-plan-app'
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+    });
+}
+
+async function validateAzureSerenityPipeline(organization, project, releaseDefinitionId, personalAccessToken) {
+    const url = `https://vsrm.dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/release/definitions/${releaseDefinitionId}?api-version=7.1`;
+    const response = await azureReleaseRequest(url, personalAccessToken);
+
+    if (response.status === 401) throw apiError(401, 'El PAT de Azure DevOps es inválido o no tiene permisos.');
+    if (response.status === 403) throw apiError(403, 'Azure DevOps rechazó el acceso al Release Definition.');
+    if (response.status === 404) throw apiError(404, 'No se encontró el Release Definition. Verifica Project y Release Definition ID.');
+    if (!response.ok) throw apiError(502, 'No fue posible validar el Release Definition de Azure DevOps.');
+}
+
+async function resolveAzureSerenityRuntimeConfig(req) {
+    const user = await getAuthenticatedUser(req);
+    const row = await getAzureSerenityConnectionWithSecret(user.id);
+
+    if (!row?.personal_access_token) return null;
+
+    return {
+        userId: user.id,
+        azureOrganization: String(row.azure_organization || ''),
+        azureProject: String(row.azure_project || ''),
+        releaseDefinitionId: Number(row.release_definition_id || 0),
+        pipelineName: String(row.pipeline_name || 'Serenity Report CD'),
+        branch: String(row.branch || 'trunk'),
+        personalAccessToken: String(row.personal_access_token || '')
+    };
+}
+
+function resolveAzureArtifactDownloadUrlFromRelease(data) {
+    const candidates = [
+        data?.artifactDownloadUrl,
+        data?.reportZipUrl,
+        data?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+        data?.variables?.REPORT_ZIP_URL?.value,
+        data?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+        data?.environments?.[0]?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+        data?.environments?.[0]?.variables?.REPORT_ZIP_URL?.value,
+        data?.environments?.[0]?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+    ];
+
+    for (const v of candidates) {
+        const s = String(v || '').trim();
+        if (/^https?:\/\//i.test(s)) return s;
+    }
+    return null;
+}
+
+const SERENITY_BUNDLE_BUCKET = 'execution-evidence';
+
+function serenityBundlePath(userId, jobId) {
+    return `serenity-bundles/${userId}/${jobId}.json`;
+}
+
+async function deleteSerenityBundle(userId, jobId) {
+    try {
+        const { adminClient } = getSupabaseClients();
+        await adminClient.storage.from(SERENITY_BUNDLE_BUCKET).remove([serenityBundlePath(userId, jobId)]);
+    } catch (_) { /* no-op */ }
+}
+
+app.get('/api/integrations/serenity/config-azure', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const row = await getAzureSerenityConnectionWithSecret(user.id);
+        if (!row) return res.status(200).json(null);
+
+        return res.status(200).json({
+            id: row.id,
+            azureOrganization: row.azure_organization,
+            azureProject: row.azure_project,
+            releaseDefinitionId: row.release_definition_id,
+            pipelineName: row.pipeline_name,
+            branch: row.branch,
+            status: row.status,
+            tokenHint: row.token_hint,
+            lastValidatedAt: row.last_validated_at,
+            updatedAt: row.updated_at
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+app.post('/api/integrations/serenity/config-azure', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const body = req.body || {};
+
+        const azureOrganization = String(body.azureOrganization || '').trim();
+        const azureProject = String(body.azureProject || '').trim();
+        const releaseDefinitionId = Number(body.releaseDefinitionId || 0);
+        const pipelineName = String(body.pipelineName || 'Serenity Report CD').trim() || 'Serenity Report CD';
+        const branch = String(body.branch || 'trunk').trim() || 'trunk';
+        const typedToken = String(body.personalAccessToken || '').trim();
+
+        if (!azureOrganization) throw apiError(400, 'La organización de Azure DevOps es obligatoria.');
+        if (!azureProject) throw apiError(400, 'El proyecto de Azure DevOps es obligatorio.');
+        if (!releaseDefinitionId || releaseDefinitionId <= 0) throw apiError(400, 'El Release Definition ID es obligatorio.');
+
+        const existing = await getAzureSerenityConnectionWithSecret(user.id);
+        const personalAccessToken = typedToken || String(existing?.personal_access_token || '').trim();
+        if (!personalAccessToken) throw apiError(400, 'Debes ingresar un PAT de Azure DevOps.');
+
+        await validateAzureSerenityPipeline(azureOrganization, azureProject, releaseDefinitionId, personalAccessToken);
+
+        const { adminClient } = getSupabaseClients();
+        const { data, error } = await adminClient.rpc('azure_serenity_upsert_connection', {
+            p_user_id: user.id,
+            p_azure_organization: azureOrganization,
+            p_azure_project: azureProject,
+            p_release_definition_id: releaseDefinitionId,
+            p_pipeline_name: pipelineName,
+            p_branch: branch,
+            p_personal_access_token: personalAccessToken,
+            p_status: 'connected'
+        });
+
+        if (error) {
+            console.error('[SERENITY_AZURE][UPSERT][RPC_ERROR]', error);
+            throw apiError(500, 'Error al guardar la configuración de Serenity Azure.');
+        }
+
+        const row = Array.isArray(data) ? data[0] : data;
+        if (!row?.id) throw apiError(500, 'No se pudo guardar la configuración de Serenity Azure.');
+
+        return res.status(200).json({
+            id: row.id,
+            azureOrganization: row.azure_organization,
+            azureProject: row.azure_project,
+            releaseDefinitionId: row.release_definition_id,
+            pipelineName: row.pipeline_name,
+            branch: row.branch,
+            status: row.status,
+            tokenHint: row.token_hint || maskTokenHint(personalAccessToken),
+            lastValidatedAt: row.last_validated_at
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+app.delete('/api/integrations/serenity/config-azure', async (req, res) => {
+    try {
+        const user = await getAuthenticatedUser(req);
+        const { adminClient } = getSupabaseClients();
+        const { error } = await adminClient.rpc('azure_serenity_disconnect_connection', {
+            p_user_id: user.id
+        });
+        if (error) throw apiError(500, 'No se pudo eliminar la configuración de Serenity Azure.');
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+app.post('/api/serenity-report-azure', async (req, res) => {
+    try {
+        const config = await resolveAzureSerenityRuntimeConfig(req);
+        if (!config) {
+            return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
+        }
+
+        const { bundle } = req.body || {};
+        if (!bundle) {
+            return res.status(400).json({ error: 'Se requiere un bundle' });
+        }
+
+        const jobId = `serenity-azure-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        const bundleJson = JSON.stringify(bundle);
+        const { adminClient } = getSupabaseClients();
+        const path = serenityBundlePath(config.userId, jobId);
+
+        const { error: uploadError } = await adminClient.storage
+            .from(SERENITY_BUNDLE_BUCKET)
+            .upload(path, bundleJson, { contentType: 'application/json', upsert: true });
+
+        if (uploadError) {
+            console.error('[serenity-report-azure][local] Error subiendo bundle:', uploadError);
+            return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+        }
+
+        const { data: signedData, error: signedError } = await adminClient.storage
+            .from(SERENITY_BUNDLE_BUCKET)
+            .createSignedUrl(path, 3600);
+
+        if (signedError || !signedData?.signedUrl) {
+            await deleteSerenityBundle(config.userId, jobId);
+            return res.status(502).json({ error: 'Error al generar URL firmada para el bundle.' });
+        }
+
+        const bundleUrl = signedData.signedUrl;
+        console.log(`[serenity-report-azure][local] Bundle subido (${(bundleJson.length / 1024).toFixed(0)} KB): ${path}`);
+
+        const releaseUrlApi = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/releases?api-version=7.1`;
+        const releaseResponse = await azureReleaseRequest(releaseUrlApi, config.personalAccessToken, 'POST', {
+            definitionId: config.releaseDefinitionId,
+            description: `Serenity report — ${jobId}`,
+            variables: {
+                BUNDLE_URL: { value: bundleUrl },
+                RUN_ID: { value: jobId },
+                RUN_NAME: { value: jobId }
+            }
+        });
+
+        if (!releaseResponse.ok) {
+            const errText = await releaseResponse.text();
+            console.error('[serenity-report-azure][local] Error al crear release:', releaseResponse.status, errText);
+            await deleteSerenityBundle(config.userId, jobId);
+            const hint = releaseResponse.status === 401 || releaseResponse.status === 403
+                ? ' Verifica que el PAT tenga permisos Release (Read, Write, & Execute).'
+                : '';
+            return res.status(502).json({ error: `Error al crear release: ${releaseResponse.status}.${hint}`.trim() });
+        }
+
+        const releaseData = await releaseResponse.json();
+        const releaseId = releaseData?.id;
+        if (!releaseId) {
+            await deleteSerenityBundle(config.userId, jobId);
+            return res.status(502).json({ error: 'No se pudo obtener el ID del release de Azure DevOps.' });
+        }
+
+        console.log(`[serenity-report-azure][local] Release creado: ${releaseId}`);
+
+        return res.status(200).json({
+            success: true,
+            phase: 'running',
+            jobId,
+            releaseId,
+            message: 'Release de Azure DevOps creado.'
+        });
+    } catch (error) {
+        console.error('[serenity-report-azure][local] Error fatal:', error);
+        return sendApiError(res, error);
+    }
+});
+
+app.get('/api/serenity-report-azure', async (req, res) => {
+    try {
+        const config = await resolveAzureSerenityRuntimeConfig(req);
+        if (!config) {
+            return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
+        }
+
+        const releaseId = String(req.query.releaseId || '').trim();
+        const jobId = String(req.query.jobId || '').trim();
+        if (!releaseId) {
+            return res.status(400).json({ error: 'Falta releaseId.' });
+        }
+
+        const url = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/releases/${releaseId}?api-version=7.1`;
+        const response = await azureReleaseRequest(url, config.personalAccessToken);
+
+        if (!response.ok) {
+            return res.status(502).json({ status: 'error', message: `Error consultando release: ${response.status}` });
+        }
+
+        const data = await response.json();
+        const environments = data?.environments || [];
+        const status = environments[0]?.status || 'unknown';
+
+        if (status === 'succeeded' || status === 'rejected') {
+            if (jobId) await deleteSerenityBundle(config.userId, jobId);
+
+            if (status === 'succeeded') {
+                const releaseUrl = `https://dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_releaseProgress?_a=release-pipeline-progress&releaseId=${releaseId}`;
+                const artifactDownloadUrl = resolveAzureArtifactDownloadUrlFromRelease(data);
+                return res.status(200).json({
+                    status: 'done',
+                    phase: 'completed',
+                    result: status,
+                    artifactDownloadUrl,
+                    releaseUrl,
+                    message: 'Release completado exitosamente.'
+                });
+            }
+
+            return res.status(200).json({ status: 'done', phase: 'failed', result: status });
+        }
+
+        return res.status(200).json({ status: 'running', phase: status, result: null });
+    } catch (error) {
+        console.error('[serenity-report-azure][local] Error en poll:', error);
+        return sendApiError(res, error);
+    }
+});
+
 app.listen(PORT, () => {
     // Servidor listo
 });

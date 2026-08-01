@@ -28,6 +28,25 @@ function azurePost(url: string, personalAccessToken: string, body: any): Promise
   });
 }
 
+function resolveArtifactDownloadUrlFromRelease(data: any): string | null {
+  const candidates = [
+    data?.artifactDownloadUrl,
+    data?.reportZipUrl,
+    data?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+    data?.variables?.REPORT_ZIP_URL?.value,
+    data?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+    data?.environments?.[0]?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+    data?.environments?.[0]?.variables?.REPORT_ZIP_URL?.value,
+    data?.environments?.[0]?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+  ];
+
+  for (const v of candidates) {
+    const s = String(v || '').trim();
+    if (/^https?:\/\//i.test(s)) return s;
+  }
+  return null;
+}
+
 async function uploadBundleToStorage(bundleJson: string, userId: string, jobId: string): Promise<string> {
   const { adminClient } = getSupabaseClients();
   const bucket = 'execution-evidence';
@@ -184,11 +203,13 @@ async function handlePoll(req: VercelRequest, res: VercelResponse) {
 
       if (status === 'succeeded') {
         const releaseUrl = `https://dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_releaseProgress?_a=release-pipeline-progress&releaseId=${releaseId}`;
+        const artifactDownloadUrl = resolveArtifactDownloadUrlFromRelease(data);
 
         return res.status(200).json({
           status: 'done',
           phase: 'completed',
           result: status,
+          artifactDownloadUrl,
           releaseUrl,
           message: 'Release completado exitosamente.',
         });
