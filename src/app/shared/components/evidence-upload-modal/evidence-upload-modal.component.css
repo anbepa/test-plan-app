@@ -420,6 +420,43 @@
 .error-section h3 { margin:0; font-size:16px; font-weight:700; color:var(--text-color,#1c1c1e); }
 .error-section p  { margin:0; font-size:13px; color:var(--text-secondary,#8e8e93); word-break:break-word; }
 
+/* ── Advertencia de límite Vercel ── */
+.warning-banner {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background-color: #FFF3CD;
+  border: 1px solid #FFE69C;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #856404;
+}
+
+.warning-banner svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  stroke: #FF9500;
+}
+
+.warning-banner strong {
+  display: block;
+  font-weight: 600;
+  color: #FF9500;
+  margin-bottom: 2px;
+}
+
+.warning-banner p {
+  margin: 0;
+  line-height: 1.4;
+  color: #7d6608;
+}
+
+.vercel-limit-warning {
+  background-color: #FEF3E2;
+  border-color: #FFD580;
+}
+
 @media (max-width: 640px) {
   .modal-content { width:95%; max-height:95vh; }
   .modal-header, .modal-body { padding-left:16px; padding-right:16px; }

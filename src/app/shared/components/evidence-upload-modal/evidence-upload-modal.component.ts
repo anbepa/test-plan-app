@@ -43,7 +43,8 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   // Estado del modal
   inputPlanId = '';
   inputFileName = 'Evidencia_EVC00057.zip';
-  selectedFormats = { docx: true, pdf: false };
+  // Por defecto: Solo Serenity (DOCX/PDF deshabilitados por límite de 4.5MB en Vercel free tier)
+  selectedFormats = { docx: false, pdf: false };
   isValidating = false;
   isUploading = false;
   planValidated = false;

@@ -323,6 +323,22 @@ export class EvidenceUploadOrchestrator {
       throw new Error('No hay evidencias seleccionadas para cargar');
     }
 
+    // Validar tamaño total de extraFiles (máximo 4MB para Vercel free tier)
+    const maxTotalSize = 4 * 1024 * 1024; // 4MB
+    let totalSize = 0;
+    if (extraFiles && extraFiles.length > 0) {
+      for (const file of extraFiles) {
+        const fileSize = Buffer.byteLength(file.base64, 'base64');
+        totalSize += fileSize;
+      }
+      if (totalSize > maxTotalSize) {
+        throw new Error(
+          `Los archivos a cargar (${(totalSize / 1024 / 1024).toFixed(2)}MB) exceden el límite de 4MB. ` +
+          `Por favor, reduce el tamaño de los documentos (DOCX/PDF) o selecciona menos archivos.`
+        );
+      }
+    }
+
     this.setState(EvidenceUploadState.UPLOADING_ATTACHMENT, 'Subiendo evidencias a Azure DevOps...');
 
     try {
