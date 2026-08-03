@@ -160,7 +160,9 @@ export class AzureDevOpsEvidenceService {
    * Sube un archivo adjunto (attachment) a Azure DevOps y luego lo VINCULA (relations)
    * al Work Item indicado. Sin el segundo paso, el archivo queda cargado en Azure DevOps
    * pero no aparece asociado al plan de pruebas.
-   * Incluye el header de autenticación (Supabase) requerido por el backend.
+   *
+   * ⚡ Estrategia de upload directo: el archivo binario va desde el browser
+   * DIRECTO a Azure DevOps, sin pasar por Vercel (evita límite de 4.5MB).
    */
   async uploadAttachment(planId: string, areaPath: string, fileName: string, fileBase64: string, planTitle?: string): Promise<any> {
     const validationError = this.validatePlanIdFormat(planId);
@@ -171,21 +173,58 @@ export class AzureDevOpsEvidenceService {
     try {
       const headers = await this.buildAuthHeaders();
 
-      // 1) Subir el archivo como adjunto en Azure DevOps
-      const uploadUrl = `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=attachments`;
-      const uploaded = await firstValueFrom(
-        this.http.post<any>(
-          uploadUrl,
-          { fileName, areaPath, fileBlob: fileBase64 },
+      // 1) Obtener config de upload desde Vercel (solo credenciales, ~100 bytes)
+      const configParams = new URLSearchParams({
+        workItemId: planId,
+        action: 'get-upload-config',
+        areaPath: areaPath || '',
+        fileName
+      });
+
+      const uploadConfig = await firstValueFrom(
+        this.http.get<{ uploadUrl: string; authHeader: string; organization: string }>(
+          `${this.baseUrl}/work-items?${configParams.toString()}`,
           { headers }
         )
       );
+
+      if (!uploadConfig?.uploadUrl || !uploadConfig?.authHeader) {
+        throw this.createError('UNKNOWN', 'No se pudo obtener la configuración de carga de Azure DevOps.');
+      }
+
+      // 2) Convertir base64 a Blob binario para upload directo (sin overhead de base64)
+      const binaryStr = atob(fileBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const fileBlob = new Blob([bytes], { type: 'application/octet-stream' });
+
+      // 3) Subir DIRECTAMENTE a Azure DevOps desde el browser (sin pasar por Vercel)
+      const uploadResponse = await fetch(uploadConfig.uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': uploadConfig.authHeader,
+          'Content-Type': 'application/octet-stream',
+          'Accept': 'application/json'
+        },
+        body: fileBlob
+      });
+
+      if (!uploadResponse.ok) {
+        if (uploadResponse.status === 401 || uploadResponse.status === 403) {
+          throw this.createError('UNAUTHORIZED', 'No tienes permisos para adjuntar archivos. Verifica el PAT.');
+        }
+        throw this.createError('UNKNOWN', `Azure DevOps rechazó la carga (${uploadResponse.status}).`);
+      }
+
+      const uploaded = await uploadResponse.json();
 
       if (!uploaded?.url) {
         throw this.createError('UNKNOWN', 'Azure DevOps no devolvió la URL del adjunto cargado.');
       }
 
-      // 2) Vincular el adjunto recién subido al Work Item (plan)
+      // 4) Vincular el adjunto recién subido al Work Item (plan) — sí pasa por Vercel (solo metadatos)
       const linkUrl = `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=link-attachment`;
       const linked = await firstValueFrom(
         this.http.patch<any>(

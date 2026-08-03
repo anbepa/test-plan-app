@@ -16,6 +16,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const { workItemId, action } = extractRouteParams(req);
 
+    if (req.method === 'GET' && action === 'get-upload-config') {
+      await handleGetUploadConfig(req, res, workItemId);
+      return;
+    }
+
     if (req.method === 'GET' && !['attachments', 'link-attachment'].includes(action || '')) {
       await handleGetWorkItem(req, res, workItemId);
       return;
@@ -161,6 +166,37 @@ async function handleGetWorkItem(req: VercelRequest, res: VercelResponse, workIt
     console.error('Error fetching work item:', error);
     res.status(500).json({ error: 'Error consultando plan en Azure DevOps' });
   }
+}
+
+/**
+ * GET /api/integrations/azure-devops/work-items?workItemId=:id&action=get-upload-config
+ * Devuelve la configuración necesaria para que el cliente suba archivos
+ * DIRECTAMENTE a Azure DevOps, sin pasar el archivo por Vercel (evita límite 4.5MB).
+ */
+async function handleGetUploadConfig(req: VercelRequest, res: VercelResponse, workItemId: string): Promise<void> {
+  const user = await getAuthenticatedUser(req.headers);
+  const projectId = typeof req.query['projectId'] === 'string' ? req.query['projectId'].trim() : '';
+  const areaPath = typeof req.query['areaPath'] === 'string' ? req.query['areaPath'].trim() : '';
+  const fileName = typeof req.query['fileName'] === 'string' ? req.query['fileName'].trim() : 'Evidencia.zip';
+
+  const connection = await getAzureConnectionWithSecret(user.id);
+  if (!connection) {
+    res.status(401).json({ error: 'No hay conexión configurada con Azure DevOps', code: 'NO_CONNECTION' });
+    return;
+  }
+
+  // Devuelve la URL de upload directa a Azure DevOps y el token Basic codificado
+  // El cliente puede usar esto para subir el archivo directamente sin pasar por Vercel
+  const apiVersion = '7.1';
+  const uploadUrl = `https://dev.azure.com/${connection.organization}/${encodeURIComponent(projectId || connection.organization)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=${apiVersion}`;
+  const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+
+  res.status(200).json({
+    uploadUrl,
+    authHeader: `Basic ${basicToken}`,
+    organization: connection.organization,
+    workItemId
+  });
 }
 
 /**
