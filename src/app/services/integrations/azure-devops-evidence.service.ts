@@ -164,7 +164,7 @@ export class AzureDevOpsEvidenceService {
    * ⚡ Estrategia de upload directo: el archivo binario va desde el browser
    * DIRECTO a Azure DevOps, sin pasar por Vercel (evita límite de 4.5MB).
    */
-  async uploadAttachment(planId: string, areaPath: string, fileName: string, fileBase64: string, planTitle?: string): Promise<any> {
+  async uploadAttachment(planId: string, areaPath: string, fileName: string, fileBase64: string, planTitle?: string, projectId?: string): Promise<any> {
     const validationError = this.validatePlanIdFormat(planId);
     if (validationError) {
       throw validationError;
@@ -174,9 +174,19 @@ export class AzureDevOpsEvidenceService {
       const headers = await this.buildAuthHeaders();
 
       // 1) Obtener config de upload desde Vercel (solo credenciales, ~100 bytes)
+      // Si no viene projectId, intentar extraerlo validando el plan primero
+      let resolvedProjectId = projectId || '';
+      if (!resolvedProjectId) {
+        try {
+          const planInfo = await this.validateTestPlan(planId);
+          resolvedProjectId = planInfo.projectId || '';
+        } catch { /* continuar sin projectId, el backend dará error descriptivo */ }
+      }
+
       const configParams = new URLSearchParams({
         workItemId: planId,
         action: 'get-upload-config',
+        projectId: resolvedProjectId,
         areaPath: areaPath || '',
         fileName
       });

@@ -1650,7 +1650,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         validated.areaPath,
         fileName,
         base64,
-        validated.planTitle
+        validated.planTitle,
+        validated.projectId
       );
 
       this.toastService.success('Reporte Serenity vinculado al plan de pruebas');
