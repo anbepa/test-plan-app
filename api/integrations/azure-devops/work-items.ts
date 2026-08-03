@@ -188,7 +188,13 @@ async function handleGetUploadConfig(req: VercelRequest, res: VercelResponse, wo
   // Devuelve la URL de upload directa a Azure DevOps y el token Basic codificado
   // El cliente puede usar esto para subir el archivo directamente sin pasar por Vercel
   const apiVersion = '7.1';
-  const uploadUrl = `https://dev.azure.com/${connection.organization}/${encodeURIComponent(projectId || connection.organization)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=${apiVersion}`;
+
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId requerido para construir la URL de carga', code: 'MISSING_PROJECT_ID' });
+    return;
+  }
+
+  const uploadUrl = `https://dev.azure.com/${connection.organization}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=${apiVersion}`;
   const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
 
   res.status(200).json({

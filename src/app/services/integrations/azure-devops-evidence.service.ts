@@ -313,6 +313,7 @@ export class AzureDevOpsEvidenceService {
   /**
    * Extrae el projectId de la URL de autohref del Work Item
    * Formato esperado: https://dev.azure.com/{org}/{projectId}/_apis/wit/workItems/{id}
+   * Soporta tanto UUID como nombre del proyecto.
    */
   private extractProjectId(response: AzureDevOpsWorkItem): string | null {
     const url = response._links?.self?.href || response.url;
@@ -320,11 +321,18 @@ export class AzureDevOpsEvidenceService {
       return null;
     }
 
-    // Expresión regular para extraer UUID
+    // 1) Intentar extraer UUID
     // Patrón: /{uuid}/_apis
-    const match = url.match(/\/([0-9a-fA-F-]{36})\/_apis/);
-    if (match && match[1]) {
-      return match[1];
+    const uuidMatch = url.match(/\/([0-9a-fA-F-]{36})\/_apis/);
+    if (uuidMatch && uuidMatch[1]) {
+      return uuidMatch[1];
+    }
+
+    // 2) Fallback: extraer nombre de proyecto
+    // Patrón: https://dev.azure.com/{org}/{project}/_apis
+    const projectNameMatch = url.match(/https:\/\/dev\.azure\.com\/[^/]+\/([^/]+)\/_apis/);
+    if (projectNameMatch && projectNameMatch[1]) {
+      return decodeURIComponent(projectNameMatch[1]);
     }
 
     return null;
