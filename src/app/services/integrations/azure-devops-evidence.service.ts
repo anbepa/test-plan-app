@@ -157,6 +157,70 @@ export class AzureDevOpsEvidenceService {
   }
 
   /**
+   * Sube un archivo adjunto (attachment) a Azure DevOps y luego lo VINCULA (relations)
+   * al Work Item indicado. Sin el segundo paso, el archivo queda cargado en Azure DevOps
+   * pero no aparece asociado al plan de pruebas.
+   * Incluye el header de autenticación (Supabase) requerido por el backend.
+   */
+  async uploadAttachment(planId: string, areaPath: string, fileName: string, fileBase64: string, planTitle?: string): Promise<any> {
+    const validationError = this.validatePlanIdFormat(planId);
+    if (validationError) {
+      throw validationError;
+    }
+
+    try {
+      const headers = await this.buildAuthHeaders();
+
+      // 1) Subir el archivo como adjunto en Azure DevOps
+      const uploadUrl = `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=attachments`;
+      const uploaded = await firstValueFrom(
+        this.http.post<any>(
+          uploadUrl,
+          { fileName, areaPath, fileBlob: fileBase64 },
+          { headers }
+        )
+      );
+
+      if (!uploaded?.url) {
+        throw this.createError('UNKNOWN', 'Azure DevOps no devolvió la URL del adjunto cargado.');
+      }
+
+      // 2) Vincular el adjunto recién subido al Work Item (plan)
+      const linkUrl = `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=link-attachment`;
+      const linked = await firstValueFrom(
+        this.http.patch<any>(
+          linkUrl,
+          { attachmentUrl: uploaded.url, planTitle },
+          { headers }
+        )
+      );
+
+      return { ...uploaded, ...linked };
+    } catch (error: any) {
+      console.error('Error uploading attachment:', error);
+      if (error.code && error.message) {
+        throw error;
+      }
+      if (error.status === 401 || error.status === 403) {
+        throw this.createError(
+          'UNAUTHORIZED',
+          'No tienes permisos para adjuntar archivos a este plan. Verifica la configuración de Azure DevOps.'
+        );
+      }
+      if (error.status === 404) {
+        throw this.createError(
+          'NOT_FOUND',
+          `El plan ${planId} no existe en Azure DevOps.`
+        );
+      }
+      throw this.createError(
+        'UNKNOWN',
+        error?.error?.message || 'Error al subir el adjunto a Azure DevOps'
+      );
+    }
+  }
+
+  /**
    * Valida el formato del ID del plan
    */
   private validatePlanIdFormat(planId: string): PlanValidationError | null {

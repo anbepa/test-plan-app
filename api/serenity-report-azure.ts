@@ -80,6 +80,38 @@ async function deleteBundleFromStorage(userId: string, jobId: string): Promise<v
   } catch (_) { /* no-op */ }
 }
 
+/**
+ * Elimina reportes previos del mismo usuario/ejecución antes de insertar uno nuevo.
+ * Así solo se conserva el último reporte generado (no se guarda histórico).
+ */
+async function replacePreviousReports(userId: string, executionId: string | null): Promise<void> {
+  try {
+    const { adminClient } = getSupabaseClients();
+
+    let query = adminClient
+      .from('serenity_report_results')
+      .select('id')
+      .eq('user_id', userId);
+
+    query = executionId ? query.eq('execution_id', executionId) : query.is('execution_id', null);
+
+    const { data: oldRows } = await query;
+
+    if (oldRows && oldRows.length > 0) {
+      await Promise.all(oldRows.map((row: any) => deleteBundleFromStorage(userId, row.id).catch(() => {})));
+
+      let deleteQuery = adminClient
+        .from('serenity_report_results')
+        .delete()
+        .eq('user_id', userId);
+
+      deleteQuery = executionId ? deleteQuery.eq('execution_id', executionId) : deleteQuery.is('execution_id', null);
+
+      await deleteQuery;
+    }
+  } catch (_) { /* no-op */ }
+}
+
 async function triggerAzureRelease(
   config: AzureSerenityRuntimeConfig,
   bundleUrl: string,
@@ -131,7 +163,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
     }
 
-    const { bundle } = req.body || {};
+    const { bundle, executionId } = req.body || {};
     if (!bundle) {
       return res.status(400).json({ error: 'Se requiere un bundle' });
     }
@@ -156,6 +188,26 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       await deleteBundleFromStorage(user.id, jobId).catch(() => {});
       return res.status(502).json({ error: e instanceof ApiError ? e.message : 'Error al crear release.' });
     }
+
+    // Insertar fila pendiente para que el pipeline haga PATCH luego
+    try {
+      const { adminClient } = getSupabaseClients();
+
+      // Solo se conserva el último reporte: se elimina cualquier reporte previo
+      // de este usuario/ejecución antes de insertar el nuevo.
+      await replacePreviousReports(user.id, executionId || null);
+
+      await adminClient
+        .from('serenity_report_results')
+        .upsert({
+          id: jobId,
+          user_id: user.id,
+          execution_id: executionId || null,
+          backend: 'azure',
+          status: 'pending',
+          progress: 0,
+        }, { onConflict: 'id' });
+    } catch (_) { /* no-op */ }
 
     return res.status(200).json({
       success: true,

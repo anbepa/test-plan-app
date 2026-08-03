@@ -1,19 +1,27 @@
-<div class="modal-overlay" (click)="closeIfClickOutside($event)">
-  <div class="modal-content evidence-upload-modal">
-    <!-- Header -->
-    <div class="modal-header">
-      <h2>Subir evidencias a Azure DevOps</h2>
-      <button class="btn-close" (click)="close()" [disabled]="isValidating || isUploading">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
+<ng-container *ngIf="!embedded; else embeddedBody">
+  <div class="modal-overlay" (click)="closeIfClickOutside($event)">
+    <div class="modal-content evidence-upload-modal">
+      <!-- Header -->
+      <div class="modal-header">
+        <h2>Subir evidencias a Azure DevOps</h2>
+        <button class="btn-close" (click)="close()" [disabled]="isValidating || isUploading">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
 
+      <ng-container *ngTemplateOutlet="embeddedBody"></ng-container>
+    </div>
+  </div>
+</ng-container>
+
+<ng-template #embeddedBody>
     <!-- Body -->
     <div class="modal-body">
-      <!-- Paso 1: Ingreso de Plan ID -->
+
+      <!-- Paso 1: Ingreso de Plan ID (solo si se quiere adjuntar Word/PDF al plan) -->
       <div class="upload-section" *ngIf="!planValidated && !isUploading">
         <div class="form-group">
           <label for="planId">ID del Plan de Pruebas de Azure DevOps *</label>
@@ -69,23 +77,8 @@
 
         <!-- Selección de evidencias a incluir -->
         <div class="evidence-formats">
-          <label class="formats-title">Evidencias a incluir en el archivo comprimido:</label>
+          <label class="formats-title">Formatos a incluir en el archivo comprimido:</label>
           <div class="format-options">
-
-            <label class="format-option" [class.selected]="selectedFormats.serenity">
-              <input type="checkbox" [(ngModel)]="selectedFormats.serenity" />
-              <span class="opt-icon opt-icon-serenity">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-              </span>
-              <span class="format-text">
-                <strong>Reporte Serenity</strong>
-                <small>Generado por el workflow (asíncrono)</small>
-              </span>
-            </label>
 
             <label class="format-option" [class.selected]="selectedFormats.docx">
               <input type="checkbox" [(ngModel)]="selectedFormats.docx" />
@@ -187,5 +180,4 @@
         </div>
       </div>
     </div>
-  </div>
-</div>
+</ng-template>

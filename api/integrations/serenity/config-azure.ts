@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { ApiError, getAuthenticatedUser, toErrorResponse, maskTokenHint } from '../azure-devops/shared';
+import { ApiError, getAuthenticatedUser, getAzureConnectionWithSecret, toErrorResponse, maskTokenHint } from '../azure-devops/shared';
 import {
   AzureSerenityRuntimeConfig,
   disconnectAzureSerenityConnection,
@@ -64,7 +64,6 @@ async function handleSave(req: VercelRequest, res: VercelResponse): Promise<void
   const releaseDefinitionId = Number(body.releaseDefinitionId || 0);
   const pipelineName = String(body.pipelineName || 'Serenity Report CD').trim() || 'Serenity Report CD';
   const branch = String(body.branch || 'trunk').trim() || 'trunk';
-  const personalAccessToken = String(body.personalAccessToken || '').trim();
 
   if (!azureOrganization) {
     throw new ApiError(400, 'La organización de Azure DevOps es obligatoria.');
@@ -78,11 +77,12 @@ async function handleSave(req: VercelRequest, res: VercelResponse): Promise<void
     throw new ApiError(400, 'El Release Definition ID es obligatorio.');
   }
 
-  const existingConnection = await getAzureSerenityConnectionWithSecret(user.id);
-  const finalToken = personalAccessToken || existingConnection?.personal_access_token || '';
+  // Se reutiliza el mismo PAT de la conexión principal de Azure DevOps.
+  const mainConnection = await getAzureConnectionWithSecret(user.id, azureOrganization);
+  const finalToken = mainConnection?.personal_access_token || '';
 
   if (!finalToken) {
-    throw new ApiError(400, 'Debes ingresar un PAT de Azure DevOps.');
+    throw new ApiError(400, 'Debes conectar primero Azure DevOps con un PAT válido antes de configurar Serenity.');
   }
 
   await validateAzureSerenityPipeline({

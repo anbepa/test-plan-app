@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { PlanExecution, HUData, TestRun } from '../../../models/hu-data.model';
 import { EvidenceDownloadModalComponent } from '../evidence-download-modal/evidence-download-modal.component';
@@ -15,53 +15,46 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   @Input() execution: PlanExecution | null = null;
   @Input() testRun: TestRun | null = null;
   @Input() huData: HUData | null = null;
+  @Output() openSerenityHistory = new EventEmitter<void>();
+  /** Se emite cuando el usuario valida un Plan ID de Azure DevOps, para recordarlo y no volver a pedirlo. */
+  @Output() planValidated = new EventEmitter<{ planId: string; planTitle: string }>();
 
-  showMenu = false;
-  showDownloadModal = false;
-  showUploadModal = false;
+  /** Pestaña activa dentro del modal unificado */
+  activeTab: 'download' | 'upload' = 'download';
+  showModal = false;
   isProcessing = false;
   processingMessage = '';
+  /** Último Plan ID validado en esta sesión, para precargarlo y evitar pedirlo de nuevo. */
+  lastValidatedPlanId = '';
 
-  ngOnInit(): void {
-    // Cerrar menu si se hace clic afuera
-    document.addEventListener('click', this.handleClickOutside);
+  ngOnInit(): void {}
+
+  ngOnDestroy(): void {}
+
+  openModal(tab: 'download' | 'upload' = 'download'): void {
+    if (this.isProcessing) return;
+    this.activeTab = tab;
+    this.showModal = true;
   }
 
-  ngOnDestroy(): void {
-    document.removeEventListener('click', this.handleClickOutside);
+  selectTab(tab: 'download' | 'upload'): void {
+    if (this.isProcessing) return;
+    this.activeTab = tab;
   }
 
-  private handleClickOutside = (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.evidence-manager')) {
-      this.showMenu = false;
-    }
-  };
-
-  toggleMenu(): void {
-    if (!this.isProcessing) {
-      this.showMenu = !this.showMenu;
-    }
+  closeModal(): void {
+    if (this.isProcessing) return;
+    this.showModal = false;
   }
 
-  selectDownload(): void {
-    this.showMenu = false;
-    this.showDownloadModal = true;
-    this.showUploadModal = false;
+  handleOpenSerenityHistory(): void {
+    this.showModal = false;
+    this.openSerenityHistory.emit();
   }
 
-  selectUpload(): void {
-    this.showMenu = false;
-    this.showUploadModal = true;
-    this.showDownloadModal = false;
-  }
-
-  handleDownloadClose(): void {
-    this.showDownloadModal = false;
-  }
-
-  handleUploadClose(): void {
-    this.showUploadModal = false;
+  handlePlanValidated(event: { planId: string; planTitle: string }): void {
+    this.lastValidatedPlanId = event.planId;
+    this.planValidated.emit(event);
   }
 
   setProcessing(event: any): void {

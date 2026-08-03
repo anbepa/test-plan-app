@@ -12,6 +12,7 @@ import {
 } from '../../../models/azure-devops-evidence.model';
 import { EvidenceUploadOrchestrator } from '../../../services/export/evidence-upload-orchestrator.service';
 import { AzureDevOpsEvidenceService } from '../../../services/integrations/azure-devops-evidence.service';
+import { SerenityReportService } from '../../../services/export/serenity-report.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { Subject } from 'rxjs';
@@ -28,14 +29,21 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   @Input() execution: PlanExecution | null = null;
   @Input() testRun: TestRun | null = null;
   @Input() huData: HUData | null = null;
+  /** Cuando es true, el componente renderiza solo el contenido (sin overlay ni header propios), para ser embebido en un modal contenedor. */
+  @Input() embedded = false;
+  /** ID de plan ya validado previamente (misma sesión), para no volver a pedirlo. */
+  @Input() prefillPlanId = '';
 
   @Output() onClose = new EventEmitter<void>();
   @Output() onProcessing = new EventEmitter<{ isProcessing: boolean; message: string }>();
+  @Output() openSerenityHistoryRequested = new EventEmitter<void>();
+  /** Emitido cuando un plan es validado exitosamente, para que el padre lo recuerde. */
+  @Output() planValidatedEvent = new EventEmitter<{ planId: string; planTitle: string }>();
 
   // Estado del modal
   inputPlanId = '';
   inputFileName = 'Evidencia_EVC00057.zip';
-  selectedFormats = { serenity: true, docx: false, pdf: false };
+  selectedFormats = { docx: true, pdf: false };
   isValidating = false;
   isUploading = false;
   planValidated = false;
@@ -46,22 +54,29 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   currentPhaseMessage = '';
   canRetryStep = false;
 
+  // Serenity
+  serenityDispatching = false;
+  serenityDispatched = false;
+
   private progress$ = new Subject<EvidenceUploadProgress>();
   private destroy$ = new Subject<void>();
   private lastFailedStep: RetryableStep | null = null;
 
-  // Template variables para estados
   EvidenceUploadState = EvidenceUploadState;
 
   constructor(
     private orchestrator: EvidenceUploadOrchestrator,
     private evidenceService: AzureDevOpsEvidenceService,
+    private serenityReportService: SerenityReportService,
     private toastService: ToastService,
     private exportService: ExportService
   ) {}
 
   ngOnInit(): void {
-    // Monitorear progreso de carga
+    this.serenityDispatched = false;
+    if (this.prefillPlanId) {
+      this.inputPlanId = this.prefillPlanId;
+    }
     this.progress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
@@ -86,6 +101,36 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     }
   }
 
+  openSerenityHistory(): void {
+    this.openSerenityHistoryRequested.emit();
+  }
+
+  async dispatchSerenity(): Promise<void> {
+    const run = this.buildEffectiveTestRun();
+    if (!run?.executionId) {
+      this.toastService.warning('No hay ejecución disponible para el reporte.');
+      return;
+    }
+
+    if (this.serenityDispatching) return;
+
+    this.serenityDispatching = true;
+    this.serenityDispatched = false;
+
+    try {
+      this.serenityReportService.backend = 'azure';
+      await this.serenityReportService.generateReport(run, { autoDetectBackend: false });
+
+      this.serenityDispatching = false;
+      this.serenityDispatched = true;
+      this.toastService.success('Reporte Serenity enviado a Azure DevOps');
+    } catch (error: any) {
+      this.serenityDispatching = false;
+      console.error('Error starting Serenity report:', error);
+      this.toastService.error('Error al iniciar generación Serenity: ' + (error.message || 'Error desconocido'));
+    }
+  }
+
   async validatePlan(): Promise<void> {
     if (!this.inputPlanId.trim()) return;
 
@@ -96,13 +141,13 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     try {
       console.log('[validatePlan] Iniciando validación para plan ID:', this.inputPlanId);
       
-      // Llamar al servicio REAL de validación
       const result = await this.evidenceService.validateTestPlan(this.inputPlanId);
       
       console.log('[validatePlan] Plan validado:', result);
       
       this.validatedPlan = result;
       this.planValidated = true;
+      this.planValidatedEvent.emit({ planId: result.planId, planTitle: result.planTitle });
       this.toastService.success('Plan validado correctamente');
     } catch (error: any) {
       console.error('[validatePlan] Error:', error);
@@ -132,15 +177,12 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     try {
       console.log('[startUpload] Iniciando carga para plan:', this.validatedPlan.planId);
       
-      // Nombre del archivo ZIP indicado por el usuario en el modal
       const zipNameTemplate = (this.inputFileName || 'Evidencia.zip').trim();
       
       console.log('[startUpload] Nombre archivo ZIP:', zipNameTemplate);
 
-      // Generar los documentos seleccionados (DOCX/PDF) como archivos extra
       const extraFiles = await this.buildExtraFiles();
       
-      // Suscribirse al progreso
       this.orchestrator
         .watchProgress()
         .pipe(takeUntil(this.destroy$))
@@ -151,13 +193,12 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
 
       const effectiveTestRun = this.buildEffectiveTestRun();
 
-      // Ejecutar flujo completo
       await this.orchestrator.executeFlow(
         this.validatedPlan!.planId,
         effectiveTestRun,
         zipNameTemplate,
         {
-          formats: { ...this.selectedFormats },
+          formats: { serenity: false, ...this.selectedFormats },
           extraFiles
         }
       );
@@ -216,14 +257,13 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.uploadError = '';
     this.uploadCompleted = false;
     this.inputPlanId = '';
+    this.serenityDispatched = false;
   }
 
-  /** Indica si al menos un formato de evidencia está seleccionado */
   hasSelectedFormat(): boolean {
-    return this.selectedFormats.serenity || this.selectedFormats.docx || this.selectedFormats.pdf;
+    return this.selectedFormats.docx || this.selectedFormats.pdf;
   }
 
-  /** Genera los documentos DOCX/PDF seleccionados como archivos base64 para incluir en el ZIP */
   private async buildExtraFiles(): Promise<{ name: string; base64: string }[]> {
     const files: { name: string; base64: string }[] = [];
     if (!this.execution) return files;
@@ -245,7 +285,6 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     return files;
   }
 
-  /** Convierte un Blob a base64 (sin el prefijo data:) */
   private blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -305,24 +344,20 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   }
 
   isStepActive(state: string): boolean {
-    // Comparar con estado actual del progreso
-    return false; // TODO: Implementar comparación real
+    return false;
   }
 
   isStepCompleted(state: string): boolean {
-    // Verificar si paso ya fue completado
-    return false; // TODO: Implementar comparación real
+    return false;
   }
 
   getProgressPercentage(): number {
-    // Calcular basado en estado actual
-    return 0; // TODO: Implementar cálculo real
+    return 0;
   }
 
   private updateProgress(progress: EvidenceUploadProgress): void {
     console.log('[updateProgress] Estado:', progress.state);
     
-    // Actualizar mensaje de fase
     if (progress.serenityProgress?.phase) {
       this.currentPhaseMessage = `${progress.serenityProgress.phase}... ${progress.serenityProgress.percentage || 0}%`;
     } else if (progress.compressionProgress) {

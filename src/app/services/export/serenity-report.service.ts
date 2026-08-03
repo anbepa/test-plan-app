@@ -13,7 +13,7 @@ export interface HydrateProgress {
   percentage: number;
 }
 
-export type SerenityBackend = 'github' | 'azure';
+export type SerenityBackend = 'azure';
 
 export interface SerenityReportState {
   phase: 'idle' | 'hydrating' | 'building' | 'dispatching' | 'polling' | 'downloading' | 'done' | 'error';
@@ -29,21 +29,28 @@ export interface SerenityReportState {
   statusMessage?: string;
 }
 
+export interface SerenityReportRecord {
+  id: string;
+  name: string;
+  generatedAt: string;
+  backend: SerenityBackend;
+  status: 'pending' | 'completed' | 'error';
+  progress: number;
+  executionId?: string;
+  artifactDownloadUrl?: string;
+  releaseUrl?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SerenityReportService {
   state: SerenityReportState = { phase: 'idle' };
   suppressAutoDownload = false;
   /**
-   * Backend activo. Se resuelve automaticamente en cada generateReport():
-   * 'azure' solo si existe una conexion Azure Serenity conectada,
-   * en cualquier otro caso se mantiene 'github'.
-   *
-   * Se puede forzar asignandolo antes de llamar a generateReport(); en ese
-   * caso hay que pasar { autoDetectBackend: false }.
+   * Backend activo. Actualmente solo se soporta Azure DevOps.
    */
-  backend: SerenityBackend = 'github';
+  backend: SerenityBackend = 'azure';
+  _currentRunName = 'Reporte Serenity';
   private pollTimer: any = null;
-  private readonly ghApiUrl = '/api/serenity-report';
   private readonly azApiUrl = '/api/serenity-report-azure';
 
   constructor(
@@ -55,18 +62,10 @@ export class SerenityReportService {
   ) {}
 
   /**
-   * Determina que backend usar. Ante cualquier duda o error devuelve
-   * 'github', que es el flujo historico y no debe verse afectado.
+   * Determina que backend usar. Actualmente solo se soporta Azure DevOps.
    */
   private async resolveBackend(): Promise<SerenityBackend> {
-    try {
-      const azureConfig = await firstValueFrom(
-        this.serenityIntegration.getAzureSerenityConfig()
-      );
-      return azureConfig?.status === 'connected' ? 'azure' : 'github';
-    } catch {
-      return 'github';
-    }
+    return 'azure';
   }
 
   async generateReport(
@@ -84,6 +83,7 @@ export class SerenityReportService {
       // esto quedaria pegado el valor de la generacion anterior.
       if (options.autoDetectBackend !== false) {
         this.backend = await this.resolveBackend();
+        this._currentRunName = run.name || run.huTitle || 'Reporte Serenity';
       }
 
       this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
@@ -123,49 +123,24 @@ export class SerenityReportService {
       const bundle = await this.serenityExport.buildCompressedBundle(execution, run);
       const bundleJson = JSON.stringify(bundle);
 
-      const backendLabel = this.backend === 'azure' ? 'Azure DevOps' : 'GitHub Actions';
       this.state = {
         phase: 'dispatching',
-        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a ${backendLabel}...`,
+        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a Azure DevOps...`,
         hydrateProgress: undefined,
       };
 
       const headers = await this.buildAuthHeaders();
 
-      if (this.backend === 'azure') {
-        await this.dispatchAzure(bundle, headers);
-      } else {
-        await this.dispatchGitHub(bundle, headers);
-      }
+      await this.dispatchAzure(bundle, headers, run.executionId);
     } catch (err: any) {
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
     }
   }
 
-  private async dispatchGitHub(bundle: any, headers: HttpHeaders): Promise<void> {
+  private async dispatchAzure(bundle: any, headers: HttpHeaders, executionId?: string): Promise<void> {
     const startResult = await firstValueFrom(
-      this.http.post<any>(this.ghApiUrl, { bundle }, { headers })
-    );
-
-    if (!startResult.success) {
-      throw new Error(startResult.error || 'Error al iniciar el reporte');
-    }
-
-    this.state = {
-      phase: 'polling',
-      statusMessage: 'Generando reporte en GitHub Actions...',
-      jobId: startResult.jobId,
-      gistId: startResult.gistId,
-      runId: startResult.runId,
-    };
-
-    this.startPolling();
-  }
-
-  private async dispatchAzure(bundle: any, headers: HttpHeaders): Promise<void> {
-    const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundle }, { headers })
+      this.http.post<any>(this.azApiUrl, { bundle, executionId }, { headers })
     );
 
     if (!startResult.success) {
@@ -173,13 +148,11 @@ export class SerenityReportService {
     }
 
     this.state = {
-      phase: 'polling',
-      statusMessage: 'Generando reporte en Azure DevOps...',
+      phase: 'done',
+      statusMessage: 'Reporte enviado a Azure DevOps. Revisa el historial para descargarlo.',
       jobId: startResult.jobId,
       releaseId: startResult.releaseId,
     };
-
-    this.startPolling();
   }
 
   private startPolling(): void {
@@ -189,64 +162,7 @@ export class SerenityReportService {
   }
 
   private async poll(): Promise<void> {
-    if (this.backend === 'azure') {
-      return this.pollAzure();
-    }
-    return this.pollGitHub();
-  }
-
-  private async pollGitHub(): Promise<void> {
-    const { jobId, gistId, runId } = this.state;
-
-    try {
-      const params = new URLSearchParams();
-      if (runId) params.set('runId', runId);
-      if (gistId) params.set('gistId', gistId);
-      if (jobId) params.set('jobId', jobId);
-
-      if (!jobId) {
-        this.state = { ...this.state, phase: 'error', error: 'Falta jobId.' };
-        this.stopPolling();
-        return;
-      }
-
-      const headers = await this.buildAuthHeaders();
-      const result = await firstValueFrom(
-        this.http.get<any>(`${this.ghApiUrl}?${params.toString()}`, { headers })
-      );
-
-      if (result.runId && !this.state.runId) {
-        this.state = { ...this.state, runId: result.runId };
-      }
-
-      if (result.status === 'done') {
-        this.stopPolling();
-        if (result.artifactDownloadUrl) {
-          this.state = {
-            ...this.state,
-            phase: 'downloading',
-            statusMessage: 'Descargando reporte Serenity...',
-            artifactDownloadUrl: result.artifactDownloadUrl,
-          };
-          if (!this.suppressAutoDownload) {
-            this.downloadArtifact(result.artifactDownloadUrl);
-          }
-          this.state = { ...this.state, phase: 'done', statusMessage: 'Completado' };
-        } else {
-          this.state = { ...this.state, phase: 'error', error: result.message || 'No se encontro el artifact' };
-        }
-      } else if (result.phase === 'queued') {
-        this.state = { ...this.state, phase: 'polling', statusMessage: 'Workflow en cola...' };
-      } else if (result.status === 'running') {
-        this.state = { ...this.state, phase: 'polling', statusMessage: 'Generando reporte...' };
-      } else {
-        this.stopPolling();
-        this.state = { ...this.state, phase: 'error', error: result.message || 'Estado desconocido' };
-      }
-    } catch (err: any) {
-      this.stopPolling();
-      this.state = { ...this.state, phase: 'error', error: err?.message || 'Error al consultar estado' };
-    }
+    return this.pollAzure();
   }
 
   private async pollAzure(): Promise<void> {
@@ -342,4 +258,110 @@ export class SerenityReportService {
 
   stopPolling(): void { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; } }
   reset(): void { this.stopPolling(); this.state = { phase: 'idle' }; }
+
+  async loadHistory(executionId?: string): Promise<SerenityReportRecord[]> {
+    try {
+      const { data } = await this.supabaseClient.supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!userId) return [];
+
+      let query = this.supabaseClient.supabase
+        .from('serenity_report_results')
+        .select('id, name, backend, status, progress, execution_id, artifact_download_url, release_url, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (executionId) {
+        query = query.eq('execution_id', executionId);
+      }
+
+      // Solo se conserva/muestra el último reporte generado (no se guarda histórico).
+      const { data: rows, error } = await query.limit(1);
+
+      if (error || !rows) return [];
+
+      return rows.map((r: any) => ({
+        id: r.id,
+        name: r.name || '',
+        generatedAt: r.created_at,
+        backend: r.backend as SerenityBackend,
+        status: r.artifact_download_url ? 'completed' : (r.status || 'pending'),
+        progress: r.artifact_download_url ? 100 : (r.progress || 0),
+        executionId: r.execution_id || undefined,
+        artifactDownloadUrl: r.artifact_download_url || undefined,
+        releaseUrl: r.release_url || undefined,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async checkReportStatus(id: string): Promise<SerenityReportRecord | null> {
+    try {
+      const { data: rows, error } = await this.supabaseClient.supabase
+        .from('serenity_report_results')
+        .select('id, name, backend, status, progress, execution_id, artifact_download_url, release_url, created_at')
+        .eq('id', id)
+        .limit(1);
+
+      if (error || !rows?.length) return null;
+
+      const r = rows[0];
+      return {
+        id: r.id,
+        name: r.name || '',
+        generatedAt: r.created_at,
+        backend: r.backend as SerenityBackend,
+        status: r.artifact_download_url ? 'completed' : (r.status || 'pending'),
+        progress: r.artifact_download_url ? 100 : (r.progress || 0),
+        executionId: r.execution_id || undefined,
+        artifactDownloadUrl: r.artifact_download_url || undefined,
+        releaseUrl: r.release_url || undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async saveToHistory(record: SerenityReportRecord): Promise<void> {
+    try {
+      const { data } = await this.supabaseClient.supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!userId) return;
+
+      await this.supabaseClient.supabase
+        .from('serenity_report_results')
+        .upsert({
+          id: record.id,
+          user_id: userId,
+          execution_id: record.executionId || null,
+          name: record.name,
+          backend: record.backend,
+          status: record.status,
+          progress: record.progress,
+          artifact_download_url: record.artifactDownloadUrl || null,
+          release_url: record.releaseUrl || null,
+        }, { onConflict: 'id' });
+    } catch (_) { /* no-op */ }
+  }
+
+  async removeFromHistory(id: string, executionId?: string): Promise<void> {
+    try {
+      const { data } = await this.supabaseClient.supabase.auth.getUser();
+      const userId = data.user?.id;
+      if (!userId) return;
+
+      let query = this.supabaseClient.supabase
+        .from('serenity_report_results')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (executionId) {
+        query = query.eq('execution_id', executionId);
+      }
+
+      await query;
+    } catch (_) { /* no-op */ }
+  }
 }

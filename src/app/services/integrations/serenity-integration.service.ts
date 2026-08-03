@@ -3,39 +3,12 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { from, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 
-export interface SerenityIntegrationPayload {
-  githubUsername: string;
-  repositoryOwner: string;
-  repositoryName: string;
-  workflowFileName: string;
-  branch: string;
-  repositoryUrl: string;
-  workflowName: string;
-  personalAccessToken?: string;
-}
-
-export interface SerenityIntegrationResponse {
-  id: string;
-  githubUsername: string;
-  repositoryOwner: string;
-  repositoryName: string;
-  workflowFileName: string;
-  branch: string;
-  repositoryUrl: string;
-  workflowName: string;
-  status: 'connected' | 'invalid' | 'expired' | 'disconnected' | 'default';
-  tokenHint: string;
-  lastValidatedAt: string | null;
-  updatedAt?: string | null;
-}
-
 export interface AzureSerenityIntegrationPayload {
   azureOrganization: string;
   azureProject: string;
   releaseDefinitionId: number;
   pipelineName?: string;
   branch?: string;
-  personalAccessToken?: string;
 }
 
 export interface AzureSerenityIntegrationResponse {
@@ -55,25 +28,12 @@ export interface AzureSerenityIntegrationResponse {
   providedIn: 'root'
 })
 export class SerenityIntegrationService {
-  private readonly baseUrl = '/api/integrations/serenity/config';
   private readonly azureConfigUrl = '/api/integrations/serenity/config-azure';
 
   constructor(
     private http: HttpClient,
     private supabaseClient: SupabaseClientService
   ) {}
-
-  getConfig(): Observable<SerenityIntegrationResponse | null> {
-    return this.authorizedGet<SerenityIntegrationResponse | null>(this.baseUrl);
-  }
-
-  saveConfig(payload: SerenityIntegrationPayload): Observable<SerenityIntegrationResponse> {
-    return this.authorizedPost<SerenityIntegrationResponse>(this.baseUrl, payload);
-  }
-
-  disconnect(): Observable<{ success: boolean }> {
-    return this.authorizedDelete<{ success: boolean }>(this.baseUrl);
-  }
 
   getAzureSerenityConfig(): Observable<AzureSerenityIntegrationResponse | null> {
     return this.authorizedGet<AzureSerenityIntegrationResponse | null>(this.azureConfigUrl);

@@ -52,7 +52,9 @@
             <app-evidence-manager
               [execution]="execution"
               [testRun]="null"
-              [huData]="hu">
+              [huData]="hu"
+              (openSerenityHistory)="openSerenityHistoryModal()"
+              (planValidated)="onEvidencePlanValidated($event)">
             </app-evidence-manager>
           </div>
         </div>
@@ -458,6 +460,83 @@
     type="danger" confirmText="Eliminar"
     cancelText="Cancelar" (confirm)="confirmDeleteTestCase()" (cancel)="showDeleteTestCaseModal = false">
   </app-confirmation-modal>
+
+  <!-- Serenity History Modal -->
+  <div *ngIf="showSerenityHistory" class="modal-backdrop" (click)="closeSerenityHistory()">
+    <div class="modal-box serenity-history-modal" (click)="$event.stopPropagation()">
+      <div class="modal-top">
+        <span class="modal-title-strong">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Último reporte Serenity
+        </span>
+        <button class="modal-close" (click)="closeSerenityHistory()">✕</button>
+      </div>
+      <div class="serenity-history-body">
+        <div *ngIf="serenityHistory.length === 0" class="serenity-history-empty">
+          <p>Aún no se ha generado ningún reporte</p>
+        </div>
+        <div *ngFor="let r of serenityHistory" class="sh-card">
+          <div class="sh-card-row">
+            <div class="sh-card-field">
+              <span class="sh-card-label">Generado</span>
+              <span class="sh-card-value sh-date">{{ formatSerenityDate(r.generatedAt) }}</span>
+            </div>
+            <div class="sh-card-field">
+              <span class="sh-card-label">Backend</span>
+              <span class="sh-backend" [class.sh-azure]="r.backend === 'azure'">{{ r.backend }}</span>
+            </div>
+            <div class="sh-card-field">
+              <span class="sh-card-label">Estado</span>
+              <span *ngIf="r.status == 'pending'" class="sh-status sh-status-pending">Generando...</span>
+              <span *ngIf="r.status == 'completed'" class="sh-status sh-status-done">Completado</span>
+              <span *ngIf="r.status == 'error'" class="sh-status sh-status-error">Error</span>
+            </div>
+          </div>
+          <div class="sh-actions">
+            <a *ngIf="r.artifactDownloadUrl" [href]="r.artifactDownloadUrl" download="serenity-report.zip"
+               class="sh-btn sh-btn-dl" title="Descargar .zip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              .zip
+            </a>
+            <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" title="Vincular reporte a un plan de Azure DevOps"
+              (click)="startAttachToPlan(r.id)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {{ attachingReportId === r.id ? 'Cerrar' : 'Vincular a plan' }}
+            </button>
+            <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
+              <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
+              Actualizando...
+            </span>
+            <button class="sh-btn sh-btn-del" title="Eliminar del historial" (click)="removeFromHistory(r.id)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              Eliminar
+            </button>
+          </div>
+          <!-- Formulario de vinculación a plan -->
+          <div *ngIf="attachingReportId === r.id" class="sh-attach-form">
+            <div class="sh-attach-hint" *ngIf="lastValidatedPlanId">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              Usando el plan ya validado <strong>{{ lastValidatedPlanId }}</strong>. Puedes cambiarlo si es necesario.
+            </div>
+            <input type="text" class="form-input" [(ngModel)]="attachPlanIdInput"
+              placeholder="ID del Plan de Pruebas (ej: 7695070)"
+              (keyup.enter)="confirmAttachToPlan(getAttachingReport())">
+            <input type="text" class="form-input" [(ngModel)]="attachFileNameInput"
+              placeholder="Nombre del archivo (ej: Evidencia_EVC00057.zip)"
+              title="Nombre del archivo"
+              (keyup.enter)="confirmAttachToPlan(getAttachingReport())">
+            <div class="sh-attach-form-buttons">
+              <button class="btn btn-primary btn-sm" (click)="confirmAttachToPlan(getAttachingReport())"
+                [disabled]="!attachPlanIdInput.trim() || !attachFileNameInput.trim() || isAttaching">
+                {{ isAttaching ? 'Subiendo...' : 'Subir evidencia' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="cancelAttachToPlan()">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Image Editor Modal -->
   <div *ngIf="showImageEditor" class="modal-backdrop" (click)="showImageEditor = false">

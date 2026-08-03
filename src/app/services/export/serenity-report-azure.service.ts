@@ -89,7 +89,7 @@ export class SerenityReportAzureService {
 
       const headers = await this.buildAuthHeaders();
       const startResult = await firstValueFrom(
-        this.http.post<any>(this.apiUrl, { bundle }, { headers })
+        this.http.post<any>(this.apiUrl, { bundle, executionId: run.executionId }, { headers })
       );
 
       if (!startResult.success) {
