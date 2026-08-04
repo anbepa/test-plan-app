@@ -323,6 +323,22 @@ export class EvidenceUploadOrchestrator {
       throw new Error('No hay evidencias seleccionadas para cargar');
     }
 
+    // Validar tamaño total de extraFiles (máximo 4MB para Vercel free tier)
+    const maxTotalSize = 4 * 1024 * 1024; // 4MB
+    let totalSize = 0;
+    if (extraFiles && extraFiles.length > 0) {
+      for (const file of extraFiles) {
+        const fileSize = Buffer.byteLength(file.base64, 'base64');
+        totalSize += fileSize;
+      }
+      if (totalSize > maxTotalSize) {
+        throw new Error(
+          `Los archivos a cargar (${(totalSize / 1024 / 1024).toFixed(2)}MB) exceden el límite de 4MB. ` +
+          `Por favor, reduce el tamaño de los documentos (DOCX/PDF) o selecciona menos archivos.`
+        );
+      }
+    }
+
     this.setState(EvidenceUploadState.UPLOADING_ATTACHMENT, 'Subiendo evidencias a Azure DevOps...');
 
     try {
@@ -429,31 +445,64 @@ export class EvidenceUploadOrchestrator {
 
     try {
       const headers = await this.buildAuthHeaders();
-      const fileBlobBase64 = await this.blobToBase64(compressionResult.zipBlob);
+      const plan = this.currentValidatedPlan;
+      const fileName = compressionResult.fileName;
 
-      const response = await firstValueFrom(
-        this.http.post<any>(
-          `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(this.currentValidatedPlan.planId)}&action=attachments`,
-          {
-            fileName: compressionResult.fileName,
-            areaPath: this.currentValidatedPlan.areaPath,
-            fileBlob: fileBlobBase64
-          },
+      // ── Estrategia: Upload DIRECTO a Azure DevOps desde el cliente ──
+      // Esto evita el límite de 4.5MB de Vercel (el archivo no pasa por la función serverless).
+      // Paso 1: Pedimos a Vercel solo las credenciales (payload pequeño ~100 bytes)
+      const configParams = new URLSearchParams({
+        workItemId: plan.planId,
+        action: 'get-upload-config',
+        projectId: plan.projectId || '',
+        areaPath: plan.areaPath || '',
+        fileName
+      });
+
+      const uploadConfig = await firstValueFrom(
+        this.http.get<{ uploadUrl: string; authHeader: string; organization: string }>(
+          `${this.baseUrl}/work-items?${configParams.toString()}`,
           { headers }
         )
       );
 
-      if (!response || !response.url) {
-        throw new Error('Respuesta inválida del servidor al cargar archivo');
+      if (!uploadConfig?.uploadUrl || !uploadConfig?.authHeader) {
+        throw new Error('No se pudo obtener la configuración de carga de Azure DevOps');
       }
 
-      this.currentAttachmentId = response.id;
-      this.currentAttachmentUrl = response.url;
+      // Paso 2: Subimos el archivo DIRECTAMENTE a Azure DevOps desde el browser
+      // El archivo binario va directo, sin base64, sin pasar por Vercel.
+      const uploadResponse = await fetch(uploadConfig.uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': uploadConfig.authHeader,
+          'Content-Type': 'application/octet-stream',
+          'Accept': 'application/json'
+        },
+        body: compressionResult.zipBlob
+      });
+
+      if (!uploadResponse.ok) {
+        const errText = await uploadResponse.text().catch(() => '');
+        if (uploadResponse.status === 401 || uploadResponse.status === 403) {
+          throw new Error('No autorizado para subir archivos a Azure DevOps. Verifica el PAT.');
+        }
+        throw new Error(`Azure DevOps rechazó la carga (${uploadResponse.status}): ${errText}`);
+      }
+
+      const attachment = await uploadResponse.json();
+
+      if (!attachment?.url) {
+        throw new Error('Azure DevOps no devolvió la URL del adjunto cargado');
+      }
+
+      this.currentAttachmentId = attachment.id;
+      this.currentAttachmentUrl = attachment.url;
 
       this.updateProgress(p => ({
         ...p,
-        attachmentUrl: response.url,
-        attachmentId: response.id
+        attachmentUrl: attachment.url,
+        attachmentId: attachment.id
       }));
     } catch (error: any) {
       throw new Error(`Error cargando archivo: ${error.message}`);

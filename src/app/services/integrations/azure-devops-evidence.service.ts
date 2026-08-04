@@ -157,6 +157,119 @@ export class AzureDevOpsEvidenceService {
   }
 
   /**
+   * Sube un archivo adjunto (attachment) a Azure DevOps y luego lo VINCULA (relations)
+   * al Work Item indicado. Sin el segundo paso, el archivo queda cargado en Azure DevOps
+   * pero no aparece asociado al plan de pruebas.
+   *
+   * ⚡ Estrategia de upload directo: el archivo binario va desde el browser
+   * DIRECTO a Azure DevOps, sin pasar por Vercel (evita límite de 4.5MB).
+   */
+  async uploadAttachment(planId: string, areaPath: string, fileName: string, fileBase64: string, planTitle?: string, projectId?: string): Promise<any> {
+    const validationError = this.validatePlanIdFormat(planId);
+    if (validationError) {
+      throw validationError;
+    }
+
+    try {
+      const headers = await this.buildAuthHeaders();
+
+      // 1) Obtener config de upload desde Vercel (solo credenciales, ~100 bytes)
+      // Si no viene projectId, intentar extraerlo validando el plan primero
+      let resolvedProjectId = projectId || '';
+      if (!resolvedProjectId) {
+        try {
+          const planInfo = await this.validateTestPlan(planId);
+          resolvedProjectId = planInfo.projectId || '';
+        } catch { /* continuar sin projectId, el backend dará error descriptivo */ }
+      }
+
+      const configParams = new URLSearchParams({
+        workItemId: planId,
+        action: 'get-upload-config',
+        projectId: resolvedProjectId,
+        areaPath: areaPath || '',
+        fileName
+      });
+
+      const uploadConfig = await firstValueFrom(
+        this.http.get<{ uploadUrl: string; authHeader: string; organization: string }>(
+          `${this.baseUrl}/work-items?${configParams.toString()}`,
+          { headers }
+        )
+      );
+
+      if (!uploadConfig?.uploadUrl || !uploadConfig?.authHeader) {
+        throw this.createError('UNKNOWN', 'No se pudo obtener la configuración de carga de Azure DevOps.');
+      }
+
+      // 2) Convertir base64 a Blob binario para upload directo (sin overhead de base64)
+      const binaryStr = atob(fileBase64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const fileBlob = new Blob([bytes], { type: 'application/octet-stream' });
+
+      // 3) Subir DIRECTAMENTE a Azure DevOps desde el browser (sin pasar por Vercel)
+      const uploadResponse = await fetch(uploadConfig.uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': uploadConfig.authHeader,
+          'Content-Type': 'application/octet-stream',
+          'Accept': 'application/json'
+        },
+        body: fileBlob
+      });
+
+      if (!uploadResponse.ok) {
+        if (uploadResponse.status === 401 || uploadResponse.status === 403) {
+          throw this.createError('UNAUTHORIZED', 'No tienes permisos para adjuntar archivos. Verifica el PAT.');
+        }
+        throw this.createError('UNKNOWN', `Azure DevOps rechazó la carga (${uploadResponse.status}).`);
+      }
+
+      const uploaded = await uploadResponse.json();
+
+      if (!uploaded?.url) {
+        throw this.createError('UNKNOWN', 'Azure DevOps no devolvió la URL del adjunto cargado.');
+      }
+
+      // 4) Vincular el adjunto recién subido al Work Item (plan) — sí pasa por Vercel (solo metadatos)
+      const linkUrl = `${this.baseUrl}/work-items?workItemId=${encodeURIComponent(planId)}&action=link-attachment`;
+      const linked = await firstValueFrom(
+        this.http.patch<any>(
+          linkUrl,
+          { attachmentUrl: uploaded.url, planTitle },
+          { headers }
+        )
+      );
+
+      return { ...uploaded, ...linked };
+    } catch (error: any) {
+      console.error('Error uploading attachment:', error);
+      if (error.code && error.message) {
+        throw error;
+      }
+      if (error.status === 401 || error.status === 403) {
+        throw this.createError(
+          'UNAUTHORIZED',
+          'No tienes permisos para adjuntar archivos a este plan. Verifica la configuración de Azure DevOps.'
+        );
+      }
+      if (error.status === 404) {
+        throw this.createError(
+          'NOT_FOUND',
+          `El plan ${planId} no existe en Azure DevOps.`
+        );
+      }
+      throw this.createError(
+        'UNKNOWN',
+        error?.error?.message || 'Error al subir el adjunto a Azure DevOps'
+      );
+    }
+  }
+
+  /**
    * Valida el formato del ID del plan
    */
   private validatePlanIdFormat(planId: string): PlanValidationError | null {
@@ -210,6 +323,7 @@ export class AzureDevOpsEvidenceService {
   /**
    * Extrae el projectId de la URL de autohref del Work Item
    * Formato esperado: https://dev.azure.com/{org}/{projectId}/_apis/wit/workItems/{id}
+   * Soporta tanto UUID como nombre del proyecto.
    */
   private extractProjectId(response: AzureDevOpsWorkItem): string | null {
     const url = response._links?.self?.href || response.url;
@@ -217,11 +331,18 @@ export class AzureDevOpsEvidenceService {
       return null;
     }
 
-    // Expresión regular para extraer UUID
+    // 1) Intentar extraer UUID
     // Patrón: /{uuid}/_apis
-    const match = url.match(/\/([0-9a-fA-F-]{36})\/_apis/);
-    if (match && match[1]) {
-      return match[1];
+    const uuidMatch = url.match(/\/([0-9a-fA-F-]{36})\/_apis/);
+    if (uuidMatch && uuidMatch[1]) {
+      return uuidMatch[1];
+    }
+
+    // 2) Fallback: extraer nombre de proyecto
+    // Patrón: https://dev.azure.com/{org}/{project}/_apis
+    const projectNameMatch = url.match(/https:\/\/dev\.azure\.com\/[^/]+\/([^/]+)\/_apis/);
+    if (projectNameMatch && projectNameMatch[1]) {
+      return decodeURIComponent(projectNameMatch[1]);
     }
 
     return null;

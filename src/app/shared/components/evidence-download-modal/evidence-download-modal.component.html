@@ -1,14 +1,21 @@
-<div class="evidence-download-modal-backdrop" *ngIf="isOpen" (click)="closeModal()">
-  <div class="evidence-download-modal" (click)="$event.stopPropagation()">
+<ng-container *ngIf="!embedded; else embeddedBody">
+  <div class="evidence-download-modal-backdrop" *ngIf="isOpen" (click)="closeModal()">
+    <div class="evidence-download-modal" (click)="$event.stopPropagation()">
 
-    <!-- Header -->
-    <div class="modal-header">
-      <h3>Descargar evidencias</h3>
-      <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <!-- Header -->
+      <div class="modal-header">
+        <h3>Descargar evidencias</h3>
+        <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <ng-container *ngTemplateOutlet="embeddedBody"></ng-container>
     </div>
+  </div>
+</ng-container>
 
+<ng-template #embeddedBody>
     <!-- Body -->
     <div class="modal-body">
       <div class="download-options">
@@ -60,10 +67,7 @@
         </button>
 
         <!-- Serenity -->
-        <button class="download-option-btn" (click)="downloadSerenity()"
-          [disabled]="isDownloading || !execution"
-          [class.is-loading]="isDownloading && downloadingFormat === 'serenity'"
-          type="button">
+        <div class="download-option-btn serenity-card">
           <span class="opt-icon opt-icon-serenity">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -72,30 +76,54 @@
             </svg>
           </span>
           <div class="opt-content">
-            <span class="opt-title">Reporte Serenity</span>
+            <div class="opt-title-row">
+              <span class="opt-title">Reporte Serenity</span>
+            </div>
             <span class="opt-desc">Generado por workflow (asíncrono)</span>
+
+            <div class="serenity-actions">
+              <button
+                type="button"
+                class="serenity-action-btn secondary"
+                (click)="openSerenityHistory()"
+                [disabled]="isDownloading">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Ver reportes generados
+              </button>
+
+              <button
+                type="button"
+                class="serenity-action-btn primary"
+                (click)="downloadSerenity()"
+                [disabled]="(isDownloading && downloadingFormat !== 'serenity') || !execution"
+                [class.is-loading]="isDownloading && downloadingFormat === 'serenity'">
+                <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'"></span>
+                <ng-container *ngIf="!(isDownloading && downloadingFormat === 'serenity')">
+                  Generar reporte
+                </ng-container>
+              </button>
+            </div>
           </div>
-          <span class="opt-chevron" *ngIf="!(isDownloading && downloadingFormat === 'serenity')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
-          </span>
-          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'"></span>
-        </button>
+        </div>
+
+        <!-- Mensaje post-dispatch Serenity -->
+        <div class="serenity-dispatched-msg" *ngIf="serenityDispatched">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Se envió a pipeline de Azure. Revisar detalle en <a class="ver-reporte-link" (click)="openSerenityHistory()">Ver reporte</a></span>
+        </div>
 
       </div>
 
-      <!-- Progreso -->
-      <div class="download-progress" *ngIf="isDownloading">
+      <!-- Progreso (solo Word/PDF) -->
+      <div class="download-progress" *ngIf="isDownloading && downloadingFormat !== 'serenity'">
         <p class="progress-message">{{ downloadProgressMessage }}</p>
         <div class="progress-bar-container" *ngIf="downloadProgressPercent > 0">
           <div class="progress-bar-fill" [style.width.%]="downloadProgressPercent"></div>
         </div>
       </div>
-    </div>
 
-    <!-- Footer -->
-    <div class="modal-footer">
-      <button class="btn-cancel" (click)="closeModal()" type="button" [disabled]="isDownloading">Cerrar</button>
+      <div class="modal-close-row" *ngIf="!embedded">
+        <button class="btn-cancel" (click)="closeModal()" type="button" [disabled]="isDownloading">Cerrar</button>
+      </div>
     </div>
-
-  </div>
-</div>
+</ng-template>

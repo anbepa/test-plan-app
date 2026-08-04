@@ -16,6 +16,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const { workItemId, action } = extractRouteParams(req);
 
+    if (req.method === 'GET' && action === 'get-upload-config') {
+      await handleGetUploadConfig(req, res, workItemId);
+      return;
+    }
+
     if (req.method === 'GET' && !['attachments', 'link-attachment'].includes(action || '')) {
       await handleGetWorkItem(req, res, workItemId);
       return;
@@ -164,6 +169,43 @@ async function handleGetWorkItem(req: VercelRequest, res: VercelResponse, workIt
 }
 
 /**
+ * GET /api/integrations/azure-devops/work-items?workItemId=:id&action=get-upload-config
+ * Devuelve la configuración necesaria para que el cliente suba archivos
+ * DIRECTAMENTE a Azure DevOps, sin pasar el archivo por Vercel (evita límite 4.5MB).
+ */
+async function handleGetUploadConfig(req: VercelRequest, res: VercelResponse, workItemId: string): Promise<void> {
+  const user = await getAuthenticatedUser(req.headers);
+  const projectId = typeof req.query['projectId'] === 'string' ? req.query['projectId'].trim() : '';
+  const areaPath = typeof req.query['areaPath'] === 'string' ? req.query['areaPath'].trim() : '';
+  const fileName = typeof req.query['fileName'] === 'string' ? req.query['fileName'].trim() : 'Evidencia.zip';
+
+  const connection = await getAzureConnectionWithSecret(user.id);
+  if (!connection) {
+    res.status(401).json({ error: 'No hay conexión configurada con Azure DevOps', code: 'NO_CONNECTION' });
+    return;
+  }
+
+  // Devuelve la URL de upload directa a Azure DevOps y el token Basic codificado
+  // El cliente puede usar esto para subir el archivo directamente sin pasar por Vercel
+  const apiVersion = '7.1';
+
+  if (!projectId) {
+    res.status(400).json({ error: 'projectId requerido para construir la URL de carga', code: 'MISSING_PROJECT_ID' });
+    return;
+  }
+
+  const uploadUrl = `https://dev.azure.com/${connection.organization}/${encodeURIComponent(projectId)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}&uploadType=Simple&areaPath=${encodeURIComponent(areaPath)}&api-version=${apiVersion}`;
+  const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
+
+  res.status(200).json({
+    uploadUrl,
+    authHeader: `Basic ${basicToken}`,
+    organization: connection.organization,
+    workItemId
+  });
+}
+
+/**
  * POST /api/integrations/azure-devops/work-items/:workItemId/attachments
  * Carga un archivo como adjunto en Azure DevOps
  */
@@ -264,6 +306,12 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
 
+    // Validación de tamaño máximo de payload en Vercel (4.5MB límite oficial)
+    const vercelPayloadLimit = 4.5 * 1024 * 1024; // 4.5MB (límite oficial de Vercel)
+    const safePayloadLimit = 4 * 1024 * 1024; // 4MB (para seguridad, margen de 0.5MB)
+    
+    let totalInputSize = 0;
+
     // 1) Incluir artifact Serenity original como target.zip
     if (artifactDownloadUrl) {
       const artifactRes = await fetch(artifactDownloadUrl);
@@ -271,6 +319,16 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
         throw new Error(`No fue posible descargar el reporte de Serenity (${artifactRes.status}).`);
       }
       const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
+      totalInputSize += artifactBuffer.length;
+      
+      // Validar que solo el Serenity no exceda el límite
+      if (totalInputSize > safePayloadLimit) {
+        throw new Error(
+          `El reporte Serenity (${(totalInputSize / 1024 / 1024).toFixed(2)}MB) excede el límite de Vercel (4.5MB). ` +
+          `Este es un límite técnico de la plataforma gratuita. Por favor, contacta al administrador para usar la plan Pro.`
+        );
+      }
+      
       zip.file('target.zip', artifactBuffer);
     }
 
@@ -279,10 +337,36 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
       const name = String(f?.name || '').trim();
       const base64 = String(f?.base64 || '').trim();
       if (!name || !base64) continue;
-      zip.file(name, Buffer.from(base64, 'base64'));
+      
+      const fileBuffer = Buffer.from(base64, 'base64');
+      totalInputSize += fileBuffer.length;
+      
+      // Validar que el total no exceda el límite de seguridad
+      if (totalInputSize > safePayloadLimit) {
+        throw new Error(
+          `Los archivos a cargar (${(totalInputSize / 1024 / 1024).toFixed(2)}MB) exceden el límite de Vercel (4.5MB). ` +
+          `Por favor, reduce la cantidad o tamaño de los documentos (DOCX/PDF) incluidos.`
+        );
+      }
+      
+      zip.file(name, fileBuffer);
     }
 
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    // Generar ZIP con máxima compresión
+    const zipBuffer = await zip.generateAsync({ 
+      type: 'nodebuffer', 
+      compression: 'DEFLATE',
+      compressionOptions: { level: 9 } // Máxima compresión (0-9)
+    });
+
+    // Validar tamaño final del ZIP (debe estar bien bajo el límite de Vercel)
+    const maxZipSize = 4 * 1024 * 1024; // 4MB para estar seguros
+    if (zipBuffer.length > maxZipSize) {
+      throw new Error(
+        `El archivo comprimido (${(zipBuffer.length / 1024 / 1024).toFixed(2)}MB) excede el límite permitido (4MB). ` +
+        `Incluso comprimido, es demasiado grande. Reduce el tamaño de las evidencias.`
+      );
+    }
 
     const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
     const apiVersion = '7.1';

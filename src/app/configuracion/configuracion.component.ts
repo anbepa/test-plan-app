@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
-import { SerenityIntegrationResponse, SerenityIntegrationService } from '../services/integrations/serenity-integration.service';
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
@@ -22,69 +21,49 @@ export class ConfiguracionComponent {
   repositoryLink = '';
   teamContent = '';
 
-  githubUsername = '';
-  repositoryOwner = '';
-  repositoryName = '';
-  workflowFileName = 'serenity-report.yml';
-  branch = 'main';
-  repositoryUrl = '';
-  workflowName = 'Serenity Report';
-  serenityPersonalAccessToken = '';
-
   connection: AzureDevOpsConnectionView | null = null;
-  serenityConnection: SerenityIntegrationResponse | null = null;
 
   loadingConnection = false;
   savingConnection = false;
   validatingConnection = false;
   disconnectingConnection = false;
 
-  loadingSerenityConnection = false;
-  savingSerenityConnection = false;
-  disconnectingSerenityConnection = false;
-
   infoMessage: string | null = null;
   errorMessage: string | null = null;
-  serenityInfoMessage: string | null = null;
-  serenityErrorMessage: string | null = null;
 
   isDisconnectConfirmOpen = false;
-  disconnectTarget: 'azure' | 'serenity' | null = null;
+  disconnectTarget: 'azure' | null = null;
   disconnectConfirmTitle = 'Confirmar desconexión';
   disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
 
-  accordionOpen: Record<'azure' | 'serenity' | 'global' | 'status', boolean> = {
+  accordionOpen: Record<'azure' | 'global' | 'status', boolean> = {
     azure: true,
-    serenity: false,
     global: false,
     status: false,
   };
 
   constructor(
     private azureService: AzureDevOpsIntegrationService,
-    private serenityService: SerenityIntegrationService,
     private toastService: ToastService,
     private generalSectionsConfigService: GeneralSectionsConfigService
   ) {}
 
   ngOnInit(): void {
     this.fetchConnection();
-    this.fetchSerenityConnection();
     this.loadGeneralSectionsConfig();
   }
 
-  toggleSection(section: 'azure' | 'serenity' | 'global' | 'status'): void {
+  toggleSection(section: 'azure' | 'global' | 'status'): void {
     const shouldOpen = !this.accordionOpen[section];
 
-    (Object.keys(this.accordionOpen) as Array<'azure' | 'serenity' | 'global' | 'status'>)
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'global' | 'status'>)
       .forEach((key) => this.accordionOpen[key] = false);
 
     this.accordionOpen[section] = shouldOpen;
   }
 
   get isBusy(): boolean {
-    return this.loadingConnection || this.savingConnection || this.validatingConnection || this.disconnectingConnection
-      || this.loadingSerenityConnection || this.savingSerenityConnection || this.disconnectingSerenityConnection;
+    return this.loadingConnection || this.savingConnection || this.validatingConnection || this.disconnectingConnection;
   }
 
   saveConnection(): void {
@@ -175,14 +154,10 @@ export class ConfiguracionComponent {
       });
   }
 
-  requestDisconnect(target: 'azure' | 'serenity'): void {
+  requestDisconnect(target: 'azure'): void {
     this.disconnectTarget = target;
-    this.disconnectConfirmTitle = target === 'azure'
-      ? 'Desconectar Azure DevOps'
-      : 'Desconectar GitHub + Serenity';
-    this.disconnectConfirmMessage = target === 'azure'
-      ? '¿Deseas desconectar la integración de Azure DevOps?'
-      : '¿Deseas desconectar la integración de GitHub + Serenity?';
+    this.disconnectConfirmTitle = 'Desconectar Azure DevOps';
+    this.disconnectConfirmMessage = '¿Deseas desconectar la integración de Azure DevOps?';
     this.isDisconnectConfirmOpen = true;
   }
 
@@ -192,65 +167,12 @@ export class ConfiguracionComponent {
 
     if (target === 'azure') {
       this.disconnect();
-      return;
-    }
-
-    if (target === 'serenity') {
-      this.disconnectSerenityConfig();
     }
   }
 
   closeDisconnectConfirm(): void {
     this.isDisconnectConfirmOpen = false;
     this.disconnectTarget = null;
-  }
-
-  saveSerenityConfig(): void {
-    this.serenityInfoMessage = null;
-    this.serenityErrorMessage = null;
-
-    const payload = this.buildSerenityPayload();
-    if (!payload) {
-      return;
-    }
-
-    this.savingSerenityConnection = true;
-    this.serenityService.saveConfig(payload)
-      .pipe(finalize(() => this.savingSerenityConnection = false))
-      .subscribe({
-        next: (connection) => {
-          this.applySerenityConnection(connection);
-          this.serenityPersonalAccessToken = '';
-          this.serenityInfoMessage = 'Configuración Serenity guardada y validada correctamente.';
-          this.toastService.success('Configuración Serenity guardada.');
-        },
-        error: (error: unknown) => {
-          this.serenityErrorMessage = this.getErrorMessage(error, 'No se pudo completar la operación con Serenity.');
-          this.toastService.error(this.serenityErrorMessage);
-        }
-      });
-  }
-
-  disconnectSerenityConfig(): void {
-    this.serenityInfoMessage = null;
-    this.serenityErrorMessage = null;
-
-    this.disconnectingSerenityConnection = true;
-    this.serenityService.disconnect()
-      .pipe(finalize(() => this.disconnectingSerenityConnection = false))
-      .subscribe({
-        next: () => {
-          this.serenityConnection = null;
-          this.serenityPersonalAccessToken = '';
-          this.serenityInfoMessage = 'Configuración Serenity desconectada.';
-          this.toastService.success('Configuración Serenity desconectada.');
-          this.fetchSerenityConnection();
-        },
-        error: (error: unknown) => {
-          this.serenityErrorMessage = this.getErrorMessage(error, 'No se pudo desconectar Serenity.');
-          this.toastService.error(this.serenityErrorMessage);
-        }
-      });
   }
 
   saveGeneralSectionsConfig(): void {
@@ -302,92 +224,12 @@ export class ConfiguracionComponent {
       });
   }
 
-  private fetchSerenityConnection(): void {
-    this.loadingSerenityConnection = true;
-    this.serenityService.getConfig()
-      .pipe(finalize(() => this.loadingSerenityConnection = false))
-      .subscribe({
-        next: (connection) => {
-          this.serenityConnection = connection;
-          if (connection) {
-            this.githubUsername = connection.githubUsername;
-            this.repositoryOwner = connection.repositoryOwner;
-            this.repositoryName = connection.repositoryName;
-            this.workflowFileName = connection.workflowFileName;
-            this.branch = connection.branch;
-            this.repositoryUrl = connection.repositoryUrl;
-            this.workflowName = connection.workflowName;
-          }
-        },
-        error: (error: unknown) => {
-          this.serenityErrorMessage = this.getErrorMessage(error, 'No se pudo cargar la configuración Serenity.');
-        }
-      });
-  }
-
   private applyConnection(connection: AzureDevOpsConnectionResponse): void {
     this.connection = {
       ...connection,
       updatedAt: connection.lastValidatedAt
     };
     this.organization = connection.organization;
-  }
-
-  private applySerenityConnection(connection: SerenityIntegrationResponse): void {
-    this.serenityConnection = connection;
-    this.githubUsername = connection.githubUsername;
-    this.repositoryOwner = connection.repositoryOwner;
-    this.repositoryName = connection.repositoryName;
-    this.workflowFileName = connection.workflowFileName;
-    this.branch = connection.branch;
-    this.repositoryUrl = connection.repositoryUrl;
-    this.workflowName = connection.workflowName;
-  }
-
-  private buildSerenityPayload(): {
-    githubUsername: string;
-    repositoryOwner: string;
-    repositoryName: string;
-    workflowFileName: string;
-    branch: string;
-    repositoryUrl: string;
-    workflowName: string;
-    personalAccessToken?: string;
-  } | null {
-    const githubUsername = this.githubUsername.trim();
-    const repositoryOwner = this.repositoryOwner.trim();
-    const repositoryName = this.repositoryName.trim();
-    const workflowFileName = this.workflowFileName.trim() || 'serenity-report.yml';
-    const branch = this.branch.trim() || 'main';
-    const repositoryUrl = this.repositoryUrl.trim() || `https://github.com/${repositoryOwner}/${repositoryName}`;
-    const workflowName = this.workflowName.trim() || 'Serenity Report';
-    const personalAccessToken = this.serenityPersonalAccessToken.trim();
-
-    if (!githubUsername) {
-      this.serenityErrorMessage = 'El GitHub Username es obligatorio.';
-      return null;
-    }
-
-    if (!repositoryOwner) {
-      this.serenityErrorMessage = 'El Repository Owner es obligatorio.';
-      return null;
-    }
-
-    if (!repositoryName) {
-      this.serenityErrorMessage = 'El Repository Name es obligatorio.';
-      return null;
-    }
-
-    return {
-      githubUsername,
-      repositoryOwner,
-      repositoryName,
-      workflowFileName,
-      branch,
-      repositoryUrl,
-      workflowName,
-      personalAccessToken: personalAccessToken || undefined,
-    };
   }
 
   private getErrorMessage(error: unknown, fallback = 'No se pudo completar la operación con Azure DevOps.'): string {
@@ -434,44 +276,6 @@ export class ConfiguracionComponent {
       case 'connected':
         return 'success';
       case 'disconnected':
-        return 'warning';
-      case 'invalid':
-      case 'expired':
-        return 'danger';
-      default:
-        return 'neutral';
-    }
-  }
-
-  get serenityStatusLabel(): string {
-    if (!this.serenityConnection) {
-      return 'No configurado';
-    }
-
-    switch (this.serenityConnection.status) {
-      case 'connected':
-        return 'Conectado';
-      case 'disconnected':
-      case 'default':
-        return 'Pendiente';
-      case 'invalid':
-      case 'expired':
-        return 'Error';
-      default:
-        return 'No configurado';
-    }
-  }
-
-  get serenityStatusTone(): 'success' | 'warning' | 'danger' | 'neutral' {
-    if (!this.serenityConnection) {
-      return 'neutral';
-    }
-
-    switch (this.serenityConnection.status) {
-      case 'connected':
-        return 'success';
-      case 'disconnected':
-      case 'default':
         return 'warning';
       case 'invalid':
       case 'expired':

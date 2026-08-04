@@ -211,7 +211,7 @@ export class SerenityExportService {
       (tc.steps || []).forEach((step, i) => {
         steps.push({
           keyword: this.keywordFor(i),
-          text: (step.accion || '').trim() || `Paso ${i + 1}`,
+          text: this.oneLine(step.accion || '') || `Paso ${i + 1}`,
         });
 
         const evNames: string[] = [];
@@ -263,11 +263,8 @@ export class SerenityExportService {
     };
   }
 
-  private keywordFor(i: number): string {
-    if (i === 0) return 'Given';
-    if (i === 1) return 'When';
-    if (i === 2) return 'Then';
-    return 'And';
+  private keywordFor(_i: number): string {
+    return '*';
   }
 
   private mapStatus(status: string): string {
@@ -288,7 +285,7 @@ export class SerenityExportService {
   }
 
   private uniqueName(base: string, used: Set<string>): string {
-    const clean = (base || 'Escenario').trim() || 'Escenario';
+    const clean = this.oneLine(base || 'Escenario') || 'Escenario';
     let name = clean;
     let n = 2;
     while (used.has(name)) {
@@ -296,6 +293,10 @@ export class SerenityExportService {
     }
     used.add(name);
     return name;
+  }
+
+  private oneLine(s: string): string {
+    return (s || '').replace(/[\t\r\n]+/g, ' ').replace(/#/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
   private fileName(run: TestRun): string {

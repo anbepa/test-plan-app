@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { ImageEditorComponent } from '../image-editor/image-editor.component';
 import { DataEditorComponent } from '../data-editor/data-editor.component';
 import { ConfirmationModalComponent } from '../../../confirmation-modal/confirmation-modal.component';
@@ -13,8 +14,10 @@ import { DatabaseService } from '../../../services/database/database.service';
 import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { SerenityReportService, SerenityReportState } from '../../../services/export/serenity-report.service';
+import type { SerenityReportRecord } from '../../../services/export/serenity-report.service';
+import { AzureDevOpsEvidenceService } from '../../../services/integrations/azure-devops-evidence.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-plan-execution',
@@ -89,6 +92,16 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   isExportingSerenity = false;
   serenityReportPhase: string = '';
   serenityProgressPct = 0;
+  showSerenityHistory = false;
+  serenityHistory: SerenityReportRecord[] = [];
+  // ── Vincular reporte a plan Azure DevOps ──
+  attachingReportId: string | null = null;
+  attachPlanIdInput = '';
+  attachFileNameInput = '';
+  isAttaching = false;
+  /** Plan validado recientemente en el modal de subida de evidencias (para no pedirlo de nuevo). */
+  lastValidatedPlanId = '';
+  lastValidatedPlanTitle = '';
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -185,6 +198,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private toastService: ToastService,
     private exportService: ExportService,
     private serenityReportService: SerenityReportService,
+    private azureEvidenceService: AzureDevOpsEvidenceService,
+    private http: HttpClient,
     private huSyncService: HuSyncService,
     private cdr: ChangeDetectorRef
   ) { }
@@ -347,6 +362,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.huSyncSubscription?.unsubscribe();
+    this.stopSerenityHistoryPolling();
   }
 
   trackByTestCaseId(index: number, testCase: TestCaseExecution): string {
@@ -1006,6 +1022,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.serenityReportPhase = 'Iniciando...';
       this.cdr.markForCheck();
 
+      // TEMP: forzado a azure
+      this.serenityReportService.backend = 'azure';
+
       const run = {
         id: this.testRunId || this.execution.id,
         executionId: this.execution.id,
@@ -1513,6 +1532,153 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (this.activeStepIndex >= currentTc.steps.length) {
       this.activeStepIndex = currentTc.steps.length - 1;
     }
+  }
+
+  formatSerenityDate(iso: string): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async openSerenityHistoryModal(): Promise<void> {
+    this.showSerenityHistory = true;
+    await this.loadHistory();
+    this.startSerenityHistoryPolling();
+  }
+
+  closeSerenityHistory(): void {
+    this.showSerenityHistory = false;
+    this.stopSerenityHistoryPolling();
+  }
+
+  private serenityHistoryPollTimer: any = null;
+
+  private startSerenityHistoryPolling(): void {
+    this.stopSerenityHistoryPolling();
+    this.serenityHistoryPollTimer = setInterval(async () => {
+      const pending = this.serenityHistory.filter(r => r.status === 'pending' && !r.artifactDownloadUrl);
+      if (pending.length === 0) {
+        this.stopSerenityHistoryPolling();
+        return;
+      }
+      for (const r of pending) {
+        await this.checkReportStatus(r.id);
+      }
+    }, 5000);
+  }
+
+  private stopSerenityHistoryPolling(): void {
+    if (this.serenityHistoryPollTimer) {
+      clearInterval(this.serenityHistoryPollTimer);
+      this.serenityHistoryPollTimer = null;
+    }
+  }
+
+  async loadHistory(): Promise<void> {
+    this.serenityHistory = await this.serenityReportService.loadHistory(this.execution?.id);
+  }
+
+  async checkReportStatus(id: string): Promise<void> {
+    const updated = await this.serenityReportService.checkReportStatus(id);
+    if (updated) {
+      const idx = this.serenityHistory.findIndex(r => r.id === id);
+      if (idx >= 0) this.serenityHistory[idx] = updated;
+      else this.serenityHistory.unshift(updated);
+    }
+    this.cdr.detectChanges();
+  }
+
+  async removeFromHistory(id: string): Promise<void> {
+    await this.serenityReportService.removeFromHistory(id, this.execution?.id);
+    this.serenityHistory = this.serenityHistory.filter(r => r.id !== id);
+  }
+
+  startAttachToPlan(reportId: string): void {
+    if (this.attachingReportId === reportId) {
+      this.cancelAttachToPlan();
+      return;
+    }
+    this.attachingReportId = reportId;
+    this.attachPlanIdInput = this.lastValidatedPlanId || '';
+    const report = this.serenityHistory.find(r => r.id === reportId);
+    this.attachFileNameInput = this.buildDefaultAttachFileName(report);
+    this.isAttaching = false;
+  }
+
+  private buildDefaultAttachFileName(report: SerenityReportRecord | undefined): string {
+    const baseName = (report?.name || 'Reporte_Serenity').replace(/\.[^/.]+$/, '').replace(/[^\w\-]+/g, '_').slice(0, 60);
+    return `${baseName}.zip`;
+  }
+
+  onEvidencePlanValidated(event: { planId: string; planTitle: string }): void {
+    this.lastValidatedPlanId = event.planId;
+    this.lastValidatedPlanTitle = event.planTitle;
+  }
+
+  cancelAttachToPlan(): void {
+    this.attachingReportId = null;
+    this.attachPlanIdInput = '';
+    this.attachFileNameInput = '';
+    this.isAttaching = false;
+  }
+
+  getAttachingReport(): SerenityReportRecord | undefined {
+    return this.serenityHistory.find(r => r.id === this.attachingReportId);
+  }
+
+  async confirmAttachToPlan(report: SerenityReportRecord | undefined): Promise<void> {
+    if (!report) return;
+    const planId = this.attachPlanIdInput.trim();
+    if (!planId || !report.artifactDownloadUrl) return;
+
+    this.isAttaching = true;
+
+    try {
+      const validated = await this.azureEvidenceService.validateTestPlan(planId);
+      this.toastService.success(`Plan ${validated.planId} validado`);
+
+      const zipBlob = await this.fetchAsBlob(report.artifactDownloadUrl);
+      const base64 = await this.blobToBase64(zipBlob);
+
+      const fileName = (this.attachFileNameInput || this.buildDefaultAttachFileName(report)).trim();
+
+      await this.azureEvidenceService.uploadAttachment(
+        planId,
+        validated.areaPath,
+        fileName,
+        base64,
+        validated.planTitle,
+        validated.projectId
+      );
+
+      this.toastService.success('Reporte Serenity vinculado al plan de pruebas');
+      this.lastValidatedPlanId = planId;
+      this.lastValidatedPlanTitle = validated.planTitle;
+      this.cancelAttachToPlan();
+    } catch (err: any) {
+      this.toastService.error('Error al vincular: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      this.isAttaching = false;
+    }
+  }
+
+  private async fetchAsBlob(url: string): Promise<Blob> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('No se pudo descargar el reporte');
+    return res.blob();
+  }
+
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.includes(',') ? result.split(',')[1] : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   goBack(): void {

@@ -304,123 +304,10 @@ async function disconnectAzureConnection(userId, organization) {
     if (error) throw apiError(500, 'No se pudo eliminar la conexión de Azure DevOps.');
 }
 
-async function getSerenityConnectionWithSecret(userId) {
-    const { adminClient } = getSupabaseClients();
-    const { data, error } = await adminClient.rpc('serenity_get_connection_secret', {
-        p_user_id: userId
-    });
-
-    if (error) throw apiError(500, 'Error al consultar la configuración de Serenity.');
-    return Array.isArray(data) ? data[0] || null : data || null;
-}
-
-function buildSerenityRepositoryUrl(repositoryOwner, repositoryName) {
-    if (!repositoryOwner || !repositoryName) return '';
-    return `https://github.com/${repositoryOwner}/${repositoryName}`;
-}
-
-function resolveSerenityEnvDefaults() {
-    const repositoryOwner = process.env.GH_DISPATCH_OWNER || 'anbepa';
-    const repositoryName = process.env.GH_DISPATCH_REPO || 'ManualTest';
-    const workflowFileName = process.env.GH_DISPATCH_WORKFLOW_ID || 'serenity-report.yml';
-    const branch = process.env.GH_DISPATCH_BRANCH || 'main';
-    const githubUsername = process.env.GH_DISPATCH_GITHUB_USERNAME || repositoryOwner || 'anbepa';
-    const workflowName = process.env.GH_DISPATCH_WORKFLOW_NAME || 'Serenity Report';
-    const repositoryUrl = process.env.GH_DISPATCH_REPOSITORY_URL || buildSerenityRepositoryUrl(repositoryOwner, repositoryName);
-    const personalAccessToken = process.env.GH_DISPATCH_TOKEN || process.env.GH_TOKEN || '';
-    return {
-        personalAccessToken,
-        repositoryOwner,
-        repositoryName,
-        workflowFileName,
-        branch,
-        githubUsername,
-        workflowName,
-        repositoryUrl
-    };
-}
-
 function maskTokenHint(pat) {
     const value = String(pat || '').trim();
     if (!value) return '';
     return `••••${value.slice(-4).toUpperCase() || '----'}`;
-}
-
-async function resolveSerenityRuntimeConfig(req) {
-    const user = await getAuthenticatedUser(req);
-    const row = await getSerenityConnectionWithSecret(user.id);
-
-    if (row?.personal_access_token) {
-        return {
-            personalAccessToken: String(row.personal_access_token || ''),
-            repositoryOwner: String(row.repository_owner || ''),
-            repositoryName: String(row.repository_name || ''),
-            workflowFileName: String(row.workflow_file_name || 'serenity-report.yml'),
-            branch: String(row.branch || 'main'),
-            githubUsername: String(row.github_username || row.repository_owner || ''),
-            workflowName: String(row.workflow_name || 'Serenity Report'),
-            repositoryUrl: String(row.repository_url || buildSerenityRepositoryUrl(row.repository_owner, row.repository_name))
-        };
-    }
-
-    const {
-        personalAccessToken,
-        repositoryOwner,
-        repositoryName,
-        workflowFileName,
-        branch,
-        githubUsername,
-        workflowName,
-        repositoryUrl
-    } = resolveSerenityEnvDefaults();
-
-    if (!personalAccessToken || !repositoryOwner || !repositoryName || !workflowFileName) {
-        throw apiError(404, 'Serenity no está configurado para este usuario y no existe configuración global en variables de entorno.');
-    }
-
-    return {
-        personalAccessToken,
-        repositoryOwner,
-        repositoryName,
-        workflowFileName,
-        branch,
-        githubUsername,
-        workflowName,
-        repositoryUrl
-    };
-}
-
-function gh(path, token, opts = {}) {
-    return fetch(`https://api.github.com${path}`, {
-        ...opts,
-        headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
-            'User-Agent': 'test-plan-app',
-            ...(opts.headers || {})
-        }
-    });
-}
-
-async function findRunByJobId(jobId, config) {
-    try {
-        const workflowRuns = await gh(
-            `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/workflows/${encodeURIComponent(config.workflowFileName)}/runs?event=workflow_dispatch&per_page=10`,
-            config.personalAccessToken
-        );
-
-        if (workflowRuns.ok) {
-            const data = await workflowRuns.json();
-            const match = (data.workflow_runs || []).find((r) =>
-                (String(r.name || '').includes('Serenity') || String(r.display_title || '').includes('Serenity'))
-                && (String(r.name || '').includes(jobId) || String(r.display_title || '').includes(jobId))
-            );
-            if (match) return String(match.id);
-        }
-    } catch (error) {
-        console.error('[serenity-report][local] Error buscando run por jobId:', error?.message || error);
-    }
-    return null;
 }
 
 function sendApiError(res, error) {
@@ -1173,287 +1060,314 @@ app.patch('/api/integrations/azure-devops/work-items', async (req, res) => {
 app.patch('/api/integrations/azure-devops/work-items/:workItemId/link-attachment', handleLinkAttachment);
 app.patch('/api/integrations/azure-devops/work-items/:workItemId/update-fields', handleUpdateFields);
 
-app.post('/api/serenity-report', async (req, res) => {
+// ─── Serenity + Azure DevOps (Release) ───────────────────────────────────
+
+async function getAzureSerenityConnectionWithSecret(userId) {
+    const { adminClient } = getSupabaseClients();
+    const { data, error } = await adminClient.rpc('azure_serenity_get_connection_secret', {
+        p_user_id: userId
+    });
+
+    if (error) throw apiError(500, 'Error al consultar la configuración de Serenity Azure.');
+    return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+function azureReleaseRequest(url, personalAccessToken, method = 'GET', body = null) {
+    const basicToken = Buffer.from(`:${personalAccessToken}`).toString('base64');
+    return fetch(url, {
+        method,
+        headers: {
+            Authorization: `Basic ${basicToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'test-plan-app'
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+    });
+}
+
+async function resolveAzureSerenityRuntimeConfig(req) {
+    const user = await getAuthenticatedUser(req);
+    const row = await getAzureSerenityConnectionWithSecret(user.id);
+
+    if (!row?.azure_organization) {
+        const envConfig = resolveAzureSerenityConfigFromEnv();
+        return envConfig ? { userId: user.id, ...envConfig } : null;
+    }
+
+    let pat = row.personal_access_token || '';
+
     try {
-        const config = await resolveSerenityRuntimeConfig(req);
-        const bundle = req.body?.bundle;
-        if (!bundle) {
-            throw apiError(400, 'Se requiere un bundle');
+        const { adminClient } = getSupabaseClients();
+        const { data, error } = await adminClient.rpc('azure_get_connection_secret', {
+            p_user_id: user.id,
+            p_organization: null,
+        });
+        if (!error && data) {
+            const azRow = Array.isArray(data) ? data[0] : data;
+            if (azRow?.personal_access_token) {
+                pat = azRow.personal_access_token;
+            }
+        }
+    } catch (_) {
+        // fallback al PAT de serenity si falla la consulta de azure_devops_connections
+    }
+
+    // Si el PAT sigue vacío, intenta usar el configurado por variables de entorno.
+    if (!pat) {
+        const envConfig = resolveAzureSerenityConfigFromEnv();
+        if (envConfig?.personalAccessToken) {
+            pat = envConfig.personalAccessToken;
+        }
+    }
+
+    return {
+        userId: user.id,
+        azureOrganization: String(row.azure_organization || ''),
+        azureProject: String(row.azure_project || ''),
+        releaseDefinitionId: Number(row.release_definition_id || 0),
+        pipelineName: String(row.pipeline_name || 'Serenity Report CD'),
+        branch: String(row.branch || 'trunk'),
+        personalAccessToken: pat
+    };
+}
+
+/**
+ * Lee la configuración de Azure DevOps + Serenity desde variables de entorno.
+ * Se usa como fallback cuando no existe configuración por usuario en la base de datos.
+ * Devuelve null si faltan las variables mínimas (organización, proyecto y release definition id).
+ */
+function resolveAzureSerenityConfigFromEnv() {
+    const azureOrganization = String(process.env.AZURE_SERENITY_ORGANIZATION || '').trim();
+    const azureProject = String(process.env.AZURE_SERENITY_PROJECT || '').trim();
+    const releaseDefinitionId = Number(process.env.AZURE_SERENITY_RELEASE_DEFINITION_ID || 0);
+    const pipelineName = String(process.env.AZURE_SERENITY_PIPELINE_NAME || 'Serenity Report CD').trim() || 'Serenity Report CD';
+    const branch = String(process.env.AZURE_SERENITY_BRANCH || 'trunk').trim() || 'trunk';
+    const personalAccessToken = String(process.env.AZURE_SERENITY_PAT || process.env.AZURE_DEVOPS_PAT || '').trim();
+
+    if (!azureOrganization || !azureProject || !releaseDefinitionId || releaseDefinitionId <= 0) {
+        return null;
+    }
+
+    return {
+        azureOrganization,
+        azureProject,
+        releaseDefinitionId,
+        pipelineName,
+        branch,
+        personalAccessToken,
+    };
+}
+
+function resolveAzureArtifactDownloadUrlFromRelease(data) {
+    const candidates = [
+        data?.artifactDownloadUrl,
+        data?.reportZipUrl,
+        data?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+        data?.variables?.REPORT_ZIP_URL?.value,
+        data?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+        data?.environments?.[0]?.variables?.SERENITY_REPORT_ZIP_URL?.value,
+        data?.environments?.[0]?.variables?.REPORT_ZIP_URL?.value,
+        data?.environments?.[0]?.variables?.ARTIFACT_DOWNLOAD_URL?.value,
+    ];
+
+    for (const v of candidates) {
+        const s = String(v || '').trim();
+        if (/^https?:\/\//i.test(s)) return s;
+    }
+    return null;
+}
+
+const SERENITY_BUNDLE_BUCKET = 'execution-evidence';
+
+function serenityBundlePath(userId, jobId) {
+    return `serenity-bundles/${userId}/${jobId}.json`;
+}
+
+async function deleteSerenityBundle(userId, jobId) {
+    try {
+        const { adminClient } = getSupabaseClients();
+        await adminClient.storage.from(SERENITY_BUNDLE_BUCKET).remove([serenityBundlePath(userId, jobId)]);
+    } catch (_) { /* no-op */ }
+}
+
+/**
+ * Elimina reportes previos del mismo usuario/ejecución antes de insertar uno nuevo.
+ * Solo se conserva el último reporte generado (no se guarda histórico).
+ */
+async function replacePreviousSerenityReports(userId, executionId) {
+    try {
+        const { adminClient } = getSupabaseClients();
+
+        let query = adminClient
+            .from('serenity_report_results')
+            .select('id')
+            .eq('user_id', userId);
+
+        query = executionId ? query.eq('execution_id', executionId) : query.is('execution_id', null);
+
+        const { data: oldRows } = await query;
+
+        if (oldRows && oldRows.length > 0) {
+            await Promise.all(oldRows.map((row) => deleteSerenityBundle(userId, row.id).catch(() => {})));
+
+            let deleteQuery = adminClient
+                .from('serenity_report_results')
+                .delete()
+                .eq('user_id', userId);
+
+            deleteQuery = executionId ? deleteQuery.eq('execution_id', executionId) : deleteQuery.is('execution_id', null);
+
+            await deleteQuery;
+        }
+    } catch (_) { /* no-op */ }
+}
+
+app.post('/api/serenity-report-azure', async (req, res) => {
+    try {
+        const config = await resolveAzureSerenityRuntimeConfig(req);
+        if (!config) {
+            return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
         }
 
-        const jobId = `serenity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const { bundle, executionId } = req.body || {};
+        if (!bundle) {
+            return res.status(400).json({ error: 'Se requiere un bundle' });
+        }
 
-        const gistRes = await gh('/gists', config.personalAccessToken, {
-            method: 'POST',
-            body: JSON.stringify({
-                description: `Serenity bundle — ${jobId}`,
-                public: false,
-                files: {
-                    'serenity-bundle.json': {
-                        content: JSON.stringify(bundle, null, 2)
-                    }
-                }
-            })
+        const jobId = `serenity-azure-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        const bundleJson = JSON.stringify(bundle);
+        const { adminClient } = getSupabaseClients();
+        const path = serenityBundlePath(config.userId, jobId);
+
+        const { error: uploadError } = await adminClient.storage
+            .from(SERENITY_BUNDLE_BUCKET)
+            .upload(path, bundleJson, { contentType: 'application/json', upsert: true });
+
+        if (uploadError) {
+            console.error('[serenity-report-azure][local] Error subiendo bundle:', uploadError);
+            return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+        }
+
+        const { data: signedData, error: signedError } = await adminClient.storage
+            .from(SERENITY_BUNDLE_BUCKET)
+            .createSignedUrl(path, 3600);
+
+        if (signedError || !signedData?.signedUrl) {
+            await deleteSerenityBundle(config.userId, jobId);
+            return res.status(502).json({ error: 'Error al generar URL firmada para el bundle.' });
+        }
+
+        const bundleUrl = signedData.signedUrl;
+        console.log(`[serenity-report-azure][local] Bundle subido (${(bundleJson.length / 1024).toFixed(0)} KB): ${path}`);
+
+        const releaseUrlApi = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/releases?api-version=7.1`;
+        const releaseResponse = await azureReleaseRequest(releaseUrlApi, config.personalAccessToken, 'POST', {
+            definitionId: config.releaseDefinitionId,
+            description: `Serenity report — ${jobId}`,
+            variables: {
+                BUNDLE_URL: { value: bundleUrl },
+                RUN_ID: { value: jobId },
+                RUN_NAME: { value: jobId }
+            }
         });
 
-        if (!gistRes.ok) {
-            const errText = await gistRes.text().catch(() => '');
-            console.error('[serenity-report][local] Error creando gist:', gistRes.status, errText);
-            throw apiError(502, `Error al crear gist: ${gistRes.status}. Verifica permisos (gist/repo/workflow).`);
+        if (!releaseResponse.ok) {
+            const errText = await releaseResponse.text();
+            console.error('[serenity-report-azure][local] Error al crear release:', releaseResponse.status, errText);
+            await deleteSerenityBundle(config.userId, jobId);
+            const hint = releaseResponse.status === 401 || releaseResponse.status === 403
+                ? ' Verifica que el PAT tenga permisos Release (Read, Write, & Execute).'
+                : '';
+            return res.status(502).json({ error: `Error al crear release: ${releaseResponse.status}.${hint}`.trim() });
         }
 
-        const gist = await gistRes.json();
-        const gistId = gist?.id;
-        const bundleUrl = gist?.files?.['serenity-bundle.json']?.raw_url;
-
-        if (!gistId || !bundleUrl) {
-            throw apiError(502, 'No se pudo obtener la URL del bundle desde GitHub Gist.');
+        const releaseData = await releaseResponse.json();
+        const releaseId = releaseData?.id;
+        if (!releaseId) {
+            await deleteSerenityBundle(config.userId, jobId);
+            return res.status(502).json({ error: 'No se pudo obtener el ID del release de Azure DevOps.' });
         }
 
-        const dispRes = await gh(
-            `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/workflows/${encodeURIComponent(config.workflowFileName)}/dispatches`,
-            config.personalAccessToken,
-            {
-                method: 'POST',
-                body: JSON.stringify({
-                    ref: config.branch,
-                    inputs: {
-                        job_id: jobId,
-                        bundle_url: bundleUrl
-                    }
-                })
-            }
-        );
+        console.log(`[serenity-report-azure][local] Release creado: ${releaseId}`);
 
-        if (dispRes.status !== 204) {
-            const errText = await dispRes.text().catch(() => '');
-            console.error('[serenity-report][local] Error en dispatch:', dispRes.status, errText);
-            throw apiError(502, `Error al disparar workflow: ${dispRes.status}. Verifica permisos de Actions.`);
-        }
+        // Insertar fila pendiente en BD para que el pipeline haga PATCH luego
+        try {
+            // Solo se conserva el último reporte: se elimina cualquier reporte previo
+            // de este usuario/ejecución antes de insertar el nuevo.
+            await replacePreviousSerenityReports(config.userId, executionId || null);
 
-        await new Promise((r) => setTimeout(r, 2500));
-        const runId = await findRunByJobId(jobId, config);
+            await adminClient
+                .from('serenity_report_results')
+                .upsert({
+                    id: jobId,
+                    user_id: config.userId,
+                    execution_id: executionId || null,
+                    backend: 'azure',
+                    status: 'pending',
+                    progress: 0,
+                }, { onConflict: 'id' });
+        } catch (_) { /* no-op */ }
 
         return res.status(200).json({
             success: true,
-            phase: runId ? 'running' : 'dispatched',
+            phase: 'running',
             jobId,
-            gistId,
-            runId: runId || null,
-            message: runId ? 'Workflow en ejecución' : 'Workflow disparado.'
+            releaseId,
+            message: 'Release de Azure DevOps creado.'
         });
     } catch (error) {
+        console.error('[serenity-report-azure][local] Error fatal:', error);
         return sendApiError(res, error);
     }
 });
 
-app.get('/api/serenity-report', async (req, res) => {
+app.get('/api/serenity-report-azure', async (req, res) => {
     try {
-        const config = await resolveSerenityRuntimeConfig(req);
-        const runIdRaw = req.query?.runId;
-        const gistIdRaw = req.query?.gistId;
-        const jobIdRaw = req.query?.jobId;
-
-        let runId = Array.isArray(runIdRaw) ? runIdRaw[0] : runIdRaw;
-        const gistId = Array.isArray(gistIdRaw) ? gistIdRaw[0] : gistIdRaw;
-        const jobId = Array.isArray(jobIdRaw) ? jobIdRaw[0] : jobIdRaw;
-
-        if (!runId && jobId) {
-            runId = await findRunByJobId(String(jobId), config);
+        const config = await resolveAzureSerenityRuntimeConfig(req);
+        if (!config) {
+            return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
         }
 
-        if (!runId) {
-            return res.status(202).json({
-                status: 'running',
-                phase: 'queued',
-                conclusion: null,
-                message: 'Buscando run...'
-            });
+        const releaseId = String(req.query.releaseId || '').trim();
+        const jobId = String(req.query.jobId || '').trim();
+        if (!releaseId) {
+            return res.status(400).json({ error: 'Falta releaseId.' });
         }
 
-        const runRes = await gh(
-            `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/runs/${encodeURIComponent(String(runId))}`,
-            config.personalAccessToken
-        );
+        const url = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/releases/${releaseId}?api-version=7.1`;
+        const response = await azureReleaseRequest(url, config.personalAccessToken);
 
-        if (!runRes.ok) {
-            throw apiError(502, `Error consultando run: ${runRes.status}`);
+        if (!response.ok) {
+            return res.status(502).json({ status: 'error', message: `Error consultando release: ${response.status}` });
         }
 
-        const runData = await runRes.json();
-        const status = String(runData.status || 'unknown');
-        const conclusion = runData.conclusion || null;
+        const data = await response.json();
+        const environments = data?.environments || [];
+        const status = environments[0]?.status || 'unknown';
 
-        if (status === 'completed') {
-            if (conclusion === 'success') {
-                const artifactsRes = await gh(
-                    `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/runs/${encodeURIComponent(String(runId))}/artifacts`,
-                    config.personalAccessToken
-                );
+        if (status === 'succeeded' || status === 'rejected') {
+            if (jobId) await deleteSerenityBundle(config.userId, jobId);
 
-                if (!artifactsRes.ok) {
-                    return res.status(200).json({ status: 'done', phase: 'completed_no_artifacts', conclusion });
-                }
-
-                const artifactsData = await artifactsRes.json();
-                const targetArtifact = (artifactsData.artifacts || []).find((a) =>
-                    a.name === 'target' || a.name === 'target.zip' || a.name === 'serenity-report'
-                );
-
-                if (!targetArtifact) {
-                    return res.status(200).json({
-                        status: 'done',
-                        phase: 'completed_no_target',
-                        conclusion,
-                        artifacts: (artifactsData.artifacts || []).map((a) => a.name)
-                    });
-                }
-
-                const dlRes = await gh(
-                    `/repos/${encodeURIComponent(config.repositoryOwner)}/${encodeURIComponent(config.repositoryName)}/actions/artifacts/${encodeURIComponent(String(targetArtifact.id))}/zip`,
-                    config.personalAccessToken,
-                    { redirect: 'manual' }
-                );
-
-                const artifactDownloadUrl = dlRes.headers.get('location') || '';
-
-                if (gistId) {
-                    await gh(`/gists/${encodeURIComponent(String(gistId))}`, config.personalAccessToken, { method: 'DELETE' }).catch(() => null);
-                }
-
-                return res.status(200).json({ status: 'done', phase: 'completed', conclusion, artifactDownloadUrl });
+            if (status === 'succeeded') {
+                const releaseUrl = `https://dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_releaseProgress?_a=release-pipeline-progress&releaseId=${releaseId}`;
+                const artifactDownloadUrl = resolveAzureArtifactDownloadUrlFromRelease(data);
+                return res.status(200).json({
+                    status: 'done',
+                    phase: 'completed',
+                    result: status,
+                    artifactDownloadUrl,
+                    releaseUrl,
+                    message: 'Release completado exitosamente.'
+                });
             }
 
-            if (gistId) {
-                await gh(`/gists/${encodeURIComponent(String(gistId))}`, config.personalAccessToken, { method: 'DELETE' }).catch(() => null);
-            }
-
-            return res.status(200).json({ status: 'done', phase: 'failed', conclusion });
+            return res.status(200).json({ status: 'done', phase: 'failed', result: status });
         }
 
-        return res.status(200).json({ status: 'running', phase: status, conclusion: null });
+        return res.status(200).json({ status: 'running', phase: status, result: null });
     } catch (error) {
-        return sendApiError(res, error);
-    }
-});
-
-// ─── Serenity integration ────────────────────────────────────────────────
-
-app.get('/api/integrations/serenity/config', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const row = await getSerenityConnectionWithSecret(user.id);
-        if (!row) {
-            const fallback = resolveSerenityEnvDefaults();
-            return res.status(200).json({
-                id: 'global-default',
-                githubUsername: fallback.githubUsername,
-                repositoryOwner: fallback.repositoryOwner,
-                repositoryName: fallback.repositoryName,
-                workflowFileName: fallback.workflowFileName,
-                branch: fallback.branch,
-                repositoryUrl: fallback.repositoryUrl,
-                workflowName: fallback.workflowName,
-                status: 'default',
-                tokenHint: maskSerenityTokenHint(fallback.personalAccessToken),
-                lastValidatedAt: null,
-                updatedAt: null
-            });
-        }
-        return res.status(200).json({
-            id: row.id,
-            githubUsername: row.github_username,
-            repositoryOwner: row.repository_owner,
-            repositoryName: row.repository_name,
-            workflowFileName: row.workflow_file_name,
-            branch: row.branch,
-            repositoryUrl: row.repository_url,
-            workflowName: row.workflow_name,
-            status: row.status,
-            tokenHint: row.token_hint,
-            lastValidatedAt: row.last_validated_at,
-            updatedAt: row.updated_at
-        });
-    } catch (error) {
-        return sendApiError(res, error);
-    }
-});
-
-app.post('/api/integrations/serenity/config', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const body = req.body || {};
-        const fallback = resolveSerenityEnvDefaults();
-        const repositoryOwner = String(body.repositoryOwner || fallback.repositoryOwner).trim();
-        const repositoryName  = String(body.repositoryName  || fallback.repositoryName).trim();
-        const workflowFileName = String(body.workflowFileName || fallback.workflowFileName).trim();
-        const branch = String(body.branch || fallback.branch).trim();
-        const githubUsername = String(body.githubUsername || '').trim() || repositoryOwner;
-        const workflowName = String(body.workflowName || fallback.workflowName).trim();
-        const repositoryUrl = String(body.repositoryUrl || '').trim() || `https://github.com/${repositoryOwner}/${repositoryName}`;
-        const typedPersonalAccessToken = String(body.personalAccessToken || '').trim();
-        const existingConnection = await getSerenityConnectionWithSecret(user.id);
-        const personalAccessToken = typedPersonalAccessToken || String(existingConnection?.personal_access_token || '').trim() || fallback.personalAccessToken;
-
-        if (!repositoryOwner) throw apiError(400, 'El owner del repositorio es obligatorio.');
-        if (!repositoryName)  throw apiError(400, 'El nombre del repositorio es obligatorio.');
-        if (!personalAccessToken) throw apiError(400, 'No hay token disponible. Configura GH_DISPATCH_TOKEN o ingresa un token manualmente.');
-
-        // Validar acceso a GitHub
-        const ghHeaders = {
-            Authorization: `Bearer ${personalAccessToken}`,
-            Accept: 'application/vnd.github+json',
-            'User-Agent': 'test-plan-app'
-        };
-        const repoRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(repositoryOwner)}/${encodeURIComponent(repositoryName)}`, { headers: ghHeaders });
-        if (repoRes.status === 401 || repoRes.status === 403) throw apiError(401, 'El Personal Access Token de GitHub es inválido o sin permisos.');
-        if (repoRes.status === 404) throw apiError(404, 'No se encontró el repositorio de Serenity.');
-        if (!repoRes.ok) throw apiError(502, 'No fue posible validar el repositorio de GitHub.');
-
-        const { adminClient } = getSupabaseClients();
-        const { data, error } = await adminClient.rpc('serenity_upsert_connection', {
-            p_user_id: user.id,
-            p_github_username: githubUsername,
-            p_repository_owner: repositoryOwner,
-            p_repository_name: repositoryName,
-            p_workflow_file_name: workflowFileName,
-            p_branch: branch,
-            p_repository_url: repositoryUrl,
-            p_workflow_name: workflowName,
-            p_personal_access_token: personalAccessToken,
-            p_status: 'connected'
-        });
-        if (error) throw apiError(500, 'Error al guardar la configuración de Serenity.');
-        const row = Array.isArray(data) ? data[0] : data;
-        if (!row?.id) throw apiError(500, 'No se pudo guardar la configuración de Serenity.');
-        return res.status(200).json({
-            id: row.id,
-            githubUsername: row.github_username,
-            repositoryOwner: row.repository_owner,
-            repositoryName: row.repository_name,
-            workflowFileName: row.workflow_file_name,
-            branch: row.branch,
-            repositoryUrl: row.repository_url,
-            workflowName: row.workflow_name,
-            status: row.status,
-            tokenHint: row.token_hint,
-            lastValidatedAt: row.last_validated_at
-        });
-    } catch (error) {
-        return sendApiError(res, error);
-    }
-});
-
-app.delete('/api/integrations/serenity/config', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const { adminClient } = getSupabaseClients();
-        const { error } = await adminClient.rpc('serenity_disconnect_connection', {
-            p_user_id: user.id
-        });
-        if (error) throw apiError(500, 'No se pudo eliminar la configuración de Serenity.');
-        return res.status(200).json({ success: true });
-    } catch (error) {
+        console.error('[serenity-report-azure][local] Error en poll:', error);
         return sendApiError(res, error);
     }
 });

@@ -1,19 +1,27 @@
-<div class="modal-overlay" (click)="closeIfClickOutside($event)">
-  <div class="modal-content evidence-upload-modal">
-    <!-- Header -->
-    <div class="modal-header">
-      <h2>Subir evidencias a Azure DevOps</h2>
-      <button class="btn-close" (click)="close()" [disabled]="isValidating || isUploading">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
+<ng-container *ngIf="!embedded; else embeddedBody">
+  <div class="modal-overlay" (click)="closeIfClickOutside($event)">
+    <div class="modal-content evidence-upload-modal">
+      <!-- Header -->
+      <div class="modal-header">
+        <h2>Subir evidencias a Azure DevOps</h2>
+        <button class="btn-close" (click)="close()" [disabled]="isValidating || isUploading">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
 
+      <ng-container *ngTemplateOutlet="embeddedBody"></ng-container>
+    </div>
+  </div>
+</ng-container>
+
+<ng-template #embeddedBody>
     <!-- Body -->
     <div class="modal-body">
-      <!-- Paso 1: Ingreso de Plan ID -->
+
+      <!-- Paso 1: Ingreso de Plan ID (solo si se quiere adjuntar Word/PDF al plan) -->
       <div class="upload-section" *ngIf="!planValidated && !isUploading">
         <div class="form-group">
           <label for="planId">ID del Plan de Pruebas de Azure DevOps *</label>
@@ -69,23 +77,22 @@
 
         <!-- Selección de evidencias a incluir -->
         <div class="evidence-formats">
-          <label class="formats-title">Evidencias a incluir en el archivo comprimido:</label>
+          <label class="formats-title">Formatos a incluir en el archivo comprimido:</label>
+          
+          <!-- Advertencia de límite de Vercel -->
+          <div class="warning-banner vercel-limit-warning">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3.05h16.94a2 2 0 001.71-3.05L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div>
+              <strong>Límite de Vercel: 4.5 MB</strong>
+              <p>Por defecto se sube solo el reporte Serenity. Los formatos DOCX/PDF aumentan el tamaño considerablemente.</p>
+            </div>
+          </div>
+          
           <div class="format-options">
-
-            <label class="format-option" [class.selected]="selectedFormats.serenity">
-              <input type="checkbox" [(ngModel)]="selectedFormats.serenity" />
-              <span class="opt-icon opt-icon-serenity">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-              </span>
-              <span class="format-text">
-                <strong>Reporte Serenity</strong>
-                <small>Generado por el workflow (asíncrono)</small>
-              </span>
-            </label>
 
             <label class="format-option" [class.selected]="selectedFormats.docx">
               <input type="checkbox" [(ngModel)]="selectedFormats.docx" />
@@ -187,5 +194,4 @@
         </div>
       </div>
     </div>
-  </div>
-</div>
+</ng-template>
