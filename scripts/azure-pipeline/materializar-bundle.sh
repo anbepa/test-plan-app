@@ -43,6 +43,10 @@ for (const [k, v] of Object.entries({ IN, OUT, EVID, FEATDIR })) {
   if (!v) { console.error(`##[error]Variable ${k} no definida`); process.exit(1); }
 }
 
+function oneLine(s) {
+  return String(s == null ? "" : s).replace(/[\t\r\n]+/g, " ").replace(/#/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
 const bundle = JSON.parse(fs.readFileSync(IN, "utf8"));
 
 // ── 1) Evidencias: dataURL base64 -> archivo ────────────────────────
@@ -58,14 +62,14 @@ for (const ev of (bundle.evidences || [])) {
 const f = bundle.feature || {};
 const out = [];
 (f.tags || []).forEach(t => out.push(t));
-out.push(`Feature: ${f.name || "Reporte manual"}`);
-(f.description || []).forEach(d => out.push("  " + d));
+out.push(`Feature: ${oneLine(f.name || "Reporte manual")}`);
+(f.description || []).forEach(d => out.push("  " + oneLine(d)));
 
 for (const sc of (f.scenarios || [])) {
   out.push("");
   (sc.tags || []).forEach(t => out.push("  " + t));
-  out.push(`  Scenario: ${sc.name}`);
-  (sc.steps || []).forEach(s => out.push(`    ${s.keyword} ${s.text}`));
+  out.push(`  ${sc.type || "Scenario"}: ${oneLine(sc.name)}`);
+  (sc.steps || []).forEach(s => out.push(`    ${s.keyword} ${oneLine(s.text)}`));
 }
 fs.writeFileSync(path.join(FEATDIR, "manual.feature"), out.join("\n") + "\n");
 
@@ -74,7 +78,7 @@ const rows = [["scenario", "step_index", "status", "evidences", "notes"].join("\
 for (const [name, sc] of Object.entries(bundle.results || {})) {
   for (const [idx, r] of Object.entries((sc && sc.steps) || {})) {
     rows.push([
-      name,
+      oneLine(name),
       idx,
       r.status || "pending",
       (r.evidences || []).join(","),
