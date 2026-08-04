@@ -1090,27 +1090,44 @@ async function resolveAzureSerenityRuntimeConfig(req) {
     const user = await getAuthenticatedUser(req);
     const row = await getAzureSerenityConnectionWithSecret(user.id);
 
+    // Resuelve el PAT del usuario desde su conexión principal de Azure DevOps.
+    const resolveUserAzurePat = async () => {
+        try {
+            const { adminClient } = getSupabaseClients();
+            const { data, error } = await adminClient.rpc('azure_get_connection_secret', {
+                p_user_id: user.id,
+                p_organization: null,
+            });
+            if (!error && data) {
+                const azRow = Array.isArray(data) ? data[0] : data;
+                if (azRow?.personal_access_token) {
+                    return azRow.personal_access_token;
+                }
+            }
+        } catch (_) {
+            // no-op
+        }
+        return '';
+    };
+
+    // Sin config de Serenity por usuario: usar variables de entorno para
+    // organización/proyecto/releaseDefId y el PAT de la conexión principal del usuario.
     if (!row?.azure_organization) {
         const envConfig = resolveAzureSerenityConfigFromEnv();
-        return envConfig ? { userId: user.id, ...envConfig } : null;
+        if (!envConfig) return null;
+        const userPat = await resolveUserAzurePat();
+        return {
+            userId: user.id,
+            ...envConfig,
+            personalAccessToken: userPat || envConfig.personalAccessToken,
+        };
     }
 
     let pat = row.personal_access_token || '';
 
-    try {
-        const { adminClient } = getSupabaseClients();
-        const { data, error } = await adminClient.rpc('azure_get_connection_secret', {
-            p_user_id: user.id,
-            p_organization: null,
-        });
-        if (!error && data) {
-            const azRow = Array.isArray(data) ? data[0] : data;
-            if (azRow?.personal_access_token) {
-                pat = azRow.personal_access_token;
-            }
-        }
-    } catch (_) {
-        // fallback al PAT de serenity si falla la consulta de azure_devops_connections
+    const userPat = await resolveUserAzurePat();
+    if (userPat) {
+        pat = userPat;
     }
 
     // Si el PAT sigue vacío, intenta usar el configurado por variables de entorno.

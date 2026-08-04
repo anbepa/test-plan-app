@@ -163,6 +163,12 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
     }
 
+    if (!config.personalAccessToken) {
+      return res.status(400).json({
+        error: 'No se encontró un Personal Access Token (PAT) de Azure DevOps para este usuario. Conecta primero la integración de Azure DevOps con un PAT válido con permisos Release (Read, Write & Execute).',
+      });
+    }
+
     const { bundle, executionId } = req.body || {};
     if (!bundle) {
       return res.status(400).json({ error: 'Se requiere un bundle' });
@@ -186,7 +192,10 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       releaseId = await triggerAzureRelease(config, bundleUrl, jobId);
     } catch (e: any) {
       await deleteBundleFromStorage(user.id, jobId).catch(() => {});
-      return res.status(502).json({ error: e instanceof ApiError ? e.message : 'Error al crear release.' });
+      const message = e instanceof ApiError
+        ? e.message
+        : (e?.message ? `Error al crear release: ${e.message}` : 'Error al crear release.');
+      return res.status(502).json({ error: message });
     }
 
     // Insertar fila pendiente para que el pipeline haga PATCH luego
