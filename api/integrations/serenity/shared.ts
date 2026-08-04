@@ -28,6 +28,35 @@ export interface AzureSerenityRuntimeConfig {
   personalAccessToken: string;
 }
 
+/**
+ * Lee la configuración de Azure DevOps + Serenity desde variables de entorno.
+ * Se usa como fallback cuando no existe configuración por usuario en la base de datos.
+ * Devuelve null si faltan las variables mínimas (organización, proyecto y release definition id).
+ */
+export function resolveAzureSerenityConfigFromEnv(): AzureSerenityRuntimeConfig | null {
+  const azureOrganization = String(process.env.AZURE_SERENITY_ORGANIZATION || '').trim();
+  const azureProject = String(process.env.AZURE_SERENITY_PROJECT || '').trim();
+  const releaseDefinitionId = Number(process.env.AZURE_SERENITY_RELEASE_DEFINITION_ID || 0);
+  const pipelineName = String(process.env.AZURE_SERENITY_PIPELINE_NAME || 'Serenity Report CD').trim() || 'Serenity Report CD';
+  const branch = String(process.env.AZURE_SERENITY_BRANCH || 'trunk').trim() || 'trunk';
+  const personalAccessToken = String(
+    process.env.AZURE_SERENITY_PAT || process.env.AZURE_DEVOPS_PAT || ''
+  ).trim();
+
+  if (!azureOrganization || !azureProject || !releaseDefinitionId || releaseDefinitionId <= 0) {
+    return null;
+  }
+
+  return {
+    azureOrganization,
+    azureProject,
+    releaseDefinitionId,
+    pipelineName,
+    branch,
+    personalAccessToken,
+  };
+}
+
 export async function getAzureSerenityConnectionWithSecret(userId: string): Promise<AzureSerenitySecretRecord | null> {
   const { adminClient } = getSupabaseClients();
 
@@ -43,93 +72,13 @@ export async function getAzureSerenityConnectionWithSecret(userId: string): Prom
   return row || null;
 }
 
-export async function upsertAzureSerenityConnection(
-  userId: string,
-  config: AzureSerenityRuntimeConfig,
-  status: AzureSerenityConnectionRecord['status'] = 'connected'
-): Promise<AzureSerenityConnectionRecord> {
-  const { adminClient } = getSupabaseClients();
-
-  const { data, error } = await adminClient.rpc('azure_serenity_upsert_connection', {
-    p_user_id: userId,
-    p_azure_organization: config.azureOrganization,
-    p_azure_project: config.azureProject,
-    p_release_definition_id: config.releaseDefinitionId,
-    p_pipeline_name: config.pipelineName || 'Serenity Report CD',
-    p_branch: config.branch || 'trunk',
-    p_personal_access_token: config.personalAccessToken,
-    p_status: status,
-  });
-
-  if (error) {
-    console.error('[SERENITY_AZURE][UPSERT_CONNECTION][RPC_ERROR]', {
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    throw new ApiError(500, 'Error al guardar la configuración de Serenity Azure.', {
-      source: 'supabase-rpc:azure_serenity_upsert_connection',
-      code: error.code,
-    });
-  }
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row?.id) {
-    throw new ApiError(500, 'No se pudo guardar la configuración de Serenity Azure.');
-  }
-
-  return row as AzureSerenityConnectionRecord;
-}
-
-export async function disconnectAzureSerenityConnection(userId: string): Promise<void> {
-  const { adminClient } = getSupabaseClients();
-
-  const { error } = await adminClient.rpc('azure_serenity_disconnect_connection', {
-    p_user_id: userId,
-  });
-
-  if (error) {
-    throw new ApiError(500, 'No se pudo eliminar la configuración de Serenity Azure.');
-  }
-}
-
-export async function validateAzureSerenityPipeline(
-  config: Pick<AzureSerenityRuntimeConfig, 'azureOrganization' | 'azureProject' | 'releaseDefinitionId' | 'personalAccessToken'>
-): Promise<void> {
-  const basicToken = Buffer.from(`:${config.personalAccessToken}`).toString('base64');
-  const url = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/definitions/${config.releaseDefinitionId}?api-version=7.1`;
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      Authorization: `Basic ${basicToken}`,
-      Accept: 'application/json',
-      'User-Agent': 'test-plan-app',
-    },
-  });
-
-  if (response.status === 401) {
-    throw new ApiError(401, 'El PAT de Azure DevOps es inválido o no tiene permisos.');
-  }
-  if (response.status === 403) {
-    throw new ApiError(403, 'Azure DevOps rechazó el acceso al Release Definition.');
-  }
-  if (response.status === 404) {
-    throw new ApiError(404, 'No se encontró el Release Definition en Azure DevOps. Verifica el Project y Release Definition ID.');
-  }
-  if (!response.ok) {
-    throw new ApiError(502, 'No fue posible validar el Release Definition de Azure DevOps.');
-  }
-}
-
 export async function resolveAzureSerenityRuntimeConfig(headers?: Record<string, string | string[] | undefined>): Promise<AzureSerenityRuntimeConfig | null> {
   try {
     if (headers) {
       const user = await getAuthenticatedUser(headers);
 
       const serenityConnection = await getAzureSerenityConnectionWithSecret(user.id);
-      if (!serenityConnection) return null;
+      if (!serenityConnection) return resolveAzureSerenityConfigFromEnv();
 
       let pat = serenityConnection.personal_access_token;
 
@@ -150,6 +99,14 @@ export async function resolveAzureSerenityRuntimeConfig(headers?: Record<string,
         // fallback al PAT de serenity si falla la consulta de azure_devops_connections
       }
 
+      // Si el PAT sigue vacío, intenta usar el configurado por variables de entorno.
+      if (!pat) {
+        const envConfig = resolveAzureSerenityConfigFromEnv();
+        if (envConfig?.personalAccessToken) {
+          pat = envConfig.personalAccessToken;
+        }
+      }
+
       return {
         azureOrganization: serenityConnection.azure_organization,
         azureProject: serenityConnection.azure_project,
@@ -165,5 +122,6 @@ export async function resolveAzureSerenityRuntimeConfig(headers?: Record<string,
     }
   }
 
-  return null;
+  // Fallback global por variables de entorno (sin usuario o ante errores de BD).
+  return resolveAzureSerenityConfigFromEnv();
 }

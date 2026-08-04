@@ -5,7 +5,6 @@ import { SerenityExportService } from './serenity-export.service';
 import { TestRun } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
-import { SerenityIntegrationService } from '../integrations/serenity-integration.service';
 
 export interface HydrateProgress {
   current: number;
@@ -58,7 +57,6 @@ export class SerenityReportService {
     private serenityExport: SerenityExportService,
     private storage: ExecutionStorageService,
     private supabaseClient: SupabaseClientService,
-    private serenityIntegration: SerenityIntegrationService,
   ) {}
 
   /**

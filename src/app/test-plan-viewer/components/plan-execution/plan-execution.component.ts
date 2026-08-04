@@ -15,7 +15,6 @@ import { ToastService } from '../../../services/core/toast.service';
 import { ExportService } from '../../../services/export/export.service';
 import { SerenityReportService, SerenityReportState } from '../../../services/export/serenity-report.service';
 import type { SerenityReportRecord } from '../../../services/export/serenity-report.service';
-import { SerenityIntegrationService } from '../../../services/integrations/serenity-integration.service';
 import { AzureDevOpsEvidenceService } from '../../../services/integrations/azure-devops-evidence.service';
 import { HuSyncService } from '../../../services/core/hu-sync.service';
 import { Subscription, firstValueFrom } from 'rxjs';
@@ -199,7 +198,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     private toastService: ToastService,
     private exportService: ExportService,
     private serenityReportService: SerenityReportService,
-    private serenityIntegrationService: SerenityIntegrationService,
     private azureEvidenceService: AzureDevOpsEvidenceService,
     private http: HttpClient,
     private huSyncService: HuSyncService,

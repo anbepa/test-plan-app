@@ -1086,21 +1086,14 @@ function azureReleaseRequest(url, personalAccessToken, method = 'GET', body = nu
     });
 }
 
-async function validateAzureSerenityPipeline(organization, project, releaseDefinitionId, personalAccessToken) {
-    const url = `https://vsrm.dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_apis/release/definitions/${releaseDefinitionId}?api-version=7.1`;
-    const response = await azureReleaseRequest(url, personalAccessToken);
-
-    if (response.status === 401) throw apiError(401, 'El PAT de Azure DevOps es inválido o no tiene permisos.');
-    if (response.status === 403) throw apiError(403, 'Azure DevOps rechazó el acceso al Release Definition.');
-    if (response.status === 404) throw apiError(404, 'No se encontró el Release Definition. Verifica Project y Release Definition ID.');
-    if (!response.ok) throw apiError(502, 'No fue posible validar el Release Definition de Azure DevOps.');
-}
-
 async function resolveAzureSerenityRuntimeConfig(req) {
     const user = await getAuthenticatedUser(req);
     const row = await getAzureSerenityConnectionWithSecret(user.id);
 
-    if (!row?.azure_organization) return null;
+    if (!row?.azure_organization) {
+        const envConfig = resolveAzureSerenityConfigFromEnv();
+        return envConfig ? { userId: user.id, ...envConfig } : null;
+    }
 
     let pat = row.personal_access_token || '';
 
@@ -1120,6 +1113,14 @@ async function resolveAzureSerenityRuntimeConfig(req) {
         // fallback al PAT de serenity si falla la consulta de azure_devops_connections
     }
 
+    // Si el PAT sigue vacío, intenta usar el configurado por variables de entorno.
+    if (!pat) {
+        const envConfig = resolveAzureSerenityConfigFromEnv();
+        if (envConfig?.personalAccessToken) {
+            pat = envConfig.personalAccessToken;
+        }
+    }
+
     return {
         userId: user.id,
         azureOrganization: String(row.azure_organization || ''),
@@ -1128,6 +1129,33 @@ async function resolveAzureSerenityRuntimeConfig(req) {
         pipelineName: String(row.pipeline_name || 'Serenity Report CD'),
         branch: String(row.branch || 'trunk'),
         personalAccessToken: pat
+    };
+}
+
+/**
+ * Lee la configuración de Azure DevOps + Serenity desde variables de entorno.
+ * Se usa como fallback cuando no existe configuración por usuario en la base de datos.
+ * Devuelve null si faltan las variables mínimas (organización, proyecto y release definition id).
+ */
+function resolveAzureSerenityConfigFromEnv() {
+    const azureOrganization = String(process.env.AZURE_SERENITY_ORGANIZATION || '').trim();
+    const azureProject = String(process.env.AZURE_SERENITY_PROJECT || '').trim();
+    const releaseDefinitionId = Number(process.env.AZURE_SERENITY_RELEASE_DEFINITION_ID || 0);
+    const pipelineName = String(process.env.AZURE_SERENITY_PIPELINE_NAME || 'Serenity Report CD').trim() || 'Serenity Report CD';
+    const branch = String(process.env.AZURE_SERENITY_BRANCH || 'trunk').trim() || 'trunk';
+    const personalAccessToken = String(process.env.AZURE_SERENITY_PAT || process.env.AZURE_DEVOPS_PAT || '').trim();
+
+    if (!azureOrganization || !azureProject || !releaseDefinitionId || releaseDefinitionId <= 0) {
+        return null;
+    }
+
+    return {
+        azureOrganization,
+        azureProject,
+        releaseDefinitionId,
+        pipelineName,
+        branch,
+        personalAccessToken,
     };
 }
 
@@ -1194,101 +1222,6 @@ async function replacePreviousSerenityReports(userId, executionId) {
         }
     } catch (_) { /* no-op */ }
 }
-
-app.get('/api/integrations/serenity/config-azure', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const row = await getAzureSerenityConnectionWithSecret(user.id);
-        if (!row) return res.status(200).json(null);
-
-        return res.status(200).json({
-            id: row.id,
-            azureOrganization: row.azure_organization,
-            azureProject: row.azure_project,
-            releaseDefinitionId: row.release_definition_id,
-            pipelineName: row.pipeline_name,
-            branch: row.branch,
-            status: row.status,
-            tokenHint: row.token_hint,
-            lastValidatedAt: row.last_validated_at,
-            updatedAt: row.updated_at
-        });
-    } catch (error) {
-        return sendApiError(res, error);
-    }
-});
-
-app.post('/api/integrations/serenity/config-azure', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const body = req.body || {};
-
-        const azureOrganization = String(body.azureOrganization || '').trim();
-        const azureProject = String(body.azureProject || '').trim();
-        const releaseDefinitionId = Number(body.releaseDefinitionId || 0);
-        const pipelineName = String(body.pipelineName || 'Serenity Report CD').trim() || 'Serenity Report CD';
-        const branch = String(body.branch || 'trunk').trim() || 'trunk';
-
-        if (!azureOrganization) throw apiError(400, 'La organización de Azure DevOps es obligatoria.');
-        if (!azureProject) throw apiError(400, 'El proyecto de Azure DevOps es obligatorio.');
-        if (!releaseDefinitionId || releaseDefinitionId <= 0) throw apiError(400, 'El Release Definition ID es obligatorio.');
-
-        // Se reutiliza el mismo PAT de la conexión principal de Azure DevOps.
-        const mainConnection = await getAzureConnectionWithSecret(user.id, azureOrganization);
-        const personalAccessToken = String(mainConnection?.personal_access_token || '').trim();
-        if (!personalAccessToken) throw apiError(400, 'Debes conectar primero Azure DevOps con un PAT válido antes de configurar Serenity.');
-
-        await validateAzureSerenityPipeline(azureOrganization, azureProject, releaseDefinitionId, personalAccessToken);
-
-        const { adminClient } = getSupabaseClients();
-        const { data, error } = await adminClient.rpc('azure_serenity_upsert_connection', {
-            p_user_id: user.id,
-            p_azure_organization: azureOrganization,
-            p_azure_project: azureProject,
-            p_release_definition_id: releaseDefinitionId,
-            p_pipeline_name: pipelineName,
-            p_branch: branch,
-            p_personal_access_token: personalAccessToken,
-            p_status: 'connected'
-        });
-
-        if (error) {
-            console.error('[SERENITY_AZURE][UPSERT][RPC_ERROR]', error);
-            throw apiError(500, 'Error al guardar la configuración de Serenity Azure.');
-        }
-
-        const row = Array.isArray(data) ? data[0] : data;
-        if (!row?.id) throw apiError(500, 'No se pudo guardar la configuración de Serenity Azure.');
-
-        return res.status(200).json({
-            id: row.id,
-            azureOrganization: row.azure_organization,
-            azureProject: row.azure_project,
-            releaseDefinitionId: row.release_definition_id,
-            pipelineName: row.pipeline_name,
-            branch: row.branch,
-            status: row.status,
-            tokenHint: row.token_hint || maskTokenHint(personalAccessToken),
-            lastValidatedAt: row.last_validated_at
-        });
-    } catch (error) {
-        return sendApiError(res, error);
-    }
-});
-
-app.delete('/api/integrations/serenity/config-azure', async (req, res) => {
-    try {
-        const user = await getAuthenticatedUser(req);
-        const { adminClient } = getSupabaseClients();
-        const { error } = await adminClient.rpc('azure_serenity_disconnect_connection', {
-            p_user_id: user.id
-        });
-        if (error) throw apiError(500, 'No se pudo eliminar la configuración de Serenity Azure.');
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        return sendApiError(res, error);
-    }
-});
 
 app.post('/api/serenity-report-azure', async (req, res) => {
     try {
