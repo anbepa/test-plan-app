@@ -1080,25 +1080,55 @@
 }
 
 /* Botones: Agregar paso / Agregar escenario */
-.add-step-row { padding: 8px 0 4px 34px; }
+.add-step-row { padding: 10px 0 6px 34px; }
 .btn-add-step {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: transparent; color: var(--primary-color, #007AFF);
-  border: 1px dashed var(--primary-color, #007AFF); border-radius: 8px;
-  padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: background 200ms, color 200ms;
+  display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(0,122,255,0.10); color: var(--primary-color, #007AFF);
+  border: 1.5px dashed var(--primary-color, #007AFF); border-radius: 8px;
+  padding: 8px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: background 200ms, color 200ms, box-shadow 200ms, transform 120ms;
 }
-.btn-add-step:hover { background: rgba(0,122,255,0.08); }
-
-.add-testcase-row { display: flex; justify-content: center; padding: 14px 0 6px; }
-.btn-add-testcase {
-  display: inline-flex; align-items: center; gap: 8px;
+.btn-add-step:hover {
   background: var(--primary-color, #007AFF); color: #fff;
-  border: none; border-radius: 10px; padding: 10px 20px;
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,122,255,0.25);
-  transition: filter 200ms, transform 120ms;
+  box-shadow: 0 3px 10px rgba(0,122,255,0.30);
+  transform: translateY(-1px);
 }
-.btn-add-testcase:hover { filter: brightness(1.05); }
-.btn-add-testcase:active { transform: translateY(1px); }
+.btn-add-step:active { transform: translateY(0); }
+.btn-add-step svg { flex-shrink: 0; }
+
+.add-testcase-row {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 22px 0 10px;
+  margin-top: 6px;
+  border-top: 1px dashed var(--border-color, #D1D1D6);
+}
+.add-testcase-row::before {
+  content: 'Puedes crear y editar escenarios y pasos aquí';
+  font-size: 12px; font-weight: 600; color: var(--text-secondary, #6E6E73);
+  letter-spacing: 0.2px;
+}
+.btn-add-testcase {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 9px;
+  background: linear-gradient(135deg, #0A84FF 0%, #007AFF 100%); color: #fff;
+  border: none; border-radius: 12px; padding: 13px 28px;
+  font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
+  box-shadow: 0 4px 14px rgba(0,122,255,0.38);
+  transition: filter 200ms, transform 120ms, box-shadow 200ms;
+  animation: addTcPulse 2.4s ease-in-out infinite;
+}
+.btn-add-testcase:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 6px 20px rgba(0,122,255,0.48);
+  transform: translateY(-2px);
+  animation: none;
+}
+.btn-add-testcase:active { transform: translateY(0); }
+.btn-add-testcase svg { flex-shrink: 0; }
+
+@keyframes addTcPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(0,122,255,0.38); }
+  50% { box-shadow: 0 4px 22px rgba(0,122,255,0.55); }
+}
 
