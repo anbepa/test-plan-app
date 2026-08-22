@@ -953,22 +953,11 @@ export class ExportService {
                         isNestedCell ? 450 : 675
                     );
 
-                    paragraphs.push(new Paragraph({
-                        alignment: AlignmentType.CENTER,
-                        spacing: { before: 120, after: 60 },
-                        children: [
-                            new ImageRun({
-                                data: bytes,
-                                transformation: { width: dims.width, height: dims.height },
-                                type: imgType
-                            })
-                        ]
-                    }));
-                    // Descripción de la imagen (si existe)
+                    // Descripción de la imagen (si existe) (ahora ARRIBA de la imagen)
                     if (evidence.description?.trim()) {
                         paragraphs.push(new Paragraph({
                             alignment: AlignmentType.CENTER,
-                            spacing: { before: 0, after: 120 },
+                            spacing: { before: 120, after: 60 },
                             children: [
                                 new TextRun({
                                     text: evidence.description.trim(),
@@ -979,6 +968,18 @@ export class ExportService {
                             ]
                         }));
                     }
+
+                    paragraphs.push(new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: evidence.description?.trim() ? 0 : 120, after: 120 },
+                        children: [
+                            new ImageRun({
+                                data: bytes,
+                                transformation: { width: dims.width, height: dims.height },
+                                type: imgType
+                            })
+                        ]
+                    }));
                 } catch (err) {
                     console.error('Error al incrustar evidencia en DOCX:', err);
                     paragraphs.push(new Paragraph({
@@ -1437,30 +1438,46 @@ export class ExportService {
                                                 const imgH = ev.naturalHeight || 720;
                                                 const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
 
+                                                let borderHeight = dims.height;
+                                                let blockWidth = dims.width;
+                                                let imageY = currentY + (rowH - dims.height) / 2;
                                                 const imageX = currentX + (layout.colWidth - dims.width) / 2;
-                                                const imageY = currentY + (rowH - dims.height) / 2;
+                                                let borderY = imageY;
+                                                let borderX = imageX;
 
-                                                doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
-
-                                                // Draw description underneath image
                                                 if (ev.description?.trim()) {
                                                     doc.setFont('helvetica', 'italic');
                                                     doc.setFontSize(9);
                                                     doc.setTextColor(85, 85, 85);
                                                     const descStr = ev.description.trim();
                                                     const descW = doc.getTextWidth(descStr);
+                                                    
+                                                    const descHeight = 20;
+                                                    borderHeight = dims.height + descHeight;
+                                                    blockWidth = Math.max(dims.width, descW + 20);
+                                                    borderX = currentX + (layout.colWidth - blockWidth) / 2;
+                                                    
+                                                    // Center the whole block vertically
+                                                    const blockY = currentY + (rowH - borderHeight) / 2;
+                                                    borderY = blockY;
+                                                    
+                                                    // Draw description at top of block
                                                     const descX = currentX + (layout.colWidth - descW) / 2;
-                                                    const descY = imageY + dims.height + (layout.cols === 1 && layout.rows === 1 ? 24 : 14); 
-                                                    doc.text(descStr, descX, descY);
+                                                    doc.text(descStr, descX, blockY + 12);
                                                     doc.setTextColor(0, 0, 0); // reset
+                                                    
+                                                    // Image goes below description
+                                                    imageY = blockY + descHeight;
                                                 }
 
-                                                // Draw border around image (only when no grid cell border already drawn)
+                                                doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
+
+                                                // Draw border around image and description block
                                                 if (layout.cols === 1 && layout.rows === 1) {
                                                     const padding = 10; // px/pt margin
                                                     doc.setDrawColor(0);
                                                     doc.setLineWidth(0.5);
-                                                    doc.rect(imageX - padding, imageY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
+                                                    doc.rect(borderX - padding, borderY - padding, blockWidth + (padding * 2), borderHeight + (padding * 2));
                                                 }
                                             } catch (err) {
                                                 console.error('Error drawing image inside autoTable cell:', err);
@@ -1786,13 +1803,35 @@ export class ExportService {
                                     try {
                                         const format = img.type.toUpperCase() || 'PNG';
                                         const imageX = cellX + (cellWidthCol2 - dims.width) / 2;
-                                        doc.addImage(img.base64Data, format, imageX, currentY, dims.width, dims.height);
+                                        const padding = 10;
 
-                                        // Draw border
-                                        const padding = 10; // px/pt margin
+                                        let blockY = currentY;
+                                        let blockHeight = dims.height;
+                                        let imgY = currentY;
+
+                                        // Draw description ABOVE the image
+                                        if (img.description?.trim()) {
+                                            doc.setFont('helvetica', 'italic');
+                                            doc.setFontSize(9);
+                                            doc.setTextColor(85, 85, 85);
+                                            const descStr = img.description.trim();
+                                            const descW = doc.getTextWidth(descStr);
+                                            const descX = cellX + (cellWidthCol2 - descW) / 2;
+                                            const descLineH = 20;
+                                            doc.text(descStr, descX, blockY + 12);
+                                            doc.setTextColor(0, 0, 0);
+                                            imgY = blockY + descLineH;
+                                            blockHeight = descLineH + dims.height;
+                                        }
+
+                                        doc.addImage(img.base64Data, format, imageX, imgY, dims.width, dims.height);
+
+                                        // Draw border wrapping description + image
+                                        const blockWidth = dims.width;
+                                        const borderX = cellX + (cellWidthCol2 - blockWidth) / 2;
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
-                                        doc.rect(imageX - padding, currentY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
+                                        doc.rect(borderX - padding, blockY - padding, blockWidth + (padding * 2), blockHeight + (padding * 2));
                                     } catch (err) {
                                         console.error('Error drawing image in analysis PDF:', err);
                                     }
