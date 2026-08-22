@@ -332,6 +332,9 @@
     line-height: 1.6;
     color: #333;
     margin-bottom: 0.75rem;
+    text-align: justify;
+    text-justify: inter-word;
+    hyphens: auto;
 }
 
 ::ng-deep .paper-sheet ul,
