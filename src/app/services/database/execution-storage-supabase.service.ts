@@ -1012,6 +1012,7 @@ export class ExecutionStorageService {
             timestamp: evidence.timestamp,
             naturalWidth: evidence.naturalWidth,
             naturalHeight: evidence.naturalHeight,
+            description: evidence.description,
             // NO guardar base64 en la tabla — solo en Storage
             base64Data: '',
             originalBase64: '',

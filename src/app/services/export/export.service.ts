@@ -1297,6 +1297,7 @@ export class ExportService {
                                     const imgH = ev.naturalHeight || 720;
                                     const dims = this.scaleImageDimensions(imgW, imgH, maxW, maxH);
                                     h = dims.height + (validCols === 1 && validRows === 1 ? 20 : 0);
+                                    if (ev.description?.trim()) h += 20; // Espacio extra para el texto
                                 }
                                 if (h > maxRowHeight) maxRowHeight = h;
                             }
@@ -1440,6 +1441,19 @@ export class ExportService {
                                                 const imageY = currentY + (rowH - dims.height) / 2;
 
                                                 doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
+
+                                                // Draw description underneath image
+                                                if (ev.description?.trim()) {
+                                                    doc.setFont('helvetica', 'italic');
+                                                    doc.setFontSize(9);
+                                                    doc.setTextColor(85, 85, 85);
+                                                    const descStr = ev.description.trim();
+                                                    const descW = doc.getTextWidth(descStr);
+                                                    const descX = currentX + (layout.colWidth - descW) / 2;
+                                                    const descY = imageY + dims.height + (layout.cols === 1 && layout.rows === 1 ? 24 : 14); 
+                                                    doc.text(descStr, descX, descY);
+                                                    doc.setTextColor(0, 0, 0); // reset
+                                                }
 
                                                 // Draw border around image (only when no grid cell border already drawn)
                                                 if (layout.cols === 1 && layout.rows === 1) {
