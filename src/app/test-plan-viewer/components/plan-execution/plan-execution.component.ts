@@ -2137,4 +2137,91 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     await this.autoSaveExecutionState();
     this.toastService.success('Pasos reordenados');
   }
+
+  // --- Agregar Pasos y Escenarios ---
+
+  /** Genera un identificador único (con fallback si crypto.randomUUID no existe). */
+  private generateLocalId(prefix: string): string {
+    const rand = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    return `${prefix}_${rand}`;
+  }
+
+  /**
+   * Agrega un paso nuevo (en blanco) a un escenario existente.
+   * Persiste inmediatamente en BD (JSONB de plan_executions).
+   */
+  async addStep(tcIndex: number, event?: MouseEvent): Promise<void> {
+    if (event) event.stopPropagation();
+    if (!this.execution) return;
+
+    const tc = this.execution.testCases[tcIndex];
+    if (!tc) return;
+
+    const newStep: ExecutionStep = {
+      stepId: this.generateLocalId('step'),
+      numero_paso: tc.steps.length + 1,
+      accion: 'Nuevo paso',
+      status: 'pending',
+      notes: '',
+      evidences: []
+    };
+
+    tc.steps.push(newStep);
+
+    // Activar el paso recién creado para edición/evidencias
+    this.activeTestCaseIndex = tcIndex;
+    this.activeStepIndex = tc.steps.length - 1;
+
+    await this.autoSaveExecutionState();
+    await this.updateStats();
+    this.toastService.success('Paso agregado');
+  }
+
+  /**
+   * Agrega un escenario (test case) nuevo en blanco con un paso inicial.
+   * Persiste inmediatamente en BD (JSONB de plan_executions).
+   */
+  async addTestCase(event?: MouseEvent): Promise<void> {
+    if (event) event.stopPropagation();
+    if (!this.execution) return;
+
+    const newTestCase: TestCaseExecution = {
+      testCaseId: this.generateLocalId('tc'),
+      title: 'Nuevo escenario',
+      preconditions: '',
+      expectedResults: '',
+      status: 'pending',
+      steps: [
+        {
+          stepId: this.generateLocalId('step'),
+          numero_paso: 1,
+          accion: 'Nuevo paso',
+          status: 'pending',
+          notes: '',
+          evidences: []
+        }
+      ]
+    };
+
+    this.execution.testCases.push(newTestCase);
+
+    const newIndex = this.execution.testCases.length - 1;
+    this.expandedTestCaseIndex = newIndex;
+    this.activeTestCaseIndex = newIndex;
+    this.activeStepIndex = 0;
+
+    // Reset de filtros para asegurar que el nuevo escenario sea visible
+    this.statusFilter = 'all';
+    this.searchQuery = '';
+    this.onFilterChange();
+
+    // Ir a la última página donde quedó el nuevo escenario
+    this.currentPage = this.totalPages;
+
+    await this.autoSaveExecutionState();
+    await this.updateStats();
+    this.toastService.success('Escenario agregado');
+  }
 }

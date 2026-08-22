@@ -1078,3 +1078,27 @@
   margin: 0 !important;
   font-weight: 500 !important;
 }
+
+/* Botones: Agregar paso / Agregar escenario */
+.add-step-row { padding: 8px 0 4px 34px; }
+.btn-add-step {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--primary-color, #007AFF);
+  border: 1px dashed var(--primary-color, #007AFF); border-radius: 8px;
+  padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 200ms, color 200ms;
+}
+.btn-add-step:hover { background: rgba(0,122,255,0.08); }
+
+.add-testcase-row { display: flex; justify-content: center; padding: 14px 0 6px; }
+.btn-add-testcase {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--primary-color, #007AFF); color: #fff;
+  border: none; border-radius: 10px; padding: 10px 20px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,122,255,0.25);
+  transition: filter 200ms, transform 120ms;
+}
+.btn-add-testcase:hover { filter: brightness(1.05); }
+.btn-add-testcase:active { transform: translateY(1px); }
+
