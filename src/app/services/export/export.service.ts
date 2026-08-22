@@ -1431,53 +1431,44 @@ export class ExportService {
                                             });
 
                                         } else if (ev.base64Data) {
-                                            // Draw image
+                                            // Draw image (and optional description above it)
                                             try {
                                                 const format = ev.base64Data.match(/data:image\/([a-zA-Z]+);/)?.[1] || 'PNG';
                                                 const imgW = ev.naturalWidth || 1280;
                                                 const imgH = ev.naturalHeight || 720;
                                                 const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
 
-                                                let borderHeight = dims.height;
-                                                let blockWidth = dims.width;
-                                                let imageY = currentY + (rowH - dims.height) / 2;
-                                                const imageX = currentX + (layout.colWidth - dims.width) / 2;
-                                                let borderY = imageY;
-                                                let borderX = imageX;
+                                                const descStr = ev.description?.trim() || '';
+                                                const descLineH = descStr ? 22 : 0;
 
-                                                if (ev.description?.trim()) {
+                                                // 1. Calcular alto total del bloque (descripción + imagen)
+                                                const totalBlockH = dims.height + descLineH;
+
+                                                // 2. Centrar el bloque verticalmente dentro de la fila
+                                                const blockY = currentY + (rowH - totalBlockH) / 2;
+                                                const imageX = currentX + (layout.colWidth - dims.width) / 2;
+
+                                                // 3. Dibujar descripción ARRIBA si existe
+                                                if (descStr) {
                                                     doc.setFont('helvetica', 'italic');
                                                     doc.setFontSize(9);
                                                     doc.setTextColor(85, 85, 85);
-                                                    const descStr = ev.description.trim();
                                                     const descW = doc.getTextWidth(descStr);
-                                                    
-                                                    const descHeight = 20;
-                                                    borderHeight = dims.height + descHeight;
-                                                    blockWidth = Math.max(dims.width, descW + 20);
-                                                    borderX = currentX + (layout.colWidth - blockWidth) / 2;
-                                                    
-                                                    // Center the whole block vertically
-                                                    const blockY = currentY + (rowH - borderHeight) / 2;
-                                                    borderY = blockY;
-                                                    
-                                                    // Draw description at top of block
                                                     const descX = currentX + (layout.colWidth - descW) / 2;
-                                                    doc.text(descStr, descX, blockY + 12);
-                                                    doc.setTextColor(0, 0, 0); // reset
-                                                    
-                                                    // Image goes below description
-                                                    imageY = blockY + descHeight;
+                                                    doc.text(descStr, descX, blockY + 13); // +13 = margen visual sobre baseline
+                                                    doc.setTextColor(0, 0, 0);
                                                 }
 
-                                                doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
+                                                // 4. Dibujar imagen DEBAJO de la descripción
+                                                const imgY = blockY + descLineH;
+                                                doc.addImage(ev.base64Data, format, imageX, imgY, dims.width, dims.height);
 
-                                                // Draw border around image and description block
+                                                // 5. Dibujar borde que encierra TODO el bloque
                                                 if (layout.cols === 1 && layout.rows === 1) {
-                                                    const padding = 10; // px/pt margin
+                                                    const padding = 10;
                                                     doc.setDrawColor(0);
                                                     doc.setLineWidth(0.5);
-                                                    doc.rect(borderX - padding, borderY - padding, blockWidth + (padding * 2), borderHeight + (padding * 2));
+                                                    doc.rect(imageX - padding, blockY - padding, dims.width + (padding * 2), totalBlockH + (padding * 2));
                                                 }
                                             } catch (err) {
                                                 console.error('Error drawing image inside autoTable cell:', err);
@@ -1805,33 +1796,35 @@ export class ExportService {
                                         const imageX = cellX + (cellWidthCol2 - dims.width) / 2;
                                         const padding = 10;
 
-                                        let blockY = currentY;
-                                        let blockHeight = dims.height;
-                                        let imgY = currentY;
+                                        const descStr2 = img.description?.trim() || '';
+                                        const descLineH2 = descStr2 ? 22 : 0;
 
-                                        // Draw description ABOVE the image
-                                        if (img.description?.trim()) {
+                                        // 1. Alto total del bloque
+                                        const totalBlockH2 = dims.height + descLineH2;
+
+                                        // 2. blockY ya es currentY (apilado verticalmente)
+                                        const blockY2 = currentY;
+
+                                        // 3. Descripción ARRIBA
+                                        if (descStr2) {
                                             doc.setFont('helvetica', 'italic');
                                             doc.setFontSize(9);
                                             doc.setTextColor(85, 85, 85);
-                                            const descStr = img.description.trim();
-                                            const descW = doc.getTextWidth(descStr);
-                                            const descX = cellX + (cellWidthCol2 - descW) / 2;
-                                            const descLineH = 20;
-                                            doc.text(descStr, descX, blockY + 12);
+                                            const descW2 = doc.getTextWidth(descStr2);
+                                            const descX2 = cellX + (cellWidthCol2 - descW2) / 2;
+                                            doc.text(descStr2, descX2, blockY2 + 13);
                                             doc.setTextColor(0, 0, 0);
-                                            imgY = blockY + descLineH;
-                                            blockHeight = descLineH + dims.height;
                                         }
 
-                                        doc.addImage(img.base64Data, format, imageX, imgY, dims.width, dims.height);
+                                        // 4. Imagen ABAJO
+                                        const imgY2 = blockY2 + descLineH2;
+                                        doc.addImage(img.base64Data, format, imageX, imgY2, dims.width, dims.height);
 
-                                        // Draw border wrapping description + image
-                                        const blockWidth = dims.width;
-                                        const borderX = cellX + (cellWidthCol2 - blockWidth) / 2;
+                                        // 5. Borde que encierra todo
+                                        const borderX2 = cellX + (cellWidthCol2 - dims.width) / 2;
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
-                                        doc.rect(borderX - padding, blockY - padding, blockWidth + (padding * 2), blockHeight + (padding * 2));
+                                        doc.rect(borderX2 - padding, blockY2 - padding, dims.width + (padding * 2), totalBlockH2 + (padding * 2));
                                     } catch (err) {
                                         console.error('Error drawing image in analysis PDF:', err);
                                     }
