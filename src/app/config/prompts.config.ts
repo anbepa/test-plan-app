@@ -95,8 +95,33 @@ Devuelve exclusivamente el texto final en español, sin encabezado, numeración,
   RISK_STRATEGY_PROMPT: (
     huSummary: string,
     availableScenarios: string[],
-    previousRisks: string[] = []
-  ): string => `
+    previousRisks: string[] = [],
+    huCount: number = 1
+  ): string => {
+    // Nivel de detalle dinámico según cantidad de HUs (igual que STATIC_SECTION_ENHANCEMENT).
+    let detailLevel: string;
+    if (huCount <= 3) {
+      detailLevel = `
+ANÁLISIS CONCISO: Riesgo singular con causa e impacto claros. Descripciones breves (1-2 líneas cada campo).
+2-3 escenarios de mitigación seleccionados directamente de los disponibles.`;
+    } else if (huCount <= 7) {
+      detailLevel = `
+ANÁLISIS MODERADO: Riesgo bien fundamentado con contexto. Descripciones detalladas (2-3 líneas cada campo).
+Relaciona dependencias y restricciones entre HUs cuando sea relevante.
+2-3 escenarios positivos + 1-2 alternos/negativos.`;
+    } else if (huCount <= 15) {
+      detailLevel = `
+ANÁLISIS PROFUNDO: Riesgos complejos con múltiples causas, impactos e integraciones. Descripciones sustantivas (3-4 líneas).
+Incluye datos específicos, restricciones de negocio, dependencias explícitas y casos de borde.
+3+ escenarios positivos + 2+ alternos (error, recuperación, borde, integración).`;
+    } else {
+      detailLevel = `
+ANÁLISIS EXHAUSTIVO: Riesgos sistémicos con conexiones entre múltiples HUs. Descripciones ricas (4+ líneas).
+Detalles críticos: nombres de funciones, APIs, formatos de datos, restricciones, integraciones, rollback.
+Escenarios de mitigación complejos que cubran caminos felices, errores, recuperación y flujos alternos.`;
+    }
+
+    return `
 Actúa como QA Lead Senior especializado en análisis de riesgos de pruebas.
 Todo el contenido generado debe estar exclusivamente en español.
 
@@ -116,6 +141,8 @@ ${previousRisks.length > 0
       .map((risk, index) => `${index + 1}. ${risk}`)
       .join('\n')
   : 'No se proporcionaron riesgos anteriores.'}
+
+NIVEL DE PROFUNDIDAD REQUERIDO:${detailLevel}
 
 JERARQUÍA DE FUENTES — OBLIGATORIA:
 1. Identifica el riesgo exclusivamente desde las HUs, criterios, reglas, dependencias, datos, integraciones y restricciones del contexto funcional.
@@ -205,7 +232,8 @@ El primer carácter debe ser "{" y el último "}".
     "Escenario negativo, alterno, de borde o recuperación"
   ]
 }
-`,
+`;
+  },
 
   DIRECT_GENERATION_PROMPT: (
     description: string,

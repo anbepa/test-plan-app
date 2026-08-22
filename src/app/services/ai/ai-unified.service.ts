@@ -68,15 +68,15 @@ export class AiUnifiedService {
     /**
      * Generar item de riesgos para la estrategia de pruebas
      */
-    public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
         const service = this.getActiveService();
 
         if ('generateRiskStrategy' in service) {
-            return (service as any).generateRiskStrategy(huSummary, availableScenarios);
+            return (service as any).generateRiskStrategy(huSummary, availableScenarios, huCount);
         }
 
         console.warn('[AI Unified] El proveedor activo no soporta generateRiskStrategy, usando DeepSeek');
-        return this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios);
+        return this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount);
     }
 
     /**

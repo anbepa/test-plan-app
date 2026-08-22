@@ -1055,7 +1055,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.errorRiskAI = null;
     this.cdr.detectChanges();
 
-    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions)
+    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions, this.huList.length)
       .pipe(
         tap((response: any) => {
           this.riskStrategyData = this.mapRiskAiResponse(response);

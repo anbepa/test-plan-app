@@ -141,8 +141,8 @@ export class DeepSeekService {
         );
     }
 
-    public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
-        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
+        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, [], huCount);
 
         return this.deepSeekClient.callDeepSeek(
             'generateRiskStrategy',
