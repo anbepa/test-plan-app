@@ -1428,9 +1428,10 @@ export class ExportService {
 
                                                 // Draw border around image (only when no grid cell border already drawn)
                                                 if (layout.cols === 1 && layout.rows === 1) {
+                                                    const padding = 2; // px/pt margin
                                                     doc.setDrawColor(0);
                                                     doc.setLineWidth(0.5);
-                                                    doc.rect(imageX, imageY, dims.width, dims.height);
+                                                    doc.rect(imageX - padding, imageY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
                                                 }
                                             } catch (err) {
                                                 console.error('Error drawing image inside autoTable cell:', err);
@@ -1759,9 +1760,10 @@ export class ExportService {
                                         doc.addImage(img.base64Data, format, imageX, currentY, dims.width, dims.height);
 
                                         // Draw border
+                                        const padding = 2; // px/pt margin
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
-                                        doc.rect(imageX, currentY, dims.width, dims.height);
+                                        doc.rect(imageX - padding, currentY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
                                     } catch (err) {
                                         console.error('Error drawing image in analysis PDF:', err);
                                     }
