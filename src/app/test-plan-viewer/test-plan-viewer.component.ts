@@ -1609,16 +1609,39 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   private compactStaticSectionContent(content: string): string {
     if (!content) return '';
 
+    // Límites dinámicos alineados con STATIC_SECTION_ENHANCEMENT (prompts.config.ts).
+    // Antes eran fijos (4 líneas / 110 chars / 420 total) y cortaban a media palabra,
+    // truncando el contenido generado por la IA para planes con muchas HUs.
+    const huCount = this.huList.length;
+    let maxLines: number;
+    let maxChars: number;
+    if (huCount <= 3) {
+      maxLines = 4; maxChars = 500;
+    } else if (huCount <= 7) {
+      maxLines = 6; maxChars = 750;
+    } else if (huCount <= 15) {
+      maxLines = 8; maxChars = 1000;
+    } else {
+      maxLines = 10; maxChars = 1400;
+    }
+
     const lines = content
       .split(/\r?\n/)
       .map(line => line.trim())
       .filter(Boolean)
       .map(line => line.replace(/^[-•\d.)\s]+/, '').trim())
-      .slice(0, 4)
-      .map(line => line.slice(0, 110));
+      .slice(0, maxLines);
 
-    const compact = lines.join('\n');
-    return compact.slice(0, 420).trim();
+    let compact = lines.join('\n').trim();
+
+    // Recorte final SIN partir palabras.
+    if (compact.length > maxChars) {
+      const slice = compact.slice(0, maxChars);
+      const lastSpace = slice.lastIndexOf(' ');
+      compact = (lastSpace > maxChars * 0.6 ? slice.slice(0, lastSpace) : slice).trim();
+    }
+
+    return compact;
   }
 
   private createDefaultRiskStrategyData(): RiskStrategyData {
