@@ -86,6 +86,7 @@ REGLAS DE CALIDAD:
 - Máximo ${maxLines} líneas, aproximadamente ${charsPerLine} caracteres por línea y ${maxChars} caracteres en total.
 - Incluye detalles específicos, nombres de funciones, datos, integraciones y restricciones del contexto.
 - Usa puntuación clara y frases concisas para maximizar densidad de información.
+- OBLIGATORIO: NO superes ${maxChars} caracteres y CIERRA siempre la última frase con punto final. Nunca dejes una idea a medias.
 
 SALIDA:
 Devuelve exclusivamente el texto final en español, sin encabezado, numeración, viñetas, markdown, JSON ni explicación adicional.

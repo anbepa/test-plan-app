@@ -45,7 +45,7 @@ export class GeminiService {
     const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
     const geminiPayload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 300, temperature: 0.2 }
+      generationConfig: { maxOutputTokens: 700, temperature: 0.2 }
     };
     return this.geminiClient.callGemini('enhanceStaticSection', geminiPayload).pipe(
       map(response => this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim())

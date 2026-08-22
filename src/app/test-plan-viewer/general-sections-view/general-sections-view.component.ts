@@ -288,6 +288,29 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
       compact = (lastSpace > maxChars * 0.6 ? slice.slice(0, lastSpace) : slice).trim();
     }
 
+    // Si el texto termina en una frase incompleta (coma, punto y coma, dos puntos
+    // o conjunción colgante), recorta hasta el último punto para cerrar la idea.
+    compact = this.closeAtLastSentence(compact);
+
     return compact;
+  }
+
+  /** Cierra el texto en la última oración completa para evitar frases a medias. */
+  private closeAtLastSentence(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return trimmed;
+    // Si ya termina bien, no tocar.
+    if (/[.!?]$/.test(trimmed)) return trimmed;
+    const lastPeriod = Math.max(
+      trimmed.lastIndexOf('. '),
+      trimmed.lastIndexOf('.\n'),
+      trimmed.endsWith('.') ? trimmed.length - 1 : -1
+    );
+    // Solo recortar si conservamos una porción sustancial (>50%).
+    if (lastPeriod > trimmed.length * 0.5) {
+      return trimmed.slice(0, lastPeriod + 1).trim();
+    }
+    // No hay punto útil: al menos quitar puntuación colgante final.
+    return trimmed.replace(/[\s,;:\-–—]+$/, '').trim();
   }
 }

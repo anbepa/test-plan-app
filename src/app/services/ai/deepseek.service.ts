@@ -122,7 +122,7 @@ export class DeepSeekService {
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 1200
+            max_tokens: 2500
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
