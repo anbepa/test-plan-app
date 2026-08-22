@@ -1439,37 +1439,33 @@ export class ExportService {
                                                 const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
 
                                                 const descStr = ev.description?.trim() || '';
-                                                const descLineH = descStr ? 22 : 0;
+                                                const descLineH = descStr ? 20 : 0;
+                                                const p = 8; // padding inside the border
 
-                                                // 1. Calcular alto total del bloque (descripción + imagen)
-                                                const totalBlockH = dims.height + descLineH;
+                                                // ─── 1. Dibujar borde PRIMERO — siempre cubriendo la celda de la grilla ───
+                                                doc.setDrawColor(0);
+                                                doc.setLineWidth(0.5);
+                                                doc.rect(currentX, currentY, layout.colWidth, rowH);
 
-                                                // 2. Centrar el bloque verticalmente dentro de la fila
-                                                const blockY = currentY + (rowH - totalBlockH) / 2;
-                                                const imageX = currentX + (layout.colWidth - dims.width) / 2;
-
-                                                // 3. Dibujar descripción ARRIBA si existe
+                                                // ─── 2. Descripción ARRIBA (dentro del borde) ───
                                                 if (descStr) {
                                                     doc.setFont('helvetica', 'italic');
                                                     doc.setFontSize(9);
                                                     doc.setTextColor(85, 85, 85);
                                                     const descW = doc.getTextWidth(descStr);
                                                     const descX = currentX + (layout.colWidth - descW) / 2;
-                                                    doc.text(descStr, descX, blockY + 13); // +13 = margen visual sobre baseline
+                                                    doc.text(descStr, descX, currentY + p + 10);
                                                     doc.setTextColor(0, 0, 0);
                                                 }
 
-                                                // 4. Dibujar imagen DEBAJO de la descripción
-                                                const imgY = blockY + descLineH;
-                                                doc.addImage(ev.base64Data, format, imageX, imgY, dims.width, dims.height);
+                                                // ─── 3. Imagen centrada DEBAJO de la descripción ───
+                                                const availH = rowH - descLineH - 2 * p;
+                                                const availW = layout.colWidth - 2 * p;
+                                                const fitDims = this.scaleImageDimensions(imgW, imgH, availW, availH);
+                                                const imageX = currentX + (layout.colWidth - fitDims.width) / 2;
+                                                const imgY = currentY + descLineH + p + Math.max(0, (availH - fitDims.height) / 2);
+                                                doc.addImage(ev.base64Data, format, imageX, imgY, fitDims.width, fitDims.height);
 
-                                                // 5. Dibujar borde que encierra TODO el bloque
-                                                if (layout.cols === 1 && layout.rows === 1) {
-                                                    const padding = 10;
-                                                    doc.setDrawColor(0);
-                                                    doc.setLineWidth(0.5);
-                                                    doc.rect(imageX - padding, blockY - padding, dims.width + (padding * 2), totalBlockH + (padding * 2));
-                                                }
                                             } catch (err) {
                                                 console.error('Error drawing image inside autoTable cell:', err);
                                             }
@@ -1790,45 +1786,42 @@ export class ExportService {
                                 // Draw all images stacked vertically
                                 for (let imgIdx = 0; imgIdx < layout.images.length; imgIdx++) {
                                     const img = layout.images[imgIdx];
-                                    const dims = layout.dims[imgIdx];
+                                    const origDims = layout.dims[imgIdx];
                                     try {
                                         const format = img.type.toUpperCase() || 'PNG';
-                                        const imageX = cellX + (cellWidthCol2 - dims.width) / 2;
-                                        const padding = 10;
-
                                         const descStr2 = img.description?.trim() || '';
-                                        const descLineH2 = descStr2 ? 22 : 0;
+                                        const descLineH2 = descStr2 ? 20 : 0;
+                                        const p = 8; // padding interior del recuadro
 
-                                        // 1. Alto total del bloque
-                                        const totalBlockH2 = dims.height + descLineH2;
+                                        // Alto total de la "tarjeta"
+                                        const totalBlockH2 = origDims.height + descLineH2 + (p * 2);
 
-                                        // 2. blockY ya es currentY (apilado verticalmente)
-                                        const blockY2 = currentY;
+                                        // 1. Dibujar el recuadro que ocupa TODO el ancho de la celda
+                                        doc.setDrawColor(0);
+                                        doc.setLineWidth(0.5);
+                                        doc.rect(cellX, currentY, cellWidthCol2, totalBlockH2);
 
-                                        // 3. Descripción ARRIBA
+                                        // 2. Dibujar Descripción ARRIBA
                                         if (descStr2) {
                                             doc.setFont('helvetica', 'italic');
                                             doc.setFontSize(9);
                                             doc.setTextColor(85, 85, 85);
                                             const descW2 = doc.getTextWidth(descStr2);
                                             const descX2 = cellX + (cellWidthCol2 - descW2) / 2;
-                                            doc.text(descStr2, descX2, blockY2 + 13);
+                                            doc.text(descStr2, descX2, currentY + p + 10);
                                             doc.setTextColor(0, 0, 0);
                                         }
 
-                                        // 4. Imagen ABAJO
-                                        const imgY2 = blockY2 + descLineH2;
-                                        doc.addImage(img.base64Data, format, imageX, imgY2, dims.width, dims.height);
+                                        // 3. Dibujar Imagen CENTRADA
+                                        const imageX = cellX + (cellWidthCol2 - origDims.width) / 2;
+                                        const imgY2 = currentY + p + descLineH2;
+                                        doc.addImage(img.base64Data, format, imageX, imgY2, origDims.width, origDims.height);
 
-                                        // 5. Borde que encierra todo
-                                        const borderX2 = cellX + (cellWidthCol2 - dims.width) / 2;
-                                        doc.setDrawColor(0);
-                                        doc.setLineWidth(0.5);
-                                        doc.rect(borderX2 - padding, blockY2 - padding, dims.width + (padding * 2), totalBlockH2 + (padding * 2));
+                                        currentY += totalBlockH2 + innerPadding;
                                     } catch (err) {
                                         console.error('Error drawing image in analysis PDF:', err);
+                                        currentY += origDims.height + innerPadding;
                                     }
-                                    currentY += dims.height + innerPadding;
                                 }
                             }
                         }
