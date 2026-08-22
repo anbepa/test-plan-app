@@ -343,6 +343,39 @@
     margin-bottom: 1rem;
 }
 
+/* Tabla de dos columnas para "Equipo de trabajo" */
+::ng-deep .paper-sheet table.team-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5rem 0 1.5rem;
+    font-size: 1rem;
+}
+
+::ng-deep .paper-sheet table.team-table th,
+::ng-deep .paper-sheet table.team-table td {
+    border: 1px solid #ddd;
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    vertical-align: top;
+    color: #333;
+    line-height: 1.5;
+}
+
+::ng-deep .paper-sheet table.team-table th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #222;
+}
+
+::ng-deep .paper-sheet table.team-table th:first-child,
+::ng-deep .paper-sheet table.team-table td:first-child {
+    width: 55%;
+}
+
+::ng-deep .paper-sheet table.team-table tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+
 .loading-state,
 .error-state {
     display: flex;
