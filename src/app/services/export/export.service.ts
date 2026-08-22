@@ -1224,7 +1224,7 @@ export class ExportService {
 
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
-            const innerPadding = 15;
+            const innerPadding = 25;
 
             for (let sIdx = 0; sIdx < stepsToRender.length; sIdx++) {
                 const step = stepsToRender[sIdx];
@@ -1281,7 +1281,7 @@ export class ExportService {
                                     const imgW = ev.naturalWidth || 1280;
                                     const imgH = ev.naturalHeight || 720;
                                     const dims = this.scaleImageDimensions(imgW, imgH, maxW, maxH);
-                                    h = dims.height;
+                                    h = dims.height + (layout.cols === 1 && layout.rows === 1 ? 20 : 0);
                                 }
                                 if (h > maxRowHeight) maxRowHeight = h;
                             }
@@ -1428,7 +1428,7 @@ export class ExportService {
 
                                                 // Draw border around image (only when no grid cell border already drawn)
                                                 if (layout.cols === 1 && layout.rows === 1) {
-                                                    const padding = 2; // px/pt margin
+                                                    const padding = 10; // px/pt margin
                                                     doc.setDrawColor(0);
                                                     doc.setLineWidth(0.5);
                                                     doc.rect(imageX - padding, imageY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
@@ -1571,7 +1571,7 @@ export class ExportService {
 
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
-            const innerPadding = 15;
+            const innerPadding = 25;
 
             for (let j = 0; j < steps.length; j++) {
                 const step = steps[j];
@@ -1655,7 +1655,7 @@ export class ExportService {
                     for (const img of loadedImages) {
                         const dims = this.scaleImageDimensions(img.width, img.height, 900, maxH);
                         scaledDimensions.push(dims);
-                        imagesH += dims.height;
+                        imagesH += dims.height + 20; // 10pt top + 10pt bottom padding for borders
                     }
                     totalCellHeight = imagesH + spreadsheetsH + (loadedImages.length + loadedSpreadsheets.length + 1) * innerPadding;
                     if (totalCellHeight < 40) totalCellHeight = 40;
@@ -1760,7 +1760,7 @@ export class ExportService {
                                         doc.addImage(img.base64Data, format, imageX, currentY, dims.width, dims.height);
 
                                         // Draw border
-                                        const padding = 2; // px/pt margin
+                                        const padding = 10; // px/pt margin
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
                                         doc.rect(imageX - padding, currentY - padding, dims.width + (padding * 2), dims.height + (padding * 2));
