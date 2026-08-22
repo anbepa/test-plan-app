@@ -299,27 +299,56 @@
                     <!-- Gallery -->
                     <div class="ev-gallery" *ngIf="step.evidences.length > 0; else noEv">
                       <div class="ev-thumb" *ngFor="let ev of step.evidences">
-                        <ng-container *ngIf="ev.type === 'image'; else csvThumb">
-                          <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
-                            <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                        <div class="ev-thumb-img-wrap">
+                          <ng-container *ngIf="ev.type === 'image'; else csvThumb">
+                            <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
+                              <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
+                            </ng-container>
+                            <ng-template #imgSkeletonStd>
+                              <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
+                                <span class="ev-skeleton-spinner"></span>
+                                <span class="ev-skeleton-text">Cargando…</span>
+                              </div>
+                            </ng-template>
                           </ng-container>
-                          <ng-template #imgSkeletonStd>
-                            <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
-                              <span class="ev-skeleton-spinner"></span>
-                              <span class="ev-skeleton-text">Cargando…</span>
+                          <ng-template #csvThumb>
+                            <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
+                              <div class="csv-icon">📊</div>
+                              <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
                             </div>
                           </ng-template>
-                        </ng-container>
-                        <ng-template #csvThumb>
-                          <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
-                            <div class="csv-icon">📊</div>
-                            <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
+                          <div class="ev-thumb-actions">
+                            <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
+                            <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
+                            <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
                           </div>
-                        </ng-template>
-                        <div class="ev-thumb-actions">
-                          <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
-                          <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
-                          <button (click)="deleteImage(ev.id)" title="Eliminar">🗑️</button>
+                        </div>
+                        <!-- Descripción sutil de la evidencia -->
+                        <div class="ev-description-wrap">
+                          <ng-container *ngIf="editingDescriptionId === ev.id; else descReadMode">
+                            <input
+                              class="ev-description-input"
+                              type="text"
+                              maxlength="120"
+                              placeholder="Agregar descripción..."
+                              [value]="ev.description || ''"
+                              #descInput
+                              (blur)="saveImageDescription(ev, descInput.value)"
+                              (keydown.enter)="saveImageDescription(ev, descInput.value)"
+                              (keydown.escape)="editingDescriptionId = null"
+                              (click)="$event.stopPropagation()"
+                              autofocus />
+                          </ng-container>
+                          <ng-template #descReadMode>
+                            <button
+                              class="ev-description-btn"
+                              [class.ev-description-has-text]="ev.description"
+                              (click)="$event.stopPropagation(); editingDescriptionId = ev.id"
+                              title="Agregar o editar descripción">
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              <span class="ev-description-text">{{ ev.description || 'Descripción...' }}</span>
+                            </button>
+                          </ng-template>
                         </div>
                       </div>
                     </div>
@@ -555,12 +584,21 @@
   </div>
 
   <!-- Image Editor Modal -->
-  <div *ngIf="showImageEditor" class="modal-backdrop" (click)="showImageEditor = false">
+  <div *ngIf="showImageEditor" class="modal-backdrop" (click)="showImageEditor = false; pendingImageDescription = ''">
     <div class="modal-box" (click)="$event.stopPropagation()">
       <div class="modal-top">
         <span>{{ editingImageId ? 'Editar imagen' : 'Nueva imagen' }}</span>
-        <!-- translated -->
-        <button class="modal-close" (click)="showImageEditor = false">✕</button>
+        <button class="modal-close" (click)="showImageEditor = false; pendingImageDescription = ''">&#x2715;</button>
+      </div>
+      <!-- Descripción de la imagen (campo sutil antes del canvas) -->
+      <div class="img-editor-desc-bar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;opacity:.6"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <input
+          class="img-editor-desc-input"
+          type="text"
+          maxlength="120"
+          placeholder="Descripción de la imagen (opcional)..."
+          [(ngModel)]="pendingImageDescription" />
       </div>
       <app-image-editor [imageBase64]="pendingImageBase64" [clearBase64]="pendingOriginalBase64 || pendingImageBase64"
         [editorStateJson]="selectedImage?.editorStateJson" (imageSaved)="onImageSaved($event)"></app-image-editor>

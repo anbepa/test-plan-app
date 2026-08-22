@@ -30,6 +30,8 @@ export interface AssetEvidence {
   stepId: string;
   fileName: string;
   type: 'image' | 'csv';
+  /** Título o descripción breve de la evidencia (visible en galería y reporte DOCX) */
+  description?: string;
   // Para imágenes
   base64Data?: string;
   originalBase64?: string;

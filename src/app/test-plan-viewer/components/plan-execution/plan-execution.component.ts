@@ -69,9 +69,13 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.showUploadMenu = false;
   }
   editingImageId: string | null = null;
+  /** ID de la evidencia cuya descripción inline se está editando en la galería */
+  editingDescriptionId: string | null = null;
   previewImage: AssetEvidence | null = null;
   pendingImageBase64: string = '';
   pendingOriginalBase64: string = '';
+  /** Descripción temporal mientras el modal de edición de imagen está abierto */
+  pendingImageDescription: string = '';
   pendingTabularData: any[][] = [];
   pendingHasHeader: boolean = true;
   pendingAssetType: 'image' | 'csv' = 'image';
@@ -726,6 +730,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     if (asset.type === 'image') {
       this.pendingImageBase64 = asset.base64Data || '';
       this.pendingOriginalBase64 = asset.originalBase64 || asset.base64Data || '';
+      this.pendingImageDescription = asset.description || '';
       this.showImageEditor = true;
     } else if (asset.type === 'csv') {
       this.pendingTabularData = asset.tabularData || [];
@@ -899,6 +904,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           updatedImage.base64Data = data.base64;
           updatedImage.originalBase64 = updatedImage.originalBase64 || this.pendingOriginalBase64 || updatedImage.base64Data;
           updatedImage.editorStateJson = data.stateJson;
+          updatedImage.description = this.pendingImageDescription.trim() || updatedImage.description;
           updatedImage.timestamp = Date.now();
           await this.storageService.saveImage(updatedImage);
         }
@@ -912,6 +918,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           base64Data: data.base64,
           originalBase64: this.pendingImageBase64,
           editorStateJson: data.stateJson,
+          description: this.pendingImageDescription.trim() || undefined,
           naturalWidth: this.pendingImageNaturalWidth,
           naturalHeight: this.pendingImageNaturalHeight,
           timestamp: Date.now()
@@ -926,6 +933,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       this.showImageEditor = false;
       this.editingImageId = null;
       this.selectedImage = null;
+      this.pendingImageDescription = '';
       await this.updateStats();
       this.toastService.success('Imagen guardada correctamente');
     } catch (error) {
@@ -934,6 +942,30 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     } finally {
       this.isParsingFile = false;
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Guarda la descripción de una evidencia desde la edición inline de la galería.
+   */
+  async saveImageDescription(ev: AssetEvidence, newDesc: string): Promise<void> {
+    const trimmed = newDesc.trim();
+    if (ev.description === trimmed) {
+      this.editingDescriptionId = null;
+      return;
+    }
+    ev.description = trimmed || undefined;
+    ev.timestamp = Date.now();
+    this.editingDescriptionId = null;
+    try {
+      await this.storageService.saveImage(ev);
+      if (this.execution) {
+        this.execution.updatedAt = Date.now();
+        await this.autoSaveExecutionState();
+      }
+    } catch (err) {
+      console.error('Error guardando descripción:', err);
+      this.toastService.error('No se pudo guardar la descripción');
     }
   }
 

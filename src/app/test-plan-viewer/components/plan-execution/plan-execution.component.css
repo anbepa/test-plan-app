@@ -425,17 +425,37 @@
 .upload-menu-fixed { position: fixed !important; top: unset; right: unset; transform: translateX(-100%); z-index: 2000; }
 .menu-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; background: none; width: 100%; text-align: left; font-size: 13px; font-weight: 500; color: var(--text-primary, #1D1D1F); border-radius: 8px; cursor: pointer; }
 .menu-item:hover { background: var(--surface-color, #F5F5F7); }
-.ev-gallery { display: flex; gap: 10px; flex-wrap: wrap; }
+.ev-gallery { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; }
 .ev-gallery.is-grid { display: grid; width: 100%; }
-.ev-thumb { position: relative; width: 200px; height: 130px; border-radius: 8px; overflow: hidden; border: 2px solid var(--border-color, #D1D1D6); flex-shrink: 0; }
-.ev-thumb.grid-view { width: 100%; height: 100%; min-height: 160px; }
-.ev-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.ev-thumb { position: relative; width: 200px; border-radius: 8px; overflow: visible; border: 2px solid var(--border-color, #D1D1D6); flex-shrink: 0; background: #fff; display: flex; flex-direction: column; }
+.ev-thumb.grid-view { width: 100%; min-height: 160px; }
+.ev-thumb-img-wrap { width: 100%; height: 130px; overflow: hidden; border-radius: 6px 6px 0 0; position: relative; }
+.ev-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; display: block; }
 .ev-thumb-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .2s; z-index: 5; }
 .ev-thumb:hover .ev-thumb-actions { opacity: 1; }
 .ev-thumb-actions button { width: 28px; height: 28px; border-radius: 50%; border: none; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.1); font-size: .85rem; transition: background .2s; }
 .ev-thumb-actions button:hover { background: #f3f4f6; }
+
+/* Descripción sutil de evidencia */
+.ev-description-wrap { width: 100%; padding: 0 2px 2px; }
+.ev-description-btn { display: flex; align-items: center; gap: 5px; width: 100%; padding: 4px 5px; background: none; border: none; cursor: pointer; border-radius: 0 0 6px 6px; transition: background .15s; }
+.ev-description-btn:hover { background: rgba(0,0,0,.04); }
+.ev-description-btn svg { flex-shrink: 0; opacity: .35; }
+.ev-description-text { font-size: 10px; color: var(--text-secondary, #6E6E73); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; opacity: .6; font-style: italic; }
+.ev-description-has-text .ev-description-text { opacity: 1; font-style: normal; color: var(--text-primary, #1D1D1F); }
+.ev-description-has-text svg { opacity: .6; }
+.ev-description-input { width: 100%; font-size: 10px; border: none; border-top: 1px solid var(--border-color, #D1D1D6); border-radius: 0 0 6px 6px; padding: 4px 6px; outline: none; background: #fafafa; color: var(--text-primary, #1D1D1F); transition: background .15s; }
+.ev-description-input:focus { background: #fff; border-color: var(--primary-color, #007AFF); box-shadow: 0 0 0 2px rgba(0,122,255,.1); }
+
+/* Campo de descripción en modal editor de imagen */
+.img-editor-desc-bar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border-color, #E5E7EB); background: var(--surface-color, #F9FAFB); }
+.img-editor-desc-input { flex: 1; font-size: 13px; border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; background: transparent; color: var(--text-primary, #1D1D1F); outline: none; transition: all .15s; }
+.img-editor-desc-input::placeholder { color: var(--text-secondary, #9CA3AF); font-style: italic; }
+.img-editor-desc-input:hover { background: rgba(0,0,0,.04); }
+.img-editor-desc-input:focus { background: #fff; border-color: var(--primary-color, #007AFF); box-shadow: 0 0 0 2px rgba(0,122,255,.1); }
+
 .ev-empty { font-size: 13px; color: var(--text-secondary, #6E6E73); text-align: center; padding: 12px 0; }
-.csv-thumb-preview { width: 100%; height: 100%; display: flex; flex-direction: column; background: #f8fafc; overflow: hidden; cursor: pointer; padding: 6px; }
+.csv-thumb-preview { width: 100%; height: 130px; display: flex; flex-direction: column; background: #f8fafc; overflow: hidden; cursor: pointer; padding: 6px; }
 .csv-label-minimal { font-size: 9px; font-weight: 800; color: #94a3b8; text-align: center; margin-bottom: 3px; letter-spacing: .1em; }
 .csv-icon { font-size: 20px; text-align: center; margin-bottom: 4px; }
 .csv-peek { flex: 1; background: white; border: 1px solid #f1f5f9; border-radius: 3px; overflow: hidden; }

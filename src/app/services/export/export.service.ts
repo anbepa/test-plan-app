@@ -955,7 +955,7 @@ export class ExportService {
 
                     paragraphs.push(new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        spacing: { before: 120, after: 120 },
+                        spacing: { before: 120, after: 60 },
                         children: [
                             new ImageRun({
                                 data: bytes,
@@ -964,6 +964,21 @@ export class ExportService {
                             })
                         ]
                     }));
+                    // Descripción de la imagen (si existe)
+                    if (evidence.description?.trim()) {
+                        paragraphs.push(new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 0, after: 120 },
+                            children: [
+                                new TextRun({
+                                    text: evidence.description.trim(),
+                                    italics: true,
+                                    size: 18,
+                                    color: '555555'
+                                })
+                            ]
+                        }));
+                    }
                 } catch (err) {
                     console.error('Error al incrustar evidencia en DOCX:', err);
                     paragraphs.push(new Paragraph({
@@ -1281,7 +1296,7 @@ export class ExportService {
                                     const imgW = ev.naturalWidth || 1280;
                                     const imgH = ev.naturalHeight || 720;
                                     const dims = this.scaleImageDimensions(imgW, imgH, maxW, maxH);
-                                    h = dims.height + (layout.cols === 1 && layout.rows === 1 ? 20 : 0);
+                                    h = dims.height + (validCols === 1 && validRows === 1 ? 20 : 0);
                                 }
                                 if (h > maxRowHeight) maxRowHeight = h;
                             }
