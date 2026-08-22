@@ -169,7 +169,14 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
       includeDescription: true
     });
 
-    this.aiService.generateEnhancedStaticSectionContent(section.title, section.value || '', huSummary)
+    // Pasar el conteo de HUs al servicio para que ajuste dinámicamente los límites
+    // del prompt según la complejidad: más HUs = más espacio para contenido denso.
+    this.aiService.generateEnhancedStaticSectionContent(
+      section.title,
+      section.value || '',
+      huSummary,
+      this.huList.length
+    )
       .pipe(
         switchMap((enhancedContent: string) => {
           if (!enhancedContent || !enhancedContent.trim()) {

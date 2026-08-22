@@ -27,8 +27,37 @@ SALIDA:
   STATIC_SECTION_ENHANCEMENT: (
     sectionName: string,
     existingContent: string,
-    huSummary: string
-  ): string => `
+    huSummary: string,
+    huCount: number = 1
+  ): string => {
+    // Límites dinámicos basados en el número de HUs:
+    // - 1-3 HUs: 4 líneas, 420 chars (restrictivo)
+    // - 4-7 HUs: 6 líneas, 650 chars (moderado)
+    // - 8-15 HUs: 8 líneas, 900 chars (generoso)
+    // - 16+ HUs: 10 líneas, 1200 chars (expansivo)
+    let maxLines: number;
+    let maxChars: number;
+    let charsPerLine: number;
+
+    if (huCount <= 3) {
+      maxLines = 4;
+      maxChars = 420;
+      charsPerLine = 110;
+    } else if (huCount <= 7) {
+      maxLines = 6;
+      maxChars = 650;
+      charsPerLine = 110;
+    } else if (huCount <= 15) {
+      maxLines = 8;
+      maxChars = 900;
+      charsPerLine = 115;
+    } else {
+      maxLines = 10;
+      maxChars = 1200;
+      charsPerLine = 120;
+    }
+
+    return `
 Actúa como QA Lead Senior.
 
 SECCIÓN A GENERAR:
@@ -54,11 +83,14 @@ PROCESAMIENTO OBLIGATORIO:
 REGLAS DE CALIDAD:
 - Información crítica y útil para ejecutar pruebas.
 - Sin contenido genérico, relleno, recomendaciones obvias ni repeticiones.
-- Máximo 4 líneas, aproximadamente 110 caracteres por línea y 420 caracteres en total.
+- Máximo ${maxLines} líneas, aproximadamente ${charsPerLine} caracteres por línea y ${maxChars} caracteres en total.
+- Incluye detalles específicos, nombres de funciones, datos, integraciones y restricciones del contexto.
+- Usa puntuación clara y frases concisas para maximizar densidad de información.
 
 SALIDA:
 Devuelve exclusivamente el texto final en español, sin encabezado, numeración, viñetas, markdown, JSON ni explicación adicional.
-`,
+`;
+  },
 
   RISK_STRATEGY_PROMPT: (
     huSummary: string,

@@ -58,10 +58,11 @@ export class AiUnifiedService {
     public generateEnhancedStaticSectionContent(
         sectionName: string,
         existingContent: string,
-        huSummary: string
+        huSummary: string,
+        huCount: number = 1
     ): Observable<string> {
         const service = this.getActiveService();
-        return service.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary);
+        return service.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary, huCount);
     }
 
     /**

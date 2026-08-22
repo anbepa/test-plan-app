@@ -41,11 +41,11 @@ export class GeminiService {
     );
   }
 
-  public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
-    const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
+  public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string, huCount: number = 1): Observable<string> {
+    const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
     const geminiPayload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 180, temperature: 0.2 }
+      generationConfig: { maxOutputTokens: 300, temperature: 0.2 }
     };
     return this.geminiClient.callGemini('enhanceStaticSection', geminiPayload).pipe(
       map(response => this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim())

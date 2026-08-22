@@ -1134,7 +1134,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     (this as any)[errorMap[section]] = null;
     this.cdr.detectChanges();
 
-    this.aiService.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary)
+    this.aiService.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary, this.huList.length)
       .pipe(
         tap(enhancedContent => {
           if (!enhancedContent || enhancedContent.trim() === '') {

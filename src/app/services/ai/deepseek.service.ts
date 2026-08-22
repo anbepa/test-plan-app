@@ -112,8 +112,8 @@ export class DeepSeekService {
         );
     }
 
-    public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
-        const promptText = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
+    public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string, huCount: number = 1): Observable<string> {
+        const promptText = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
         const payload: DeepSeekRequest = {
             // Usamos deepseek-chat (no el reasoner): la sección estática es texto breve y con
             // deepseek-reasoner el razonamiento interno (reasoning_content) agotaba los max_tokens
