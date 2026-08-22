@@ -3,6 +3,22 @@ import { HUData } from '../../models/hu-data.model';
 import { DbTestPlan, DbUserStoryWithRelations } from './database.service';
 
 /**
+ * Opciones para construir el resumen de HUs enviado a la IA.
+ */
+export interface HuSummaryOptions {
+    /** Presupuesto total de caracteres del resumen. Por defecto 6000. */
+    maxChars?: number;
+    /** Incluir la descripción de cada HU. Por defecto true. */
+    includeDescription?: boolean;
+    /** Incluir los títulos de escenarios de cada HU. Por defecto true. */
+    includeScenarios?: boolean;
+    /** Máximo de criterios de aceptación por HU. Por defecto 6. */
+    maxCriteria?: number;
+    /** Máximo de escenarios por HU. Por defecto 8. */
+    maxScenarios?: number;
+}
+
+/**
  * Servicio para transformar datos entre formatos de la aplicación y la base de datos
  */
 @Injectable({
@@ -100,54 +116,86 @@ export class TestPlanMapperService {
     }
 
     /**
-     * Obtiene un resumen de las HUs para usar en prompts de IA
+     * Obtiene un resumen de las HUs para usar en prompts de IA.
+     *
+     * Optimización: en lugar de truncar el texto completo de golpe (lo que descartaba
+     * por completo las últimas HUs cuando había muchas), se reparte un presupuesto de
+     * caracteres ENTRE TODAS las HUs. Así ninguna HU queda fuera del contexto y cada
+     * una se comprime proporcionalmente al número total de historias.
      */
-    getHuSummaryForAI(huList: HUData[]): string {
+    getHuSummaryForAI(huList: HUData[], options: HuSummaryOptions = {}): string {
         if (huList.length === 0) {
             return "No hay Historias de Usuario definidas aún.";
         }
 
-        const summary = huList.map((hu, index) => {
-            const description = (hu.originalInput.description || '')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 240);
+        const {
+            maxChars = 6000,
+            includeDescription = true,
+            includeScenarios = true,
+            maxCriteria = 6,
+            maxScenarios = 8
+        } = options;
+
+        // Presupuesto por HU: garantiza que TODAS las HUs estén representadas.
+        // Se reserva un mínimo razonable para que cada bloque siga siendo útil.
+        const perHuBudget = Math.max(200, Math.floor(maxChars / huList.length));
+
+        const blocks = huList.map((hu, index) => {
+            const description = includeDescription
+                ? (hu.originalInput.description || '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                : '';
 
             const acceptanceCriteria = (hu.originalInput.acceptanceCriteria || '')
                 .split(/\n|\r|•|- /)
                 .map(line => line.trim())
                 .filter(Boolean)
-                .slice(0, 6)
-                .map((line, i) => `CA${i + 1}: ${line.slice(0, 150)}`)
+                .slice(0, maxCriteria)
+                .map((line, i) => `CA${i + 1}: ${line}`)
                 .join(' | ');
 
-            let testCaseTitles = (hu.detailedTestCases || [])
-                .map(tc => tc.title?.trim())
-                .filter(Boolean)
-                .slice(0, 8)
-                .join(' | ');
-                
-            if (!testCaseTitles && hu.generatedTestCaseTitles) {
-                testCaseTitles = hu.generatedTestCaseTitles
-                    .split(/\r?\n|\|/)
-                    .map(l => l.trim())
-                    .filter(Boolean)
-                    .slice(0, 8)
-                    .join(' | ');
+            let scenarios = '';
+            if (includeScenarios) {
+                let titles = (hu.detailedTestCases || [])
+                    .map(tc => tc.title?.trim())
+                    .filter(Boolean) as string[];
+
+                if (titles.length === 0 && hu.generatedTestCaseTitles) {
+                    titles = hu.generatedTestCaseTitles
+                        .split(/\r?\n|\|/)
+                        .map(l => l.trim())
+                        .filter(Boolean);
+                }
+
+                scenarios = titles.slice(0, maxScenarios).join(' | ');
             }
 
-            return [
+            const lines: string[] = [
                 `HU ${index + 1}/${huList.length}: ${hu.id} | ${hu.title}`,
-                `Sprint: ${hu.sprint || 'N/A'} | Técnica: ${hu.originalInput.selectedTechnique || hu.refinementTechnique || 'N/A'}`,
-                `Descripción: ${description || 'N/A'}`,
-                `Criterios: ${acceptanceCriteria || 'N/A'}`,
-                `Escenarios (${hu.detailedTestCases?.length || 0}): ${testCaseTitles || 'Sin escenarios detallados'}`
-            ].join('\n');
-        }).join('\n\n');
+                `Sprint: ${hu.sprint || 'N/A'} | Técnica: ${hu.originalInput.selectedTechnique || hu.refinementTechnique || 'N/A'}`
+            ];
+            if (includeDescription) {
+                lines.push(`Descripción: ${description || 'N/A'}`);
+            }
+            lines.push(`Criterios: ${acceptanceCriteria || 'N/A'}`);
+            if (includeScenarios) {
+                lines.push(`Escenarios (${hu.detailedTestCases?.length || 0}): ${scenarios || 'Sin escenarios detallados'}`);
+            }
 
-        return summary.length > 6000
-            ? summary.substring(0, 6000) + "\n... (contexto truncado para no exceder límites de prompt)"
-            : summary;
+            let block = lines.join('\n');
+            if (block.length > perHuBudget) {
+                block = block.slice(0, perHuBudget - 1).trimEnd() + '…';
+            }
+            return block;
+        });
+
+        let summary = blocks.join('\n\n');
+        if (summary.length > maxChars) {
+            // Salvaguarda final: aún respetando el presupuesto por HU, recortamos el total.
+            summary = summary.substring(0, maxChars) + "\n... (contexto truncado para no exceder límites de prompt)";
+        }
+        return summary;
     }
 
     /**

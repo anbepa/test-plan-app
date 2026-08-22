@@ -160,7 +160,14 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     section.errorAI = null;
     this.cdr.detectChanges();
 
-    const huSummary = this.mapper.getHuSummaryForAI(this.huList);
+    // Resumen optimizado: reparte el presupuesto entre TODAS las HUs (incluyendo
+    // los títulos de escenarios) para que ninguna quede fuera del contexto cuando
+    // hay muchas historias, evitando el truncado que dejaba HUs sin considerar.
+    const huSummary = this.mapper.getHuSummaryForAI(this.huList, {
+      maxChars: 6000,
+      includeScenarios: true,
+      includeDescription: true
+    });
 
     this.aiService.generateEnhancedStaticSectionContent(section.title, section.value || '', huSummary)
       .pipe(

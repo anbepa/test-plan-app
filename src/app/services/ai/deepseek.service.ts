@@ -115,14 +115,29 @@ export class DeepSeekService {
     public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
         const promptText = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
         const payload: DeepSeekRequest = {
-            model: this.MODEL,
+            // Usamos deepseek-chat (no el reasoner): la sección estática es texto breve y con
+            // deepseek-reasoner el razonamiento interno (reasoning_content) agotaba los max_tokens
+            // dejando message.content = "" (finish_reason=length), lo que provocaba que la app
+            // creyera que "ya estaba completa" y no actualizara el front.
+            model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 1500  // Aumentado: deepseek-reasoner consume ~500-1000 tokens en reasoning antes de generar content
+            max_tokens: 800
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
-            map(response => this.getContentFromResponse(response).trim())
+            map(response => {
+                const content = this.getContentFromResponse(response).trim();
+                if (!content) {
+                    // No dejar pasar respuestas vacías como "sin cambios": informar el error real.
+                    const finishReason = response?.choices?.[0]?.finish_reason || 'desconocido';
+                    throw {
+                        userMessage: 'La IA no devolvió contenido para la sección. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    };
+                }
+                return content;
+            })
         );
     }
 
