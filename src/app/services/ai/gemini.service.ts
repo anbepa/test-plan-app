@@ -41,23 +41,23 @@ export class GeminiService {
     );
   }
 
-  public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string): Observable<string> {
-    const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary);
+  public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string, huCount: number = 1): Observable<string> {
+    const promptText: string = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
     const geminiPayload: any = {
       contents: [{ parts: [{ text: promptText }] }],
-      generationConfig: { maxOutputTokens: 180, temperature: 0.2 }
+      generationConfig: { maxOutputTokens: 700, temperature: 0.2 }
     };
     return this.geminiClient.callGemini('enhanceStaticSection', geminiPayload).pipe(
       map(response => this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim())
     );
   }
 
-  public generateRiskStrategy(huSummary: string, availableScenarios: string[]): Observable<any> {
-    const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios);
+  public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
+    const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, [], huCount);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        maxOutputTokens: 1500,
+        maxOutputTokens: 2000,
         temperature: 0.6,
         responseMimeType: 'application/json'
       }

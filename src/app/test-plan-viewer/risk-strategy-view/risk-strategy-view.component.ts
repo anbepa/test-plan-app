@@ -148,7 +148,9 @@ export class RiskStrategyViewComponent implements OnInit {
 
     const huSummary = this.mapper.getHuSummaryForAI(this.huList);
 
-    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions)
+    // Pasar el conteo de HUs para ajustar dinámicamente la profundidad del análisis de riesgos:
+    // más HUs = más espacio para riesgos complejos, causas múltiples, integraciones, etc.
+    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions, this.huList.length)
       .pipe(
         tap((response: any) => {
           this.riskData = this.mapAIResponse(response);

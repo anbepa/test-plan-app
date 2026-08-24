@@ -953,9 +953,25 @@ export class ExportService {
                         isNestedCell ? 450 : 675
                     );
 
+                    // Descripción de la imagen (si existe) (ahora ARRIBA de la imagen)
+                    if (evidence.description?.trim()) {
+                        paragraphs.push(new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 120, after: 60 },
+                            children: [
+                                new TextRun({
+                                    text: evidence.description.trim(),
+                                    italics: true,
+                                    size: 18,
+                                    color: '555555'
+                                })
+                            ]
+                        }));
+                    }
+
                     paragraphs.push(new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        spacing: { before: 120, after: 120 },
+                        spacing: { before: evidence.description?.trim() ? 0 : 120, after: 120 },
                         children: [
                             new ImageRun({
                                 data: bytes,
@@ -1224,7 +1240,7 @@ export class ExportService {
 
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
-            const innerPadding = 15;
+            const innerPadding = 25;
 
             for (let sIdx = 0; sIdx < stepsToRender.length; sIdx++) {
                 const step = stepsToRender[sIdx];
@@ -1281,7 +1297,8 @@ export class ExportService {
                                     const imgW = ev.naturalWidth || 1280;
                                     const imgH = ev.naturalHeight || 720;
                                     const dims = this.scaleImageDimensions(imgW, imgH, maxW, maxH);
-                                    h = dims.height;
+                                    h = dims.height + (validCols === 1 && validRows === 1 ? 20 : 0);
+                                    if (ev.description?.trim()) h += 20; // Espacio extra para el texto
                                 }
                                 if (h > maxRowHeight) maxRowHeight = h;
                             }
@@ -1414,24 +1431,41 @@ export class ExportService {
                                             });
 
                                         } else if (ev.base64Data) {
-                                            // Draw image
+                                            // Draw image (and optional description above it)
                                             try {
                                                 const format = ev.base64Data.match(/data:image\/([a-zA-Z]+);/)?.[1] || 'PNG';
                                                 const imgW = ev.naturalWidth || 1280;
                                                 const imgH = ev.naturalHeight || 720;
                                                 const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
 
-                                                const imageX = currentX + (layout.colWidth - dims.width) / 2;
-                                                const imageY = currentY + (rowH - dims.height) / 2;
+                                                const descStr = ev.description?.trim() || '';
+                                                const descLineH = descStr ? 20 : 0;
+                                                const p = 8; // padding inside the border
 
-                                                doc.addImage(ev.base64Data, format, imageX, imageY, dims.width, dims.height);
+                                                // ─── 1. Dibujar borde PRIMERO — siempre cubriendo la celda de la grilla ───
+                                                doc.setDrawColor(0);
+                                                doc.setLineWidth(0.5);
+                                                doc.rect(currentX, currentY, layout.colWidth, rowH);
 
-                                                // Draw border around image (only when no grid cell border already drawn)
-                                                if (layout.cols === 1 && layout.rows === 1) {
-                                                    doc.setDrawColor(0);
-                                                    doc.setLineWidth(0.5);
-                                                    doc.rect(imageX, imageY, dims.width, dims.height);
+                                                // ─── 2. Descripción ARRIBA (dentro del borde) ───
+                                                if (descStr) {
+                                                    doc.setFont('helvetica', 'italic');
+                                                    doc.setFontSize(9);
+                                                    doc.setTextColor(85, 85, 85);
+                                                    const descW = doc.getTextWidth(descStr);
+                                                    const descX = currentX + (layout.colWidth - descW) / 2;
+                                                    doc.text(descStr, descX, currentY + p + 10);
+                                                    doc.setTextColor(0, 0, 0);
                                                 }
+
+                                                // ─── 3. Imagen centrada DEBAJO de la descripción ───
+                                                const availH = rowH - descLineH - 2 * p;
+                                                const availW = layout.colWidth - 2 * p;
+                                                const fitDims = this.scaleImageDimensions(imgW, imgH, availW, availH);
+                                                const imageX = currentX + (layout.colWidth - fitDims.width) / 2;
+                                                const imgY = currentY + descLineH + p + Math.max(0, (availH - fitDims.height) / 2);
+                                                doc.addImage(ev.base64Data, format, imageX, imgY, fitDims.width, fitDims.height);
+
                                             } catch (err) {
                                                 console.error('Error drawing image inside autoTable cell:', err);
                                             }
@@ -1570,7 +1604,7 @@ export class ExportService {
 
             const cellWidthCol1 = 359.94; // 25% of printable width
             const cellWidthCol2 = 1079.81; // 75% of printable width
-            const innerPadding = 15;
+            const innerPadding = 25;
 
             for (let j = 0; j < steps.length; j++) {
                 const step = steps[j];
@@ -1654,7 +1688,7 @@ export class ExportService {
                     for (const img of loadedImages) {
                         const dims = this.scaleImageDimensions(img.width, img.height, 900, maxH);
                         scaledDimensions.push(dims);
-                        imagesH += dims.height;
+                        imagesH += dims.height + 20; // 10pt top + 10pt bottom padding for borders
                     }
                     totalCellHeight = imagesH + spreadsheetsH + (loadedImages.length + loadedSpreadsheets.length + 1) * innerPadding;
                     if (totalCellHeight < 40) totalCellHeight = 40;
@@ -1752,20 +1786,42 @@ export class ExportService {
                                 // Draw all images stacked vertically
                                 for (let imgIdx = 0; imgIdx < layout.images.length; imgIdx++) {
                                     const img = layout.images[imgIdx];
-                                    const dims = layout.dims[imgIdx];
+                                    const origDims = layout.dims[imgIdx];
                                     try {
                                         const format = img.type.toUpperCase() || 'PNG';
-                                        const imageX = cellX + (cellWidthCol2 - dims.width) / 2;
-                                        doc.addImage(img.base64Data, format, imageX, currentY, dims.width, dims.height);
+                                        const descStr2 = img.description?.trim() || '';
+                                        const descLineH2 = descStr2 ? 20 : 0;
+                                        const p = 8; // padding interior del recuadro
 
-                                        // Draw border
+                                        // Alto total de la "tarjeta"
+                                        const totalBlockH2 = origDims.height + descLineH2 + (p * 2);
+
+                                        // 1. Dibujar el recuadro que ocupa TODO el ancho de la celda
                                         doc.setDrawColor(0);
                                         doc.setLineWidth(0.5);
-                                        doc.rect(imageX, currentY, dims.width, dims.height);
+                                        doc.rect(cellX, currentY, cellWidthCol2, totalBlockH2);
+
+                                        // 2. Dibujar Descripción ARRIBA
+                                        if (descStr2) {
+                                            doc.setFont('helvetica', 'italic');
+                                            doc.setFontSize(9);
+                                            doc.setTextColor(85, 85, 85);
+                                            const descW2 = doc.getTextWidth(descStr2);
+                                            const descX2 = cellX + (cellWidthCol2 - descW2) / 2;
+                                            doc.text(descStr2, descX2, currentY + p + 10);
+                                            doc.setTextColor(0, 0, 0);
+                                        }
+
+                                        // 3. Dibujar Imagen CENTRADA
+                                        const imageX = cellX + (cellWidthCol2 - origDims.width) / 2;
+                                        const imgY2 = currentY + p + descLineH2;
+                                        doc.addImage(img.base64Data, format, imageX, imgY2, origDims.width, origDims.height);
+
+                                        currentY += totalBlockH2 + innerPadding;
                                     } catch (err) {
                                         console.error('Error drawing image in analysis PDF:', err);
+                                        currentY += origDims.height + innerPadding;
                                     }
-                                    currentY += dims.height + innerPadding;
                                 }
                             }
                         }

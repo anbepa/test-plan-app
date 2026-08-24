@@ -62,7 +62,10 @@
                   (change)="onRunSelectionChange(run, $any($event.target).checked)">
               </td>
               <td data-label="Nombre">
-                <button type="button" class="plan-title-link" (click)="executeRun(run)">{{ run.name }}</button>
+                <button type="button" class="plan-title-link" (click)="executeRun(run)" [disabled]="navigatingRunId === run.id">
+                  {{ run.name }}
+                  <span *ngIf="navigatingRunId === run.id" class="spinner-sm" style="display:inline-block; margin-left:8px; vertical-align:middle; width: 12px; height: 12px; border-width: 2px;"></span>
+                </button>
               </td>
               <td data-label="Plan de Prueba">
                 <span class="cell-meta" [title]="run.testPlanTitle || 'N/A'">{{ run.testPlanTitle || 'N/A' }}</span>

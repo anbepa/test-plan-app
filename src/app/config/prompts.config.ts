@@ -27,8 +27,37 @@ SALIDA:
   STATIC_SECTION_ENHANCEMENT: (
     sectionName: string,
     existingContent: string,
-    huSummary: string
-  ): string => `
+    huSummary: string,
+    huCount: number = 1
+  ): string => {
+    // Límites dinámicos basados en el número de HUs:
+    // - 1-3 HUs: 4 líneas, 420 chars (restrictivo)
+    // - 4-7 HUs: 6 líneas, 650 chars (moderado)
+    // - 8-15 HUs: 8 líneas, 900 chars (generoso)
+    // - 16+ HUs: 10 líneas, 1200 chars (expansivo)
+    let maxLines: number;
+    let maxChars: number;
+    let charsPerLine: number;
+
+    if (huCount <= 3) {
+      maxLines = 4;
+      maxChars = 420;
+      charsPerLine = 110;
+    } else if (huCount <= 7) {
+      maxLines = 6;
+      maxChars = 650;
+      charsPerLine = 110;
+    } else if (huCount <= 15) {
+      maxLines = 8;
+      maxChars = 900;
+      charsPerLine = 115;
+    } else {
+      maxLines = 10;
+      maxChars = 1200;
+      charsPerLine = 120;
+    }
+
+    return `
 Actúa como QA Lead Senior.
 
 SECCIÓN A GENERAR:
@@ -54,17 +83,46 @@ PROCESAMIENTO OBLIGATORIO:
 REGLAS DE CALIDAD:
 - Información crítica y útil para ejecutar pruebas.
 - Sin contenido genérico, relleno, recomendaciones obvias ni repeticiones.
-- Máximo 4 líneas, aproximadamente 110 caracteres por línea y 420 caracteres en total.
+- Máximo ${maxLines} líneas, aproximadamente ${charsPerLine} caracteres por línea y ${maxChars} caracteres en total.
+- Incluye detalles específicos, nombres de funciones, datos, integraciones y restricciones del contexto.
+- Usa puntuación clara y frases concisas para maximizar densidad de información.
+- OBLIGATORIO: NO superes ${maxChars} caracteres y CIERRA siempre la última frase con punto final. Nunca dejes una idea a medias.
 
 SALIDA:
 Devuelve exclusivamente el texto final en español, sin encabezado, numeración, viñetas, markdown, JSON ni explicación adicional.
-`,
+`;
+  },
 
   RISK_STRATEGY_PROMPT: (
     huSummary: string,
     availableScenarios: string[],
-    previousRisks: string[] = []
-  ): string => `
+    previousRisks: string[] = [],
+    huCount: number = 1
+  ): string => {
+    // Nivel de detalle dinámico según cantidad de HUs (igual que STATIC_SECTION_ENHANCEMENT).
+    let detailLevel: string;
+    if (huCount <= 3) {
+      detailLevel = `
+ANÁLISIS CONCISO: Riesgo singular con causa e impacto claros. Descripciones breves (1-2 líneas cada campo).
+2-3 escenarios de mitigación seleccionados directamente de los disponibles.`;
+    } else if (huCount <= 7) {
+      detailLevel = `
+ANÁLISIS MODERADO: Riesgo bien fundamentado con contexto. Descripciones detalladas (2-3 líneas cada campo).
+Relaciona dependencias y restricciones entre HUs cuando sea relevante.
+2-3 escenarios positivos + 1-2 alternos/negativos.`;
+    } else if (huCount <= 15) {
+      detailLevel = `
+ANÁLISIS PROFUNDO: Riesgos complejos con múltiples causas, impactos e integraciones. Descripciones sustantivas (3-4 líneas).
+Incluye datos específicos, restricciones de negocio, dependencias explícitas y casos de borde.
+3+ escenarios positivos + 2+ alternos (error, recuperación, borde, integración).`;
+    } else {
+      detailLevel = `
+ANÁLISIS EXHAUSTIVO: Riesgos sistémicos con conexiones entre múltiples HUs. Descripciones ricas (4+ líneas).
+Detalles críticos: nombres de funciones, APIs, formatos de datos, restricciones, integraciones, rollback.
+Escenarios de mitigación complejos que cubran caminos felices, errores, recuperación y flujos alternos.`;
+    }
+
+    return `
 Actúa como QA Lead Senior especializado en análisis de riesgos de pruebas.
 Todo el contenido generado debe estar exclusivamente en español.
 
@@ -84,6 +142,8 @@ ${previousRisks.length > 0
       .map((risk, index) => `${index + 1}. ${risk}`)
       .join('\n')
   : 'No se proporcionaron riesgos anteriores.'}
+
+NIVEL DE PROFUNDIDAD REQUERIDO:${detailLevel}
 
 JERARQUÍA DE FUENTES — OBLIGATORIA:
 1. Identifica el riesgo exclusivamente desde las HUs, criterios, reglas, dependencias, datos, integraciones y restricciones del contexto funcional.
@@ -173,7 +233,8 @@ El primer carácter debe ser "{" y el último "}".
     "Escenario negativo, alterno, de borde o recuperación"
   ]
 }
-`,
+`;
+  },
 
   DIRECT_GENERATION_PROMPT: (
     description: string,

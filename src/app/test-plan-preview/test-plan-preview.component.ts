@@ -134,9 +134,46 @@ export class TestPlanPreviewComponent implements OnInit {
 
         // 7. Equipo de trabajo
         html += `<h2>7. Equipo de trabajo</h2>\n`;
-        html += `<p>${this.teamContent || 'No especificado'}</p>\n\n`;
+        html += this.buildTeamTableHtml(this.teamContent);
 
         this.previewHtmlContent = html;
+    }
+
+    /**
+     * Convierte el contenido del equipo (una persona por línea con formato
+     * "Rol – Empresa: Nombre") en una tabla de dos columnas (Rol | Nombre).
+     * Si una línea no tiene el separador esperado, se muestra completa en la
+     * columna de rol para no perder información.
+     */
+    private buildTeamTableHtml(content: string): string {
+        const raw = (content || '').trim();
+        if (!raw) {
+            return `<p>No especificado</p>\n\n`;
+        }
+
+        const rows = raw
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean)
+            .map(line => {
+                // Separar por el ÚLTIMO ": " para que "Rol – Empresa" quede completo a la izquierda.
+                const idx = line.lastIndexOf(':');
+                if (idx === -1) {
+                    return { role: line, name: '' };
+                }
+                const role = line.slice(0, idx).trim();
+                const name = line.slice(idx + 1).trim();
+                return { role, name };
+            });
+
+        let table = `<table class="team-table">\n`;
+        table += `<thead><tr><th>Rol</th><th>Nombre</th></tr></thead>\n`;
+        table += `<tbody>\n`;
+        for (const r of rows) {
+            table += `<tr><td>${r.role}</td><td>${r.name}</td></tr>\n`;
+        }
+        table += `</tbody>\n</table>\n\n`;
+        return table;
     }
 
         private buildPlainTextFromPreviewHtml(): string {
@@ -145,10 +182,14 @@ export class TestPlanPreviewComponent implements OnInit {
                         .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
                         .replace(/<h3[^>]*>(.*?)<\/h3>/gi, (match, title) => `\n\n${title}\n\n`)
                         .replace(/<li[^>]*>(.*?)<\/li>/gi, ' • $1\n')
+                        // Tabla: cada celda separada por tab, cada fila con salto de línea.
+                        .replace(/<\/tr>/gi, '\n')
+                        .replace(/<t[hd][^>]*>(.*?)<\/t[hd]>/gi, '$1\t')
                         .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
                         .replace(/<br\s*\/?>/gi, '\n')
                         .replace(/<[^>]+>/g, '')
                         .replace(/&nbsp;/g, ' ')
+                        .replace(/\t\n/g, '\n')
                         .replace(/\n{3,}/g, '\n\n')
                         .trim();
         }

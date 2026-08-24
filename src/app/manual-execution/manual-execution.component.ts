@@ -78,6 +78,9 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   // Selection
   selectedRunIds: string[] = [];
 
+  // Navegación a la pantalla de ejecución (feedback de carga)
+  navigatingRunId: string | null = null;
+
   // Serenity report export
   exportingRunId: string | null = null;
   generatingReportFor: Set<string> = new Set();
@@ -575,78 +578,89 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   // ── Actions ──
 
   async executeRun(run: TestRun): Promise<void> {
-    // Find the HU from planTree if loaded
-    let huForExecution: HUData | null = null;
+    // Evitar dobles clics mientras se prepara la navegación
+    if (this.navigatingRunId) return;
+    this.navigatingRunId = run.id;
 
-    // Ensure planTree is loaded to find the full HU
-    if (this.planTree.length === 0) {
-      await this.loadPlanTree();
-    }
+    try {
+      // Find the HU from planTree if loaded
+      let huForExecution: HUData | null = null;
 
-    // Paso 1: Búsqueda exacta por testPlanId + huId (evita confundir HUs con mismo nombre en distintos planes)
-    for (const plan of this.planTree) {
-      if (run.testPlanId && plan.id !== run.testPlanId) continue; // Filtrar por plan primero
-      for (const huNode of plan.hus) {
-        const huId = huNode.hu.dbUuid || huNode.hu.id;
-        if (huId === run.huId) {
-          huForExecution = huNode.hu;
-          break;
-        }
+      // Ensure planTree is loaded to find the full HU
+      if (this.planTree.length === 0) {
+        await this.loadPlanTree();
       }
-      if (huForExecution) break;
-    }
 
-    // Paso 2 (fallback): si no encontró con testPlanId, buscar solo por huId en todos los planes
-    if (!huForExecution) {
+      // Paso 1: Búsqueda exacta por testPlanId + huId (evita confundir HUs con mismo nombre en distintos planes)
       for (const plan of this.planTree) {
+        if (run.testPlanId && plan.id !== run.testPlanId) continue; // Filtrar por plan primero
         for (const huNode of plan.hus) {
           const huId = huNode.hu.dbUuid || huNode.hu.id;
-          if (huId === run.huId || huNode.hu.id === run.huId) {
+          if (huId === run.huId) {
             huForExecution = huNode.hu;
             break;
           }
         }
         if (huForExecution) break;
       }
-    }
 
-    if (!huForExecution) {
-      // Build a minimal HU — plan-execution will reconstruct from stored execution
-      huForExecution = {
-        id: run.huId,
-        title: run.huTitle,
-        sprint: '',
-        originalInput: { generationMode: 'text' as const, description: '', acceptanceCriteria: '' },
-        detailedTestCases: [],
-        isScopeDetailsOpen: false,
-        isScenariosDetailsOpen: false,
-        editingScope: false,
-        editingTestCases: false,
-        loadingScope: false,
-        errorScope: null
-      };
-    }
-
-    if (!run.includeAllTestCases && run.selectedTestCaseIds.length > 0 && huForExecution.detailedTestCases) {
-      const selectedIds = new Set(run.selectedTestCaseIds);
-      const filteredCases = huForExecution.detailedTestCases.filter(tc => {
-        const id = tc.dbId || tc.title;
-        return selectedIds.has(id);
-      });
-      huForExecution = { ...huForExecution, detailedTestCases: filteredCases };
-    }
-
-    this.router.navigate(['/viewer/execute-plan'], {
-      state: {
-        hu: huForExecution,
-        testPlanId: run.testPlanId || '',
-        testPlanTitle: run.testPlanTitle || '',
-        testRunId: run.id,
-        testRunName: run.name,
-        forceNewExecution: !run.executionId,
-        origin: 'manual-execution'
+      // Paso 2 (fallback): si no encontró con testPlanId, buscar solo por huId en todos los planes
+      if (!huForExecution) {
+        for (const plan of this.planTree) {
+          for (const huNode of plan.hus) {
+            const huId = huNode.hu.dbUuid || huNode.hu.id;
+            if (huId === run.huId || huNode.hu.id === run.huId) {
+              huForExecution = huNode.hu;
+              break;
+            }
+          }
+          if (huForExecution) break;
+        }
       }
-    });
+
+      if (!huForExecution) {
+        // Build a minimal HU — plan-execution will reconstruct from stored execution
+        huForExecution = {
+          id: run.huId,
+          title: run.huTitle,
+          sprint: '',
+          originalInput: { generationMode: 'text' as const, description: '', acceptanceCriteria: '' },
+          detailedTestCases: [],
+          isScopeDetailsOpen: false,
+          isScenariosDetailsOpen: false,
+          editingScope: false,
+          editingTestCases: false,
+          loadingScope: false,
+          errorScope: null
+        };
+      }
+
+      if (!run.includeAllTestCases && run.selectedTestCaseIds.length > 0 && huForExecution.detailedTestCases) {
+        const selectedIds = new Set(run.selectedTestCaseIds);
+        const filteredCases = huForExecution.detailedTestCases.filter(tc => {
+          const id = tc.dbId || tc.title;
+          return selectedIds.has(id);
+        });
+        huForExecution = { ...huForExecution, detailedTestCases: filteredCases };
+      }
+
+      await this.router.navigate(['/viewer/execute-plan'], {
+        state: {
+          hu: huForExecution,
+          testPlanId: run.testPlanId || '',
+          testPlanTitle: run.testPlanTitle || '',
+          testRunId: run.id,
+          testRunName: run.name,
+          forceNewExecution: !run.executionId,
+          origin: 'manual-execution'
+        }
+      });
+    } catch (e) {
+      console.error('Error in executeRun:', e);
+    } finally {
+      this.navigatingRunId = null;
+      this.cdr.detectChanges();
+    }
   }
 
   // ── Serenity Report Export ──
