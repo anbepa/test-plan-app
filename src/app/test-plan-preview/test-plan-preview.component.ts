@@ -166,11 +166,11 @@ export class TestPlanPreviewComponent implements OnInit {
                 return { role, name };
             });
 
-        let table = `<table class="team-table">\n`;
-        table += `<thead><tr><th>Rol</th><th>Nombre</th></tr></thead>\n`;
+        let table = `<table class="team-table" border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;">\n`;
+        table += `<thead><tr><th style="border:1px solid #000;padding:6px 10px;text-align:left;">Rol</th><th style="border:1px solid #000;padding:6px 10px;text-align:left;">Nombre</th></tr></thead>\n`;
         table += `<tbody>\n`;
         for (const r of rows) {
-            table += `<tr><td>${r.role}</td><td>${r.name}</td></tr>\n`;
+            table += `<tr><td style="border:1px solid #000;padding:6px 10px;">${r.role}</td><td style="border:1px solid #000;padding:6px 10px;">${r.name}</td></tr>\n`;
         }
         table += `</tbody>\n</table>\n\n`;
         return table;
@@ -229,6 +229,18 @@ export class TestPlanPreviewComponent implements OnInit {
         li {
             margin: 0 0 6pt 0;
         }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0 0 12pt 0;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 6pt 10pt;
+            text-align: left;
+            vertical-align: top;
+        }
+        th { font-weight: bold; background: #f0f0f0; }
     </style>
 </head>
 <body>

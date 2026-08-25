@@ -594,23 +594,153 @@
 }
 
 .tester-character {
-    width: 75px; /* Robot más pequeño */
-    height: 90px;
-    animation: robotBobbing 3s ease-in-out infinite;
+    width: 82px; /* Robot */
+    height: 100px;
+    transform-origin: center bottom;
+    animation: robotFloat 3s ease-in-out infinite;
 }
 
 /* Parpadeo del robot: el SVG entero se achata levemente como si parpadeara */
 .tester-svg {
     width: 100%;
     height: 100%;
-    filter: drop-shadow(0 2px 6px rgba(59,130,246,0.25));
-    animation: robotBlink 4s ease-in-out 2s infinite;
+    filter: drop-shadow(0 3px 8px rgba(59,130,246,0.35));
+    overflow: visible;
 }
 
-.tester-svg {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 2px 6px rgba(59,130,246,0.25));
+/* ──────────────────────────────────────────────
+   ROBOT MASCOTA – animaciones base y reactivas por fase de la IA
+   ────────────────────────────────────────────── */
+.robot-svg g,
+.robot-svg .robot-core,
+.robot-svg .robot-antenna-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* Cabeza: se ladea suavemente (idle) */
+.robot-head {
+    transform-origin: 50% 100%;
+    animation: robotHeadIdle 4s ease-in-out infinite;
+}
+
+/* Ojos: parpadeo periodico */
+.robot-eyes {
+    transform-origin: center;
+    animation: robotBlinkEyes 5s ease-in-out infinite;
+}
+
+/* Antena: parpadeo del punto */
+.robot-antenna-dot {
+    animation: antennaPulse 2.4s ease-in-out infinite;
+}
+
+/* Nucleo central: latido suave */
+.robot-core {
+    animation: corePulse 2.6s ease-in-out infinite;
+}
+.robot-core-glow {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+
+/* Brazos: colgando quietos en idle */
+.robot-arm { transform-origin: 50% 20%; }
+
+/* ── Base float ── */
+@keyframes robotFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+}
+@keyframes robotHeadIdle {
+    0%, 100% { transform: rotate(0deg); }
+    30%      { transform: rotate(-3deg); }
+    70%      { transform: rotate(3deg); }
+}
+@keyframes robotBlinkEyes {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95%           { transform: scaleY(0.1); }
+}
+@keyframes antennaPulse {
+    0%, 100% { fill: #f5b53f; }
+    50%      { fill: #fde68a; }
+}
+@keyframes corePulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.12); }
+}
+
+/* ═════ FASE: THINKING (la IA razona) ═════ */
+.tester-character.is-thinking { animation: robotFloat 2.4s ease-in-out infinite; }
+.tester-character.is-thinking .robot-head { animation: robotThink 1.8s ease-in-out infinite; }
+.tester-character.is-thinking .robot-antenna-dot { animation: antennaThink 0.9s ease-in-out infinite; }
+.tester-character.is-thinking .robot-core { animation: corePulse 1.6s ease-in-out infinite; }
+
+@keyframes robotThink {
+    0%, 100% { transform: rotate(-6deg); }
+    50%      { transform: rotate(6deg); }
+}
+@keyframes antennaThink {
+    0%, 100% { fill: #f5b53f; r: 2.5; }
+    50%      { fill: #38bdf8; r: 3.4; }
+}
+
+/* ═════ FASE: GENERATING (construye casos) ═════ */
+.tester-character.is-generating { animation: robotBounce 0.7s ease-in-out infinite; }
+.tester-character.is-generating .robot-arm-left  { animation: armWaveL 0.6s ease-in-out infinite; }
+.tester-character.is-generating .robot-arm-right { animation: armWaveR 0.6s ease-in-out infinite; }
+.tester-character.is-generating .robot-core { animation: corePulse 0.8s ease-in-out infinite; }
+.tester-character.is-generating .robot-antenna-dot { animation: antennaFast 0.5s ease-in-out infinite; }
+
+@keyframes robotBounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+}
+@keyframes armWaveL {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(-22deg); }
+}
+@keyframes armWaveR {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(22deg); }
+}
+@keyframes antennaFast {
+    0%, 100% { fill: #f5b53f; }
+    50%      { fill: #22c55e; }
+}
+
+/* ═════ FASE: ACEPTACION (escenarios aceptados) ═════ */
+.tester-character.is-accept { animation: robotHappy 0.9s ease-in-out infinite; }
+.tester-character.is-accept .robot-core { fill: #22c55e; animation: coreHappy 0.9s ease-in-out infinite; }
+.tester-character.is-accept .robot-core-glow { animation: coreGlow 0.9s ease-in-out infinite; }
+.tester-character.is-accept .robot-mouth { animation: mouthSmile 0.9s ease-in-out infinite; }
+.tester-character.is-accept .robot-arm-left  { animation: armCheerL 0.9s ease-in-out infinite; }
+.tester-character.is-accept .robot-arm-right { animation: armCheerR 0.9s ease-in-out infinite; }
+
+@keyframes robotHappy {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25%      { transform: translateY(-8px) rotate(-3deg); }
+    75%      { transform: translateY(-8px) rotate(3deg); }
+}
+@keyframes coreHappy {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.25); }
+}
+@keyframes coreGlow {
+    0%, 100% { opacity: 0; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.9); }
+}
+@keyframes mouthSmile {
+    0%, 100% { transform: scaleY(1); }
+    50%      { transform: scaleY(1.4); }
+}
+@keyframes armCheerL {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(-45deg); }
+}
+@keyframes armCheerR {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(45deg); }
 }
 
 /* Robot speech bubble (to the right of robot) */
@@ -1139,6 +1269,13 @@
 /* ────── Reduced motion ────── */
 @media (prefers-reduced-motion: reduce) {
     .tester-character,
+    .tester-character .robot-head,
+    .tester-character .robot-eyes,
+    .tester-character .robot-core,
+    .tester-character .robot-core-glow,
+    .tester-character .robot-arm,
+    .tester-character .robot-antenna-dot,
+    .tester-character .robot-mouth,
     .progress-indeterminate,
     .thought-bubble-main,
     .thought-list-item,

@@ -62,7 +62,7 @@
                   (change)="onRunSelectionChange(run, $any($event.target).checked)">
               </td>
               <td data-label="Nombre">
-                <button type="button" class="plan-title-link" (click)="executeRun(run)" [disabled]="navigatingRunId === run.id">
+                <button type="button" class="plan-title-link" (click)="executeRun(run)" [disabled]="navigatingRunId === run.id" [title]="run.name">
                   {{ run.name }}
                   <span *ngIf="navigatingRunId === run.id" class="spinner-sm" style="display:inline-block; margin-left:8px; vertical-align:middle; width: 12px; height: 12px; border-width: 2px;"></span>
                 </button>
@@ -151,11 +151,7 @@
       <h3>Nueva Ejecución</h3>
       <button type="button" class="modal-close-btn" (click)="closeCreateModal()">✕</button>
     </div>
-    <div class="modal-tabs">
-      <button type="button" class="modal-tab" [class.active]="createModalTab === 'run'" (click)="createModalTab = 'run'">EJECUCIÓN</button>
-      <button type="button" class="modal-tab" [class.active]="createModalTab === 'notes'" (click)="createModalTab = 'notes'">NOTAS</button>
-    </div>
-    <div class="modal-body" *ngIf="createModalTab === 'run'">
+    <div class="modal-body">
       <div class="modal-form-grid">
         <div class="modal-form-left">
           <div class="form-group">
@@ -265,12 +261,6 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    <div class="modal-body" *ngIf="createModalTab === 'notes'">
-      <div class="form-group">
-        <label class="form-label">Notas</label>
-        <textarea class="form-textarea" rows="8" placeholder="Agregar notas para esta ejecución..." [(ngModel)]="newRunNotes"></textarea>
       </div>
     </div>
     <div class="modal-footer">

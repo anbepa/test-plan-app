@@ -7,6 +7,7 @@ import { AzureDevOpsIntegrationService } from '../services/integrations/azure-de
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
+import { CellsConfigService } from '../services/core/cells-config.service';
 
 @Component({
   selector: 'app-configuracion',
@@ -20,6 +21,7 @@ export class ConfiguracionComponent {
   personalAccessToken = '';
   repositoryLink = '';
   teamContent = '';
+  teamRows: Array<{ role: string; name: string }> = [];
 
   connection: AzureDevOpsConnectionView | null = null;
 
@@ -36,27 +38,36 @@ export class ConfiguracionComponent {
   disconnectConfirmTitle = 'Confirmar desconexión';
   disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
 
-  accordionOpen: Record<'azure' | 'global' | 'status', boolean> = {
+  accordionOpen: Record<'azure' | 'global' | 'status' | 'cells', boolean> = {
     azure: true,
     global: false,
     status: false,
+    cells: false,
   };
+
+  // ── Estado CRUD de "Nombre Célula" ──
+  cellRows: string[] = [];
+  savingCells = false;
+  cellsInfoMessage: string | null = null;
+  cellsErrorMessage: string | null = null;
 
   constructor(
     private azureService: AzureDevOpsIntegrationService,
     private toastService: ToastService,
-    private generalSectionsConfigService: GeneralSectionsConfigService
+    private generalSectionsConfigService: GeneralSectionsConfigService,
+    private cellsConfigService: CellsConfigService
   ) {}
 
   ngOnInit(): void {
     this.fetchConnection();
     this.loadGeneralSectionsConfig();
+    this.loadCellsConfig();
   }
 
-  toggleSection(section: 'azure' | 'global' | 'status'): void {
+  toggleSection(section: 'azure' | 'global' | 'status' | 'cells'): void {
     const shouldOpen = !this.accordionOpen[section];
 
-    (Object.keys(this.accordionOpen) as Array<'azure' | 'global' | 'status'>)
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'global' | 'status' | 'cells'>)
       .forEach((key) => this.accordionOpen[key] = false);
 
     this.accordionOpen[section] = shouldOpen;
@@ -175,9 +186,46 @@ export class ConfiguracionComponent {
     this.disconnectTarget = null;
   }
 
+  addTeamRow(): void {
+    this.teamRows.push({ role: '', name: '' });
+  }
+
+  removeTeamRow(index: number): void {
+    this.teamRows.splice(index, 1);
+    if (this.teamRows.length === 0) {
+      this.addTeamRow();
+    }
+  }
+
+  private parseTeamContent(content: string): Array<{ role: string; name: string }> {
+    const raw = (content || '').trim();
+    if (!raw) {
+      return [{ role: '', name: '' }];
+    }
+    return raw
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        const idx = line.lastIndexOf(':');
+        if (idx === -1) {
+          return { role: line, name: '' };
+        }
+        return { role: line.slice(0, idx).trim(), name: line.slice(idx + 1).trim() };
+      });
+  }
+
+  private serializeTeamRows(): string {
+    return this.teamRows
+      .map(r => ({ role: (r.role || '').trim(), name: (r.name || '').trim() }))
+      .filter(r => r.role || r.name)
+      .map(r => (r.name ? `${r.role}: ${r.name}` : r.role))
+      .join('\n');
+  }
+
   saveGeneralSectionsConfig(): void {
     const repositoryLink = this.repositoryLink.trim();
-    const teamContent = this.teamContent.trim();
+    const teamContent = this.serializeTeamRows();
 
     if (!repositoryLink) {
       this.errorMessage = 'El campo Repositorio Pruebas VSTS es obligatorio.';
@@ -196,6 +244,7 @@ export class ConfiguracionComponent {
 
     this.repositoryLink = updated.repositoryLink;
     this.teamContent = updated.teamContent;
+    this.teamRows = this.parseTeamContent(updated.teamContent);
     this.infoMessage = 'Configuración de secciones generales guardada correctamente.';
     this.errorMessage = null;
     this.toastService.success('Parámetros de secciones generales guardados.');
@@ -205,6 +254,91 @@ export class ConfiguracionComponent {
     const config = this.generalSectionsConfigService.getConfig();
     this.repositoryLink = config.repositoryLink;
     this.teamContent = config.teamContent;
+    this.teamRows = this.parseTeamContent(config.teamContent);
+  }
+
+  // ── CRUD "Nombre Célula" ─────────────────────────────────────────────
+  private loadCellsConfig(): void {
+    const cells = this.cellsConfigService.getCurrent();
+    this.cellRows = cells.length ? [...cells] : this.cellsConfigService.getDefaults();
+    // Refrescar cuando el servicio actualice (login / carga desde BD).
+    this.cellsConfigService.cells$.subscribe((list) => {
+      // Solo reflejamos cambios externos si el usuario no está editando manualmente.
+      if (!this.savingCells) {
+        this.cellRows = list.length ? [...list] : this.cellsConfigService.getDefaults();
+      }
+    });
+  }
+
+  addCellRow(): void {
+    this.cellRows.push('');
+  }
+
+  removeCellRow(index: number): void {
+    this.cellRows.splice(index, 1);
+    if (this.cellRows.length === 0) {
+      this.addCellRow();
+    }
+  }
+
+  private normalizeCellRows(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of this.cellRows) {
+      const value = (raw || '').trim();
+      if (!value) continue;
+      const key = value.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+    }
+    return out;
+  }
+
+  saveCellsConfig(): void {
+    this.cellsInfoMessage = null;
+    this.cellsErrorMessage = null;
+
+    const cells = this.normalizeCellRows();
+    if (!cells.length) {
+      this.cellsErrorMessage = 'Debes definir al menos una célula.';
+      return;
+    }
+
+    this.savingCells = true;
+    this.cellsConfigService.saveForCurrentUser(cells)
+      .then((saved) => {
+        this.cellRows = [...saved];
+        this.cellsInfoMessage = 'Lista de células guardada correctamente.';
+        this.toastService.success('Nombre Célula actualizado.');
+      })
+      .catch((error: unknown) => {
+        this.cellsErrorMessage = this.getErrorMessage(error, 'No se pudo guardar la lista de células.');
+        this.toastService.error(this.cellsErrorMessage);
+      })
+      .finally(() => {
+        this.savingCells = false;
+      });
+  }
+
+  resetCellsConfig(): void {
+    this.cellsInfoMessage = null;
+    this.cellsErrorMessage = null;
+
+    this.savingCells = true;
+    this.cellsConfigService.resetForCurrentUser()
+      .then((defaults) => {
+        this.cellRows = [...defaults];
+        this.cellsInfoMessage = 'Lista restaurada a los valores por defecto.';
+        this.toastService.success('Nombre Célula restaurado.');
+      })
+      .catch((error: unknown) => {
+        this.cellsErrorMessage = this.getErrorMessage(error, 'No se pudo restaurar la lista de células.');
+        this.toastService.error(this.cellsErrorMessage);
+      })
+      .finally(() => {
+        this.savingCells = false;
+      });
   }
 
   private fetchConnection(): void {

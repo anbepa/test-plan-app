@@ -150,7 +150,18 @@
         </summary>
         <div class="plan-section-content">
             <div *ngIf="!editingTeam">
-                <pre class="static-text">{{ teamContent }}</pre>
+                <table *ngIf="teamRows.length; else noTeam" class="team-view-table">
+                    <thead>
+                        <tr><th>Rol</th><th>Nombre</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr *ngFor="let r of teamRows">
+                            <td>{{ r.role }}</td>
+                            <td>{{ r.name }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <ng-template #noTeam><pre class="static-text">No especificado</pre></ng-template>
             </div>
             <div *ngIf="editingTeam">
                 <textarea [(ngModel)]="tempTeamContent" rows="8" class="scrollable-content"></textarea>

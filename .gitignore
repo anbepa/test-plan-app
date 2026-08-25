@@ -96,3 +96,5 @@ supabase/.temp/
 
 # SQL scripts should not be committed
 *.sql
+# Local copy of Serenity pipeline project (not versioned here)
+SAF_front_Manual/

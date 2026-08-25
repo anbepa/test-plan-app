@@ -1247,36 +1247,46 @@ app.post('/api/serenity-report-azure', async (req, res) => {
             return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
         }
 
-        const { bundle, executionId } = req.body || {};
-        if (!bundle) {
+        const { bundle, bundleUrl: providedBundleUrl, executionId } = req.body || {};
+        if (!bundle && !providedBundleUrl) {
             return res.status(400).json({ error: 'Se requiere un bundle' });
         }
 
         const jobId = `serenity-azure-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-        const bundleJson = JSON.stringify(bundle);
         const { adminClient } = getSupabaseClients();
         const path = serenityBundlePath(config.userId, jobId);
 
-        const { error: uploadError } = await adminClient.storage
-            .from(SERENITY_BUNDLE_BUCKET)
-            .upload(path, bundleJson, { contentType: 'application/json', upsert: true });
+        // El cliente puede subir el bundle DIRECTAMENTE a Storage (evita el límite
+        // de body cuando las evidencias pesan mucho) y enviar solo la URL firmada.
+        let bundleUrl;
+        let bundleUploadedHere = false;
+        if (providedBundleUrl) {
+            bundleUrl = String(providedBundleUrl);
+            console.log('[serenity-report-azure][local] Usando bundle URL provista por el cliente');
+        } else {
+            const bundleJson = JSON.stringify(bundle);
+            const { error: uploadError } = await adminClient.storage
+                .from(SERENITY_BUNDLE_BUCKET)
+                .upload(path, bundleJson, { contentType: 'application/json', upsert: true });
 
-        if (uploadError) {
-            console.error('[serenity-report-azure][local] Error subiendo bundle:', uploadError);
-            return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+            if (uploadError) {
+                console.error('[serenity-report-azure][local] Error subiendo bundle:', uploadError);
+                return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+            }
+
+            const { data: signedData, error: signedError } = await adminClient.storage
+                .from(SERENITY_BUNDLE_BUCKET)
+                .createSignedUrl(path, 3600);
+
+            if (signedError || !signedData?.signedUrl) {
+                await deleteSerenityBundle(config.userId, jobId);
+                return res.status(502).json({ error: 'Error al generar URL firmada para el bundle.' });
+            }
+
+            bundleUrl = signedData.signedUrl;
+            bundleUploadedHere = true;
+            console.log(`[serenity-report-azure][local] Bundle subido (${(bundleJson.length / 1024).toFixed(0)} KB): ${path}`);
         }
-
-        const { data: signedData, error: signedError } = await adminClient.storage
-            .from(SERENITY_BUNDLE_BUCKET)
-            .createSignedUrl(path, 3600);
-
-        if (signedError || !signedData?.signedUrl) {
-            await deleteSerenityBundle(config.userId, jobId);
-            return res.status(502).json({ error: 'Error al generar URL firmada para el bundle.' });
-        }
-
-        const bundleUrl = signedData.signedUrl;
-        console.log(`[serenity-report-azure][local] Bundle subido (${(bundleJson.length / 1024).toFixed(0)} KB): ${path}`);
 
         const releaseUrlApi = `https://vsrm.dev.azure.com/${encodeURIComponent(config.azureOrganization)}/${encodeURIComponent(config.azureProject)}/_apis/release/releases?api-version=7.1`;
         const releaseResponse = await azureReleaseRequest(releaseUrlApi, config.personalAccessToken, 'POST', {
@@ -1292,7 +1302,7 @@ app.post('/api/serenity-report-azure', async (req, res) => {
         if (!releaseResponse.ok) {
             const errText = await releaseResponse.text();
             console.error('[serenity-report-azure][local] Error al crear release:', releaseResponse.status, errText);
-            await deleteSerenityBundle(config.userId, jobId);
+            if (bundleUploadedHere) await deleteSerenityBundle(config.userId, jobId);
             const hint = releaseResponse.status === 401 || releaseResponse.status === 403
                 ? ' Verifica que el PAT tenga permisos Release (Read, Write, & Execute).'
                 : '';
@@ -1302,7 +1312,7 @@ app.post('/api/serenity-report-azure', async (req, res) => {
         const releaseData = await releaseResponse.json();
         const releaseId = releaseData?.id;
         if (!releaseId) {
-            await deleteSerenityBundle(config.userId, jobId);
+            if (bundleUploadedHere) await deleteSerenityBundle(config.userId, jobId);
             return res.status(502).json({ error: 'No se pudo obtener el ID del release de Azure DevOps.' });
         }
 

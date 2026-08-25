@@ -391,3 +391,72 @@ textarea.form-control {
     width: 100%;
   }
 }
+
+/* Tabla editable de Equipo de trabajo */
+.field-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.team-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.team-config-table th,
+.team-config-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.team-config-table th {
+  background: #f9fafb;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.team-config-table .col-actions {
+  width: 44px;
+  text-align: center;
+}
+
+.team-config-table .form-control {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-remove-row {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.btn-remove-row:hover {
+  background: #fef2f2;
+}
+
+.btn-add-row {
+  background: transparent;
+  border: 1px dashed #9ca3af;
+  color: #374151;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-add-row:hover {
+  background: #f3f4f6;
+  border-color: #6b7280;
+}
