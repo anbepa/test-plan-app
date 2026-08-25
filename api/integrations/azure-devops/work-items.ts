@@ -306,10 +306,12 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
 
-    // Validación de tamaño máximo de payload en Vercel (4.5MB límite oficial)
-    const vercelPayloadLimit = 4.5 * 1024 * 1024; // 4.5MB (límite oficial de Vercel)
-    const safePayloadLimit = 4 * 1024 * 1024; // 4MB (para seguridad, margen de 0.5MB)
-    
+    // NOTA sobre límites:
+    // El límite de 4.5MB de Vercel aplica SOLO al body de entrada de la request.
+    // Aquí el artifact de Serenity NO viaja en el body: solo llega su URL y el
+    // servidor lo descarga (fetch saliente) y lo sube a Azure (fetch saliente),
+    // ninguno de los cuales está sujeto a ese límite. Por eso no validamos 4MB.
+    // El único límite real es la memoria/tiempo de la función serverless.
     let totalInputSize = 0;
 
     // 1) Incluir artifact Serenity original como target.zip
@@ -320,15 +322,6 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
       }
       const artifactBuffer = Buffer.from(await artifactRes.arrayBuffer());
       totalInputSize += artifactBuffer.length;
-      
-      // Validar que solo el Serenity no exceda el límite
-      if (totalInputSize > safePayloadLimit) {
-        throw new Error(
-          `El reporte Serenity (${(totalInputSize / 1024 / 1024).toFixed(2)}MB) excede el límite de Vercel (4.5MB). ` +
-          `Este es un límite técnico de la plataforma gratuita. Por favor, contacta al administrador para usar la plan Pro.`
-        );
-      }
-      
       zip.file('target.zip', artifactBuffer);
     }
 
@@ -337,18 +330,9 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
       const name = String(f?.name || '').trim();
       const base64 = String(f?.base64 || '').trim();
       if (!name || !base64) continue;
-      
+
       const fileBuffer = Buffer.from(base64, 'base64');
       totalInputSize += fileBuffer.length;
-      
-      // Validar que el total no exceda el límite de seguridad
-      if (totalInputSize > safePayloadLimit) {
-        throw new Error(
-          `Los archivos a cargar (${(totalInputSize / 1024 / 1024).toFixed(2)}MB) exceden el límite de Vercel (4.5MB). ` +
-          `Por favor, reduce la cantidad o tamaño de los documentos (DOCX/PDF) incluidos.`
-        );
-      }
-      
       zip.file(name, fileBuffer);
     }
 
@@ -358,15 +342,6 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
       compression: 'DEFLATE',
       compressionOptions: { level: 9 } // Máxima compresión (0-9)
     });
-
-    // Validar tamaño final del ZIP (debe estar bien bajo el límite de Vercel)
-    const maxZipSize = 4 * 1024 * 1024; // 4MB para estar seguros
-    if (zipBuffer.length > maxZipSize) {
-      throw new Error(
-        `El archivo comprimido (${(zipBuffer.length / 1024 / 1024).toFixed(2)}MB) excede el límite permitido (4MB). ` +
-        `Incluso comprimido, es demasiado grande. Reduce el tamaño de las evidencias.`
-      );
-    }
 
     const basicToken = Buffer.from(`:${connection.personal_access_token}`).toString('base64');
     const apiVersion = '7.1';
