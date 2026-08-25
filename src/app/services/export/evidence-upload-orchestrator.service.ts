@@ -134,6 +134,7 @@ export class EvidenceUploadOrchestrator {
       const errorMsg = error?.message || 'Error desconocido durante la carga de evidencias';
       console.error('Evidence upload flow error:', error);
       this.setState(EvidenceUploadState.FAILED, errorMsg);
+      throw (error instanceof Error ? error : new Error(errorMsg));
     }
   }
 
@@ -328,7 +329,7 @@ export class EvidenceUploadOrchestrator {
     let totalSize = 0;
     if (extraFiles && extraFiles.length > 0) {
       for (const file of extraFiles) {
-        const fileSize = Buffer.byteLength(file.base64, 'base64');
+        const fileSize = this.getBase64ByteSize(file.base64);
         totalSize += fileSize;
       }
       if (totalSize > maxTotalSize) {
@@ -578,6 +579,14 @@ export class EvidenceUploadOrchestrator {
       });
     }
     return this.retryAttempts.get(step)!;
+  }
+
+  private getBase64ByteSize(base64: string): number {
+    const normalized = (base64 || '').split(',').pop()?.trim() || '';
+    if (!normalized) return 0;
+
+    const padding = normalized.endsWith('==') ? 2 : (normalized.endsWith('=') ? 1 : 0);
+    return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
   }
 
   private async blobToBase64(blob: Blob): Promise<string> {
