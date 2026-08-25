@@ -60,11 +60,16 @@ export class SerenityExportService {
 
   /**
    * Builds a SIZE-OPTIMIZED bundle by re-compressing evidence images.
-    * Each image is resized to max 640px wide and re-encoded as JPEG at quality 0.5,
-   * dramatically reducing the base64 payload for Vercel upload.
-    * Evidence names are normalized to .jpg to maximize Serenity compatibility.
+   * Los parámetros por defecto priorizan calidad, ya que el bundle se sube
+   * DIRECTAMENTE a Supabase Storage (no pasa por el límite de body de Vercel).
+   * Evidence names are normalized to .jpg to maximize Serenity compatibility.
    */
-  async buildCompressedBundle(execution: PlanExecution, run: TestRun): Promise<any> {
+  async buildCompressedBundle(
+    execution: PlanExecution,
+    run: TestRun,
+    maxWidth: number = 1600,
+    quality: number = 0.85
+  ): Promise<any> {
     // 1) Build full bundle (convert handles all naming consistently)
     const fullBundle = this.convert(execution, run);
 
@@ -77,7 +82,7 @@ export class SerenityExportService {
       const isJpg = oldName.toLowerCase().endsWith('.jpg') || oldName.toLowerCase().endsWith('.jpeg');
       const newName = isJpg ? oldName : oldName.replace(/\.(png|jpe?g|gif|webp)$/i, '.jpg');
       try {
-        const compressed = await this.compressImage(ev.base64, 640, 0.5);
+        const compressed = await this.compressImage(ev.base64, maxWidth, quality);
         ev.base64 = compressed;
         if (newName !== oldName) {
           ev.name = newName;

@@ -169,29 +169,41 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const { bundle, executionId } = req.body || {};
-    if (!bundle) {
+    const { bundle, bundleUrl: providedBundleUrl, executionId } = req.body || {};
+    if (!bundle && !providedBundleUrl) {
       return res.status(400).json({ error: 'Se requiere un bundle' });
     }
 
     const user = await getAuthenticatedUser(req.headers);
     const jobId = `serenity-azure-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    const bundleJson = JSON.stringify(bundle);
+    // El cliente puede subir el bundle DIRECTAMENTE a Supabase Storage (evita el
+    // límite de 4.5MB del body de Vercel cuando las evidencias pesan mucho) y
+    // enviar solo la URL firmada. Como fallback, aceptamos el bundle inline.
     let bundleUrl: string;
-    try {
-      bundleUrl = await uploadBundleToStorage(bundleJson, user.id, jobId);
-      console.log(`[serenity-report-azure] Bundle subido: ${bundleUrl}`);
-    } catch (e: any) {
-      console.error('[serenity-report-azure] Error subiendo bundle:', e);
-      return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+    let bundleUploadedHere = false;
+    if (providedBundleUrl) {
+      bundleUrl = String(providedBundleUrl);
+      console.log(`[serenity-report-azure] Usando bundle URL provista por el cliente`);
+    } else {
+      const bundleJson = JSON.stringify(bundle);
+      try {
+        bundleUrl = await uploadBundleToStorage(bundleJson, user.id, jobId);
+        bundleUploadedHere = true;
+        console.log(`[serenity-report-azure] Bundle subido: ${bundleUrl}`);
+      } catch (e: any) {
+        console.error('[serenity-report-azure] Error subiendo bundle:', e);
+        return res.status(502).json({ error: 'Error al almacenar el bundle.' });
+      }
     }
 
     let releaseId: number;
     try {
       releaseId = await triggerAzureRelease(config, bundleUrl, jobId);
     } catch (e: any) {
-      await deleteBundleFromStorage(user.id, jobId).catch(() => {});
+      if (bundleUploadedHere) {
+        await deleteBundleFromStorage(user.id, jobId).catch(() => {});
+      }
       const message = e instanceof ApiError
         ? e.message
         : (e?.message ? `Error al crear release: ${e.message}` : 'Error al crear release.');
