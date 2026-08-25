@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
-import { PlanExecution, TestRun } from '../../models/hu-data.model';
+import { PlanExecution, TestRun, TestCaseExecution } from '../../models/hu-data.model';
 
 /** A single step inside a Gherkin scenario. */
 interface BundleStep { keyword: string; text: string; }
@@ -213,11 +213,34 @@ export class SerenityExportService {
       const steps: BundleStep[] = [];
       const stepResults: Record<string, any> = {};
 
+      // Índice global del paso dentro del escenario. Debe permanecer alineado
+      // con las claves de stepResults (evidencias/veredicto por paso), por eso
+      // se incrementa por CADA paso emitido, incluidos los inyectados
+      // (precondición Given y resultado esperado Then).
+      let outIdx = 0;
+      const scenarioStatus = this.mapStatus(tc.status);
+
+      // 1) Precondición → uno o varios Given (soporta múltiples líneas).
+      const preconditionLines = this.splitLines(tc.preconditions);
+      preconditionLines.forEach((line, pIdx) => {
+        steps.push({ keyword: pIdx === 0 ? 'Given' : 'And', text: line });
+        stepResults[String(outIdx)] = {
+          status: scenarioStatus === 'pending' ? 'pending' : 'passed',
+          evidences: [],
+          notes: '',
+        };
+        outIdx++;
+      });
+
+      // 2) Acciones → When (primera) / And (siguientes). Aquí van las evidencias.
+      let actionCount = 0;
       (tc.steps || []).forEach((step, i) => {
+        const isFirstAction = actionCount === 0;
         steps.push({
-          keyword: this.keywordFor(i),
+          keyword: isFirstAction ? 'When' : 'And',
           text: this.oneLine(step.accion || '') || `Paso ${i + 1}`,
         });
+        actionCount++;
 
         const evNames: string[] = [];
         (step.evidences || []).forEach((ev, evIdx) => {
@@ -234,16 +257,38 @@ export class SerenityExportService {
           }
         });
 
-        stepResults[String(i)] = {
+        stepResults[String(outIdx)] = {
           status: this.mapStatus(step.status),
           evidences: evNames,
           notes: step.notes || '',
         };
+        outIdx++;
       });
 
-      scenarios.push({ name: scenarioName, type: 'Scenario', tags: [], steps });
+      // 3) Resultado esperado → uno o varios Then (soporta múltiples líneas).
+      const expectedLines = this.splitLines(tc.expectedResults);
+      expectedLines.forEach((line, eIdx) => {
+        steps.push({ keyword: eIdx === 0 ? 'Then' : 'And', text: line });
+        stepResults[String(outIdx)] = {
+          status: scenarioStatus === 'pending' ? 'pending' : scenarioStatus,
+          evidences: [],
+          notes: '',
+        };
+        outIdx++;
+      });
+
+      // Fallback: si el caso no tuvo ningún paso emitido, garantizar al menos uno
+      // para que el escenario sea Gherkin válido.
+      if (steps.length === 0) {
+        steps.push({ keyword: 'When', text: tc.title || `Caso ${sIdx + 1}` });
+        stepResults['0'] = { status: scenarioStatus, evidences: [], notes: '' };
+      }
+
+      const scenarioTags = this.buildScenarioTags(tc, execution);
+      scenarios.push({ name: scenarioName, type: 'Scenario', tags: scenarioTags, steps });
       results[scenarioName] = { steps: stepResults, notes: tc.notes || '' };
     });
+
 
     const huLine = execution.huTitle ? `HU: ${execution.huTitle}` : '';
 
@@ -268,8 +313,33 @@ export class SerenityExportService {
     };
   }
 
-  private keywordFor(_i: number): string {
-    return '*';
+  /**
+   * Divide un texto multi-línea en líneas limpias (una por renglón / viñeta).
+   * Cada línea se aplana con oneLine para que sea Gherkin válido.
+   */
+  private splitLines(text?: string): string[] {
+    if (!text) return [];
+    return String(text)
+      .split(/\r?\n/)
+      .map(l => l.replace(/^\s*[-*•·]\s*/, '')) // quitar viñetas al inicio
+      .map(l => this.oneLine(l))
+      .filter(l => l.length > 0);
+  }
+
+  /** Genera tags automáticos para el escenario (@passed/@failed, @HU-xxx). */
+  private buildScenarioTags(tc: TestCaseExecution, execution: PlanExecution): string[] {
+    const tags: string[] = [];
+    const status = this.mapStatus(tc.status);
+    if (status === 'passed') tags.push('@passed');
+    else if (status === 'failed') tags.push('@failed');
+    else tags.push('@pending');
+
+    const huId = execution.huId ? String(execution.huId).trim() : '';
+    if (huId) {
+      const safe = huId.replace(/[^\w\-]+/g, '-').replace(/^-+|-+$/g, '');
+      if (safe) tags.push(`@HU-${safe}`);
+    }
+    return tags;
   }
 
   private mapStatus(status: string): string {

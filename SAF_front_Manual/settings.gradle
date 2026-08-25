@@ -1,0 +1,20 @@
+// Todos los artefactos (incluidos los plugins) se resuelven SOLO desde Artifactory.
+// No se permite Maven Central ni el Gradle Plugin Portal (bloqueados en el agente).
+pluginManagement {
+    repositories {
+        maven {
+            url "https://artifactory.apps.bancolombia.com/maven-bancolombia"
+        }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode = RepositoriesMode.PREFER_SETTINGS
+    repositories {
+        maven {
+            url "https://artifactory.apps.bancolombia.com/maven-bancolombia"
+        }
+    }
+}
+
+rootProject.name = 'pruebasManualesBatch'
