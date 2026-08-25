@@ -75,10 +75,14 @@ export class PlanExportModalComponent {
       .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (match, title) => `\n\n${title.toUpperCase()}\n\n`)
       .replace(/<h3[^>]*>(.*?)<\/h3>/gi, (match, title) => `\n\n${title}\n\n`)
       .replace(/<li[^>]*>(.*?)<\/li>/gi, ' • $1\n')
+      // Tabla: cada celda separada por tab, cada fila con salto de línea.
+      .replace(/<\/tr>/gi, '\n')
+      .replace(/<t[hd][^>]*>(.*?)<\/t[hd]>/gi, '$1\t')
       .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ')
+      .replace(/\t\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   }
@@ -98,6 +102,9 @@ export class PlanExportModalComponent {
         p { margin: 0 0 12pt 0; text-align: left; }
         ul, ol { margin: 0 0 12pt 24pt; padding: 0; }
         li { margin: 0 0 6pt 0; }
+        table { border-collapse: collapse; width: 100%; margin: 0 0 12pt 0; }
+        th, td { border: 1px solid #000; padding: 6pt 10pt; text-align: left; vertical-align: top; }
+        th { font-weight: bold; background: #f0f0f0; }
     </style>
 </head>
 <body>

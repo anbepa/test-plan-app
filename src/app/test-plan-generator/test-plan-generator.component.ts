@@ -877,8 +877,45 @@ export class TestPlanGeneratorComponent {
     }
     fullPlanHtmlContent += `<p><span class="preview-section-title">LIMITACIONES:</span><br>\n${this.exportService.escapeHtml(this.limitationsContent)}</p>\n\n`;
     fullPlanHtmlContent += `<p><span class="preview-section-title">SUPUESTOS:</span><br>\n${this.exportService.escapeHtml(this.assumptionsContent)}</p>\n\n`;
-    fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span><br>\n${this.exportService.escapeHtml(this.teamContent)}</p>\n\n`;
+    fullPlanHtmlContent += `<p><span class="preview-section-title">Equipo de Trabajo:</span></p>\n${this.buildTeamTableHtml(this.teamContent)}`;
     return fullPlanHtmlContent;
+  }
+
+  /**
+   * Convierte el contenido del equipo (una persona por línea con formato
+   * "Rol – Empresa: Nombre") en una tabla de dos columnas (Rol | Nombre).
+   * Si una línea no tiene el separador esperado, se muestra completa en la
+   * columna de rol para no perder información.
+   */
+  private buildTeamTableHtml(content: string): string {
+    const raw = (content || '').trim();
+    if (!raw) {
+      return `<p>No especificado</p>\n\n`;
+    }
+
+    const rows = raw
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        // Separar por el ÚLTIMO ":" para que "Rol – Empresa" quede completo a la izquierda.
+        const idx = line.lastIndexOf(':');
+        if (idx === -1) {
+          return { role: line, name: '' };
+        }
+        const role = line.slice(0, idx).trim();
+        const name = line.slice(idx + 1).trim();
+        return { role, name };
+      });
+
+    let table = `<table class="team-table" border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;">\n`;
+    table += `<thead><tr><th style="border:1px solid #000;padding:6px 10px;text-align:left;">Rol</th><th style="border:1px solid #000;padding:6px 10px;text-align:left;">Nombre</th></tr></thead>\n`;
+    table += `<tbody>\n`;
+    for (const r of rows) {
+      table += `<tr><td style="border:1px solid #000;padding:6px 10px;">${this.exportService.escapeHtml(r.role)}</td><td style="border:1px solid #000;padding:6px 10px;">${this.exportService.escapeHtml(r.name)}</td></tr>\n`;
+    }
+    table += `</tbody>\n</table>\n\n`;
+    return table;
   }
 
   public copyPreviewToClipboard(): void {
