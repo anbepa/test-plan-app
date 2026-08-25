@@ -78,20 +78,7 @@
         <!-- Selección de evidencias a incluir -->
         <div class="evidence-formats">
           <label class="formats-title">Formatos a incluir en el archivo comprimido:</label>
-          
-          <!-- Advertencia de límite de Vercel -->
-          <div class="warning-banner vercel-limit-warning">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3.05h16.94a2 2 0 001.71-3.05L13.71 3.86a2 2 0 00-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <div>
-              <strong>Límite de Vercel: 4.5 MB</strong>
-              <p>Por defecto se sube solo el reporte Serenity. Los formatos DOCX/PDF aumentan el tamaño considerablemente.</p>
-            </div>
-          </div>
-          
+
           <div class="format-options">
 
             <label class="format-option" [class.selected]="selectedFormats.docx">

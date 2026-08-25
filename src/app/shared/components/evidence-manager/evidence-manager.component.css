@@ -109,10 +109,11 @@
   background: var(--surface-color, #F5F5F7);
   border-radius: 50%;
   cursor: pointer;
-  color: var(--text-secondary, #6E6E73);
-  transition: background 150ms;
+  color: #1d1d1f;
+  transition: background 150ms, color 150ms;
 }
-.close-btn:hover:not(:disabled) { background: var(--border-color, #E5E5EA); }
+.close-btn svg { display: block; }
+.close-btn:hover:not(:disabled) { background: #E5E5EA; color: #000; }
 .close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Tabs */
