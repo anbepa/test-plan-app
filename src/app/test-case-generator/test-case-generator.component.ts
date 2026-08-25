@@ -5,12 +5,13 @@ import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as O
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
-import { Observable, of, forkJoin } from 'rxjs';
+import { Observable, of, forkJoin, Subscription } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
+import { CellsConfigService } from '../services/core/cells-config.service';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -69,7 +70,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   cellName: string = '';
-  cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
+  cellOptions: string[] = CellsConfigService.DEFAULT_CELLS.slice();
+  private cellsSub?: Subscription;
 
   generatedHUData: UIHUData | null = null;
 
@@ -109,7 +111,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef,
     private elRef: ElementRef,
     private toastService: ToastService,
-    private azureDevOpsIntegrationService: AzureDevOpsIntegrationService
+    private azureDevOpsIntegrationService: AzureDevOpsIntegrationService,
+    private cellsConfigService: CellsConfigService
   ) { }
 
   ngOnInit(): void {
@@ -117,10 +120,21 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.currentSprint = this.initialSprint;
     this.cellName = this.initialCellName;
     this.resetToInitialForm();
+
+    // Lista de "Nombre Célula" configurable por usuario (Configuración -> BD).
+    this.cellsSub = this.cellsConfigService.cells$.subscribe((cells) => {
+      this.cellOptions = cells && cells.length ? cells : CellsConfigService.DEFAULT_CELLS.slice();
+      // Si la selección actual ya no existe en la lista, se limpia.
+      if (this.cellName && !this.cellOptions.includes(this.cellName)) {
+        this.cellName = '';
+      }
+      this.cdr.markForCheck();
+    });
   }
 
   ngOnDestroy(): void {
     this.stopAiProgress();
+    this.cellsSub?.unsubscribe();
   }
 
   get isAiBusy(): boolean {

@@ -149,6 +149,68 @@
     </div>
   </div>
 
+  <!-- SECCIÓN 5: Nombre Célula -->
+  <div class="config-section">
+    <button class="section-toggle" type="button" (click)="toggleSection('cells')" [attr.aria-expanded]="accordionOpen.cells">
+      <span class="section-label">Nombre Célula</span>
+      <span class="section-arrow" [class.open]="accordionOpen.cells">▾</span>
+    </button>
+    <div class="config-card" *ngIf="accordionOpen.cells">
+      <h3 class="card-title">Lista de "Nombre Célula"</h3>
+      <p class="card-description">
+        Estas son las opciones que aparecen en el selector <strong>Nombre Célula</strong> del generador.
+        Por defecto todos ven la lista estándar; si la personalizas, los cambios se guardan en tu cuenta y solo tú los verás.
+      </p>
+
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Células disponibles</label>
+          <p class="field-hint">Agrega, edita o elimina las células. No se permiten valores vacíos ni duplicados.</p>
+          <table class="team-config-table">
+            <thead>
+              <tr>
+                <th>Célula</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let cell of cellRows; let i = index">
+                <td>
+                  <input
+                    class="form-control"
+                    type="text"
+                    [name]="'cellRow' + i"
+                    [(ngModel)]="cellRows[i]"
+                    placeholder="Ej: BRAINSTORM">
+                </td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="btn-remove-row"
+                    title="Eliminar célula"
+                    (click)="removeCellRow(i)">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn-add-row" (click)="addCellRow()">+ Agregar célula</button>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn-primary" type="button" (click)="saveCellsConfig()" [disabled]="savingCells">
+          {{ savingCells ? 'Guardando...' : 'Guardar células' }}
+        </button>
+        <button class="btn-secondary" type="button" (click)="resetCellsConfig()" [disabled]="savingCells">
+          Restaurar valores por defecto
+        </button>
+      </div>
+
+      <p *ngIf="cellsInfoMessage" class="message success">{{ cellsInfoMessage }}</p>
+      <p *ngIf="cellsErrorMessage" class="message error">{{ cellsErrorMessage }}</p>
+    </div>
+  </div>
+
   <app-confirmation-modal
     [isOpen]="isDisconnectConfirmOpen"
     [title]="disconnectConfirmTitle"
