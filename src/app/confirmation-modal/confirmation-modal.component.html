@@ -94,52 +94,84 @@
                 <!-- Bottom: Robot + Speech Row -->
                 <div class="robot-speech-row">
                     <div class="robot-col">
-                        <div class="tester-character">
-<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg bee-svg">
-                                <!-- Antenas -->
-                                <g class="bee-antenna bee-antenna-left">
-                                    <path d="M42 16 Q34 4 28 6" stroke="#4b5563" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-                                    <circle cx="27" cy="5" r="3.5" fill="#111827"/>
+                        <div class="tester-character"
+                             [class.is-thinking]="streamingPhase === 'thinking'"
+                             [class.is-generating]="streamingPhase === 'generating'"
+                             [class.is-accept]="isAcceptancePhase">
+                            <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg robot-svg">
+                                <defs>
+                                    <linearGradient id="robBlue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0" stop-color="#5aa9f0"/>
+                                        <stop offset="1" stop-color="#3b82f6"/>
+                                    </linearGradient>
+                                    <linearGradient id="robWhite" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0" stop-color="#ffffff"/>
+                                        <stop offset="1" stop-color="#dbe4ee"/>
+                                    </linearGradient>
+                                </defs>
+
+                                <!-- Sombra en el suelo -->
+                                <ellipse class="robot-shadow" cx="50" cy="115" rx="24" ry="4" fill="#0f172a" opacity="0.12"/>
+
+                                <!-- Brazo izquierdo -->
+                                <g class="robot-arm robot-arm-left">
+                                    <rect x="16" y="58" width="9" height="22" rx="4.5" fill="url(#robWhite)" stroke="#94a3b8" stroke-width="1"/>
+                                    <rect x="15" y="76" width="11" height="8" rx="3" fill="#f5b53f"/>
+                                    <circle cx="20.5" cy="90" r="6" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                    <circle cx="20.5" cy="90" r="2.4" fill="#fff"/>
                                 </g>
-                                <g class="bee-antenna bee-antenna-right">
-                                    <path d="M58 16 Q66 4 72 6" stroke="#4b5563" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-                                    <circle cx="73" cy="5" r="3.5" fill="#111827"/>
+                                <!-- Brazo derecho -->
+                                <g class="robot-arm robot-arm-right">
+                                    <rect x="75" y="58" width="9" height="22" rx="4.5" fill="url(#robWhite)" stroke="#94a3b8" stroke-width="1"/>
+                                    <rect x="74" y="76" width="11" height="8" rx="3" fill="#f5b53f"/>
+                                    <circle cx="79.5" cy="90" r="6" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                    <circle cx="79.5" cy="90" r="2.4" fill="#fff"/>
                                 </g>
 
-                                <!-- Alas (detrás del cuerpo) -->
-                                <g class="bee-wings">
-                                    <ellipse class="bee-wing bee-wing-left" cx="26" cy="58" rx="16" ry="10" fill="#bfdbfe" opacity="0.75" stroke="#93c5fd" stroke-width="1.5"/>
-                                    <ellipse class="bee-wing bee-wing-right" cx="74" cy="58" rx="16" ry="10" fill="#bfdbfe" opacity="0.75" stroke="#93c5fd" stroke-width="1.5"/>
+                                <!-- Piernas -->
+                                <g class="robot-legs">
+                                    <rect x="40" y="92" width="8" height="16" rx="3" fill="url(#robWhite)" stroke="#94a3b8" stroke-width="1"/>
+                                    <rect x="52" y="92" width="8" height="16" rx="3" fill="url(#robWhite)" stroke="#94a3b8" stroke-width="1"/>
+                                    <ellipse cx="41" cy="110" rx="8" ry="4" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                    <ellipse cx="59" cy="110" rx="8" ry="4" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                </g>
+
+                                <!-- Cuerpo (torso) -->
+                                <g class="robot-body">
+                                    <path d="M34 56 Q50 52 66 56 L64 88 Q50 92 36 88 Z" fill="url(#robWhite)" stroke="#94a3b8" stroke-width="1.2"/>
+                                    <path d="M40 56 Q50 53 60 56 L58 66 Q50 68 42 66 Z" fill="url(#robBlue)" opacity="0.9"/>
+                                    <!-- Núcleo/botón central que late -->
+                                    <circle class="robot-core" cx="50" cy="72" r="6.5" fill="#f5b53f" stroke="#d99a2b" stroke-width="1.2"/>
+                                    <circle class="robot-core-glow" cx="50" cy="72" r="6.5" fill="#fbbf24" opacity="0"/>
+                                    <rect x="43" y="83" width="14" height="3" rx="1.5" fill="#3b82f6" opacity="0.5"/>
                                 </g>
 
                                 <!-- Cabeza -->
-                                <circle cx="50" cy="30" r="20" fill="#facc15" stroke="#eab308" stroke-width="2"/>
-                                <!-- Ojos -->
-                                <circle cx="42" cy="28" r="6.5" fill="#fff"/>
-                                <circle cx="58" cy="28" r="6.5" fill="#fff"/>
-                                <circle class="bee-pupil" cx="43" cy="29" r="3.2" fill="#111827"/>
-                                <circle class="bee-pupil" cx="59" cy="29" r="3.2" fill="#111827"/>
-                                <circle cx="44.2" cy="27.8" r="1" fill="#fff"/>
-                                <circle cx="60.2" cy="27.8" r="1" fill="#fff"/>
-                                <!-- Sonrisa -->
-                                <path d="M42 38 Q50 45 58 38" stroke="#92400e" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-                                <!-- Mejillas -->
-                                <circle cx="36" cy="36" r="2.5" fill="#fb7185" opacity="0.55"/>
-                                <circle cx="64" cy="36" r="2.5" fill="#fb7185" opacity="0.55"/>
-
-                                <!-- Cuerpo (abdomen con rayas) -->
-                                <g class="bee-body">
-                                    <ellipse cx="50" cy="74" rx="22" ry="24" fill="#facc15" stroke="#eab308" stroke-width="2"/>
-                                    <path d="M30 66 h40" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
-                                    <path d="M29 78 h42" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
-                                    <path d="M33 90 h34" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
-                                    <!-- Aguijón -->
-                                    <path d="M50 98 l0 8" stroke="#1f2937" stroke-width="2.5" stroke-linecap="round"/>
+                                <g class="robot-head">
+                                    <!-- Casco -->
+                                    <path d="M32 30 Q32 12 50 12 Q68 12 68 30 L68 34 Q50 30 32 34 Z" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1.2"/>
+                                    <rect x="46" y="6" width="8" height="7" rx="3" fill="#93c5fd"/>
+                                    <circle cx="50" cy="6" r="2.5" class="robot-antenna-dot" fill="#f5b53f"/>
+                                    <!-- Orejeras -->
+                                    <rect x="27" y="28" width="7" height="12" rx="3.5" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                    <rect x="66" y="28" width="7" height="12" rx="3.5" fill="url(#robBlue)" stroke="#2563eb" stroke-width="1"/>
+                                    <!-- Pantalla facial -->
+                                    <rect x="34" y="24" width="32" height="26" rx="8" fill="#bfe0f5" stroke="#94a3b8" stroke-width="1"/>
+                                    <!-- Cejas -->
+                                    <path class="robot-brow robot-brow-left" d="M39 31 Q42 28 45 31" stroke="#1e293b" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                                    <path class="robot-brow robot-brow-right" d="M55 31 Q58 28 61 31" stroke="#1e293b" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+                                    <!-- Ojos -->
+                                    <g class="robot-eyes">
+                                        <circle cx="43" cy="37" r="5" fill="#fff" stroke="#1e293b" stroke-width="1"/>
+                                        <circle cx="57" cy="37" r="5" fill="#fff" stroke="#1e293b" stroke-width="1"/>
+                                        <circle class="robot-pupil" cx="43" cy="37" r="2.6" fill="#1e3a8a"/>
+                                        <circle class="robot-pupil" cx="57" cy="37" r="2.6" fill="#1e3a8a"/>
+                                        <circle cx="44" cy="36" r="0.9" fill="#fff"/>
+                                        <circle cx="58" cy="36" r="0.9" fill="#fff"/>
+                                    </g>
+                                    <!-- Boca sonriente -->
+                                    <path class="robot-mouth" d="M45 44 Q50 49 55 44 Q50 47 45 44 Z" fill="#ef4444" stroke="#b91c1c" stroke-width="0.8"/>
                                 </g>
-
-                                <!-- Bracitos -->
-                                <path class="bee-arm bee-arm-left" d="M30 68 Q18 70 16 78" stroke="#eab308" stroke-width="4" fill="none" stroke-linecap="round"/>
-                                <path class="bee-arm bee-arm-right" d="M70 68 Q82 70 84 78" stroke="#eab308" stroke-width="4" fill="none" stroke-linecap="round"/>
                             </svg>
                         </div>
                     </div>
