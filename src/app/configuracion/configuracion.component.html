@@ -96,14 +96,45 @@
         </div>
 
         <div class="form-group full-width">
-          <label for="teamContent">Equipo de trabajo</label>
-          <textarea
-            id="teamContent"
-            name="teamContent"
-            class="form-control"
-            rows="5"
-            [(ngModel)]="teamContent"
-            placeholder="Lista del equipo responsable"></textarea>
+          <label>Equipo de trabajo</label>
+          <p class="field-hint">Completa el Rol (incluye empresa si aplica) y el Nombre. Se exportará como tabla en el plan.</p>
+          <table class="team-config-table">
+            <thead>
+              <tr>
+                <th>Rol</th>
+                <th>Nombre</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of teamRows; let i = index">
+                <td>
+                  <input
+                    class="form-control"
+                    type="text"
+                    [name]="'teamRole' + i"
+                    [(ngModel)]="row.role"
+                    placeholder="Ej: Analista de Pruebas – TCS">
+                </td>
+                <td>
+                  <input
+                    class="form-control"
+                    type="text"
+                    [name]="'teamName' + i"
+                    [(ngModel)]="row.name"
+                    placeholder="Ej: Andrés Antonio Bernal Padilla">
+                </td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="btn-remove-row"
+                    title="Eliminar fila"
+                    (click)="removeTeamRow(i)">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn-add-row" (click)="addTeamRow()">+ Agregar integrante</button>
         </div>
       </div>
 

@@ -108,6 +108,25 @@ export class GeneralSectionsComponent implements OnChanges {
                this.loadingLimitationsAI || this.loadingAssumptionsAI || this.loadingRiskAI;
     }
 
+    /** Parsea el contenido del equipo en filas Rol/Nombre para mostrarlo como tabla. */
+    get teamRows(): Array<{ role: string; name: string }> {
+        const raw = (this.teamContent || '').trim();
+        if (!raw) {
+            return [];
+        }
+        return raw
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean)
+            .map(line => {
+                const idx = line.lastIndexOf(':');
+                if (idx === -1) {
+                    return { role: line, name: '' };
+                }
+                return { role: line.slice(0, idx).trim(), name: line.slice(idx + 1).trim() };
+            });
+    }
+
     constructor(@Inject(PLATFORM_ID) private platformId: Object) { }
 
     ngOnChanges(changes: SimpleChanges): void {
