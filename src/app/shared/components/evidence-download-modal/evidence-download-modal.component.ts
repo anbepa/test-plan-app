@@ -29,6 +29,8 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
   downloadProgressPercent = 0;
   serenityHistoryCount = 0;
   serenityDispatched = false;
+  serenityStatusMessage = '';
+  private serenityStatusTimer: any = null;
 
   get effectiveTestRun(): TestRun | null {
     if (this.testRun) return this.testRun;
@@ -68,6 +70,7 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopSerenityStatusPolling();
     this.serenityReportService.stopPolling();
   }
 
@@ -164,14 +167,18 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
     this.isDownloading = true;
     this.downloadingFormat = 'serenity';
     this.downloadProgressMessage = 'Enviando a pipeline de Azure...';
+    this.serenityStatusMessage = 'Preparando reporte...';
+    this.startSerenityStatusPolling();
     this.cdr.detectChanges();
 
     try {
       this.serenityReportService.backend = 'azure';
       await this.serenityReportService.generateReport(run, { autoDetectBackend: false });
 
+      this.stopSerenityStatusPolling();
       this.isDownloading = false;
       this.downloadingFormat = null;
+      this.serenityStatusMessage = '';
       this.serenityDispatched = true;
       this.toastService.success('Reporte Serenity enviado a Azure DevOps');
       this.serenityHistoryCount = (await this.serenityReportService.loadHistory(this.execution?.id)).length;
@@ -179,11 +186,36 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
       // Abrir automáticamente la trazabilidad del reporte recién generado
       this.openSerenityHistory();
     } catch (error: any) {
+      this.stopSerenityStatusPolling();
       this.isDownloading = false;
       this.downloadingFormat = null;
+      this.serenityStatusMessage = '';
       console.error('Error starting Serenity report:', error);
       this.toastService.error('Error al iniciar generación Serenity: ' + (error.message || 'Error desconocido'));
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Refresca periódicamente el mensaje de estado del servicio Serenity mientras
+   * se genera el reporte, para que el usuario vea el avance real (descarga de
+   * evidencias, empaquetado, subida) en lugar de un spinner sin contexto.
+   */
+  private startSerenityStatusPolling(): void {
+    this.stopSerenityStatusPolling();
+    this.serenityStatusTimer = setInterval(() => {
+      const msg = this.serenityReportService.state?.statusMessage;
+      if (msg) {
+        this.serenityStatusMessage = msg;
+        this.cdr.detectChanges();
+      }
+    }, 300);
+  }
+
+  private stopSerenityStatusPolling(): void {
+    if (this.serenityStatusTimer) {
+      clearInterval(this.serenityStatusTimer);
+      this.serenityStatusTimer = null;
     }
   }
 }

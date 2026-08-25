@@ -98,12 +98,21 @@
                 [disabled]="(isDownloading && downloadingFormat !== 'serenity') || !execution"
                 [class.is-loading]="isDownloading && downloadingFormat === 'serenity'">
                 <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'"></span>
+                <ng-container *ngIf="isDownloading && downloadingFormat === 'serenity'">
+                  {{ serenityStatusMessage || 'Preparando reporte...' }}
+                </ng-container>
                 <ng-container *ngIf="!(isDownloading && downloadingFormat === 'serenity')">
                   Generar reporte
                 </ng-container>
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Mensaje de estado durante la generación de Serenity -->
+        <div class="serenity-generating-msg" *ngIf="isDownloading && downloadingFormat === 'serenity'">
+          <span class="opt-spinner opt-spinner-blue"></span>
+          <span>{{ serenityStatusMessage || 'Preparando reporte Serenity...' }}</span>
         </div>
 
         <!-- Mensaje post-dispatch Serenity -->
