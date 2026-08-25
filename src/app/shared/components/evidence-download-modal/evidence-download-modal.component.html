@@ -109,11 +109,6 @@
           </div>
         </div>
 
-        <!-- Mensaje de estado durante la generación de Serenity -->
-        <div class="serenity-generating-msg" *ngIf="isDownloading && downloadingFormat === 'serenity'">
-          <span class="opt-spinner opt-spinner-blue"></span>
-          <span>{{ serenityStatusMessage || 'Preparando reporte Serenity...' }}</span>
-        </div>
 
         <!-- Mensaje post-dispatch Serenity -->
         <div class="serenity-dispatched-msg" *ngIf="serenityDispatched">
