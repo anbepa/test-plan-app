@@ -594,23 +594,66 @@
 }
 
 .tester-character {
-    width: 75px; /* Robot más pequeño */
-    height: 90px;
-    animation: robotBobbing 3s ease-in-out infinite;
+    width: 78px; /* Abeja */
+    height: 94px;
+    animation: beeFloat 2.4s ease-in-out infinite;
 }
 
 /* Parpadeo del robot: el SVG entero se achata levemente como si parpadeara */
 .tester-svg {
     width: 100%;
     height: 100%;
-    filter: drop-shadow(0 2px 6px rgba(59,130,246,0.25));
-    animation: robotBlink 4s ease-in-out 2s infinite;
+    filter: drop-shadow(0 3px 7px rgba(234,179,8,0.35));
+    overflow: visible;
+}
+
+/* ── Abeja: partes animadas ── */
+.bee-wing {
+    transform-box: fill-box;
+    transform-origin: center;
+}
+.bee-wing-left  { animation: beeFlapLeft 0.22s ease-in-out infinite; }
+.bee-wing-right { animation: beeFlapRight 0.22s ease-in-out infinite; }
+
+.bee-antenna {
+    transform-box: fill-box;
+    transform-origin: bottom center;
+}
+.bee-antenna-left  { animation: beeAntennaWiggle 2.2s ease-in-out infinite; }
+.bee-antenna-right { animation: beeAntennaWiggle 2.2s ease-in-out 0.3s infinite; }
+
+.bee-body {
+    transform-box: fill-box;
+    transform-origin: center top;
+    animation: beeBlink 5s ease-in-out 1.5s infinite;
+}
+
+@keyframes beeFloat {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-6px) rotate(2deg); }
+}
+@keyframes beeFlapLeft {
+    0%, 100% { transform: scaleY(1) rotate(0deg); }
+    50%      { transform: scaleY(0.55) rotate(-12deg); }
+}
+@keyframes beeFlapRight {
+    0%, 100% { transform: scaleY(1) rotate(0deg); }
+    50%      { transform: scaleY(0.55) rotate(12deg); }
+}
+@keyframes beeAntennaWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(-8deg); }
+}
+@keyframes beeBlink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    96%           { transform: scaleY(0.94); }
 }
 
 .tester-svg {
     width: 100%;
     height: 100%;
-    filter: drop-shadow(0 2px 6px rgba(59,130,246,0.25));
+    filter: drop-shadow(0 3px 7px rgba(234,179,8,0.35));
+    overflow: visible;
 }
 
 /* Robot speech bubble (to the right of robot) */
@@ -1139,6 +1182,11 @@
 /* ────── Reduced motion ────── */
 @media (prefers-reduced-motion: reduce) {
     .tester-character,
+    .bee-wing-left,
+    .bee-wing-right,
+    .bee-antenna-left,
+    .bee-antenna-right,
+    .bee-body,
     .progress-indeterminate,
     .thought-bubble-main,
     .thought-list-item,

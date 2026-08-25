@@ -95,22 +95,51 @@
                 <div class="robot-speech-row">
                     <div class="robot-col">
                         <div class="tester-character">
-                            <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg">
-                                <rect x="30" y="12" width="40" height="40" rx="6" fill="#3b82f6"/>
-                                <circle cx="40" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
-                                <circle cx="40" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
-                                <circle cx="60" cy="28" r="8" fill="none" stroke="#0071e3" stroke-width="2"/>
-                                <circle cx="60" cy="28" r="5" fill="#e0f2fe" opacity="0.6"/>
-                                <line x1="48" y1="28" x2="52" y2="28" stroke="#0071e3" stroke-width="2"/>
-                                <path d="M 40 40 Q 50 42 60 40" stroke="#0071e3" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-                                <rect x="35" y="56" width="30" height="32" rx="4" fill="#4a90e2"/>
-                                <rect x="40" y="62" width="20" height="20" rx="2" fill="#60a5fa" opacity="0.5"/>
-                                <rect x="24" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
-                                <rect x="66" y="62" width="10" height="6" rx="3" fill="#0071e3"/>
-                                <rect x="42" y="90" width="6" height="14" fill="#1e3a5f"/>
-                                <rect x="52" y="90" width="6" height="14" fill="#1e3a5f"/>
-                                <rect x="40" y="106" width="10" height="4" rx="1" fill="#000"/>
-                                <rect x="50" y="106" width="10" height="4" rx="1" fill="#000"/>
+<svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg" class="tester-svg bee-svg">
+                                <!-- Antenas -->
+                                <g class="bee-antenna bee-antenna-left">
+                                    <path d="M42 16 Q34 4 28 6" stroke="#4b5563" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                                    <circle cx="27" cy="5" r="3.5" fill="#111827"/>
+                                </g>
+                                <g class="bee-antenna bee-antenna-right">
+                                    <path d="M58 16 Q66 4 72 6" stroke="#4b5563" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                                    <circle cx="73" cy="5" r="3.5" fill="#111827"/>
+                                </g>
+
+                                <!-- Alas (detrás del cuerpo) -->
+                                <g class="bee-wings">
+                                    <ellipse class="bee-wing bee-wing-left" cx="26" cy="58" rx="16" ry="10" fill="#bfdbfe" opacity="0.75" stroke="#93c5fd" stroke-width="1.5"/>
+                                    <ellipse class="bee-wing bee-wing-right" cx="74" cy="58" rx="16" ry="10" fill="#bfdbfe" opacity="0.75" stroke="#93c5fd" stroke-width="1.5"/>
+                                </g>
+
+                                <!-- Cabeza -->
+                                <circle cx="50" cy="30" r="20" fill="#facc15" stroke="#eab308" stroke-width="2"/>
+                                <!-- Ojos -->
+                                <circle cx="42" cy="28" r="6.5" fill="#fff"/>
+                                <circle cx="58" cy="28" r="6.5" fill="#fff"/>
+                                <circle class="bee-pupil" cx="43" cy="29" r="3.2" fill="#111827"/>
+                                <circle class="bee-pupil" cx="59" cy="29" r="3.2" fill="#111827"/>
+                                <circle cx="44.2" cy="27.8" r="1" fill="#fff"/>
+                                <circle cx="60.2" cy="27.8" r="1" fill="#fff"/>
+                                <!-- Sonrisa -->
+                                <path d="M42 38 Q50 45 58 38" stroke="#92400e" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                                <!-- Mejillas -->
+                                <circle cx="36" cy="36" r="2.5" fill="#fb7185" opacity="0.55"/>
+                                <circle cx="64" cy="36" r="2.5" fill="#fb7185" opacity="0.55"/>
+
+                                <!-- Cuerpo (abdomen con rayas) -->
+                                <g class="bee-body">
+                                    <ellipse cx="50" cy="74" rx="22" ry="24" fill="#facc15" stroke="#eab308" stroke-width="2"/>
+                                    <path d="M30 66 h40" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+                                    <path d="M29 78 h42" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+                                    <path d="M33 90 h34" stroke="#1f2937" stroke-width="6" stroke-linecap="round"/>
+                                    <!-- Aguijón -->
+                                    <path d="M50 98 l0 8" stroke="#1f2937" stroke-width="2.5" stroke-linecap="round"/>
+                                </g>
+
+                                <!-- Bracitos -->
+                                <path class="bee-arm bee-arm-left" d="M30 68 Q18 70 16 78" stroke="#eab308" stroke-width="4" fill="none" stroke-linecap="round"/>
+                                <path class="bee-arm bee-arm-right" d="M70 68 Q82 70 84 78" stroke="#eab308" stroke-width="4" fill="none" stroke-linecap="round"/>
                             </svg>
                         </div>
                     </div>
