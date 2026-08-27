@@ -7,7 +7,7 @@ import {
   toErrorResponse,
   updateAzureConnectionStatus,
   validateAzureConnection,
-} from '../shared';
+} from '../_shared';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'POST') {

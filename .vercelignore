@@ -4,8 +4,3 @@
 node_modules
 dist
 .angular
-
-# --- TEMPORAL: inhabilitar GitHub Models para diagnosticar el limite de 12 funciones ---
-# Excluye el endpoint nuevo del deploy sin borrar el codigo fuente.
-# Para reactivar: eliminar la linea siguiente y volver a desplegar.
-api/integrations/github-models

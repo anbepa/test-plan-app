@@ -98,3 +98,6 @@ supabase/.temp/
 *.sql
 # Local copy of Serenity pipeline project (not versioned here)
 SAF_front_Manual/
+
+# Local token notes (may contain credentials) — not versioned
+token.md

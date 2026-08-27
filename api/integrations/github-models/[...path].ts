@@ -13,7 +13,7 @@ import {
   updateGithubConnectionStatus,
   upsertGithubConnection,
   validateGithubToken,
-} from './shared';
+} from './_shared';
 
 /**
  * Router catch-all consolidado para GitHub Models.
