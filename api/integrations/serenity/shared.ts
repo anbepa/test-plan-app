@@ -34,13 +34,13 @@ export interface AzureSerenityRuntimeConfig {
  * Devuelve null si faltan las variables mínimas (organización, proyecto y release definition id).
  */
 export function resolveAzureSerenityConfigFromEnv(): AzureSerenityRuntimeConfig | null {
-  const azureOrganization = String(process.env.AZURE_SERENITY_ORGANIZATION || '').trim();
-  const azureProject = String(process.env.AZURE_SERENITY_PROJECT || '').trim();
-  const releaseDefinitionId = Number(process.env.AZURE_SERENITY_RELEASE_DEFINITION_ID || 0);
-  const pipelineName = String(process.env.AZURE_SERENITY_PIPELINE_NAME || 'Serenity Report CD').trim() || 'Serenity Report CD';
-  const branch = String(process.env.AZURE_SERENITY_BRANCH || 'trunk').trim() || 'trunk';
+  const azureOrganization = String(process.env['AZURE_SERENITY_ORGANIZATION'] || '').trim();
+  const azureProject = String(process.env['AZURE_SERENITY_PROJECT'] || '').trim();
+  const releaseDefinitionId = Number(process.env['AZURE_SERENITY_RELEASE_DEFINITION_ID'] || 0);
+  const pipelineName = String(process.env['AZURE_SERENITY_PIPELINE_NAME'] || 'Serenity Report CD').trim() || 'Serenity Report CD';
+  const branch = String(process.env['AZURE_SERENITY_BRANCH'] || 'trunk').trim() || 'trunk';
   const personalAccessToken = String(
-    process.env.AZURE_SERENITY_PAT || process.env.AZURE_DEVOPS_PAT || ''
+    process.env['AZURE_SERENITY_PAT'] || process.env['AZURE_DEVOPS_PAT'] || ''
   ).trim();
 
   if (!azureOrganization || !azureProject || !releaseDefinitionId || releaseDefinitionId <= 0) {
