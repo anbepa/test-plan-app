@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
+import { Subscription, timer } from 'rxjs';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
@@ -38,17 +39,22 @@ export class ConfiguracionComponent {
   disconnectingConnection = false;
 
   // ── Estado GitHub Models (Copilot) ──────────────────────────────────
-  githubToken = '';
   githubEnabled = false;
   githubSelectedModel = '';
   githubModels: GitHubModel[] = [];
   githubConnection: GitHubModelsConnectionView | null = null;
 
   loadingGithub = false;
-  savingGithub = false;
   validatingGithub = false;
   disconnectingGithub = false;
   loadingGithubModels = false;
+
+  // ── Estado del Device Flow OAuth ──
+  githubConnecting = false;          // true mientras dura el flujo de autorización
+  githubUserCode = '';               // código que el usuario debe pegar en GitHub
+  githubVerificationUri = '';        // URL de GitHub para autorizar
+  private githubPollSub: Subscription | null = null;
+  private githubDeviceCode = '';
 
   githubInfoMessage: string | null = null;
   githubErrorMessage: string | null = null;
@@ -89,6 +95,10 @@ export class ConfiguracionComponent {
     this.fetchGithubConnection();
     this.loadGeneralSectionsConfig();
     this.loadCellsConfig();
+  }
+
+  ngOnDestroy(): void {
+    this.stopGithubPolling();
   }
 
   toggleSection(section: 'azure' | 'github' | 'global' | 'status' | 'cells'): void {
@@ -192,9 +202,9 @@ export class ConfiguracionComponent {
       });
   }
 
-  // ── GitHub Models (Copilot) ─────────────────────────────────────────
+  // ── GitHub Models (Copilot) — Device Flow OAuth ─────────────────────
   get isGithubBusy(): boolean {
-    return this.loadingGithub || this.savingGithub || this.validatingGithub
+    return this.loadingGithub || this.githubConnecting || this.validatingGithub
       || this.disconnectingGithub || this.loadingGithubModels;
   }
 
@@ -215,37 +225,102 @@ export class ConfiguracionComponent {
       });
   }
 
-  saveGithubConnection(): void {
+  /**
+   * Inicia el GitHub OAuth Device Flow: pide un código a GitHub, abre la página
+   * de autorización y hace polling hasta que el usuario autorice (como DBeaver).
+   */
+  connectWithGithub(): void {
     this.githubInfoMessage = null;
     this.githubErrorMessage = null;
+    this.stopGithubPolling();
 
-    const pat = this.githubToken.trim();
-    if (!pat) {
-      this.githubErrorMessage = 'Debes ingresar un PAT/OAuth de GitHub con Copilot para guardar la conexión.';
+    this.githubConnecting = true;
+    this.githubModelsService.deviceStart().subscribe({
+      next: (device) => {
+        this.githubDeviceCode = device.deviceCode;
+        this.githubUserCode = device.userCode;
+        this.githubVerificationUri = device.verificationUri;
+
+        // Abrimos la página de autorización de GitHub en una pestaña nueva.
+        try {
+          window.open(device.verificationUri, '_blank', 'noopener,noreferrer');
+        } catch {
+          // Si el navegador bloquea el popup, el usuario puede usar el enlace mostrado.
+        }
+
+        this.githubInfoMessage = `Autoriza en GitHub con el código ${device.userCode}. Esperando confirmación...`;
+        this.startGithubPolling(device.interval || 5, device.expiresIn || 900);
+      },
+      error: (error: unknown) => {
+        this.githubConnecting = false;
+        this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo iniciar la conexión con GitHub.');
+        this.toastService.error(this.githubErrorMessage);
+      }
+    });
+  }
+
+  private startGithubPolling(intervalSeconds: number, expiresInSeconds: number): void {
+    const deadline = Date.now() + expiresInSeconds * 1000;
+    let periodMs = Math.max(intervalSeconds, 1) * 1000;
+
+    const scheduleNext = () => {
+      this.githubPollSub = timer(periodMs).subscribe(() => this.pollOnce(deadline, scheduleNext, (ms) => { periodMs = ms; }));
+    };
+    scheduleNext();
+  }
+
+  private pollOnce(deadline: number, scheduleNext: () => void, setPeriod: (ms: number) => void): void {
+    if (Date.now() > deadline) {
+      this.stopGithubPolling();
+      this.githubConnecting = false;
+      this.githubErrorMessage = 'El código expiró. Vuelve a iniciar la conexión con GitHub.';
       return;
     }
 
-    this.savingGithub = true;
-    this.githubModelsService.saveConnection({
-      personalAccessToken: pat,
+    this.githubModelsService.devicePoll(this.githubDeviceCode, {
       enabled: this.githubEnabled,
-      selectedModel: this.githubSelectedModel || undefined
-    })
-      .pipe(finalize(() => this.savingGithub = false))
-      .subscribe({
-        next: (connection) => {
-          this.applyGithubConnection(connection);
-          this.githubToken = '';
-          this.githubInfoMessage = 'Conexión de GitHub Models guardada y validada correctamente.';
-          this.toastService.success('Conexión GitHub Models guardada.');
-          this.syncGithubProviderState();
-          this.loadGithubModels();
-        },
-        error: (error: unknown) => {
-          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo guardar la conexión de GitHub Models.');
-          this.toastService.error(this.githubErrorMessage);
+      selectedModel: this.githubSelectedModel || undefined,
+    }).subscribe({
+      next: (result) => {
+        if (result.pending) {
+          // GitHub pide reducir el ritmo del polling.
+          if (result.slowDown) {
+            setPeriod(7000);
+          }
+          scheduleNext();
+          return;
         }
-      });
+        // Autorizado: token guardado y conexión establecida.
+        this.stopGithubPolling();
+        this.githubConnecting = false;
+        this.githubUserCode = '';
+        this.githubVerificationUri = '';
+        this.applyGithubConnection(result.connection ?? null);
+        this.githubInfoMessage = 'Conexión de GitHub Models establecida correctamente.';
+        this.toastService.success('Conectado con GitHub Copilot.');
+        this.syncGithubProviderState();
+        this.loadGithubModels();
+      },
+      error: (error: unknown) => {
+        this.stopGithubPolling();
+        this.githubConnecting = false;
+        this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo completar la autorización con GitHub.');
+        this.toastService.error(this.githubErrorMessage);
+      }
+    });
+  }
+
+  private stopGithubPolling(): void {
+    this.githubPollSub?.unsubscribe();
+    this.githubPollSub = null;
+  }
+
+  cancelGithubConnect(): void {
+    this.stopGithubPolling();
+    this.githubConnecting = false;
+    this.githubUserCode = '';
+    this.githubVerificationUri = '';
+    this.githubInfoMessage = null;
   }
 
   validateGithubConnection(): void {
@@ -302,12 +377,12 @@ export class ConfiguracionComponent {
       return;
     }
 
-    this.savingGithub = true;
+    this.loadingGithub = true;
     this.githubModelsService.updatePreferences({
       enabled: this.githubEnabled,
       selectedModel: this.githubSelectedModel || undefined
     })
-      .pipe(finalize(() => this.savingGithub = false))
+      .pipe(finalize(() => this.loadingGithub = false))
       .subscribe({
         next: (connection) => {
           this.applyGithubConnection(connection);
@@ -338,6 +413,7 @@ export class ConfiguracionComponent {
   disconnectGithub(): void {
     this.githubInfoMessage = null;
     this.githubErrorMessage = null;
+    this.stopGithubPolling();
 
     this.disconnectingGithub = true;
     this.githubModelsService.disconnectConnection()
@@ -345,10 +421,12 @@ export class ConfiguracionComponent {
       .subscribe({
         next: () => {
           this.githubConnection = null;
-          this.githubToken = '';
           this.githubEnabled = false;
           this.githubSelectedModel = '';
           this.githubModels = [];
+          this.githubConnecting = false;
+          this.githubUserCode = '';
+          this.githubVerificationUri = '';
           this.githubInfoMessage = 'Conexión de GitHub Models desconectada.';
           this.toastService.success('Conexión desconectada.');
           // Al desconectar, aseguramos DeepSeek como proveedor activo.

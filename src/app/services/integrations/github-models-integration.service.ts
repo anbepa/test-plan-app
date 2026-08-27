@@ -3,23 +3,24 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { from, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import {
-  GitHubModelsConnectionPayload,
+  GitHubDevicePollResponse,
+  GitHubDeviceStartResponse,
   GitHubModelsConnectionResponse,
   GitHubModelsConnectionView,
   GitHubModelsListResponse,
 } from '../../models/github-models.model';
 
 /**
- * Servicio de integración con "GitHub Models" (a través de GitHub Copilot / PAT).
+ * Servicio de integración con "GitHub Models" (a través de GitHub Copilot).
  *
- * Replica el patrón de AzureDevOpsIntegrationService: todas las llamadas van al
- * backend propio (local-api-server.js / Vercel functions) bajo
- * `/api/integrations/github-models`, y NUNCA se envía el PAT en claro al frontend.
+ * La autenticación usa el GitHub OAuth Device Flow (igual que DBeaver, VS Code,
+ * etc.): el usuario autoriza en github.com/login/device con un código corto y
+ * el backend obtiene su token efímero. NUNCA se pega un token manualmente.
  *
+ * Todas las llamadas van al backend propio bajo `/api/integrations/github-models`.
  * El backend es responsable de:
- *   1. Guardar/validar el PAT de forma segura (igual que Azure DevOps).
- *   2. Ejecutar el Device Flow / canje del token efímero de Copilot.
- *   3. Consultar el catálogo de modelos y hacer proxy del chat/completions.
+ *   1. Ejecutar el Device Flow y guardar/validar el token de forma segura.
+ *   2. Consultar el catálogo de modelos y hacer proxy del chat/completions.
  */
 @Injectable({
   providedIn: 'root'
@@ -27,22 +28,30 @@ import {
 export class GitHubModelsIntegrationService {
   private readonly baseUrl = '/api/integrations/github-models';
 
-  constructor(
-    private http: HttpClient,
-    private supabaseClient: SupabaseClientService
-  ) {}
-
-  /** Guarda (o reemplaza) el PAT y valida la conexión contra la API de Copilot. */
-  saveConnection(payload: GitHubModelsConnectionPayload): Observable<GitHubModelsConnectionResponse> {
-    return this.authorizedPost<GitHubModelsConnectionResponse>(`${this.baseUrl}/connections`, payload);
+  /** Paso 1 del Device Flow: pide a GitHub un código de dispositivo. */
+  deviceStart(): Observable<GitHubDeviceStartResponse> {
+    return this.authorizedPost<GitHubDeviceStartResponse>(`${this.baseUrl}/device/start`, {});
   }
 
-  /** Valida la conexión existente (verifica que el token efímero se pueda obtener). */
+  /**
+   * Paso 2 del Device Flow: consulta si el usuario ya autorizó en GitHub.
+   * Devuelve { pending: true } mientras se espera, o { pending: false, connection }
+   * cuando la autorización se completa y el token queda guardado.
+   */
+  devicePoll(deviceCode: string, options: { enabled?: boolean; selectedModel?: string } = {}): Observable<GitHubDevicePollResponse> {
+    return this.authorizedPost<GitHubDevicePollResponse>(`${this.baseUrl}/device/poll`, {
+      deviceCode,
+      enabled: options.enabled,
+      selectedModel: options.selectedModel,
+    });
+  }
+
+  /** Valida la conexión existente (verifica que el token siga siendo válido). */
   validateConnection(): Observable<GitHubModelsConnectionResponse> {
     return this.authorizedPost<GitHubModelsConnectionResponse>(`${this.baseUrl}/connections/validate`, {});
   }
 
-  /** Obtiene la conexión guardada (sin exponer el PAT). */
+  /** Obtiene la conexión guardada (sin exponer el token). */
   getConnection(): Observable<GitHubModelsConnectionView | null> {
     return this.authorizedGet<GitHubModelsConnectionView | null>(`${this.baseUrl}/connections`);
   }
@@ -52,7 +61,7 @@ export class GitHubModelsIntegrationService {
     return this.authorizedDelete<{ success: boolean }>(`${this.baseUrl}/connections`);
   }
 
-  /** Actualiza el modelo seleccionado y/o el flag enabled sin reintroducir el PAT. */
+  /** Actualiza el modelo seleccionado y/o el flag enabled sin reautenticar. */
   updatePreferences(preferences: { enabled?: boolean; selectedModel?: string }): Observable<GitHubModelsConnectionResponse> {
     return this.authorizedPost<GitHubModelsConnectionResponse>(`${this.baseUrl}/connections/preferences`, preferences);
   }
@@ -61,6 +70,11 @@ export class GitHubModelsIntegrationService {
   listModels(): Observable<GitHubModelsListResponse> {
     return this.authorizedGet<GitHubModelsListResponse>(`${this.baseUrl}/models`);
   }
+
+  constructor(
+    private http: HttpClient,
+    private supabaseClient: SupabaseClientService
+  ) {}
 
   private authorizedGet<T>(url: string): Observable<T> {
     return this.withAuthHeaders().pipe(

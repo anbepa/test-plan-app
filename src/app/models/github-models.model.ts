@@ -1,16 +1,8 @@
-// Modelo para la integración de "GitHub Models" (vía GitHub Copilot / PAT).
-// Sigue el mismo patrón que azure-devops.model.ts.
+// Modelo para la integración de "GitHub Models" (vía GitHub Copilot).
+// La autenticación se realiza mediante el GitHub OAuth Device Flow: el usuario
+// autoriza en github.com/login/device y el backend obtiene su token efímero.
 
 export type GitHubModelsConnectionStatus = 'connected' | 'invalid' | 'expired' | 'disconnected';
-
-export interface GitHubModelsConnectionPayload {
-  /** Personal Access Token (PAT / OAuth) de GitHub. */
-  personalAccessToken: string;
-  /** Habilita explícitamente el uso de GitHub Models como proveedor. */
-  enabled: boolean;
-  /** Modelo seleccionado por el usuario (opcional al guardar por primera vez). */
-  selectedModel?: string;
-}
 
 export interface GitHubModelsConnectionResponse {
   id: string;
@@ -39,4 +31,22 @@ export interface GitHubModelsListResponse {
 export interface GitHubModelsApiError {
   message: string;
   code?: string;
+}
+
+// ── Device Flow OAuth de GitHub ─────────────────────────────────────────────
+
+/** Respuesta de /device/start: datos para que el usuario autorice en GitHub. */
+export interface GitHubDeviceStartResponse {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+}
+
+/** Respuesta de /device/poll mientras se espera la autorización del usuario. */
+export interface GitHubDevicePollResponse {
+  pending: boolean;
+  slowDown?: boolean;
+  connection?: GitHubModelsConnectionResponse;
 }

@@ -86,13 +86,14 @@
 
       <p class="card-description">
         Proveedor de IA opcional que usa tu suscripción de <strong>GitHub Copilot</strong>.
-        Si se habilita y la conexión es válida, se usará como proveedor activo; ante cualquier
-        error, la aplicación vuelve automáticamente a <strong>DeepSeek</strong>.
+        Conéctate con tu cuenta de GitHub (te redirigimos para autorizar, igual que en otras
+        herramientas). Si se habilita y la conexión es válida, se usará como proveedor activo;
+        ante cualquier error, la aplicación vuelve automáticamente a <strong>DeepSeek</strong>.
       </p>
 
       <div class="inline-status-grid" *ngIf="githubConnection">
         <div class="inline-status-item">
-          <span class="inline-status-label">Token</span>
+          <span class="inline-status-label">Cuenta</span>
           <strong class="inline-status-value">{{ githubConnection.tokenHint }}</strong>
         </div>
         <div class="inline-status-item">
@@ -105,20 +106,22 @@
         </div>
       </div>
 
-      <div class="form-grid">
-        <div class="form-group full-width">
-          <label for="githubToken">Personal Access Token / OAuth (GitHub Copilot)</label>
-          <input
-            id="githubToken"
-            name="githubToken"
-            class="form-control"
-            type="password"
-            [(ngModel)]="githubToken"
-            [disabled]="isGithubBusy"
-            autocomplete="new-password"
-            placeholder="Ingresa o reemplaza tu token de GitHub">
-        </div>
+      <!-- Panel de autorización del Device Flow -->
+      <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode">
+        <p class="device-instructions">
+          Se abrió GitHub en una pestaña nueva. Introduce este código para autorizar:
+        </p>
+        <div class="device-code">{{ githubUserCode }}</div>
+        <p class="device-link">
+          ¿No se abrió?
+          <a [href]="githubVerificationUri" target="_blank" rel="noopener noreferrer">Abrir github.com/login/device</a>
+        </p>
+        <p class="device-waiting">Esperando tu autorización en GitHub...</p>
+        <button class="btn-secondary" type="button" (click)="cancelGithubConnect()">Cancelar</button>
+      </div>
 
+      <!-- Preferencias (solo con conexión activa) -->
+      <div class="form-grid" *ngIf="githubConnection">
         <div class="form-group">
           <label for="githubModel">Modelo</label>
           <select
@@ -151,8 +154,24 @@
       </div>
 
       <div class="actions-row">
-        <button class="btn-primary" type="button" (click)="saveGithubConnection()" [disabled]="isGithubBusy">
-          {{ savingGithub ? 'Guardando...' : 'Guardar token' }}
+        <!-- Sin conexión: botón de conectar (Device Flow) -->
+        <button
+          class="btn-primary"
+          type="button"
+          *ngIf="!githubConnection"
+          (click)="connectWithGithub()"
+          [disabled]="isGithubBusy">
+          {{ githubConnecting ? 'Esperando autorización...' : 'Conectar con GitHub Copilot' }}
+        </button>
+
+        <!-- Con conexión: reconectar / validar / refrescar / desconectar -->
+        <button
+          class="btn-secondary"
+          type="button"
+          *ngIf="githubConnection"
+          (click)="connectWithGithub()"
+          [disabled]="isGithubBusy">
+          {{ githubConnecting ? 'Esperando autorización...' : 'Reconectar cuenta' }}
         </button>
         <button class="btn-secondary" type="button" (click)="validateGithubConnection()" [disabled]="isGithubBusy || !githubConnection">
           {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
