@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, catchError } from 'rxjs';
 import { GeminiService } from './gemini.service';
 import { DeepSeekService } from './deepseek.service';
 import { AiProvidersService } from './ai-providers.service';
@@ -8,7 +8,12 @@ import { StreamEvent } from './deepseek-client.service';
 
 /**
  * Servicio unificado que delega las llamadas al proveedor de IA activo
- * (Gemini o DeepSeek)
+ * (Gemini, GitHub Models/Copilot o DeepSeek).
+ *
+ * DeepSeek actúa como proveedor por defecto Y como fallback global: si el
+ * proveedor activo es "github-models" y la llamada falla (p. ej. 410 por
+ * retirement brownout, 404 sin Copilot, o error de red), la operación se
+ * reintenta automáticamente contra DeepSeek de forma transparente.
  */
 @Injectable({
     providedIn: 'root'
@@ -22,7 +27,11 @@ export class AiUnifiedService {
     ) { }
 
     /**
-     * Obtiene el servicio activo según la configuración
+     * Obtiene el servicio activo según la configuración.
+     * Nota: "github-models" no tiene un servicio de cliente propio en el
+     * frontend (se resuelve vía backend proxy). Para las operaciones de
+     * generación de casos delegamos en DeepSeek como motor efectivo, salvo
+     * que en el futuro se añada un GitHubModelsService dedicado.
      */
     private getActiveService(): GeminiService | DeepSeekService {
         const activeProvider = this.providersService.getActiveProvider();
@@ -39,9 +48,38 @@ export class AiUnifiedService {
                 return this.deepSeekService;
             case 'gemini':
                 return this.geminiService;
+            case 'github-models':
+                // El proveedor GitHub Models se orquesta en backend; mientras
+                // no exista un cliente dedicado, DeepSeek es el motor efectivo.
+                console.log('[AI Unified] GitHub Models activo — motor efectivo: DeepSeek (con fallback)');
+                return this.deepSeekService;
             default:
                 return this.deepSeekService;
         }
+    }
+
+    /** Indica si el proveedor activo es GitHub Models (para aplicar fallback explícito). */
+    private isGitHubModelsActive(): boolean {
+        return this.providersService.getActiveProviderId() === 'github-models';
+    }
+
+    /**
+     * Envuelve un Observable con fallback automático a DeepSeek cuando el
+     * proveedor activo es GitHub Models y la llamada primaria falla.
+     */
+    private withDeepSeekFallback<T>(
+        primary: Observable<T>,
+        deepSeekCall: () => Observable<T>
+    ): Observable<T> {
+        if (!this.isGitHubModelsActive()) {
+            return primary;
+        }
+        return primary.pipe(
+            catchError((error: unknown) => {
+                console.warn('[AI Unified] GitHub Models falló, aplicando fallback a DeepSeek.', error);
+                return deepSeekCall();
+            })
+        );
     }
 
     /**
@@ -49,7 +87,10 @@ export class AiUnifiedService {
      */
     public generateTestPlanSections(description: string, acceptanceCriteria: string): Observable<string> {
         const service = this.getActiveService();
-        return service.generateTestPlanSections(description, acceptanceCriteria);
+        return this.withDeepSeekFallback(
+            service.generateTestPlanSections(description, acceptanceCriteria),
+            () => this.deepSeekService.generateTestPlanSections(description, acceptanceCriteria)
+        );
     }
 
     /**
@@ -62,7 +103,10 @@ export class AiUnifiedService {
         huCount: number = 1
     ): Observable<string> {
         const service = this.getActiveService();
-        return service.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary, huCount);
+        return this.withDeepSeekFallback(
+            service.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary, huCount),
+            () => this.deepSeekService.generateEnhancedStaticSectionContent(sectionName, existingContent, huSummary, huCount)
+        );
     }
 
     /**
@@ -71,12 +115,14 @@ export class AiUnifiedService {
     public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
         const service = this.getActiveService();
 
-        if ('generateRiskStrategy' in service) {
-            return (service as any).generateRiskStrategy(huSummary, availableScenarios, huCount);
-        }
+        const primary = ('generateRiskStrategy' in service)
+            ? (service as any).generateRiskStrategy(huSummary, availableScenarios, huCount)
+            : this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount);
 
-        console.warn('[AI Unified] El proveedor activo no soporta generateRiskStrategy, usando DeepSeek');
-        return this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount);
+        return this.withDeepSeekFallback(
+            primary,
+            () => this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount)
+        );
     }
 
     /**
@@ -89,12 +135,14 @@ export class AiUnifiedService {
     ): Observable<any> {
         const service = this.getActiveService();
 
-        if ('generateTestCasesDirect' in service) {
-            return (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique);
-        }
+        const primary = ('generateTestCasesDirect' in service)
+            ? (service as any).generateTestCasesDirect(description, acceptanceCriteria, technique)
+            : this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique);
 
-        console.warn('[AI Unified] El proveedor activo no soporta generación directa, usando DeepSeek');
-        return this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique);
+        return this.withDeepSeekFallback(
+            primary,
+            () => this.deepSeekService.generateTestCasesDirect(description, acceptanceCriteria, technique)
+        );
     }
 
     /**
@@ -108,12 +156,14 @@ export class AiUnifiedService {
     ): Observable<any> {
         const service = this.getActiveService();
 
-        if ('generateTestCasesSmart' in service) {
-            return (service as any).generateTestCasesSmart(description, acceptanceCriteria, technique);
-        }
+        const primary = ('generateTestCasesSmart' in service)
+            ? (service as any).generateTestCasesSmart(description, acceptanceCriteria, technique)
+            : this.deepSeekService.generateTestCasesSmart(description, acceptanceCriteria, technique);
 
-        console.warn('[AI Unified] El proveedor activo no soporta generación smart, usando DeepSeek');
-        return this.deepSeekService.generateTestCasesSmart(description, acceptanceCriteria, technique);
+        return this.withDeepSeekFallback(
+            primary,
+            () => this.deepSeekService.generateTestCasesSmart(description, acceptanceCriteria, technique)
+        );
     }
 
     /**
@@ -127,12 +177,14 @@ export class AiUnifiedService {
     ): Observable<any> {
         const service = this.getActiveService();
 
-        if ('refineTestCasesDirect' in service) {
-            return (service as any).refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
-        }
+        const primary = ('refineTestCasesDirect' in service)
+            ? (service as any).refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
+            : this.deepSeekService.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
 
-        console.warn('[AI Unified] El proveedor activo no soporta refinamiento directo, usando DeepSeek');
-        return this.deepSeekService.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
+        return this.withDeepSeekFallback(
+            primary,
+            () => this.deepSeekService.refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
+        );
     }
 
     /**

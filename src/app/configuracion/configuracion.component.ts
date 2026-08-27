@@ -5,6 +5,13 @@ import { finalize } from 'rxjs/operators';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { AzureDevOpsConnectionResponse, AzureDevOpsConnectionView } from '../models/azure-devops.model';
+import { GitHubModelsIntegrationService } from '../services/integrations/github-models-integration.service';
+import {
+  GitHubModelsConnectionResponse,
+  GitHubModelsConnectionView,
+  GitHubModel,
+} from '../models/github-models.model';
+import { AiProvidersService } from '../services/ai/ai-providers.service';
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
 import { CellsConfigService } from '../services/core/cells-config.service';
@@ -30,16 +37,33 @@ export class ConfiguracionComponent {
   validatingConnection = false;
   disconnectingConnection = false;
 
+  // ── Estado GitHub Models (Copilot) ──────────────────────────────────
+  githubToken = '';
+  githubEnabled = false;
+  githubSelectedModel = '';
+  githubModels: GitHubModel[] = [];
+  githubConnection: GitHubModelsConnectionView | null = null;
+
+  loadingGithub = false;
+  savingGithub = false;
+  validatingGithub = false;
+  disconnectingGithub = false;
+  loadingGithubModels = false;
+
+  githubInfoMessage: string | null = null;
+  githubErrorMessage: string | null = null;
+
   infoMessage: string | null = null;
   errorMessage: string | null = null;
 
   isDisconnectConfirmOpen = false;
-  disconnectTarget: 'azure' | null = null;
+  disconnectTarget: 'azure' | 'github' | null = null;
   disconnectConfirmTitle = 'Confirmar desconexión';
   disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
 
-  accordionOpen: Record<'azure' | 'global' | 'status' | 'cells', boolean> = {
+  accordionOpen: Record<'azure' | 'github' | 'global' | 'status' | 'cells', boolean> = {
     azure: true,
+    github: false,
     global: false,
     status: false,
     cells: false,
@@ -53,6 +77,8 @@ export class ConfiguracionComponent {
 
   constructor(
     private azureService: AzureDevOpsIntegrationService,
+    private githubModelsService: GitHubModelsIntegrationService,
+    private aiProvidersService: AiProvidersService,
     private toastService: ToastService,
     private generalSectionsConfigService: GeneralSectionsConfigService,
     private cellsConfigService: CellsConfigService
@@ -60,14 +86,15 @@ export class ConfiguracionComponent {
 
   ngOnInit(): void {
     this.fetchConnection();
+    this.fetchGithubConnection();
     this.loadGeneralSectionsConfig();
     this.loadCellsConfig();
   }
 
-  toggleSection(section: 'azure' | 'global' | 'status' | 'cells'): void {
+  toggleSection(section: 'azure' | 'github' | 'global' | 'status' | 'cells'): void {
     const shouldOpen = !this.accordionOpen[section];
 
-    (Object.keys(this.accordionOpen) as Array<'azure' | 'global' | 'status' | 'cells'>)
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'github' | 'global' | 'status' | 'cells'>)
       .forEach((key) => this.accordionOpen[key] = false);
 
     this.accordionOpen[section] = shouldOpen;
@@ -165,10 +192,234 @@ export class ConfiguracionComponent {
       });
   }
 
-  requestDisconnect(target: 'azure'): void {
+  // ── GitHub Models (Copilot) ─────────────────────────────────────────
+  get isGithubBusy(): boolean {
+    return this.loadingGithub || this.savingGithub || this.validatingGithub
+      || this.disconnectingGithub || this.loadingGithubModels;
+  }
+
+  private fetchGithubConnection(): void {
+    this.loadingGithub = true;
+    this.githubModelsService.getConnection()
+      .pipe(finalize(() => this.loadingGithub = false))
+      .subscribe({
+        next: (connection) => {
+          this.applyGithubConnection(connection);
+          if (connection?.status === 'connected') {
+            this.loadGithubModels();
+          }
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo cargar la conexión de GitHub Models.');
+        }
+      });
+  }
+
+  saveGithubConnection(): void {
+    this.githubInfoMessage = null;
+    this.githubErrorMessage = null;
+
+    const pat = this.githubToken.trim();
+    if (!pat) {
+      this.githubErrorMessage = 'Debes ingresar un PAT/OAuth de GitHub con Copilot para guardar la conexión.';
+      return;
+    }
+
+    this.savingGithub = true;
+    this.githubModelsService.saveConnection({
+      personalAccessToken: pat,
+      enabled: this.githubEnabled,
+      selectedModel: this.githubSelectedModel || undefined
+    })
+      .pipe(finalize(() => this.savingGithub = false))
+      .subscribe({
+        next: (connection) => {
+          this.applyGithubConnection(connection);
+          this.githubToken = '';
+          this.githubInfoMessage = 'Conexión de GitHub Models guardada y validada correctamente.';
+          this.toastService.success('Conexión GitHub Models guardada.');
+          this.syncGithubProviderState();
+          this.loadGithubModels();
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo guardar la conexión de GitHub Models.');
+          this.toastService.error(this.githubErrorMessage);
+        }
+      });
+  }
+
+  validateGithubConnection(): void {
+    this.githubInfoMessage = null;
+    this.githubErrorMessage = null;
+
+    this.validatingGithub = true;
+    this.githubModelsService.validateConnection()
+      .pipe(finalize(() => this.validatingGithub = false))
+      .subscribe({
+        next: (connection) => {
+          this.applyGithubConnection(connection);
+          this.githubInfoMessage = 'Conexión de GitHub Models validada correctamente.';
+          this.toastService.success('Conexión validada.');
+          this.loadGithubModels();
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo validar la conexión de GitHub Models.');
+          this.toastService.error(this.githubErrorMessage);
+        }
+      });
+  }
+
+  loadGithubModels(): void {
+    this.loadingGithubModels = true;
+    this.githubModelsService.listModels()
+      .pipe(finalize(() => this.loadingGithubModels = false))
+      .subscribe({
+        next: (response) => {
+          this.githubModels = response?.models ?? [];
+          // Si el modelo seleccionado ya no existe en el catálogo, resetear.
+          if (this.githubSelectedModel && !this.githubModels.some(m => m.id === this.githubSelectedModel)) {
+            this.githubSelectedModel = this.githubModels[0]?.id ?? '';
+          }
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo obtener el catálogo de modelos de GitHub.');
+        }
+      });
+  }
+
+  onGithubEnabledChange(): void {
+    this.saveGithubPreferences();
+  }
+
+  onGithubModelChange(): void {
+    this.saveGithubPreferences();
+  }
+
+  private saveGithubPreferences(): void {
+    // Solo persistimos preferencias si ya hay conexión guardada.
+    if (!this.githubConnection) {
+      this.syncGithubProviderState();
+      return;
+    }
+
+    this.savingGithub = true;
+    this.githubModelsService.updatePreferences({
+      enabled: this.githubEnabled,
+      selectedModel: this.githubSelectedModel || undefined
+    })
+      .pipe(finalize(() => this.savingGithub = false))
+      .subscribe({
+        next: (connection) => {
+          this.applyGithubConnection(connection);
+          this.syncGithubProviderState();
+          this.toastService.success('Preferencias de GitHub Models actualizadas.');
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudieron actualizar las preferencias.');
+          this.toastService.error(this.githubErrorMessage);
+        }
+      });
+  }
+
+  /**
+   * Activa GitHub Models como proveedor de IA si el usuario lo habilitó y la
+   * conexión está OK; de lo contrario, vuelve a DeepSeek (fallback por defecto).
+   */
+  private syncGithubProviderState(): void {
+    const canUseGithub = this.githubEnabled && this.githubConnection?.status === 'connected';
+    if (canUseGithub) {
+      this.aiProvidersService.setActiveProvider('github-models');
+    } else if (this.aiProvidersService.getActiveProviderId() === 'github-models') {
+      // Si estaba activo GitHub y se deshabilita, volvemos a DeepSeek.
+      this.aiProvidersService.setActiveProvider('deepseek');
+    }
+  }
+
+  disconnectGithub(): void {
+    this.githubInfoMessage = null;
+    this.githubErrorMessage = null;
+
+    this.disconnectingGithub = true;
+    this.githubModelsService.disconnectConnection()
+      .pipe(finalize(() => this.disconnectingGithub = false))
+      .subscribe({
+        next: () => {
+          this.githubConnection = null;
+          this.githubToken = '';
+          this.githubEnabled = false;
+          this.githubSelectedModel = '';
+          this.githubModels = [];
+          this.githubInfoMessage = 'Conexión de GitHub Models desconectada.';
+          this.toastService.success('Conexión desconectada.');
+          // Al desconectar, aseguramos DeepSeek como proveedor activo.
+          if (this.aiProvidersService.getActiveProviderId() === 'github-models') {
+            this.aiProvidersService.setActiveProvider('deepseek');
+          }
+          this.fetchGithubConnection();
+        },
+        error: (error: unknown) => {
+          this.githubErrorMessage = this.getErrorMessage(error, 'No se pudo desconectar GitHub Models.');
+          this.toastService.error(this.githubErrorMessage);
+        }
+      });
+  }
+
+  private applyGithubConnection(connection: GitHubModelsConnectionResponse | GitHubModelsConnectionView | null): void {
+    if (!connection) {
+      this.githubConnection = null;
+      return;
+    }
+    this.githubConnection = {
+      ...connection,
+      updatedAt: (connection as GitHubModelsConnectionView).updatedAt ?? connection.lastValidatedAt
+    };
+    this.githubEnabled = !!connection.enabled;
+    this.githubSelectedModel = connection.selectedModel ?? this.githubSelectedModel;
+  }
+
+  get githubStatusLabel(): string {
+    if (!this.githubConnection) {
+      return 'No configurado';
+    }
+    switch (this.githubConnection.status) {
+      case 'connected':
+        return 'Conectado';
+      case 'disconnected':
+        return 'Pendiente';
+      case 'invalid':
+      case 'expired':
+        return 'Error';
+      default:
+        return 'No configurado';
+    }
+  }
+
+  get githubStatusTone(): 'success' | 'warning' | 'danger' | 'neutral' {
+    if (!this.githubConnection) {
+      return 'neutral';
+    }
+    switch (this.githubConnection.status) {
+      case 'connected':
+        return 'success';
+      case 'disconnected':
+        return 'warning';
+      case 'invalid':
+      case 'expired':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
+  }
+
+  requestDisconnect(target: 'azure' | 'github'): void {
     this.disconnectTarget = target;
-    this.disconnectConfirmTitle = 'Desconectar Azure DevOps';
-    this.disconnectConfirmMessage = '¿Deseas desconectar la integración de Azure DevOps?';
+    if (target === 'azure') {
+      this.disconnectConfirmTitle = 'Desconectar Azure DevOps';
+      this.disconnectConfirmMessage = '¿Deseas desconectar la integración de Azure DevOps?';
+    } else {
+      this.disconnectConfirmTitle = 'Desconectar GitHub Models';
+      this.disconnectConfirmMessage = '¿Deseas desconectar la integración de GitHub Models? Se volverá a DeepSeek como proveedor por defecto.';
+    }
     this.isDisconnectConfirmOpen = true;
   }
 
@@ -178,6 +429,8 @@ export class ConfiguracionComponent {
 
     if (target === 'azure') {
       this.disconnect();
+    } else if (target === 'github') {
+      this.disconnectGithub();
     }
   }
 

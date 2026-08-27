@@ -40,12 +40,22 @@ export class AiProvidersService {
       metadata: { tier: 'free', rateLimit: '20/day' }
     },
     {
+      id: 'github-models',
+      name: 'github-models',
+      displayName: 'GitHub Models (Copilot)',
+      endpointUrl: 'https://api.githubcopilot.com/chat/completions',
+      defaultModel: 'gpt-4o',
+      isActive: false, // Opcional: se activa desde Configuración → Conexión
+      hasApiKey: false, // El PAT/OAuth se gestiona en el backend, no aquí
+      metadata: { tier: 'copilot', requiresBackendProxy: true, fallbackTo: 'deepseek' }
+    },
+    {
       id: 'deepseek',
       name: 'deepseek',
       displayName: 'DeepSeek',
       endpointUrl: 'https://api.deepseek.com/chat/completions',
       defaultModel: 'deepseek-chat',
-      isActive: true, // ACTIVO POR DEFECTO
+      isActive: true, // ACTIVO POR DEFECTO (y fallback global)
       hasApiKey: true,
       metadata: { tier: 'paid', rateLimit: 'varies' }
     }
