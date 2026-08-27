@@ -18,6 +18,14 @@
   ],
   "rewrites": [
     {
+      "source": "/api/integrations/github-models/:path*",
+      "destination": "/api/integrations/github-models/[...path]"
+    },
+    {
+      "source": "/api/integrations/azure-devops/work-items/:path*",
+      "destination": "/api/integrations/azure-devops/work-items/[...path]"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
