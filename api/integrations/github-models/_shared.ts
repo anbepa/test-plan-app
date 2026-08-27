@@ -204,13 +204,15 @@ export interface DeviceStartResult {
 }
 
 export async function deviceStart(): Promise<DeviceStartResult> {
-  const { ok, data } = await ghFetchJson(GH_DEVICE_CODE_URL, {
+  const params = new URLSearchParams({ client_id: ghClientId(), scope: ghScopes() });
+  const { ok, status, data } = await ghFetchJson(GH_DEVICE_CODE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: ghClientId(), scope: ghScopes() }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
   });
   if (!ok || !data?.device_code) {
-    throw new ApiError(502, 'GitHub no devolvió un device_code válido.', { githubResponse: data });
+    const detail = data?.error_description || data?.error || `HTTP ${status}`;
+    throw new ApiError(502, `GitHub no devolvió un device_code válido: ${detail}`, { status, githubResponse: data });
   }
   return {
     deviceCode: data.device_code,
@@ -230,14 +232,15 @@ export interface DevicePollResult {
 }
 
 export async function devicePoll(deviceCode: string): Promise<DevicePollResult> {
+  const pollParams = new URLSearchParams({
+    client_id: ghClientId(),
+    device_code: deviceCode,
+    grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+  });
   const { data } = await ghFetchJson(GH_ACCESS_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: ghClientId(),
-      device_code: deviceCode,
-      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-    }),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: pollParams.toString(),
   });
 
   if (data?.error) {
