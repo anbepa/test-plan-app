@@ -5,8 +5,7 @@
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60,
-      "memory": 1024,
-      "excludeFiles": "api/**/{shared.ts,types.d.ts,middleware.config.ts}"
+      "memory": 1024
     }
   },
   "routes": [
