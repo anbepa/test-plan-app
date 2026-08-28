@@ -303,6 +303,7 @@ export async function validateGithubToken(token: string): Promise<void> {
 }
 
 export async function listGithubModels(token: string): Promise<GithubModelInfo[]> {
+  // Si hay un catálogo custom configurado, respétalo.
   const catalogUrl = process.env['GITHUB_MODELS_CATALOG_URL'];
   if (catalogUrl) {
     const { ok, data } = await ghFetchJson(catalogUrl, { headers: { Authorization: `Bearer ${token}` } });
@@ -315,6 +316,53 @@ export async function listGithubModels(token: string): Promise<GithubModelInfo[]
       }));
     }
   }
+
+  // Por defecto, listar los modelos REALMENTE soportados por el endpoint de
+  // chat de Copilot (api.githubcopilot.com/models). Los ids de este catálogo
+  // son los únicos válidos para /chat/completions; usar el catálogo genérico de
+  // GitHub Models produce "The requested model is not supported.".
+  try {
+    const copilotToken = await exchangeCopilotToken(token);
+    const modelsUrl =
+      process.env['GITHUB_COPILOT_MODELS_URL'] || 'https://api.githubcopilot.com/models';
+    const { ok, data } = await ghFetchJson(modelsUrl, {
+      headers: {
+        Authorization: `Bearer ${copilotToken}`,
+        'Copilot-Integration-Id': GH_INTEGRATION_ID,
+        'Editor-Version': GH_EDITOR_VERSION,
+        'Editor-Plugin-Version': GH_PLUGIN_VERSION,
+        'User-Agent': GH_USER_AGENT,
+      },
+    });
+    const raw = data?.data || data?.models;
+    if (ok && Array.isArray(raw)) {
+      const seen = new Set<string>();
+      const models = raw
+        .filter((m: any) => {
+          // Solo modelos habilitados para chat.
+          const enabled = m?.model_picker_enabled !== false;
+          const capChat = !m?.capabilities?.type || m.capabilities.type === 'chat';
+          return enabled && capChat;
+        })
+        .map((m: any) => ({
+          id: m.id || m.name,
+          displayName: m.name || m.id,
+          publisher: m.vendor || m.publisher || 'GitHub',
+        }))
+        .filter((m: GithubModelInfo) => {
+          if (!m.id || seen.has(m.id)) return false;
+          seen.add(m.id);
+          return true;
+        });
+      if (models.length > 0) return models;
+    }
+  } catch (error) {
+    console.error('[GITHUB_MODELS][LIST_MODELS][COPILOT_ERROR]', {
+      message: (error as Error)?.message,
+    });
+  }
+
+  // Fallback conservador con ids válidos en el endpoint de Copilot.
   return [
     { id: 'gpt-4o', displayName: 'GPT-4o', publisher: 'OpenAI' },
     { id: 'gpt-4o-mini', displayName: 'GPT-4o mini', publisher: 'OpenAI' },

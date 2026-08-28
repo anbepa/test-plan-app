@@ -73,15 +73,11 @@ export class AiUnifiedService {
         primary: Observable<T>,
         deepSeekCall: () => Observable<T>
     ): Observable<T> {
-        if (!this.isGitHubModelsActive()) {
-            return primary;
-        }
-        return primary.pipe(
-            catchError((error: unknown) => {
-                console.warn('[AI Unified] GitHub Models falló, aplicando fallback a DeepSeek.', error);
-                return deepSeekCall();
-            })
-        );
+        // Cuando "Usar GitHub Models como proveedor" está activo, NO se debe
+        // llamar a DeepSeek bajo ninguna circunstancia: el error del proveedor
+        // activo debe propagarse tal cual para que el usuario lo vea. El fallback
+        // silencioso a deepseek-proxy queda deshabilitado a propósito.
+        return primary;
     }
 
     /**
