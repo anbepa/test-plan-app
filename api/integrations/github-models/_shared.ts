@@ -344,8 +344,67 @@ export function toErrorResponse(error: unknown): { status: number; body: { messa
 // Inferencia (chat/completions) contra GitHub Models
 // ---------------------------------------------------------------------------
 // Endpoint estándar de GitHub Models. Se puede sobreescribir por entorno.
-const GH_MODELS_INFERENCE_URL =
-  process.env['GITHUB_MODELS_INFERENCE_URL'] || 'https://models.inference.ai.azure.com/chat/completions';
+// Flujo Copilot (igual que DBeaver/Copilot CLI):
+//   1) OAuth device flow  -> gho_ token (ya lo tenemos)
+//   2) Token exchange      -> GET api.github.com/copilot_internal/v2/token -> bearer efímero
+//   3) Inferencia          -> POST api.githubcopilot.com/chat/completions
+const GH_COPILOT_TOKEN_URL =
+  process.env['GITHUB_COPILOT_TOKEN_URL'] || 'https://api.github.com/copilot_internal/v2/token';
+const GH_COPILOT_CHAT_URL =
+  process.env['GITHUB_COPILOT_CHAT_URL'] || 'https://api.githubcopilot.com/chat/completions';
+// Metadatos de editor requeridos por los endpoints de Copilot.
+const GH_EDITOR_VERSION = process.env['GITHUB_COPILOT_EDITOR_VERSION'] || 'vscode/1.95.0';
+const GH_PLUGIN_VERSION = process.env['GITHUB_COPILOT_PLUGIN_VERSION'] || 'copilot-chat/0.22.0';
+const GH_INTEGRATION_ID = process.env['GITHUB_COPILOT_INTEGRATION_ID'] || 'vscode-chat';
+const GH_USER_AGENT = process.env['GITHUB_COPILOT_USER_AGENT'] || 'GithubCopilot/1.155.0';
+
+/**
+ * Nivel 2: intercambia el token OAuth de GitHub (gho_) por un bearer token
+ * efimero de Copilot llamando a /copilot_internal/v2/token.
+ * Devuelve el string del token de sesion de Copilot.
+ */
+export async function exchangeCopilotToken(githubToken: string): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ghTimeoutMs());
+  try {
+    const response = await fetch(GH_COPILOT_TOKEN_URL, {
+      method: 'GET',
+      headers: {
+        Authorization: `token ${githubToken}`,
+        'Editor-Version': GH_EDITOR_VERSION,
+        'Editor-Plugin-Version': GH_PLUGIN_VERSION,
+        'User-Agent': GH_USER_AGENT,
+        Accept: 'application/json',
+      },
+      signal: controller.signal as any,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 401 || response.status === 403) {
+      throw new ApiError(401, 'Tu cuenta de GitHub no tiene una suscripcion de Copilot activa o el token no es valido.');
+    }
+    if (!response.ok || !(data as any)?.token) {
+      const detail = (data as any)?.message || `HTTP ${response.status}`;
+      console.error('[GITHUB_MODELS][COPILOT_TOKEN_EXCHANGE][ERROR]', { status: response.status, detail });
+      throw new ApiError(502, `No se pudo obtener el token de sesion de Copilot: ${detail}`);
+    }
+
+    return (data as any).token as string;
+  } catch (error: unknown) {
+    if (error instanceof ApiError) throw error;
+    if (String((error as Error)?.message || '').includes('aborted')) {
+      throw new ApiError(504, 'El intercambio de token con Copilot excedio el tiempo de espera.');
+    }
+    const err = error as any;
+    console.error('[GITHUB_MODELS][COPILOT_TOKEN_EXCHANGE][FETCH_ERROR]', {
+      url: GH_COPILOT_TOKEN_URL, name: err?.name, message: err?.message, code: err?.code || err?.cause?.code,
+    });
+    throw new ApiError(502, 'Error de conexion al obtener el token de Copilot.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export interface GithubChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -372,16 +431,23 @@ export async function githubModelsChatCompletion(
   token: string,
   request: GithubChatRequest
 ): Promise<any> {
+  // Nivel 2: intercambiar el token OAuth de GitHub por un token de sesion de Copilot.
+  const copilotToken = await exchangeCopilotToken(token);
+
+  // Nivel 3: llamar al endpoint de chat de Copilot con el token de sesion + headers.
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ghTimeoutMs());
   try {
-    const response = await fetch(GH_MODELS_INFERENCE_URL, {
+    const response = await fetch(GH_COPILOT_CHAT_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${copilotToken}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': 'test-plan-app',
+        'Copilot-Integration-Id': GH_INTEGRATION_ID,
+        'Editor-Version': GH_EDITOR_VERSION,
+        'Editor-Plugin-Version': GH_PLUGIN_VERSION,
+        'User-Agent': GH_USER_AGENT,
       },
       body: JSON.stringify({
         model: request.model,
@@ -419,7 +485,7 @@ export async function githubModelsChatCompletion(
     const err = error as any;
     const cause = err?.cause || {};
     console.error('[GITHUB_MODELS][INFERENCE][FETCH_ERROR]', {
-      url: GH_MODELS_INFERENCE_URL,
+      url: GH_COPILOT_CHAT_URL,
       model: request.model,
       name: err?.name,
       message: err?.message,
@@ -428,7 +494,7 @@ export async function githubModelsChatCompletion(
       causeMessage: cause?.message,
     });
     throw new ApiError(502, 'Error de conexión con GitHub Models.', {
-      url: GH_MODELS_INFERENCE_URL,
+      url: GH_COPILOT_CHAT_URL,
       name: err?.name || null,
       message: err?.message || null,
       code: err?.code || cause?.code || null,
