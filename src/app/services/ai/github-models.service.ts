@@ -26,6 +26,12 @@ export class GitHubModelsService {
 
     private readonly chatUrl = '/api/integrations/github-models/chat';
     private readonly MAX_CONTINUATIONS = 2;
+    // Límite de tokens por request en modo NO-stream. Se mantiene moderado a
+    // propósito: GitHub Models (Copilot) no hace streaming en este flujo, así que
+    // una respuesta muy larga tarda más que el límite de la función serverless y
+    // produce 504. Con 4000 la generación completa a tiempo; si se trunca, la
+    // lógica de continueGeneration completa la cobertura en llamadas sucesivas.
+    private readonly MAX_GEN_TOKENS = 4000;
 
     constructor(
         private http: HttpClient,
@@ -138,7 +144,7 @@ export class GitHubModelsService {
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 8000
+            max_tokens: this.MAX_GEN_TOKENS
         }).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
@@ -165,7 +171,7 @@ export class GitHubModelsService {
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 8000
+            max_tokens: this.MAX_GEN_TOKENS
         }).pipe(
             switchMap(response => {
                 const textContent = this.getContentFromResponse(response).trim();
@@ -211,7 +217,7 @@ export class GitHubModelsService {
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 8000
+            max_tokens: this.MAX_GEN_TOKENS
         }).pipe(
             switchMap(response => {
                 const textContent = this.getContentFromResponse(response).trim();
@@ -252,7 +258,7 @@ export class GitHubModelsService {
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 8000
+            max_tokens: this.MAX_GEN_TOKENS
         }).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
