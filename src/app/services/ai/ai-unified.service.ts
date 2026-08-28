@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, catchError } from 'rxjs';
 import { GeminiService } from './gemini.service';
 import { DeepSeekService } from './deepseek.service';
+import { GitHubModelsService } from './github-models.service';
 import { AiProvidersService } from './ai-providers.service';
 import { DetailedTestCase, HUData } from '../../models/hu-data.model';
 import { StreamEvent } from './deepseek-client.service';
@@ -23,6 +24,7 @@ export class AiUnifiedService {
     constructor(
         private geminiService: GeminiService,
         private deepSeekService: DeepSeekService,
+        private githubModelsService: GitHubModelsService,
         private providersService: AiProvidersService
     ) { }
 
@@ -33,7 +35,7 @@ export class AiUnifiedService {
      * generación de casos delegamos en DeepSeek como motor efectivo, salvo
      * que en el futuro se añada un GitHubModelsService dedicado.
      */
-    private getActiveService(): GeminiService | DeepSeekService {
+    private getActiveService(): GeminiService | DeepSeekService | GitHubModelsService {
         const activeProvider = this.providersService.getActiveProvider();
 
         if (!activeProvider) {
@@ -49,10 +51,10 @@ export class AiUnifiedService {
             case 'gemini':
                 return this.geminiService;
             case 'github-models':
-                // El proveedor GitHub Models se orquesta en backend; mientras
-                // no exista un cliente dedicado, DeepSeek es el motor efectivo.
-                console.log('[AI Unified] GitHub Models activo — motor efectivo: DeepSeek (con fallback)');
-                return this.deepSeekService;
+                // Cliente dedicado: llama al backend de inferencia de GitHub Models.
+                // Si falla, withDeepSeekFallback reintenta contra DeepSeek.
+                console.log('[AI Unified] GitHub Models activo — motor efectivo: GitHubModelsService (con fallback a DeepSeek)');
+                return this.githubModelsService;
             default:
                 return this.deepSeekService;
         }

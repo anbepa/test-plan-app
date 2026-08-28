@@ -339,3 +339,84 @@ export function toErrorResponse(error: unknown): { status: number; body: { messa
   }
   return { status: 500, body: { message: 'Error interno del servidor.' } };
 }
+
+// ---------------------------------------------------------------------------
+// Inferencia (chat/completions) contra GitHub Models
+// ---------------------------------------------------------------------------
+// Endpoint estándar de GitHub Models. Se puede sobreescribir por entorno.
+const GH_MODELS_INFERENCE_URL =
+  process.env['GITHUB_MODELS_INFERENCE_URL'] || 'https://models.inference.ai.azure.com/chat/completions';
+
+export interface GithubChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface GithubChatRequest {
+  model: string;
+  messages: GithubChatMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  response_format?: { type: 'json_object' | 'text' };
+}
+
+/**
+ * Llama al endpoint de inferencia de GitHub Models con el token del usuario.
+ * Devuelve la respuesta cruda en formato OpenAI-compatible
+ * ({ choices: [{ message: { content }, finish_reason }], usage }).
+ *
+ * No hace streaming (primera versión). Si GitHub Models falla, se lanza
+ * ApiError y el frontend aplica el fallback a DeepSeek automáticamente.
+ */
+export async function githubModelsChatCompletion(
+  token: string,
+  request: GithubChatRequest
+): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ghTimeoutMs());
+  try {
+    const response = await fetch(GH_MODELS_INFERENCE_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'test-plan-app',
+      },
+      body: JSON.stringify({
+        model: request.model,
+        messages: request.messages,
+        temperature: request.temperature ?? 0.5,
+        max_tokens: request.max_tokens ?? 4000,
+        ...(request.response_format ? { response_format: request.response_format } : {}),
+      }),
+      signal: controller.signal as any,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 401) {
+      throw new ApiError(401, 'Token de GitHub inválido o expirado para inferencia.');
+    }
+    if (response.status === 404) {
+      throw new ApiError(404, 'El modelo o el endpoint de GitHub Models no está disponible para tu cuenta.');
+    }
+    if (response.status === 429) {
+      throw new ApiError(429, 'Se alcanzó el límite de uso de GitHub Models. Intenta más tarde.');
+    }
+    if (!response.ok) {
+      const detail = (data as any)?.error?.message || (data as any)?.message || `HTTP ${response.status}`;
+      throw new ApiError(502, `GitHub Models devolvió un error: ${detail}`);
+    }
+
+    return data;
+  } catch (error: unknown) {
+    if (error instanceof ApiError) throw error;
+    if (String((error as Error)?.message || '').includes('aborted')) {
+      throw new ApiError(504, 'La inferencia con GitHub Models excedió el tiempo de espera.');
+    }
+    throw new ApiError(502, 'Error de conexión con GitHub Models.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

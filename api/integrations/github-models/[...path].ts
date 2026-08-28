@@ -7,6 +7,7 @@ import {
   getAuthenticatedUser,
   getGithubConnection,
   getGithubConnectionWithSecret,
+  githubModelsChatCompletion,
   listGithubModels,
   toConnectionView,
   toErrorResponse,
@@ -46,6 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
       case 'models':
         await handleModels(req, res);
+        return;
+      case 'chat':
+        await handleChat(req, res);
         return;
       case 'device/start':
         await handleDeviceStart(req, res);
@@ -203,4 +207,45 @@ async function handleDevicePoll(req: VercelRequest, res: VercelResponse): Promis
   });
 
   res.status(200).json({ pending: false, connection: toConnectionView(row) });
+}
+
+// ---- /chat ----------------------------------------------------------------
+// Proxy de inferencia. El frontend envía { messages, temperature, max_tokens,
+// response_format?, model? }. El backend resuelve el token del vault y el
+// modelo seleccionado por el usuario, y llama a GitHub Models.
+async function handleChat(req: VercelRequest, res: VercelResponse): Promise<void> {
+  if (req.method !== 'POST') {
+    res.status(405).json({ message: 'Método no permitido.' });
+    return;
+  }
+
+  const user = await getAuthenticatedUser(req.headers);
+  const secret = await getGithubConnectionWithSecret(user.id);
+
+  if (!secret || !secret.token) {
+    throw new ApiError(404, 'GitHub Models no está configurado para tu usuario.');
+  }
+  // Respetar el toggle "Usar GitHub Models como proveedor".
+  if (!secret.enabled) {
+    throw new ApiError(409, 'GitHub Models está deshabilitado como proveedor.');
+  }
+
+  const body = req.body || {};
+  const messages = Array.isArray(body.messages) ? body.messages : null;
+  if (!messages || messages.length === 0) {
+    throw new ApiError(400, 'Faltan los mensajes para la inferencia.');
+  }
+
+  // El modelo efectivo: el que mande el cliente o el seleccionado en la conexión.
+  const model = String(body.model || secret.selected_model || 'gpt-4o');
+
+  const completion = await githubModelsChatCompletion(secret.token, {
+    model,
+    messages,
+    temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+    max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+    response_format: body.response_format,
+  });
+
+  res.status(200).json(completion);
 }
