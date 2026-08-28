@@ -565,3 +565,55 @@ export async function githubModelsChatCompletion(
     clearTimeout(timeoutId);
   }
 }
+
+/**
+ * Igual que githubModelsChatCompletion pero en modo STREAM (SSE).
+ * Devuelve la Response cruda de node-fetch para que el handler haga pipe del
+ * body directamente al cliente (mismo patrón que deepseek-proxy). Esto evita el
+ * 504 de Vercel en respuestas largas: los headers se envían de inmediato y los
+ * tokens fluyen en tiempo real, manteniendo viva la conexión.
+ */
+export async function githubModelsChatCompletionStream(
+  token: string,
+  request: GithubChatRequest
+): Promise<any> {
+  const copilotToken = await exchangeCopilotToken(token);
+
+  const response = await fetch(GH_COPILOT_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${copilotToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      'Copilot-Integration-Id': GH_INTEGRATION_ID,
+      'Editor-Version': GH_EDITOR_VERSION,
+      'Editor-Plugin-Version': GH_PLUGIN_VERSION,
+      'User-Agent': GH_USER_AGENT,
+    },
+    body: JSON.stringify({
+      model: request.model,
+      messages: request.messages,
+      temperature: request.temperature ?? 0.5,
+      max_tokens: request.max_tokens ?? 4000,
+      stream: true,
+      ...(request.response_format ? { response_format: request.response_format } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      throw new ApiError(401, 'Token de GitHub inválido o expirado para inferencia.');
+    }
+    if (response.status === 404) {
+      throw new ApiError(404, 'El modelo o el endpoint de GitHub Models no está disponible para tu cuenta.');
+    }
+    if (response.status === 429) {
+      throw new ApiError(429, 'Se alcanzó el límite de uso de GitHub Models. Intenta más tarde.');
+    }
+    const detail = (data as any)?.error?.message || (data as any)?.message || `HTTP ${response.status}`;
+    throw new ApiError(502, `GitHub Models devolvió un error: ${detail}`);
+  }
+
+  return response;
+}

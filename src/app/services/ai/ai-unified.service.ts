@@ -203,18 +203,13 @@ export class AiUnifiedService {
         technique: string,
         userRequest: string = ''
     ): Observable<StreamEvent> {
-        // GitHub Models no soporta streaming en esta versión: usamos su modo
-        // no-stream y adaptamos el resultado a un único StreamEvent (done=true),
-        // con fallback automático a DeepSeek si la llamada falla.
+        // GitHub Models (Copilot) ahora soporta streaming real (SSE), igual que
+        // DeepSeek. NO se hace fallback a DeepSeek: el error del proveedor activo
+        // se propaga tal cual.
         if (this.isGitHubModelsActive()) {
-            console.log('[AI Unified Stream] GitHub Models activo — generación NO-stream adaptada a StreamEvent');
-            const primary = this.githubModelsService
-                .generateTestCasesSmart(description, acceptanceCriteria, technique)
-                .pipe(map((parsed: any) => this.toStreamEvent(parsed)));
-            return this.withDeepSeekFallback(
-                primary,
-                () => this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest)
-            );
+            console.log('[AI Unified Stream] GitHub Models activo — generación con streaming (SSE)');
+            return this.githubModelsService
+                .generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
         }
         console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
         return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
@@ -230,17 +225,11 @@ export class AiUnifiedService {
         newTechnique: string,
         userReanalysisContext: string
     ): Observable<StreamEvent> {
-        // GitHub Models no soporta streaming: modo no-stream adaptado a StreamEvent,
-        // con fallback automático a DeepSeek si falla.
+        // GitHub Models (Copilot) con streaming real (SSE). Sin fallback a DeepSeek.
         if (this.isGitHubModelsActive()) {
-            console.log('[AI Unified Stream] GitHub Models activo — refinamiento NO-stream adaptado a StreamEvent');
-            const primary = this.githubModelsService
-                .refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
-                .pipe(map((parsed: any) => this.toStreamEvent(parsed)));
-            return this.withDeepSeekFallback(
-                primary,
-                () => this.deepSeekService.refineTestCasesDirectStream(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
-            );
+            console.log('[AI Unified Stream] GitHub Models activo — refinamiento con streaming (SSE)');
+            return this.githubModelsService
+                .refineTestCasesDirectStream(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
         }
         console.log('[AI Unified Stream] Usando DeepSeek para refinamiento con streaming');
         return this.deepSeekService.refineTestCasesDirectStream(

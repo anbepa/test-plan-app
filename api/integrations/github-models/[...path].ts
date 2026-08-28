@@ -8,6 +8,7 @@ import {
   getGithubConnection,
   getGithubConnectionWithSecret,
   githubModelsChatCompletion,
+  githubModelsChatCompletionStream,
   listGithubModels,
   toConnectionView,
   toErrorResponse,
@@ -238,6 +239,41 @@ async function handleChat(req: VercelRequest, res: VercelResponse): Promise<void
 
   // El modelo efectivo: el que mande el cliente o el seleccionado en la conexión.
   const model = String(body.model || secret.selected_model || 'gpt-4o');
+
+  // Modo STREAM (SSE): igual que deepseek-proxy. Se envían los headers de
+  // inmediato y se hace pipe del stream de Copilot al cliente. Esto evita el
+  // 504 de Vercel en respuestas largas (max_tokens alto).
+  if (body.stream === true) {
+    const upstream = await githubModelsChatCompletionStream(secret.token, {
+      model,
+      messages,
+      temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+      max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+      response_format: body.response_format,
+    });
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    (res as any).flushHeaders?.();
+
+    let bytes = 0;
+    try {
+      for await (const chunk of upstream.body as any) {
+        bytes += chunk?.length ?? 0;
+        res.write(chunk);
+        (res as any).flush?.();
+      }
+    } catch (streamError: any) {
+      console.error('[GITHUB_MODELS][CHAT][STREAM_ERROR]', streamError?.message || streamError);
+      res.write(`data: ${JSON.stringify({ error: true, message: streamError?.message || 'Stream interrumpido' })}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+    console.log(`[GITHUB_MODELS][CHAT][STREAM] completado (${bytes} bytes)`);
+    return;
+  }
 
   const completion = await githubModelsChatCompletion(secret.token, {
     model,
