@@ -415,7 +415,24 @@ export async function githubModelsChatCompletion(
     if (String((error as Error)?.message || '').includes('aborted')) {
       throw new ApiError(504, 'La inferencia con GitHub Models excedió el tiempo de espera.');
     }
-    throw new ApiError(502, 'Error de conexión con GitHub Models.');
+    // Log detallado en Vercel para diagnosticar la causa real (DNS/TLS/red/token).
+    const err = error as any;
+    const cause = err?.cause || {};
+    console.error('[GITHUB_MODELS][INFERENCE][FETCH_ERROR]', {
+      url: GH_MODELS_INFERENCE_URL,
+      model: request.model,
+      name: err?.name,
+      message: err?.message,
+      code: err?.code || cause?.code,
+      errno: cause?.errno,
+      causeMessage: cause?.message,
+    });
+    throw new ApiError(502, 'Error de conexión con GitHub Models.', {
+      url: GH_MODELS_INFERENCE_URL,
+      name: err?.name || null,
+      message: err?.message || null,
+      code: err?.code || cause?.code || null,
+    });
   } finally {
     clearTimeout(timeoutId);
   }
