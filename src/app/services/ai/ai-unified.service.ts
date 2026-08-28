@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, catchError } from 'rxjs';
+import { Observable, catchError, of, map } from 'rxjs';
 import { GeminiService } from './gemini.service';
 import { DeepSeekService } from './deepseek.service';
 import { GitHubModelsService } from './github-models.service';
@@ -207,6 +207,19 @@ export class AiUnifiedService {
         technique: string,
         userRequest: string = ''
     ): Observable<StreamEvent> {
+        // GitHub Models no soporta streaming en esta versión: usamos su modo
+        // no-stream y adaptamos el resultado a un único StreamEvent (done=true),
+        // con fallback automático a DeepSeek si la llamada falla.
+        if (this.isGitHubModelsActive()) {
+            console.log('[AI Unified Stream] GitHub Models activo — generación NO-stream adaptada a StreamEvent');
+            const primary = this.githubModelsService
+                .generateTestCasesSmart(description, acceptanceCriteria, technique)
+                .pipe(map((parsed: any) => this.toStreamEvent(parsed)));
+            return this.withDeepSeekFallback(
+                primary,
+                () => this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest)
+            );
+        }
         console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
         return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
     }
@@ -221,9 +234,34 @@ export class AiUnifiedService {
         newTechnique: string,
         userReanalysisContext: string
     ): Observable<StreamEvent> {
+        // GitHub Models no soporta streaming: modo no-stream adaptado a StreamEvent,
+        // con fallback automático a DeepSeek si falla.
+        if (this.isGitHubModelsActive()) {
+            console.log('[AI Unified Stream] GitHub Models activo — refinamiento NO-stream adaptado a StreamEvent');
+            const primary = this.githubModelsService
+                .refineTestCasesDirect(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
+                .pipe(map((parsed: any) => this.toStreamEvent(parsed)));
+            return this.withDeepSeekFallback(
+                primary,
+                () => this.deepSeekService.refineTestCasesDirectStream(originalHuInput, editedTestCases, newTechnique, userReanalysisContext)
+            );
+        }
         console.log('[AI Unified Stream] Usando DeepSeek para refinamiento con streaming');
         return this.deepSeekService.refineTestCasesDirectStream(
             originalHuInput, editedTestCases, newTechnique, userReanalysisContext
         );
+    }
+
+    /**
+     * Adapta un resultado ya parseado (JSON con testCases) al formato StreamEvent
+     * que esperan los componentes que consumen los métodos ...Stream.
+     * Emite el contenido como un único evento final (done=true).
+     */
+    private toStreamEvent(parsed: any): StreamEvent {
+        return {
+            reasoning: '',
+            content: JSON.stringify(parsed ?? {}),
+            done: true
+        };
     }
 }
