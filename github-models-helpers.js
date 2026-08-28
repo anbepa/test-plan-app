@@ -142,8 +142,14 @@ async function ghDisconnectConnection(userId) {
 const GH_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GH_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
+// Client ID oficial de GitHub Copilot para editores (mismo que VS Code / DBeaver).
+// El endpoint /copilot_internal/v2/token SOLO acepta tokens emitidos por las OAuth
+// Apps aprobadas de Copilot; un OAuth App propio da 401 en el token exchange aunque
+// el usuario tenga suscripcion activa.
+const GH_COPILOT_CLIENT_ID = 'Iv1.b507a08c87ecfe98';
+
 function ghClientId() {
-    return ghRequiredEnv('GITHUB_OAUTH_CLIENT_ID');
+    return process.env.GITHUB_OAUTH_CLIENT_ID || GH_COPILOT_CLIENT_ID;
 }
 
 function ghScopes() {

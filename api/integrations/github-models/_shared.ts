@@ -164,8 +164,16 @@ export async function disconnectGithubConnection(userId: string): Promise<void> 
 const GH_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GH_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
+// Client ID oficial de GitHub Copilot para editores (el mismo que usan
+// VS Code / DBeaver / Copilot CLI). Es imprescindible usar este client_id
+// en el Device Flow porque el endpoint /copilot_internal/v2/token SOLO acepta
+// tokens emitidos por las OAuth Apps aprobadas de Copilot. Un OAuth App propio
+// produce un token gho_ valido para api.github.com/user, pero Copilot lo rechaza
+// con 401 aunque el usuario tenga suscripcion activa.
+const GH_COPILOT_CLIENT_ID = 'Iv1.b507a08c87ecfe98';
+
 function ghClientId(): string {
-  return requiredEnv('GITHUB_OAUTH_CLIENT_ID');
+  return process.env['GITHUB_OAUTH_CLIENT_ID'] || GH_COPILOT_CLIENT_ID;
 }
 function ghScopes(): string {
   return process.env['GITHUB_MODELS_SCOPES'] || 'read:user';
