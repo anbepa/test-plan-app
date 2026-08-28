@@ -181,6 +181,12 @@ function ghScopes(): string {
 function ghTimeoutMs(): number {
   return Number(process.env['GITHUB_MODELS_TIMEOUT_MS'] || 15000);
 }
+// Timeout específico (más amplio) para la inferencia de chat: generar respuestas
+// largas (max_tokens altos) supera fácilmente los 15s. Se mantiene por debajo del
+// maxDuration de la función en Vercel (60s) para poder devolver un error limpio.
+function ghInferenceTimeoutMs(): number {
+  return Number(process.env['GITHUB_MODELS_INFERENCE_TIMEOUT_MS'] || 55000);
+}
 
 async function ghFetchJson(url: string, options: any = {}): Promise<{ ok: boolean; status: number; data: any }> {
   const controller = new AbortController();
@@ -492,7 +498,7 @@ export async function githubModelsChatCompletion(
 
   // Nivel 3: llamar al endpoint de chat de Copilot con el token de sesion + headers.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ghTimeoutMs());
+  const timeoutId = setTimeout(() => controller.abort(), ghInferenceTimeoutMs());
   try {
     const response = await fetch(GH_COPILOT_CHAT_URL, {
       method: 'POST',
