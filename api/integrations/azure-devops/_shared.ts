@@ -167,7 +167,7 @@ async function azureGet(url: string, personalAccessToken: string): Promise<any> 
         Authorization: `Basic ${basicToken}`,
         Accept: 'application/json'
       },
-      signal: controller.signal
+      signal: controller.signal as any
     });
 
     const data = await response.json().catch(() => ({}));

@@ -72,6 +72,123 @@
     </div>
   </div>
 
+  <!-- SECCIÓN 2: GitHub Models (Copilot) -->
+  <div class="config-section">
+    <button class="section-toggle" type="button" (click)="toggleSection('github')" [attr.aria-expanded]="accordionOpen.github">
+      <span class="section-label">GitHub Models (IA opcional)</span>
+      <span class="section-arrow" [class.open]="accordionOpen.github">▾</span>
+    </button>
+    <div class="config-card" *ngIf="accordionOpen.github">
+      <div class="card-header">
+        <h3 class="card-title">GitHub Models (Copilot)</h3>
+        <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
+      </div>
+
+      <p class="card-description">
+        Proveedor de IA opcional que usa tu suscripción de <strong>GitHub Copilot</strong>.
+        Conéctate con tu cuenta de GitHub (te redirigimos para autorizar, igual que en otras
+        herramientas). Si se habilita y la conexión es válida, se usará como proveedor activo;
+        ante cualquier error, la aplicación vuelve automáticamente a <strong>DeepSeek</strong>.
+      </p>
+
+      <div class="inline-status-grid" *ngIf="githubConnection">
+        <div class="inline-status-item">
+          <span class="inline-status-label">Cuenta</span>
+          <strong class="inline-status-value">{{ githubConnection.tokenHint }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Modelo</span>
+          <strong class="inline-status-value">{{ githubConnection.selectedModel || 'Sin seleccionar' }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Última validación</span>
+          <strong class="inline-status-value">{{ githubConnection.lastValidatedAt ? (githubConnection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+        </div>
+      </div>
+
+      <!-- Panel de autorización del Device Flow -->
+      <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode">
+        <p class="device-instructions">
+          Se abrió GitHub en una pestaña nueva. Introduce este código para autorizar:
+        </p>
+        <div class="device-code">{{ githubUserCode }}</div>
+        <p class="device-link">
+          ¿No se abrió?
+          <a [href]="githubVerificationUri" target="_blank" rel="noopener noreferrer">Abrir github.com/login/device</a>
+        </p>
+        <p class="device-waiting">Esperando tu autorización en GitHub...</p>
+        <button class="btn-secondary" type="button" (click)="cancelGithubConnect()">Cancelar</button>
+      </div>
+
+      <!-- Preferencias (solo con conexión activa) -->
+      <div class="form-grid" *ngIf="githubConnection">
+        <div class="form-group">
+          <label for="githubModel">Modelo</label>
+          <select
+            id="githubModel"
+            name="githubModel"
+            class="form-control"
+            [(ngModel)]="githubSelectedModel"
+            (change)="onGithubModelChange()"
+            [disabled]="isGithubBusy || githubModels.length === 0">
+            <option value="" disabled>{{ loadingGithubModels ? 'Cargando modelos...' : 'Selecciona un modelo' }}</option>
+            <option *ngFor="let model of githubModels" [value]="model.id">
+              {{ model.displayName }}{{ model.publisher ? ' (' + model.publisher + ')' : '' }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="toggle-label" for="githubEnabled">Usar GitHub Models como proveedor</label>
+          <label class="switch">
+            <input
+              id="githubEnabled"
+              name="githubEnabled"
+              type="checkbox"
+              [(ngModel)]="githubEnabled"
+              (change)="onGithubEnabledChange()"
+              [disabled]="isGithubBusy">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <!-- Sin conexión: botón de conectar (Device Flow) -->
+        <button
+          class="btn-primary"
+          type="button"
+          *ngIf="!githubConnection"
+          (click)="connectWithGithub()"
+          [disabled]="isGithubBusy">
+          {{ githubConnecting ? 'Esperando autorización...' : 'Conectar con GitHub Copilot' }}
+        </button>
+
+        <!-- Con conexión: reconectar / validar / refrescar / desconectar -->
+        <button
+          class="btn-secondary"
+          type="button"
+          *ngIf="githubConnection"
+          (click)="connectWithGithub()"
+          [disabled]="isGithubBusy">
+          {{ githubConnecting ? 'Esperando autorización...' : 'Reconectar cuenta' }}
+        </button>
+        <button class="btn-secondary" type="button" (click)="validateGithubConnection()" [disabled]="isGithubBusy || !githubConnection">
+          {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
+        </button>
+        <button class="btn-secondary" type="button" (click)="loadGithubModels()" [disabled]="isGithubBusy || !githubConnection">
+          {{ loadingGithubModels ? 'Actualizando...' : 'Refrescar modelos' }}
+        </button>
+        <button class="btn-danger" type="button" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection">
+          {{ disconnectingGithub ? 'Desconectando...' : 'Desconectar' }}
+        </button>
+      </div>
+
+      <p *ngIf="githubInfoMessage" class="message success">{{ githubInfoMessage }}</p>
+      <p *ngIf="githubErrorMessage" class="message error">{{ githubErrorMessage }}</p>
+    </div>
+  </div>
+
   <!-- SECCIÓN 4: Parámetros Globales -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('global')" [attr.aria-expanded]="accordionOpen.global">

@@ -8,7 +8,7 @@ import {
   getAuthenticatedUser,
   toErrorResponse,
   getAzureConnectionWithSecret
-} from './shared';
+} from './_shared';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   try {

@@ -6,6 +6,7 @@ const { createClient } = require('@supabase/supabase-js');
 const sanitizeHtml = require('sanitize-html');
 const { htmlToText } = require('html-to-text');
 const { decode } = require('he');
+const ghm = require('./github-models-helpers');
 
 const app = express();
 const PORT = 3000;
@@ -566,6 +567,129 @@ app.delete('/api/integrations/azure-devops/connections', async (req, res) => {
 
         await disconnectAzureConnection(user.id, organization);
         return res.status(200).json({ success: true });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+
+// ============================================================================
+// GitHub Models (Copilot) — Rutas (Device Flow + conexión por usuario)
+// ============================================================================
+
+// GET conexión (sin token) para pintar la UI
+app.get('/api/integrations/github-models/connections', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        const row = await ghm.ghGetConnection(user.id);
+        return res.status(200).json(ghm.ghToConnectionView(row));
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// POST guardar preferencias (enabled / selectedModel) sin re-autenticar
+app.post('/api/integrations/github-models/connections/preferences', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : null;
+        const selectedModel = req.body?.selectedModel ? String(req.body.selectedModel) : null;
+        const row = await ghm.ghUpsertConnection(user.id, { token: null, enabled, selectedModel, status: null });
+        return res.status(200).json(ghm.ghToConnectionView(row));
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// POST validar la conexión existente contra GitHub
+app.post('/api/integrations/github-models/connections/validate', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        const secret = await ghm.ghGetConnectionWithSecret(user.id);
+        if (!secret || !secret.token) {
+            throw ghm.ghApiError(404, 'GitHub Models no está configurado para tu usuario.');
+        }
+        try {
+            await ghm.ghValidateToken(secret.token);
+            await ghm.ghUpdateConnectionStatus(user.id, 'connected');
+            const row = await ghm.ghGetConnection(user.id);
+            return res.status(200).json(ghm.ghToConnectionView(row));
+        } catch (validationError) {
+            const status = validationError?.status === 401 ? 'invalid' : 'expired';
+            await ghm.ghUpdateConnectionStatus(user.id, status);
+            throw validationError;
+        }
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// DELETE desconectar
+app.delete('/api/integrations/github-models/connections', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        await ghm.ghDisconnectConnection(user.id);
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// GET catálogo de modelos disponibles
+app.get('/api/integrations/github-models/models', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        const secret = await ghm.ghGetConnectionWithSecret(user.id);
+        if (!secret || !secret.token) {
+            throw ghm.ghApiError(404, 'Conecta primero con GitHub para listar los modelos.');
+        }
+        const models = await ghm.ghListModels(secret.token);
+        return res.status(200).json({ models });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// POST Device Flow — paso 1: iniciar (devuelve user_code)
+app.post('/api/integrations/github-models/device/start', async (req, res) => {
+    try {
+        await ghm.ghGetAuthenticatedUser(req); // exige sesión válida
+        const dev = await ghm.ghDeviceStart();
+        return res.status(200).json({
+            deviceCode: dev.deviceCode,
+            userCode: dev.userCode,
+            verificationUri: dev.verificationUri,
+            expiresIn: dev.expiresIn,
+            interval: dev.interval
+        });
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
+// POST Device Flow — paso 2: sondear. Si el usuario autorizó, guarda el token.
+app.post('/api/integrations/github-models/device/poll', async (req, res) => {
+    try {
+        const user = await ghm.ghGetAuthenticatedUser(req);
+        const deviceCode = String(req.body?.deviceCode || '').trim();
+        if (!deviceCode) throw ghm.ghApiError(400, 'Falta el deviceCode.');
+
+        const result = await ghm.ghDevicePoll(deviceCode);
+        if (result.pending) {
+            return res.status(202).json({ pending: true, slowDown: !!result.slowDown });
+        }
+
+        // Autorizado: validar y persistir el token cifrado por usuario.
+        await ghm.ghValidateToken(result.accessToken);
+        const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : true;
+        const selectedModel = req.body?.selectedModel ? String(req.body.selectedModel) : null;
+        const row = await ghm.ghUpsertConnection(user.id, {
+            token: result.accessToken,
+            enabled,
+            selectedModel,
+            status: 'connected'
+        });
+        return res.status(200).json({ pending: false, connection: ghm.ghToConnectionView(row) });
     } catch (error) {
         return sendApiError(res, error);
     }
