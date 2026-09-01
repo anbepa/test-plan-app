@@ -148,8 +148,11 @@
 <div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
   <div class="modal-container modal-wide" (click)="$event.stopPropagation()">
     <div class="modal-header">
-      <h3>Nueva Ejecución</h3>
-      <button type="button" class="modal-close-btn" (click)="closeCreateModal()">✕</button>
+      <div class="modal-header-text">
+        <h3>Nueva Ejecución</h3>
+        <p class="modal-subtitle">Define el nombre, las etiquetas y elige los casos de prueba a ejecutar.</p>
+      </div>
+      <button type="button" class="modal-close-btn" aria-label="Cerrar" title="Cerrar" (click)="closeCreateModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="modal-form-grid">
@@ -157,9 +160,10 @@
           <div class="form-group">
             <label class="form-label">Nombre <span class="required">*</span></label>
             <input type="text" class="form-input" placeholder="Ej: Ejecución de Regresión - Módulo Login" [(ngModel)]="newRunName">
+            <p class="form-hint">Usa un nombre descriptivo para identificarla luego.</p>
           </div>
           <div class="form-group">
-            <label class="form-label">Etiquetas</label>
+            <label class="form-label">Etiquetas <span class="form-label-optional">Opcional</span></label>
             <div class="tags-input-wrapper">
               <div class="predefined-tags">
                 <button type="button" *ngFor="let pt of predefinedTags" class="predefined-tag-btn" [class.active]="newRunTags.includes(pt)" (click)="togglePredefinedTag(pt)">{{ pt }}</button>
@@ -225,7 +229,9 @@
                     <p>Cargando casos de prueba...</p>
                   </div>
                   <div *ngIf="!isLoadingTestCases && !selectedHuNode" class="tree-main-placeholder">
-                    <p>Selecciona una HU del panel izquierdo para ver sus escenarios</p>
+                    <div class="placeholder-illustration" aria-hidden="true">🗂️</div>
+                    <p class="placeholder-title">Ningún caso seleccionado</p>
+                    <p class="placeholder-hint">Expande un plan y selecciona una HU en el panel izquierdo para ver sus escenarios.</p>
                   </div>
                   <div *ngIf="!isLoadingTestCases && selectedHuNode">
                     <div class="search-tc-wrapper">
@@ -264,6 +270,7 @@
       </div>
     </div>
     <div class="modal-footer">
+      <span class="modal-footer-hint">{{ newRunSelectedTestCaseIds.length > 0 ? newRunSelectedTestCaseIds.length + ' caso(s) listo(s) para ejecutar' : 'Completa el nombre y selecciona al menos un caso' }}</span>
       <button type="button" class="button-cancel" (click)="closeCreateModal()">Cancelar</button>
       <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || !selectedHuNode || newRunSelectedTestCaseIds.length === 0 || isCreating">
         {{ isCreating ? 'Creando...' : 'Crear' }}
