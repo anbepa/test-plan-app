@@ -28,7 +28,7 @@ export interface EvidenceExtraFile {
 }
 
 export interface EvidenceUploadOptions {
-  formats: { serenity: boolean; docx: boolean; pdf: boolean };
+  formats: { serenity: boolean; docx: boolean; pdf: boolean; excel?: boolean };
   extraFiles: EvidenceExtraFile[];
 }
 

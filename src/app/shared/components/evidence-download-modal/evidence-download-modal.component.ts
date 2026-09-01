@@ -24,13 +24,14 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
   @Output() openSerenityHistoryRequested = new EventEmitter<void>();
 
   isDownloading = false;
-  downloadingFormat: 'word' | 'pdf' | 'serenity' | null = null;
+  downloadingFormat: 'word' | 'pdf' | 'excel' | 'serenity' | null = null;
   downloadProgressMessage = '';
   downloadProgressPercent = 0;
   serenityHistoryCount = 0;
   serenityDispatched = false;
   serenityStatusMessage = '';
   private serenityStatusTimer: any = null;
+
 
   get effectiveTestRun(): TestRun | null {
     if (this.testRun) return this.testRun;
@@ -141,6 +142,40 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
     } catch (error: any) {
       console.error('Error downloading PDF:', error);
       this.toastService.error('Error al descargar documento PDF: ' + (error.message || 'Error desconocido'));
+    } finally {
+      this.isDownloading = false;
+      this.downloadingFormat = null;
+      this.downloadProgressMessage = '';
+      this.downloadProgressPercent = 0;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async downloadExcel(): Promise<void> {
+    if (!this.execution) {
+      this.toastService.warning('No hay información disponible para descargar');
+      return;
+    }
+
+    this.isDownloading = true;
+    this.downloadingFormat = 'excel';
+    this.downloadProgressMessage = 'Generando documento Excel...';
+    this.downloadProgressPercent = 0;
+    this.cdr.detectChanges();
+
+    try {
+      await this.exportService.exportExecutionToXLSX(
+        this.execution,
+        this.huData,
+        (current, total) => {
+          this.downloadProgressPercent = Math.round((current / total) * 100);
+          this.cdr.detectChanges();
+        }
+      );
+      this.toastService.success('Documento Excel descargado exitosamente');
+    } catch (error: any) {
+      console.error('Error downloading Excel:', error);
+      this.toastService.error('Error al descargar documento Excel: ' + (error.message || 'Error desconocido'));
     } finally {
       this.isDownloading = false;
       this.downloadingFormat = null;

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 import { HUData, PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
 import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
 import { saveAs } from 'file-saver';
@@ -1933,6 +1934,310 @@ export class ExportService {
 
         const filename = this.escapeFilename(`Reporte_Evidencias_HU_${huNumber}.pdf`);
         doc.save(filename);
+    }
+
+
+    /**
+     * Exporta una ejecución del plan con evidencias en formato XLSX (Excel).
+     *
+     * Requisito clave: NO se ajusta la imagen al tamaño de la celda; es la CELDA la
+     * que se ajusta al tamaño con el que entra la imagen. Para lograrlo, cada imagen
+     * ocupa su propia fila cuya altura se fija según el alto (escalado) de la imagen,
+     * y el ancho de la columna "Evidencias" se amplía al ancho de la imagen más ancha.
+     * La imagen se ancla con su tamaño real en píxeles (`ext`), por lo que no se
+     * deforma. La columna "Paso a paso" se combina verticalmente sobre las filas de
+     * evidencia del mismo paso.
+     *
+     * Replica la información de exportExecutionToDOCX/PDF (título HU, tabla de
+     * escenarios y, por escenario, tabla "Paso a paso | Evidencias").
+     */
+    async exportExecutionToXLSX(
+        execution: PlanExecution,
+        hu: HUData | null,
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
+        if (!execution || !execution.testCases || execution.testCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        await this.storageService.buildStorageIndex();
+        const total = execution.testCases.length;
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Test Plan App';
+        workbook.created = new Date();
+
+        const HEADER_FILL = 'FF2E74B5';
+        const HEADER_TEXT = 'FFFFFFFF';
+        const BORDER = 'FF9AA5B1';
+        const thin = { style: 'thin' as const, color: { argb: BORDER } };
+        const allBorders = { top: thin, bottom: thin, left: thin, right: thin };
+
+        const STEP_COL_WIDTH = 45;      // Columna "Paso a paso"
+        const MIN_EVID_COL_WIDTH = 60;  // Ancho mínimo de "Evidencias"
+        const PX_PER_CHAR = 7;          // px por unidad de ancho de Excel (aprox.)
+        const PT_PER_PX = 0.75;         // px→pt para alto de fila (aprox.)
+        const MAX_IMG_W = 900;          // Máximo ancho de imagen (px)
+        const MAX_IMG_H = 675;          // Máximo alto de imagen (px)
+        const IMG_PAD = 8;              // Padding alrededor de la imagen (px)
+
+        // ── HOJA RESUMEN ──────────────────────────────────────────────
+        const summary = workbook.addWorksheet('Escenarios', {
+            views: [{ showGridLines: false }],
+            pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+        });
+        summary.columns = [{ width: 8 }, { width: 90 }];
+
+        const huTitle = hu?.title || execution.huTitle;
+        const t1 = summary.addRow([`Nombre de hu: ${huTitle}`]);
+        t1.font = { bold: true, size: 16 };
+        summary.mergeCells(t1.number, 1, t1.number, 2);
+        t1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        t1.height = 26;
+
+        const t2 = summary.addRow(['Reporte de Ejecución de Pruebas']);
+        t2.font = { bold: true, size: 13 };
+        summary.mergeCells(t2.number, 1, t2.number, 2);
+        t2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        summary.addRow([]);
+
+        const sHead = summary.addRow(['N°', 'Escenario de Prueba']);
+        sHead.eachCell(cell => {
+            cell.font = { bold: true, color: { argb: HEADER_TEXT } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = allBorders;
+        });
+        execution.testCases.forEach((tc, idx) => {
+            const r = summary.addRow([idx + 1, tc.title || `Escenario ${idx + 1}`]);
+            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+            r.eachCell(cell => (cell.border = allBorders));
+        });
+
+        // ── UNA HOJA POR ESCENARIO ────────────────────────────────────
+        for (let index = 0; index < execution.testCases.length; index++) {
+            const testCase = execution.testCases[index];
+            const scenarioNumber = index + 1;
+
+            const allStepEvidences = testCase.steps.flatMap(s => s.evidences || []);
+            if (allStepEvidences.length > 0) {
+                await this.storageService.hydrateStepEvidence(allStepEvidences);
+            }
+            onProgress?.(index + 1, total);
+
+            let sheetName = `${scenarioNumber}. ${testCase.title || 'Escenario ' + scenarioNumber}`
+                .replace(/[\\/?*[\]:]/g, '-');
+            if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
+
+            const sheet = workbook.addWorksheet(sheetName, {
+                views: [{ showGridLines: false }],
+                pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+            });
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+            const stepsToRender = validSteps.length > 0
+                ? validSteps
+                : [{ numero_paso: 1, accion: '', status: 'pending' as const, stepId: '', evidences: [], notes: '' }];
+
+            // ── Nº MÁXIMO DE COLUMNAS DEL GRID EN EL ESCENARIO ──────────────
+            // La hoja tendrá 1 (Paso a paso) + maxGridCols columnas físicas, de
+            // modo que el encabezado y el título cubran todo el ancho aunque los
+            // pasos tengan distinto nº de columnas de evidencias.
+            const maxGridCols = Math.max(
+                1,
+                ...stepsToRender.map(st => Math.max(1, Number((st as any).evidenceColumns) || 1))
+            );
+            const lastGridCol = 1 + maxGridCols; // índice de columna Excel (1-based)
+
+            // Ancho de cada sub-columna de evidencias: reparte un lienzo amplio
+            // entre las columnas para que las imágenes se vean grandes.
+            const EVID_CANVAS_PX = 980;                       // ancho total del área de evidencias
+            const perColPx = Math.floor(EVID_CANVAS_PX / maxGridCols);
+            const evidColWidthChars = Math.max(24, Math.ceil((perColPx + IMG_PAD * 2) / PX_PER_CHAR));
+
+            sheet.getColumn(1).width = STEP_COL_WIDTH;
+            for (let c = 0; c < maxGridCols; c++) {
+                sheet.getColumn(2 + c).width = evidColWidthChars;
+            }
+
+            // Título del escenario (cubre todas las columnas)
+            const titleRow = sheet.addRow([`${scenarioNumber}. ${testCase.title || 'Escenario ' + scenarioNumber}`]);
+            titleRow.font = { bold: true, size: 14, color: { argb: 'FF2E74B5' } };
+            sheet.mergeCells(titleRow.number, 1, titleRow.number, lastGridCol);
+            titleRow.getCell(1).alignment = { vertical: 'middle', wrapText: true };
+            titleRow.height = 22;
+            sheet.addRow([]);
+
+            // Encabezado de tabla: "Paso a paso" | "Evidencias" (merge sobre el grid)
+            const headRow = sheet.addRow(['Paso a paso', 'Evidencias']);
+            headRow.getCell(1).font = { bold: true, color: { argb: HEADER_TEXT } };
+            headRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+            headRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            headRow.getCell(1).border = allBorders;
+            if (maxGridCols > 1) sheet.mergeCells(headRow.number, 2, headRow.number, lastGridCol);
+            for (let c = 0; c < maxGridCols; c++) {
+                const cell = headRow.getCell(2 + c);
+                cell.font = { bold: true, color: { argb: HEADER_TEXT } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = allBorders;
+            }
+            headRow.height = 20;
+
+            for (let sIdx = 0; sIdx < stepsToRender.length; sIdx++) {
+                const step = stepsToRender[sIdx];
+                const stepNumber = step.numero_paso ?? (sIdx + 1);
+                const stepAction = step.accion?.trim() || `Paso ${stepNumber}`;
+
+                const hydratedEvidences = (step.evidences || []).map(ev => {
+                    const cached = this.storageService.getCachedImage(ev.id);
+                    return cached ? { ...ev, base64Data: cached.base64Data } : ev;
+                });
+
+                const imageEvidences = hydratedEvidences.filter(
+                    (ev: any) => ev.type !== 'csv' && typeof ev.base64Data === 'string' && ev.base64Data
+                );
+
+                // Configuración de la cuadrícula "Ajustes de reporte" (COLS x FILAS)
+                const gridCols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                let gridRows = Math.max(1, Number((step as any).evidenceRows) || 1);
+                if (imageEvidences.length > 0) {
+                    const requiredRows = Math.ceil(imageEvidences.length / gridCols);
+                    if (requiredRows > gridRows) gridRows = requiredRows;
+                }
+
+                // Ancho real (px) que ocupa cada celda del grid de ESTE paso.
+                // Si el paso usa menos columnas que maxGridCols, cada celda del
+                // paso abarca varias sub-columnas físicas (span) para llenar el ancho.
+                const spanPerCell = Math.max(1, Math.floor(maxGridCols / gridCols));
+                const cellPx = perColPx * spanPerCell;
+                const CELL_MAX_W = Math.max(200, cellPx - IMG_PAD * 2);
+                const CELL_MAX_H = MAX_IMG_H;
+
+                const firstRowIndex = sheet.rowCount + 1;
+
+                if (imageEvidences.length === 0) {
+                    // Sin imagen: fila con placeholder (celda evidencias sobre todo el grid)
+                    const row = sheet.addRow([`${stepNumber}. ${stepAction}`, this.EVIDENCE_PLACEHOLDER]);
+                    row.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    row.getCell(1).border = allBorders;
+                    if (maxGridCols > 1) sheet.mergeCells(row.number, 2, row.number, lastGridCol);
+                    row.getCell(2).font = { italic: true, color: { argb: 'FF6B7280' } };
+                    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                    for (let c = 0; c < maxGridCols; c++) row.getCell(2 + c).border = allBorders;
+                    row.height = Math.max(30, Math.min(120, Math.ceil(stepAction.length / 40) * 15 + 20));
+                } else {
+                    // ── Cuadrícula de evidencias (1 imagen por celda, llenado por filas) ──
+                    let evIdx = 0;
+                    for (let r = 0; r < gridRows; r++) {
+                        // 1) Fila de descripciones (si alguna imagen de la fila la tiene)
+                        const evRow: any[] = [];
+                        for (let c = 0; c < gridCols; c++) evRow.push(imageEvidences[evIdx + c]);
+                        const hasAnyDesc = evRow.some(ev => ev && (ev.description || '').trim());
+                        if (hasAnyDesc) {
+                            const dRow = sheet.addRow([]);
+                            dRow.getCell(1).border = allBorders;
+                            for (let c = 0; c < gridCols; c++) {
+                                const physCol = 2 + c * spanPerCell;
+                                const physEnd = (c === gridCols - 1) ? lastGridCol : (physCol + spanPerCell - 1);
+                                if (physEnd > physCol) sheet.mergeCells(dRow.number, physCol, dRow.number, physEnd);
+                                const ev = evRow[c];
+                                const cell = dRow.getCell(physCol);
+                                cell.value = ev ? ((ev.description || '').trim()) : '';
+                                cell.font = { italic: true, bold: true, color: { argb: 'FF2E74B5' } };
+                                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                                for (let pc = physCol; pc <= physEnd; pc++) dRow.getCell(pc).border = allBorders;
+                            }
+                            const maxDescLen = Math.max(0, ...evRow.map(ev => ev ? (ev.description || '').trim().length : 0));
+                            dRow.height = Math.max(18, Math.min(80, Math.ceil(maxDescLen / (evidColWidthChars * spanPerCell / 1.2)) * 15 + 6));
+                        }
+
+                        // 2) Fila de imágenes
+                        const imgRow = sheet.addRow([]);
+                        const imgRowIndex = imgRow.number;
+                        imgRow.getCell(1).border = allBorders;
+                        let maxCellH = 0;
+                        // Pre-calcular alto de la fila (según imagen más alta)
+                        const cellDims: Array<{ w: number; h: number; ext: 'png' | 'jpeg' | 'gif'; b64: string } | null> = [];
+                        for (let c = 0; c < gridCols; c++) {
+                            const ev = evRow[c];
+                            if (!ev) { cellDims.push(null); continue; }
+                            const dims = this.scaleImageDimensions(
+                                ev.naturalWidth || 1280, ev.naturalHeight || 720, CELL_MAX_W, CELL_MAX_H
+                            );
+                            maxCellH = Math.max(maxCellH, dims.height);
+                            const b64 = ev.base64Data as string;
+                            const mime = b64.match(/^data:image\/([a-zA-Z]+);base64,/)?.[1] || 'png';
+                            const ext = (mime.toLowerCase() === 'jpeg' ? 'jpeg' : mime.toLowerCase()) as 'png' | 'jpeg' | 'gif';
+                            const base64Only = b64.includes(',') ? b64.split(',')[1] : b64;
+                            cellDims.push({ w: dims.width, h: dims.height, ext, b64: base64Only });
+                        }
+                        const rowHeightPt = Math.max(24, Math.round((maxCellH + IMG_PAD * 2) * PT_PER_PX));
+                        imgRow.height = rowHeightPt;
+
+                        for (let c = 0; c < gridCols; c++) {
+                            const physCol = 2 + c * spanPerCell;
+                            const physEnd = (c === gridCols - 1) ? lastGridCol : (physCol + spanPerCell - 1);
+                            if (physEnd > physCol) sheet.mergeCells(imgRowIndex, physCol, imgRowIndex, physEnd);
+                            for (let pc = physCol; pc <= physEnd; pc++) imgRow.getCell(pc).border = allBorders;
+
+                            const cd = cellDims[c];
+                            if (!cd) continue;
+                            const imageId = workbook.addImage({ base64: cd.b64, extension: cd.ext });
+                            const spanWidthChars = evidColWidthChars * (physEnd - physCol + 1);
+                            const colOffset = IMG_PAD / (spanWidthChars * PX_PER_CHAR);
+                            const rowOffset = (IMG_PAD * PT_PER_PX) / rowHeightPt;
+                            sheet.addImage(imageId, {
+                                tl: { col: (physCol - 1) + colOffset, row: (imgRowIndex - 1) + rowOffset } as any,
+                                ext: { width: cd.w, height: cd.h },
+                                editAs: 'oneCell'
+                            });
+                        }
+                        evIdx += gridCols;
+                    }
+                }
+
+                // Combinar verticalmente la columna "Paso a paso" sobre todas las filas del paso
+                const lastRowIndex = sheet.rowCount;
+                if (lastRowIndex >= firstRowIndex && imageEvidences.length > 0) {
+                    if (lastRowIndex > firstRowIndex) {
+                        sheet.mergeCells(firstRowIndex, 1, lastRowIndex, 1);
+                    }
+                    const stepCell = sheet.getCell(firstRowIndex, 1);
+                    stepCell.value = `${stepNumber}. ${stepAction}`;
+                    stepCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    stepCell.border = allBorders;
+                }
+
+                // Nota del paso (si existe): fila que abarca todas las columnas
+                if (step.notes?.trim()) {
+                    const noteRow = sheet.addRow([`Nota: ${step.notes.trim()}`]);
+                    sheet.mergeCells(noteRow.number, 1, noteRow.number, lastGridCol);
+                    noteRow.getCell(1).font = { italic: true, color: { argb: 'FF555555' } };
+                    noteRow.getCell(1).alignment = { vertical: 'top', wrapText: true };
+                    noteRow.getCell(1).border = allBorders;
+                }
+            }
+
+            // Resultado esperado
+            sheet.addRow([]);
+            const resRow = sheet.addRow([`Resultado Esperado: ${testCase.expectedResults || 'N/A'}`]);
+            resRow.getCell(1).font = { bold: true };
+            sheet.mergeCells(resRow.number, 1, resRow.number, 2);
+            resRow.getCell(1).alignment = { vertical: 'top', wrapText: true };
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        if (returnBlob) {
+            return blob;
+        }
+        const filename = this.escapeFilename(`Ejecución - ${huTitle}.xlsx`);
+        saveAs(blob, filename);
     }
 
 }

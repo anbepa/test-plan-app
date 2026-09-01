@@ -1,72 +1,80 @@
 <div class="image-editor-container">
   <div class="editor-toolbar">
     <!-- Row 1: Tools + Stroke props + Actions -->
-    <div class="toolbar-row">
+    <div class="toolbar-row" role="toolbar" aria-label="Herramientas de edición de imagen">
 
       <!-- Tool icons -->
-      <div class="toolbar-group tools-group">
+      <div class="toolbar-group tools-group" role="group" aria-label="Herramientas de dibujo">
         <!-- Pen -->
-        <button (click)="selectTool('pen')" [class.active]="selectedTool === 'pen'" class="tool-icon-btn" title="Bolígrafo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        <button type="button" (click)="selectTool('pen')" [class.active]="selectedTool === 'pen'" class="tool-icon-btn" title="Bolígrafo" aria-label="Bolígrafo" [attr.aria-pressed]="selectedTool === 'pen'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
         <!-- Highlighter -->
-        <button (click)="selectTool('highlighter')" [class.active]="selectedTool === 'highlighter'" class="tool-icon-btn" title="Resaltador">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 5.5l-3-3-8 8 3 3 8-8z"/></svg>
+        <button type="button" (click)="selectTool('highlighter')" [class.active]="selectedTool === 'highlighter'" class="tool-icon-btn" title="Resaltador" aria-label="Resaltador" [attr.aria-pressed]="selectedTool === 'highlighter'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l-6 6v3h3l6-6"/><path d="M22 5.5l-3-3-8 8 3 3 8-8z"/></svg>
         </button>
         <!-- Line -->
-        <button (click)="selectTool('line')" [class.active]="selectedTool === 'line'" class="tool-icon-btn" title="Línea">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+        <button type="button" (click)="selectTool('line')" [class.active]="selectedTool === 'line'" class="tool-icon-btn" title="Línea" aria-label="Línea" [attr.aria-pressed]="selectedTool === 'line'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/></svg>
         </button>
         <!-- Arrow -->
-        <button (click)="selectTool('arrow')" [class.active]="selectedTool === 'arrow'" class="tool-icon-btn" title="Flecha">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
+        <button type="button" (click)="selectTool('arrow')" [class.active]="selectedTool === 'arrow'" class="tool-icon-btn" title="Flecha" aria-label="Flecha" [attr.aria-pressed]="selectedTool === 'arrow'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
         </button>
         <!-- Circle -->
-        <button (click)="selectTool('circle')" [class.active]="selectedTool === 'circle'" class="tool-icon-btn" title="Círculo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+        <button type="button" (click)="selectTool('circle')" [class.active]="selectedTool === 'circle'" class="tool-icon-btn" title="Círculo" aria-label="Círculo" [attr.aria-pressed]="selectedTool === 'circle'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
         </button>
         <!-- Rectangle -->
-        <button (click)="selectTool('rectangle')" [class.active]="selectedTool === 'rectangle'" class="tool-icon-btn" title="Rectángulo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+        <button type="button" (click)="selectTool('rectangle')" [class.active]="selectedTool === 'rectangle'" class="tool-icon-btn" title="Rectángulo" aria-label="Rectángulo" [attr.aria-pressed]="selectedTool === 'rectangle'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
         </button>
         <!-- Text -->
-        <button (click)="selectTool('text')" [class.active]="selectedTool === 'text'" class="tool-icon-btn" title="Texto">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        <button type="button" (click)="selectTool('text')" [class.active]="selectedTool === 'text'" class="tool-icon-btn" title="Texto" aria-label="Texto" [attr.aria-pressed]="selectedTool === 'text'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
         </button>
         <!-- Eraser -->
-        <button (click)="selectTool('eraser')" [class.active]="selectedTool === 'eraser'" class="tool-icon-btn" title="Editar / Borrar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6.0001 17.0001L17 6"/></svg>
+        <button type="button" (click)="selectTool('eraser')" [class.active]="selectedTool === 'eraser'" class="tool-icon-btn" title="Editar / Borrar" aria-label="Editar o borrar" [attr.aria-pressed]="selectedTool === 'eraser'">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 16l10-10 7 7-3 3"/><path d="M6.0001 17.0001L17 6"/></svg>
         </button>
       </div>
 
-      <div class="toolbar-divider"></div>
+      <div class="toolbar-divider" aria-hidden="true"></div>
 
       <!-- Stroke size + preset colors -->
-      <div class="toolbar-group stroke-group">
+      <div class="toolbar-group stroke-group" role="group" aria-label="Grosor y color del trazo">
         <input type="range" min="1" max="20" [(ngModel)]="strokeWidth" class="size-slider"
-          (change)="onSizeChange()" title="Tamaño" />
-        <span class="size-badge">{{ strokeWidth }}px</span>
-        <div class="preset-colors">
-          <button *ngFor="let c of presetColors"
+          (change)="onSizeChange()" title="Tamaño del trazo" aria-label="Tamaño del trazo" />
+        <span class="size-badge" aria-hidden="true">{{ strokeWidth }}px</span>
+        <div class="preset-colors" role="group" aria-label="Colores predefinidos">
+          <button type="button" *ngFor="let c of presetColors"
             (click)="setPresetColor(c)"
             class="color-swatch"
             [class.color-swatch-active]="strokeColor === c"
             [style.background]="c"
-            [title]="c">
+            [title]="c"
+            [attr.aria-label]="'Color ' + c"
+            [attr.aria-pressed]="strokeColor === c">
           </button>
         </div>
       </div>
 
-      <div class="toolbar-divider"></div>
+      <div class="toolbar-divider" aria-hidden="true"></div>
 
       <!-- Action buttons -->
-      <div class="toolbar-group action-group">
-        <button (click)="clearCanvas()" class="btn-clear">Limpiar</button>
-        <button (click)="saveCanvas()" class="btn-save">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      <div class="toolbar-group action-group" role="group" aria-label="Acciones">
+        <button type="button" (click)="clearCanvas()" class="btn-clear" title="Limpiar todas las anotaciones">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+          Limpiar
+        </button>
+        <button type="button" (click)="downloadImage()" class="btn-download" title="Descargar la imagen editada">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar
+        </button>
+        <button type="button" (click)="saveCanvas()" class="btn-save" title="Guardar los cambios">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar
         </button>
-        <button (click)="downloadImage()" class="btn-download">Descargar</button>
       </div>
     </div>
   </div>
@@ -76,10 +84,14 @@
       <canvas id="fabricCanvas" class="drawing-canvas"></canvas>
     </div>
     <!-- Zoom overlay -->
-    <div class="zoom-overlay">
-      <button (click)="setZoom(currentZoom - 0.2)" class="zoom-btn" title="Alejar">-</button>
-      <span class="zoom-value">{{ (currentZoom * 100).toFixed(0) }}%</span>
-      <button (click)="setZoom(currentZoom + 0.2)" class="zoom-btn" title="Acercar">+</button>
+    <div class="zoom-overlay" role="group" aria-label="Control de zoom">
+      <button type="button" (click)="setZoom(currentZoom - 0.2)" class="zoom-btn" title="Alejar" aria-label="Alejar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <span class="zoom-value" aria-live="polite">{{ (currentZoom * 100).toFixed(0) }}%</span>
+      <button type="button" (click)="setZoom(currentZoom + 0.2)" class="zoom-btn" title="Acercar" aria-label="Acercar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
     </div>
   </div>
 </div>
