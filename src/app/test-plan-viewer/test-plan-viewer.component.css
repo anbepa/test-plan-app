@@ -211,12 +211,22 @@
 .plan-title-link:hover {
   color: #1e3a8a;
   text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.plan-title-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .col-num {
   text-align: right;
   white-space: nowrap;
   padding-right: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  font-weight: 600;
 }
 
 .col-actions {
@@ -479,8 +489,8 @@
 
 .plans-table th,
 .plans-table td {
-  padding: 1.1rem 0.9rem;
-  border-bottom: 1px solid #e8edf5;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid #eef2f8;
   text-align: left;
   font-size: 0.875rem;
   color: var(--text-primary);
@@ -491,13 +501,17 @@
   position: sticky;
   top: 0;
   z-index: 2;
+  padding-top: 0.7rem;
+  padding-bottom: 0.7rem;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fe 100%);
-  color: #334155;
+  color: #64748b;
   font-weight: 700;
+  font-size: 0.72rem;
   white-space: nowrap;
-  letter-spacing: 0.015em;
-  text-transform: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   backdrop-filter: blur(4px);
+  border-bottom: 1px solid #dbe3ef;
 }
 
 .plans-table thead th:first-child {
@@ -508,21 +522,18 @@
   border-top-right-radius: 0.95rem;
 }
 
-.plans-table tbody tr:nth-child(even) {
-  background: #fafcff;
-}
-
-.plans-table tbody tr:nth-child(odd) {
+.plans-table tbody tr {
   background: #ffffff;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .plans-table tbody tr:hover {
-  background: #eef5ff;
+  background: #f5f9ff;
 }
 
 .plans-table tbody tr.row-selected {
-  background: #fafafa !important;
-  box-shadow: inset 3px 0 0 #cbd5e1;
+  background: #eff6ff !important;
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 .plans-table tbody tr:last-child td {
@@ -606,7 +617,7 @@
 .hu-name-link:hover {
   color: #1e40af;
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
 }
 
 .row-delete-btn {
