@@ -35,6 +35,11 @@
   cursor: not-allowed;
 }
 
+.btn-evidence-manager:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: 2px;
+}
+
 .btn-spinner {
   display: inline-block;
   width: 12px;
@@ -43,6 +48,12 @@
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.btn-spinner.dark {
+  border-color: rgba(0, 122, 255, 0.25);
+  border-top-color: var(--primary-color, #007AFF);
 }
 
 @keyframes spin {
@@ -83,13 +94,21 @@
   border-bottom: 1px solid var(--border-color, #E5E5EA);
   background: var(--background-color, #fff);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .evidence-modal-titlebar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   padding: 18px 20px 12px;
+}
+
+.evidence-modal-heading {
+  min-width: 0;
 }
 
 .evidence-modal-titlebar h3 {
@@ -97,6 +116,34 @@
   font-size: 16px;
   font-weight: 700;
   color: var(--text-color, #1c1c1e);
+}
+
+/* Subtítulo contextual: sobre qué ejecución se está trabajando */
+.evidence-modal-subtitle {
+  margin: 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #8e8e93);
+}
+
+.evidence-context-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-count-chip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--primary-color, #007AFF);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .close-btn {
@@ -171,23 +218,74 @@
 .evidence-modal-body {
   overflow-y: auto;
   flex: 1;
+  overscroll-behavior: contain;
 }
 
 /* Los sub-componentes embebidos ya traen su propio padding en .modal-body */
+
+/* Aviso persistente mientras hay un proceso en curso */
+.evidence-modal-processing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border-color, #E5E5EA);
+  background: rgba(0, 122, 255, 0.06);
+  color: var(--text-color, #1c1c1e);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Focos visibles accesibles */
+.evidence-tab:focus-visible,
+.close-btn:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* Respeta la preferencia de movimiento reducido del sistema */
+@media (prefers-reduced-motion: reduce) {
+  .evidence-modal,
+  .evidence-modal-backdrop,
+  .evidence-tab-indicator,
+  .btn-evidence-manager {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 
 /* Responsive */
 @media (max-width: 640px) {
   .btn-evidence-manager {
     padding: 6px 12px;
     font-size: 12px;
+    width: 100%;
+  }
+
+  .evidence-manager {
+    display: block;
+  }
+
+  /* En móvil el modal se comporta como hoja inferior: más alcanzable con el pulgar */
+  .evidence-modal-backdrop {
+    align-items: flex-end;
   }
 
   .evidence-modal {
-    width: 95%;
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
   }
 
   .evidence-tab {
     font-size: 12px;
     padding: 9px 6px 11px;
+  }
+
+  .evidence-modal-subtitle {
+    font-size: 11px;
   }
 }

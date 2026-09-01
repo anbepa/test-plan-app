@@ -21,6 +21,32 @@
     <!-- Body -->
     <div class="modal-body">
 
+      <!-- Indicador de pasos: orienta al usuario sobre dónde está en el flujo -->
+      <ol class="upload-stepper" *ngIf="!uploadCompleted && !uploadError" aria-label="Progreso del proceso de subida">
+        <li class="upload-step"
+          [class.active]="!planValidated && !isUploading"
+          [class.done]="planValidated || isUploading"
+          [attr.aria-current]="(!planValidated && !isUploading) ? 'step' : null">
+          <span class="step-dot">1</span>
+          <span class="step-label">Plan</span>
+        </li>
+        <li class="step-line" aria-hidden="true"></li>
+        <li class="upload-step"
+          [class.active]="planValidated && !isUploading"
+          [class.done]="isUploading"
+          [attr.aria-current]="(planValidated && !isUploading) ? 'step' : null">
+          <span class="step-dot">2</span>
+          <span class="step-label">Formatos</span>
+        </li>
+        <li class="step-line" aria-hidden="true"></li>
+        <li class="upload-step"
+          [class.active]="isUploading"
+          [attr.aria-current]="isUploading ? 'step' : null">
+          <span class="step-dot">3</span>
+          <span class="step-label">Subida</span>
+        </li>
+      </ol>
+
       <!-- Paso 1: Ingreso de Plan ID (solo si se quiere adjuntar Word/PDF al plan) -->
       <div class="upload-section" *ngIf="!planValidated && !isUploading">
         <div class="form-group">
@@ -28,19 +54,25 @@
           <input 
             id="planId"
             type="text" 
+            inputmode="numeric"
+            autocomplete="off"
             [(ngModel)]="inputPlanId"
             (keyup.enter)="validatePlan()"
             placeholder="Ej: 7695070"
             class="form-input"
+            [class.has-error]="!!validationError"
+            [attr.aria-invalid]="!!validationError"
+            aria-describedby="planId-help"
             [disabled]="isValidating">
-          <small class="help-text">
+          <small class="help-text" id="planId-help">
             Puedes encontrar el ID en la URL: dev.azure.com/.../test/define?planId=<strong>7695070</strong>
+            · Pulsa <kbd>Enter</kbd> para validar.
           </small>
         </div>
 
         <!-- Errores de validación -->
-        <div class="error-message" *ngIf="validationError">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <div class="error-message" *ngIf="validationError" role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/>
           </svg>
           <div>
@@ -51,16 +83,19 @@
 
         <!-- Botones de acción -->
         <div class="form-actions">
-          <button (click)="close()" class="btn btn-secondary">Cancelar</button>
+          <button (click)="close()" class="btn btn-secondary" type="button">Cancelar</button>
           <button 
             (click)="validatePlan()" 
             class="btn btn-primary"
+            type="button"
+            [attr.aria-busy]="isValidating"
+            [title]="!inputPlanId ? 'Ingresa el ID del plan para continuar' : 'Validar el plan en Azure DevOps'"
             [disabled]="!inputPlanId || isValidating">
             <ng-container *ngIf="!isValidating">
               Validar plan
             </ng-container>
             <ng-container *ngIf="isValidating">
-              <span class="btn-spinner"></span> Validando...
+              <span class="btn-spinner" aria-hidden="true"></span> Validando...
             </ng-container>
           </button>
         </div>
@@ -114,7 +149,7 @@
             </label>
 
           </div>
-          <small class="formats-hint" *ngIf="!hasSelectedFormat()">
+          <small class="formats-hint" *ngIf="!hasSelectedFormat()" role="alert">
             Selecciona al menos una evidencia para continuar.
           </small>
         </div>
@@ -126,14 +161,19 @@
             id="fileName"
             type="text"
             class="form-input"
+            autocomplete="off"
+            aria-describedby="fileName-help"
             [(ngModel)]="inputFileName"
             placeholder="Evidencia_EVC00057.zip" />
+          <small class="help-text" id="fileName-help">Se adjuntará al plan como archivo comprimido (.zip).</small>
         </div>
 
         <!-- Botones -->
         <div class="form-actions">
-          <button (click)="resetToPlantId()" class="btn btn-secondary">Cambiar plan</button>
-          <button (click)="startUpload()" class="btn btn-primary" [disabled]="!hasSelectedFormat()">
+          <button (click)="resetToPlantId()" class="btn btn-secondary" type="button">Cambiar plan</button>
+          <button (click)="startUpload()" class="btn btn-primary" type="button"
+            [title]="!hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Generar los documentos y adjuntarlos al plan'"
+            [disabled]="!hasSelectedFormat()">
             Generar y subir
           </button>
         </div>
@@ -141,19 +181,21 @@
 
       <!-- Paso 3: Progreso de carga -->
       <div class="upload-section" *ngIf="isUploading">
-        <div class="progress-container">
+        <div class="progress-container" role="status" aria-live="polite">
           <h3>Generando y subiendo evidencias...</h3>
           <div class="progress-message">{{ currentPhaseMessage }}</div>
-          <div class="progress-bar">
-            <div class="progress-fill" [style.width.%]="50"></div>
+          <!-- Barra indeterminada: el proceso no expone porcentaje real -->
+          <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-indeterminate"></div>
           </div>
+          <p class="progress-note">Este proceso puede tardar varios minutos. No cierres esta ventana.</p>
         </div>
       </div>
 
       <!-- Resultado: Éxito -->
       <div class="upload-section" *ngIf="uploadCompleted && !uploadError">
-        <div class="success-message">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="success-message" role="status" aria-live="polite">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
           <h3>¡Éxito!</h3>
@@ -161,14 +203,14 @@
         </div>
 
         <div class="form-actions">
-          <button (click)="close()" class="btn btn-primary">Cerrar</button>
+          <button (click)="close()" class="btn btn-primary" type="button">Cerrar</button>
         </div>
       </div>
 
       <!-- Resultado: Error -->
       <div class="upload-section" *ngIf="uploadError && !uploadCompleted">
-        <div class="error-section">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+        <div class="error-section" role="alert">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/>
           </svg>
           <h3>Error en la carga</h3>
@@ -176,8 +218,8 @@
         </div>
 
         <div class="form-actions">
-          <button (click)="resetToPlantId()" class="btn btn-secondary">Cambiar plan</button>
-          <button (click)="close()" class="btn btn-secondary">Cerrar</button>
+          <button (click)="resetToPlantId()" class="btn btn-secondary" type="button">Cambiar plan</button>
+          <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
         </div>
       </div>
     </div>

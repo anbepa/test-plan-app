@@ -256,9 +256,19 @@
   color: #2563eb;
   text-decoration: underline;
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
 }
 .serenity-dispatched-msg .ver-reporte-link:hover {
   color: #1d4ed8;
+}
+.serenity-dispatched-msg .ver-reporte-link:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ── Progress ── */
@@ -267,14 +277,29 @@
   background: var(--surface-color, #F5F5F7);
   border-radius: 10px;
 }
+.progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
 .progress-message {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary, #6E6E73);
 }
+.progress-percent {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-color, #007AFF);
+  font-variant-numeric: tabular-nums;
+}
 
 .progress-bar-container {
+  position: relative;
   width: 100%;
   height: 4px;
   background: var(--border-color, #E5E5EA);
@@ -286,6 +311,22 @@
   background: var(--primary-color, #007AFF);
   border-radius: 99px;
   transition: width 300ms ease;
+}
+
+/* Barra indeterminada: comunica "trabajando" cuando aún no hay % real */
+.progress-bar-indeterminate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  border-radius: 99px;
+  background: var(--primary-color, #007AFF);
+  animation: indeterminateSlide 1.2s ease-in-out infinite;
+}
+@keyframes indeterminateSlide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
 }
 
 /* ── Close row ── */
@@ -311,4 +352,36 @@
 @media (max-width: 640px) {
   .evidence-download-modal { width: 95%; }
   .modal-header, .modal-body, .modal-footer { padding-left: 16px; padding-right: 16px; }
+  .download-option-btn { padding: 12px; gap: 10px; }
+  .serenity-actions { flex-direction: column; align-items: stretch; }
+  .serenity-action-btn { width: 100%; justify-content: center; }
+}
+
+/* Texto guía al inicio del panel */
+.download-hint {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary, #6E6E73);
+}
+
+/* Foco accesible en todas las acciones del panel */
+.download-option-btn:focus-visible,
+.serenity-action-btn:focus-visible,
+.close-btn:focus-visible,
+.btn-cancel:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evidence-download-modal,
+  .evidence-download-modal-backdrop,
+  .progress-bar-fill,
+  .progress-bar-indeterminate,
+  .download-option-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+  .progress-bar-indeterminate { width: 100%; opacity: .6; }
 }
