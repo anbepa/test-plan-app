@@ -36,15 +36,18 @@
 
 /* En modo streaming el modal se expande para mostrar el pensamiento */
 .modal-container:has(.progress-body) {
-    max-width: 860px;
+    max-width: 720px;
     width: 95%;
-    border-radius: 20px;
+    border-radius: 22px;
     max-height: 90vh;
+    box-shadow:
+        0 24px 60px rgba(15, 23, 42, 0.22),
+        0 0 0 1px rgba(37, 99, 235, 0.06);
 }
 
 /* Header */
 .modal-header {
-    padding: 20px 24px 12px 24px;
+    padding: 22px 26px 12px 26px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -129,11 +132,12 @@
 .progress-track {
     position: relative;
     width: 100%;
-    height: 6px; /* Barra más delgada */
+    height: 10px;
     border-radius: 999px;
-    background: #e5e7eb;
+    background: #e9edf3;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
     overflow: visible;
-    margin-top: 0.2rem;
+    margin-top: 0.9rem;
 }
 
 .progress-indeterminate {
@@ -141,24 +145,39 @@
     top: 0;
     left: 0;
     height: 100%;
-    background: linear-gradient(90deg, #2563eb 0%, #60a5fa 60%, #93c5fd 100%);
+    min-width: 10px;
+    background: linear-gradient(90deg, #1d4ed8 0%, #3b82f6 55%, #60a5fa 100%);
     background-size: 200% 100%;
     border-radius: 999px;
+    box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
     animation: progressWidth 0.6s ease-out, progressShimmer 2s ease-in-out infinite;
     transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
 }
+.progress-indeterminate::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+    transform: translateX(-100%);
+    animation: progressGlint 1.6s ease-in-out infinite;
+}
+@keyframes progressGlint {
+    0% { transform: translateX(-100%); }
+    60%, 100% { transform: translateX(220%); }
+}
 
 .progress-percent {
     position: absolute;
-    top: -6px;
+    top: -20px;
     right: 0;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 800;
-    color: #10b981;
+    color: #059669;
     pointer-events: none;
     line-height: 1;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
 }
 
 .progress-hint {
@@ -745,13 +764,13 @@
 
 /* Robot speech bubble (to the right of robot) */
 .robot-speech {
-    background: #eff6ff;
-    border: 1px solid #dbeafe;
+    background: linear-gradient(135deg, #eff6ff 0%, #e0edff 100%);
+    border: 1px solid #cfe0fd;
     border-radius: 16px;
-    padding: 10px 16px; /* Padding reducido */
+    padding: 12px 18px;
     position: relative;
-    max-width: 240px; /* Más estrecho */
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+    max-width: 260px;
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.14);
     animation: fadeSlideIn 0.3s ease-out;
 }
 
@@ -778,10 +797,10 @@
 }
 
 .robot-speech-text {
-    font-size: 12px;
-    color: #1e40af;
+    font-size: 12.5px;
+    color: #1e3a8a;
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.35;
     text-align: center;
     display: block;
 }
@@ -814,15 +833,15 @@
     max-height: 260px; /* Máximo para que el modal no crezca infinito */
     display: flex;
     flex-direction: column;
-    background: #f8fbff;
-    border: 2px dashed #93c5fd;
-    border-radius: 16px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+    border: 1.5px dashed #a9c9f5;
+    border-radius: 18px;
     position: relative;
-    margin: 10px 0 6px 0;
+    margin: 6px 0 6px 0;
     flex-shrink: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     animation: bubbleAppear 0.4s ease-out forwards;
-    box-shadow: 0 4px 20px rgba(147, 197, 253, 0.1);
+    box-shadow: 0 8px 28px rgba(59, 130, 246, 0.10);
     background-image: none;
     overflow: hidden;
 }
@@ -1119,13 +1138,27 @@
 }
 
 .thought-cases-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 11px;
-    font-weight: 700;
-    color: #0071e3;
-    margin-bottom: 8px;
+    font-weight: 800;
+    color: #1d4ed8;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5edfb;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     flex-shrink: 0;
+}
+.thought-cases-header::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+    animation: dotPulse 1.4s ease-in-out infinite;
 }
 
 .thought-cases-list {
@@ -1156,14 +1189,24 @@
 
 .thought-case-item {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 5px 0;
-    border-bottom: 1px solid #f1f5f9;
-    font-size: 12.5px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    border: 1px solid #eef2f7;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    font-size: 13px;
     color: #1e3a5f;
     line-height: 1.4;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
     animation: itemSlideIn 0.25s ease-out both;
+}
+.thought-case-item:hover {
+    border-color: #bfdbfe;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.10);
+    transform: translateX(2px);
 }
 .thought-case-item:nth-child(1)  { animation-delay: 0s; }
 .thought-case-item:nth-child(2)  { animation-delay: 0.05s; }
@@ -1172,7 +1215,6 @@
 .thought-case-item:nth-child(5)  { animation-delay: 0.20s; }
 .thought-case-item:nth-child(6)  { animation-delay: 0.25s; }
 .thought-case-item:nth-child(n+7) { animation-delay: 0.30s; }
-.thought-case-item:last-child { border-bottom: none; }
 .thought-case-item.accepted {
     background: #f0fdf4;
     border-radius: 6px;
@@ -1182,16 +1224,17 @@
 
 .tc-num {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #eff6ff;
-    color: #2563eb;
-    font-size: 10px;
-    font-weight: 700;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
 }
 
 .tc-check {
