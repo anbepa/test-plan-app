@@ -98,11 +98,11 @@
 
 /* Test Cases Table */
 .tc-table-container { background: var(--background-color, #fff); border-radius: var(--radius-lg, 14px); box-shadow: 0 1px 3px rgba(0,0,0,.04); overflow: hidden; }
-.tc-table-head { display: grid; grid-template-columns: 40px 40px 1fr 220px 170px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border-color, #D1D1D6); background: var(--surface-color, #F5F5F7); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary, #6E6E73); }
+.tc-table-head { display: grid; grid-template-columns: 40px 40px 1fr 220px 56px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border-color, #D1D1D6); background: var(--surface-color, #F5F5F7); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary, #6E6E73); }
 .tc-row { border-bottom: 1px solid var(--border-color, #D1D1D6); }
 .tc-row:last-child { border-bottom: none; }
 .tc-row-expanded { background: rgba(0,122,255,.02); }
-.tc-row-header { display: grid; grid-template-columns: 40px 40px 1fr 220px 170px; align-items: center; padding: 14px 16px; min-height: 60px; cursor: pointer; transition: background 150ms; user-select: none; }
+.tc-row-header { display: grid; grid-template-columns: 40px 40px 1fr 220px 56px; align-items: center; padding: 14px 16px; min-height: 60px; cursor: pointer; transition: background 150ms; user-select: none; }
 .tc-row-header:hover { background: var(--surface-color, #F5F5F7); }
 .tc-row-expanded .tc-row-header { background: rgba(0,122,255,.05); }
 .tc-col-expander { display: flex; align-items: center; justify-content: center; }
@@ -183,6 +183,8 @@
 .tc-col-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tc-col-assignee { display: flex; align-items: center; }
 .tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: flex-end; flex-wrap: wrap; }
+/* La cabecera "Acciones" se reduce porque la columna ahora solo tiene el menú ⋮ */
+.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: hidden; }
 
 /* Action icon circle buttons */
 .act-icon-btn {
@@ -203,6 +205,98 @@
 .act-fail:hover     { background: #fef2f2 !important; }
 .act-delete-tc { color: #94a3b8 !important; }
 .act-delete-tc:hover { background: #fef2f2 !important; color: #ef4444 !important; }
+
+/* ── Menú contextual (⋮) de acciones por caso de prueba ────────────── */
+.act-kebab-btn {
+  width: 30px; height: 30px; padding: 0;
+  border: none; background: transparent; border-radius: 50%;
+  color: #8e8e93; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 160ms, color 160ms;
+  flex-shrink: 0;
+}
+.act-kebab-btn:hover { background: #f2f2f7; color: #1c1c1e; }
+.act-kebab-btn[aria-expanded="true"] {
+  background: #eff6ff;
+  color: var(--primary-color, #007AFF);
+}
+.act-kebab-btn:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: 2px;
+}
+.act-kebab-btn svg { pointer-events: none; }
+
+.act-menu-panel {
+  position: fixed;
+  transform: translateX(-100%);
+  z-index: 1400;
+  min-width: 236px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .14);
+  animation: act-menu-in 120ms ease-out;
+}
+
+@keyframes act-menu-in {
+  from { opacity: 0; transform: translateX(-100%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-100%) translateY(0); }
+}
+
+.act-menu-label {
+  padding: 6px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #8e8e93;
+}
+
+.act-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1c1c1e;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms;
+}
+.act-menu-item:hover { background: #f2f2f7; }
+.act-menu-item:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: -2px;
+}
+.act-menu-item-danger { color: #ef4444; }
+.act-menu-item-danger:hover { background: #fef2f2; }
+
+.act-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.act-menu-icon svg { pointer-events: none; }
+
+.act-menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: #e5e5ea;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .act-menu-panel { animation: none; }
+  .act-kebab-btn, .act-menu-item { transition: none; }
+}
 
 .step-drag-handle {
   color: #d1d1d6;
@@ -842,13 +936,15 @@
 
 /* Responsive */
 @media (max-width: 900px) {
-  .tc-table-head, .tc-row-header { grid-template-columns: 36px 36px 1fr 200px 180px; }
+  .tc-table-head, .tc-row-header { grid-template-columns: 36px 36px 1fr 180px 48px; }
   .summary-cards { grid-template-columns: repeat(2, 1fr); }
   .summary-bottom-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .tc-table-head, .tc-row-header { grid-template-columns: 36px 36px 1fr 160px; }
-  .tc-col-actions { display: none; }
+  .tc-table-head, .tc-row-header { grid-template-columns: 32px 32px 1fr 110px 40px; }
+  /* El menú (⋮) sí se mantiene en móvil: ocupa poco y agrupa todas las acciones */
+  .tc-col-actions { display: flex; }
+  .act-menu-panel { min-width: 210px; max-width: calc(100vw - 24px); }
   .exec-body { padding: 12px 12px 24px; }
   .tc-row-body { padding: 0 8px 12px 56px; }
 }

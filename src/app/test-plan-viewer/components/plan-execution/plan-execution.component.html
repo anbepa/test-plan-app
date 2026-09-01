@@ -139,48 +139,80 @@
                 </span>
               </div>
               <div class="tc-col-actions" (click)="$event.stopPropagation()">
-                <!-- Pendiente -->
-                <button class="act-icon-btn act-pending"
-                  title="Marcar como Pendiente"
-                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'pending')">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                <!-- Menú contextual (⋮): agrupa todas las acciones de la fila -->
+                <button class="act-kebab-btn"
+                  type="button"
+                  title="Más acciones"
+                  aria-label="Más acciones del caso de prueba"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="openActionsMenuId === tc.testCaseId"
+                  (click)="toggleActionsMenu(tc.testCaseId, $event)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>
                   </svg>
                 </button>
-                <!-- En Progreso -->
-                <button class="act-icon-btn act-progress"
-                  title="Marcar en progreso"
-                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'in-progress')">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                  </svg>
-                </button>
-                <!-- Completado -->
-                <button class="act-icon-btn act-done"
-                  title="Marcar como Completado"
-                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'completed')">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M8 12l3 3 5-5"/>
-                  </svg>
-                </button>
-                <!-- Falló -->
-                <button class="act-icon-btn act-fail"
-                  title="Marcar como Falló"
-                  (click)="setAllStepsStatus(getOriginalIndex(tc), 'failed')">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M15 9l-6 6M9 9l6 6"/>
-                  </svg>
-                </button>
-                <!-- Eliminar (Solo para esta ejecución) -->
-                <button class="act-icon-btn act-delete-tc"
-                  title="Eliminar solo de esta ejecución"
-                  (click)="deleteTestCase(tc, $event)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                  </svg>
-                </button>
+
+                <div class="act-menu-panel"
+                     *ngIf="openActionsMenuId === tc.testCaseId"
+                     role="menu"
+                     aria-label="Acciones del caso de prueba"
+                     [style.top.px]="actionsMenuPos.top"
+                     [style.left.px]="actionsMenuPos.left"
+                     (click)="$event.stopPropagation()">
+                  <div class="act-menu-label">Cambiar estado</div>
+
+                  <button class="act-menu-item" type="button" role="menuitem"
+                          (click)="setAllStepsStatus(getOriginalIndex(tc), 'pending'); closeActionsMenu()">
+                    <span class="act-menu-icon act-pending">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                      </svg>
+                    </span>
+                    Marcar como Pendiente
+                  </button>
+
+                  <button class="act-menu-item" type="button" role="menuitem"
+                          (click)="setAllStepsStatus(getOriginalIndex(tc), 'in-progress'); closeActionsMenu()">
+                    <span class="act-menu-icon act-progress">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                    </span>
+                    Marcar En progreso
+                  </button>
+
+                  <button class="act-menu-item" type="button" role="menuitem"
+                          (click)="setAllStepsStatus(getOriginalIndex(tc), 'completed'); closeActionsMenu()">
+                    <span class="act-menu-icon act-done">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/>
+                      </svg>
+                    </span>
+                    Marcar como Completado
+                  </button>
+
+                  <button class="act-menu-item" type="button" role="menuitem"
+                          (click)="setAllStepsStatus(getOriginalIndex(tc), 'failed'); closeActionsMenu()">
+                    <span class="act-menu-icon act-fail">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/>
+                      </svg>
+                    </span>
+                    Marcar como Falló
+                  </button>
+
+                  <div class="act-menu-divider"></div>
+
+                  <button class="act-menu-item act-menu-item-danger" type="button" role="menuitem"
+                          (click)="deleteTestCase(tc, $event); closeActionsMenu()">
+                    <span class="act-menu-icon act-delete-tc">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                      </svg>
+                    </span>
+                    Eliminar de esta ejecución
+                  </button>
+                </div>
               </div>
             </div>
 
