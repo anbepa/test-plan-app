@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, HostListener, ElementRef, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HUData } from '../../../models/hu-data.model';
@@ -14,7 +14,7 @@ import { WordExporterComponent } from '../../../word-exporter/word-exporter.comp
   templateUrl: './plan-export-modal.component.html',
   styleUrls: ['./plan-export-modal.component.css']
 })
-export class PlanExportModalComponent {
+export class PlanExportModalComponent implements OnInit, OnDestroy {
   @Input() testPlanTitle: string = '';
   @Input() previewHtmlContent: string = '';
   @Input() repositoryLink: string = '';
@@ -48,8 +48,51 @@ export class PlanExportModalComponent {
 
   constructor(
     private evidenceService: AzureDevOpsEvidenceService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private hostRef: ElementRef<HTMLElement>
   ) {}
+
+  private previousBodyOverflow: string | null = null;
+
+  ngOnInit(): void {
+    if (typeof document !== 'undefined') {
+      this.previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (typeof document !== 'undefined' && this.previousBodyOverflow !== null) {
+      document.body.style.overflow = this.previousBodyOverflow;
+      this.previousBodyOverflow = null;
+    }
+  }
+
+  /** Cerrar con Escape (bloqueado si hay validación o envío en curso). */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    this.close();
+  }
+
+  /** Nº de historias de usuario incluidas en el plan (solo informativo). */
+  get huCount(): number {
+    return this.huList?.length || 0;
+  }
+
+  /** Nº total de casos de prueba del plan (solo informativo). */
+  get scenarioCount(): number {
+    return (this.huList || []).reduce((sum, hu) => sum + (hu.detailedTestCases?.length || 0), 0);
+  }
+
+  /** true si no hay escenarios que exportar: permite avisar antes de intentarlo. */
+  get hasNoScenarios(): boolean {
+    return this.scenarioCount === 0;
+  }
+
+  /** Indica si alguna operación bloquea el cierre del modal. */
+  get isBusy(): boolean {
+    return this.isValidating || this.isSending;
+  }
 
   closeIfClickOutside(event: MouseEvent): void {
     if (event.target === event.currentTarget) {
@@ -65,6 +108,16 @@ export class PlanExportModalComponent {
 
   selectTab(tab: 'local' | 'azure'): void {
     this.activeTab = tab;
+  }
+
+  /** Navegación entre pestañas con flechas (patrón ARIA tablist). */
+  onTabsKeydown(event: KeyboardEvent): void {
+    if (this.isBusy) return;
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    this.activeTab = this.activeTab === 'local' ? 'azure' : 'local';
+    const tabs = this.hostRef.nativeElement.querySelectorAll<HTMLElement>('.tab-btn');
+    tabs[this.activeTab === 'local' ? 0 : 1]?.focus();
   }
 
   // --- LÓGICA DE EXPORTACIÓN LOCAL ---
