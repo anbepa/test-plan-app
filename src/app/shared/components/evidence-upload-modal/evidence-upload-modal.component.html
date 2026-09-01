@@ -64,9 +64,8 @@
             [attr.aria-invalid]="!!validationError"
             aria-describedby="planId-help"
             [disabled]="isValidating">
-          <small class="help-text" id="planId-help">
-            Puedes encontrar el ID en la URL: dev.azure.com/.../test/define?planId=<strong>7695070</strong>
-            · Pulsa <kbd>Enter</kbd> para validar.
+          <small class="help-text" id="planId-help" title="Lo encuentras en la URL del plan: dev.azure.com/.../test/define?planId=7695070">
+            En la URL del plan tras <strong>planId=</strong>
           </small>
         </div>
 
@@ -112,7 +111,7 @@
 
         <!-- Selección de evidencias a incluir -->
         <div class="evidence-formats">
-          <label class="formats-title">Formatos a incluir en el archivo comprimido:</label>
+          <label class="formats-title">Formatos a incluir:</label>
 
           <div class="format-options">
 
@@ -127,8 +126,8 @@
                 </svg>
               </span>
               <span class="format-text">
-                <strong>Documento Word</strong>
-                <small>Evidencias en formato DOCX</small>
+                <strong>Word</strong>
+                <small>.docx</small>
               </span>
             </label>
 
@@ -143,8 +142,8 @@
                 </svg>
               </span>
               <span class="format-text">
-                <strong>Documento PDF</strong>
-                <small>Evidencias en formato PDF</small>
+                <strong>PDF</strong>
+                <small>.pdf</small>
               </span>
             </label>
 
@@ -159,8 +158,8 @@
                 </svg>
               </span>
               <span class="format-text">
-                <strong>Documento Excel</strong>
-                <small>Evidencias en formato XLSX (imágenes ajustadas a celda)</small>
+                <strong>Excel</strong>
+                <small title="Imágenes ajustadas a celda">.xlsx</small>
               </span>
             </label>
 
@@ -181,7 +180,7 @@
             aria-describedby="fileName-help"
             [(ngModel)]="inputFileName"
             placeholder="Evidencia_EVC00057.zip" />
-          <small class="help-text" id="fileName-help">Se adjuntará al plan como archivo comprimido (.zip).</small>
+          <small class="help-text" id="fileName-help">Se adjunta al plan como .zip</small>
         </div>
 
         <!-- Botones -->
@@ -204,7 +203,7 @@
           <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
             <div class="progress-indeterminate"></div>
           </div>
-          <p class="progress-note">Este proceso puede tardar varios minutos. No cierres esta ventana.</p>
+          <p class="progress-note">Puede tardar unos minutos. No cierres esta ventana.</p>
         </div>
       </div>
 
