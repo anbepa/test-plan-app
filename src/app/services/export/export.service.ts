@@ -2075,6 +2075,15 @@ export class ExportService {
                     (ev: any) => ev.type !== 'csv' && typeof ev.base64Data === 'string' && ev.base64Data
                 );
 
+                // Configuración de la cuadrícula "Ajustes de reporte" (COLS x FILAS)
+                const gridCols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                let gridRows = Math.max(1, Number((step as any).evidenceRows) || 1);
+                // Auto-ampliar filas para no perder evidencias (igual que Word)
+                if (imageEvidences.length > 0) {
+                    const requiredRows = Math.ceil(imageEvidences.length / gridCols);
+                    if (requiredRows > gridRows) gridRows = requiredRows;
+                }
+
                 const firstRowIndex = sheet.rowCount + 1;
 
                 if (imageEvidences.length === 0) {
@@ -2086,26 +2095,20 @@ export class ExportService {
                     row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
                     row.getCell(2).border = allBorders;
                     row.height = Math.max(30, Math.min(120, Math.ceil(stepAction.length / 40) * 15 + 20));
-                } else {
-                    // Una fila por imagen: la fila se ajusta al alto de la imagen
+                } else if (gridCols === 1) {
+                    // ── Layout de 1 columna: una fila por imagen (con descripción encima) ──
                     imageEvidences.forEach((ev: any, i: number) => {
                         const dims = this.scaleImageDimensions(
-                            ev.naturalWidth || 1280,
-                            ev.naturalHeight || 720,
-                            MAX_IMG_W, MAX_IMG_H
+                            ev.naturalWidth || 1280, ev.naturalHeight || 720, MAX_IMG_W, MAX_IMG_H
                         );
-
                         const b64 = ev.base64Data as string;
                         const mime = b64.match(/^data:image\/([a-zA-Z]+);base64,/)?.[1] || 'png';
                         const ext = (mime.toLowerCase() === 'jpeg' ? 'jpeg' : mime.toLowerCase()) as 'png' | 'jpeg' | 'gif';
                         const base64Only = b64.includes(',') ? b64.split(',')[1] : b64;
-
-                        // Descripción/anotación de la imagen (si existe): fila de texto
-                        // en la columna "Evidencias", justo encima de la imagen.
                         const descStr = (ev.description || '').trim();
+
                         if (descStr) {
-                            const isFirstImg = i === 0;
-                            const descRow = sheet.addRow([isFirstImg ? `${stepNumber}. ${stepAction}` : '', descStr]);
+                            const descRow = sheet.addRow([i === 0 ? `${stepNumber}. ${stepAction}` : '', descStr]);
                             descRow.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
                             descRow.getCell(1).border = allBorders;
                             descRow.getCell(2).font = { italic: true, bold: true, color: { argb: 'FF2E74B5' } };
@@ -2114,30 +2117,21 @@ export class ExportService {
                             descRow.height = Math.max(18, Math.min(80, Math.ceil(descStr.length / 60) * 15 + 6));
                         }
 
-                        // Texto del paso solo en la primera fila de sus imágenes.
-                        // Si ya se imprimió en la fila de descripción, no repetir.
                         const stepText = (i === 0 && !descStr) ? `${stepNumber}. ${stepAction}` : '';
                         const row = sheet.addRow([stepText, '']);
                         const rowIndex = row.number;
                         row.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
                         row.getCell(1).border = allBorders;
                         row.getCell(2).border = allBorders;
-
-                        // Alto de la fila ajustado a la imagen (px→pt) + padding
                         row.height = Math.max(24, Math.round((dims.height + IMG_PAD * 2) * PT_PER_PX));
 
-                        // Ampliar ancho de columna de evidencias si la imagen es más ancha
                         const neededWidthChars = Math.ceil((dims.width + IMG_PAD * 2) / PX_PER_CHAR);
                         if (neededWidthChars > evidenceColWidthChars) {
                             evidenceColWidthChars = neededWidthChars;
                             sheet.getColumn(2).width = evidenceColWidthChars;
                         }
 
-                        // Anclar imagen a la celda de evidencias (col 1 = 2ª columna) con
-                        // su tamaño real en px. `ext` evita que Excel la deforme.
                         const imageId = workbook.addImage({ base64: base64Only, extension: ext });
-                        // Anclaje simple a la celda de evidencias (columna índice 1) con un
-                        // pequeño offset de padding. `ext` fija el tamaño real en px sin deformar.
                         const colOffset = IMG_PAD / (evidenceColWidthChars * PX_PER_CHAR);
                         const rowOffset = (IMG_PAD * PT_PER_PX) / row.height;
                         sheet.addImage(imageId, {
@@ -2146,19 +2140,94 @@ export class ExportService {
                             editAs: 'oneCell'
                         });
                     });
+                } else {
+                    // ── Layout de cuadrícula COLS x FILAS ──
+                    // La columna "Evidencias" se subdivide en `gridCols` columnas físicas
+                    // (columnas Excel 2 .. 1+gridCols). Cada celda de la cuadrícula
+                    // contiene 1 imagen (opcionalmente con su descripción encima).
+                    const CELL_MAX_W = Math.max(120, Math.floor(MAX_IMG_W / gridCols));
+                    const CELL_MAX_H = MAX_IMG_H;
+                    const cellWidthChars = Math.max(
+                        Math.ceil(MIN_EVID_COL_WIDTH / gridCols),
+                        Math.ceil((CELL_MAX_W + IMG_PAD * 2) / PX_PER_CHAR)
+                    );
+                    // Ajustar el ancho de cada sub-columna de la cuadrícula
+                    for (let c = 0; c < gridCols; c++) {
+                        sheet.getColumn(2 + c).width = cellWidthChars;
+                    }
 
-                    // Combinar verticalmente la columna "Paso a paso" sobre sus filas
-                    const lastRowIndex = sheet.rowCount;
-                    if (lastRowIndex > firstRowIndex) {
-                        sheet.mergeCells(firstRowIndex, 1, lastRowIndex, 1);
-                        sheet.getCell(firstRowIndex, 1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    let evIdx = 0;
+                    for (let r = 0; r < gridRows; r++) {
+                        // 1) Fila de descripciones (una celda por columna del grid)
+                        const descsInRow: string[] = [];
+                        for (let c = 0; c < gridCols; c++) {
+                            const ev = imageEvidences[evIdx + c];
+                            descsInRow.push(ev ? ((ev.description || '').trim()) : '');
+                        }
+                        const hasAnyDesc = descsInRow.some(d => d);
+                        if (hasAnyDesc) {
+                            const dRow = sheet.addRow(['', ...descsInRow]);
+                            dRow.getCell(1).border = allBorders;
+                            for (let c = 0; c < gridCols; c++) {
+                                const cell = dRow.getCell(2 + c);
+                                cell.font = { italic: true, bold: true, color: { argb: 'FF2E74B5' } };
+                                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                                cell.border = allBorders;
+                            }
+                            const maxDescLen = Math.max(0, ...descsInRow.map(d => d.length));
+                            dRow.height = Math.max(18, Math.min(80, Math.ceil(maxDescLen / 40) * 15 + 6));
+                        }
+
+                        // 2) Fila de imágenes: una imagen anclada por sub-columna
+                        const imgRow = sheet.addRow(['', ...Array(gridCols).fill('')]);
+                        const imgRowIndex = imgRow.number;
+                        imgRow.getCell(1).border = allBorders;
+                        let maxCellH = 0;
+                        for (let c = 0; c < gridCols; c++) {
+                            imgRow.getCell(2 + c).border = allBorders;
+                            const ev = imageEvidences[evIdx + c];
+                            if (!ev) continue;
+                            const dims = this.scaleImageDimensions(
+                                ev.naturalWidth || 1280, ev.naturalHeight || 720, CELL_MAX_W, CELL_MAX_H
+                            );
+                            maxCellH = Math.max(maxCellH, dims.height);
+                            const b64 = ev.base64Data as string;
+                            const mime = b64.match(/^data:image\/([a-zA-Z]+);base64,/)?.[1] || 'png';
+                            const ext = (mime.toLowerCase() === 'jpeg' ? 'jpeg' : mime.toLowerCase()) as 'png' | 'jpeg' | 'gif';
+                            const base64Only = b64.includes(',') ? b64.split(',')[1] : b64;
+
+                            const imageId = workbook.addImage({ base64: base64Only, extension: ext });
+                            const colOffset = IMG_PAD / (cellWidthChars * PX_PER_CHAR);
+                            const cellRowH = Math.max(24, Math.round((maxCellH + IMG_PAD * 2) * PT_PER_PX)) || 100;
+                            const rowOffset = (IMG_PAD * PT_PER_PX) / cellRowH;
+                            sheet.addImage(imageId, {
+                                tl: { col: (1 + c) + colOffset, row: (imgRowIndex - 1) + rowOffset } as any,
+                                ext: { width: dims.width, height: dims.height },
+                                editAs: 'oneCell'
+                            });
+                        }
+                        imgRow.height = Math.max(24, Math.round((maxCellH + IMG_PAD * 2) * PT_PER_PX));
+                        evIdx += gridCols;
                     }
                 }
 
-                // Nota del paso (si existe)
+                // Combinar verticalmente la columna "Paso a paso" sobre todas las filas del paso
+                const lastRowIndex = sheet.rowCount;
+                if (lastRowIndex >= firstRowIndex && imageEvidences.length > 0) {
+                    if (lastRowIndex > firstRowIndex) {
+                        sheet.mergeCells(firstRowIndex, 1, lastRowIndex, 1);
+                    }
+                    const stepCell = sheet.getCell(firstRowIndex, 1);
+                    stepCell.value = `${stepNumber}. ${stepAction}`;
+                    stepCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    stepCell.border = allBorders;
+                }
+
+                // Nota del paso (si existe): fila que abarca las columnas del paso
                 if (step.notes?.trim()) {
-                    const noteRow = sheet.addRow([`Nota: ${step.notes.trim()}`, '']);
-                    sheet.mergeCells(noteRow.number, 1, noteRow.number, 2);
+                    const noteRow = sheet.addRow([`Nota: ${step.notes.trim()}`]);
+                    const lastCol = 1 + Math.max(1, Number((step as any).evidenceColumns) || 1);
+                    sheet.mergeCells(noteRow.number, 1, noteRow.number, lastCol);
                     noteRow.getCell(1).font = { italic: true, color: { argb: 'FF555555' } };
                     noteRow.getCell(1).alignment = { vertical: 'top', wrapText: true };
                     noteRow.getCell(1).border = allBorders;
