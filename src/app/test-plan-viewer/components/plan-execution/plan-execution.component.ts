@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
 import * as XLSX from 'xlsx';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -53,6 +53,52 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   uploadMenuPos: { top: number; left: number } = { top: 0, left: 0 };
   reportSettingsPos: { top: number; left: number } = { top: 0, left: 0 };
 
+  // ── Menú contextual (⋮) de acciones por caso de prueba ──────────────
+  openActionsMenuId: string | null = null;
+  actionsMenuPos: { top: number; left: number } = { top: 0, left: 0 };
+
+  /** Abre/cierra el menú de acciones de una fila y lo posiciona bajo el botón. */
+  toggleActionsMenu(testCaseId: string, event: MouseEvent): void {
+    event.stopPropagation();
+
+    if (this.openActionsMenuId === testCaseId) {
+      this.openActionsMenuId = null;
+      return;
+    }
+
+    const btn = event.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = 230;
+    const openUpwards = rect.bottom + menuHeight > window.innerHeight;
+
+    this.actionsMenuPos = {
+      top: openUpwards ? Math.max(8, rect.top - menuHeight - 6) : rect.bottom + 6,
+      left: rect.right
+    };
+    this.openActionsMenuId = testCaseId;
+  }
+
+  /** Cierra el menú de acciones. */
+  closeActionsMenu(): void {
+    this.openActionsMenuId = null;
+  }
+
+  @HostListener('document:click')
+  onDocumentClickCloseActions(): void {
+    this.closeActionsMenu();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeCloseActions(): void {
+    this.closeActionsMenu();
+  }
+
+  @HostListener('window:resize')
+  @HostListener('window:scroll')
+  onViewportChangeCloseActions(): void {
+    this.closeActionsMenu();
+  }
+
   openUploadMenu(event: MouseEvent): void {
     const btn = event.currentTarget as HTMLElement;
     const rect = btn.getBoundingClientRect();
@@ -98,6 +144,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   serenityProgressPct = 0;
   showSerenityHistory = false;
   serenityHistory: SerenityReportRecord[] = [];
+  /** Solo UI: muestra skeleton/spinner mientras se consulta el historial. */
+  isLoadingSerenityHistory = false;
   // ── Vincular reporte a plan Azure DevOps ──
   attachingReportId: string | null = null;
   attachPlanIdInput = '';
@@ -1573,9 +1621,59 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   }
 
+  /**
+   * Tiempo relativo legible ("hace 5 min") para dar contexto rápido del reporte.
+   * Solo presentación: no altera datos ni comportamiento.
+   */
+  formatSerenityRelative(iso: string): string {
+    if (!iso) return '';
+    const ts = new Date(iso).getTime();
+    if (Number.isNaN(ts)) return '';
+
+    const diffSec = Math.floor((Date.now() - ts) / 1000);
+    if (diffSec < 0) return '';
+    if (diffSec < 60) return 'hace unos segundos';
+
+    const mins = Math.floor(diffSec / 60);
+    if (mins < 60) return `hace ${mins} min`;
+
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `hace ${hours} h`;
+
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'ayer';
+    if (days < 30) return `hace ${days} días`;
+    return '';
+  }
+
+  /** Texto accesible del estado del reporte. */
+  serenityStatusLabel(status: string): string {
+    if (status === 'pending') return 'Generando...';
+    if (status === 'completed') return 'Completado';
+    if (status === 'error') return 'Error';
+    return status;
+  }
+
   async openSerenityHistoryModal(): Promise<void> {
     this.showSerenityHistory = true;
-    await this.loadHistory();
+    this.isLoadingSerenityHistory = true;
+    try {
+      await this.loadHistory();
+    } finally {
+      this.isLoadingSerenityHistory = false;
+    }
+    this.startSerenityHistoryPolling();
+  }
+
+  /** Refresco manual del estado del reporte (además del polling automático). */
+  async refreshSerenityHistory(): Promise<void> {
+    if (this.isLoadingSerenityHistory) return;
+    this.isLoadingSerenityHistory = true;
+    try {
+      await this.loadHistory();
+    } finally {
+      this.isLoadingSerenityHistory = false;
+    }
     this.startSerenityHistoryPolling();
   }
 

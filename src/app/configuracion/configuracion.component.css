@@ -521,3 +521,176 @@ select.form-control {
   background-position: right 10px center;
   padding-right: 32px;
 }
+
+/* ── Mejoras UI/UX ─────────────────────────────────────────────────── */
+
+/* Texto solo para lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Resumen contextual dentro del encabezado de cada sección */
+.section-summary {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, .08);
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  vertical-align: middle;
+}
+
+/* Input con acción integrada (mostrar/ocultar PAT) */
+.input-with-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-action .form-control {
+  flex: 1;
+  padding-right: 40px;
+}
+
+.input-action-btn {
+  position: absolute;
+  right: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 6px;
+  border-radius: 6px;
+  transition: background-color .15s ease;
+}
+
+.input-action-btn:hover {
+  background: rgba(0, 0, 0, .05);
+}
+
+/* Código del Device Flow + botón copiar */
+.device-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-copy-code {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.btn-copy-code:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.device-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.device-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(37, 99, 235, .25);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: config-spin .8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes config-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Estados vacíos de las tablas */
+.empty-note {
+  margin: 8px 0 12px;
+  padding: 14px 16px;
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Foco visible consistente */
+.section-toggle:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible,
+.btn-add-row:focus-visible,
+.btn-remove-row:focus-visible,
+.btn-copy-code:focus-visible,
+.input-action-btn:focus-visible,
+.form-control:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Botones deshabilitados con feedback claro */
+button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .section-summary {
+    display: block;
+    margin: 4px 0 0;
+  }
+
+  .actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions-row button {
+    width: 100%;
+  }
+
+  .device-code-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-copy-code {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-spinner {
+    animation: none;
+  }
+
+  .section-arrow,
+  .input-action-btn,
+  .btn-copy-code {
+    transition: none;
+  }
+}

@@ -18,14 +18,18 @@
 <ng-template #embeddedBody>
     <!-- Body -->
     <div class="modal-body">
+      <p class="download-hint">Elige el formato en el que quieres descargar las evidencias de esta ejecución.</p>
+
       <div class="download-options">
 
         <!-- Word -->
         <button class="download-option-btn" (click)="downloadWord()"
           [disabled]="isDownloading || !execution"
           [class.is-loading]="isDownloading && downloadingFormat === 'word'"
+          [attr.aria-busy]="isDownloading && downloadingFormat === 'word'"
+          [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar evidencias en Word (DOCX)'"
           type="button">
-          <span class="opt-icon opt-icon-word">
+          <span class="opt-icon opt-icon-word" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
@@ -37,18 +41,20 @@
             <span class="opt-title">Word (DOCX)</span>
             <span class="opt-desc">Documento con estructura personalizada</span>
           </div>
-          <span class="opt-chevron" *ngIf="!(isDownloading && downloadingFormat === 'word')">
+          <span class="opt-chevron" *ngIf="!(isDownloading && downloadingFormat === 'word')" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
           </span>
-          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'word'"></span>
+          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'word'" aria-hidden="true"></span>
         </button>
 
         <!-- PDF -->
         <button class="download-option-btn" (click)="downloadPDF()"
           [disabled]="isDownloading || !execution"
           [class.is-loading]="isDownloading && downloadingFormat === 'pdf'"
+          [attr.aria-busy]="isDownloading && downloadingFormat === 'pdf'"
+          [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar evidencias en PDF'"
           type="button">
-          <span class="opt-icon opt-icon-pdf">
+          <span class="opt-icon opt-icon-pdf" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
@@ -60,15 +66,15 @@
             <span class="opt-title">PDF</span>
             <span class="opt-desc">Matriz de evidencias en formato PDF</span>
           </div>
-          <span class="opt-chevron" *ngIf="!(isDownloading && downloadingFormat === 'pdf')">
+          <span class="opt-chevron" *ngIf="!(isDownloading && downloadingFormat === 'pdf')" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
           </span>
-          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'pdf'"></span>
+          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'pdf'" aria-hidden="true"></span>
         </button>
 
         <!-- Serenity -->
         <div class="download-option-btn serenity-card">
-          <span class="opt-icon opt-icon-serenity">
+          <span class="opt-icon opt-icon-serenity" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
@@ -78,16 +84,18 @@
           <div class="opt-content">
             <div class="opt-title-row">
               <span class="opt-title">Reporte Serenity</span>
+              <span class="opt-badge">Asíncrono</span>
             </div>
-            <span class="opt-desc">Generado por workflow (asíncrono)</span>
+            <span class="opt-desc">Se genera en un pipeline de Azure DevOps. Puede tardar varios minutos; podrás cerrar esta ventana y consultarlo luego.</span>
 
             <div class="serenity-actions">
               <button
                 type="button"
                 class="serenity-action-btn secondary"
                 (click)="openSerenityHistory()"
+                title="Consultar el estado y descargar el último reporte generado"
                 [disabled]="isDownloading">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Ver reportes generados
               </button>
 
@@ -95,9 +103,11 @@
                 type="button"
                 class="serenity-action-btn primary"
                 (click)="downloadSerenity()"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Enviar la generación del reporte al pipeline de Azure DevOps'"
+                [attr.aria-busy]="isDownloading && downloadingFormat === 'serenity'"
                 [disabled]="(isDownloading && downloadingFormat !== 'serenity') || !execution"
                 [class.is-loading]="isDownloading && downloadingFormat === 'serenity'">
-                <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'"></span>
+                <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'" aria-hidden="true"></span>
                 <ng-container *ngIf="isDownloading && downloadingFormat === 'serenity'">
                   {{ serenityStatusMessage || 'Preparando reporte...' }}
                 </ng-container>
@@ -111,18 +121,29 @@
 
 
         <!-- Mensaje post-dispatch Serenity -->
-        <div class="serenity-dispatched-msg" *ngIf="serenityDispatched">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          <span>Se envió a pipeline de Azure. Revisar detalle en <a class="ver-reporte-link" (click)="openSerenityHistory()">Ver reporte</a></span>
+        <div class="serenity-dispatched-msg" *ngIf="serenityDispatched" role="status" aria-live="polite">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Se envió a pipeline de Azure. Revisar detalle en
+            <button type="button" class="ver-reporte-link" (click)="openSerenityHistory()">Ver reporte</button>
+          </span>
         </div>
 
       </div>
 
       <!-- Progreso (solo Word/PDF) -->
-      <div class="download-progress" *ngIf="isDownloading && downloadingFormat !== 'serenity'">
-        <p class="progress-message">{{ downloadProgressMessage }}</p>
-        <div class="progress-bar-container" *ngIf="downloadProgressPercent > 0">
-          <div class="progress-bar-fill" [style.width.%]="downloadProgressPercent"></div>
+      <div class="download-progress" *ngIf="isDownloading && downloadingFormat !== 'serenity'" role="status" aria-live="polite">
+        <div class="progress-head">
+          <p class="progress-message">{{ downloadProgressMessage }}</p>
+          <span class="progress-percent" *ngIf="downloadProgressPercent > 0">{{ downloadProgressPercent }}%</span>
+        </div>
+        <div class="progress-bar-container"
+          role="progressbar"
+          [attr.aria-valuenow]="downloadProgressPercent > 0 ? downloadProgressPercent : null"
+          aria-valuemin="0"
+          aria-valuemax="100">
+          <!-- Barra determinada cuando hay porcentaje; indeterminada mientras se prepara -->
+          <div class="progress-bar-fill" *ngIf="downloadProgressPercent > 0" [style.width.%]="downloadProgressPercent"></div>
+          <div class="progress-bar-indeterminate" *ngIf="downloadProgressPercent === 0"></div>
         </div>
       </div>
 

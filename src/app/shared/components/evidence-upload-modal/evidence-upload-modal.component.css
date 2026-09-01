@@ -86,7 +86,15 @@
   outline: none;
 }
 .form-input:focus { border-color: var(--primary-color, #007AFF); }
+.form-input:focus-visible {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: 1px;
+}
 .form-input:disabled { background: var(--surface-color, #F5F5F7); }
+.form-input.has-error {
+  border-color: #FF3B30;
+  background: rgba(255, 59, 48, 0.03);
+}
 .help-text {
   display: block;
   margin-top: 6px;
@@ -94,6 +102,69 @@
   color: var(--text-secondary, #8e8e93);
 }
 .help-text strong { color: var(--primary-color, #007AFF); }
+.help-text kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--border-color, #E5E5EA);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface-color, #F5F5F7);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-color, #1c1c1e);
+}
+
+/* ── Indicador de pasos ── */
+.upload-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.upload-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #8e8e93);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.step-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-color, #F5F5F7);
+  border: 1.5px solid var(--border-color, #E5E5EA);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.upload-step.active { color: var(--primary-color, #007AFF); }
+.upload-step.active .step-dot {
+  background: var(--primary-color, #007AFF);
+  border-color: var(--primary-color, #007AFF);
+  color: #fff;
+}
+.upload-step.done { color: #34C759; }
+.upload-step.done .step-dot {
+  background: rgba(52, 199, 89, .12);
+  border-color: #34C759;
+  color: #34C759;
+}
+.step-line {
+  flex: 1;
+  height: 1.5px;
+  min-width: 12px;
+  background: var(--border-color, #E5E5EA);
+  border-radius: 99px;
+}
 
 /* ── Error mensaje ── */
 .error-message {
@@ -377,6 +448,7 @@
   color: var(--text-secondary, #8e8e93);
 }
 .progress-bar {
+  position: relative;
   width: 100%;
   height: 4px;
   background: var(--border-color, #E5E5EA);
@@ -389,6 +461,26 @@
   border-radius: 99px;
   transition: width 300ms ease;
   animation: progressPulse 1.5s ease-in-out infinite;
+}
+/* Barra indeterminada: el backend no reporta % real, no simulamos un 50% fijo */
+.progress-indeterminate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 35%;
+  border-radius: 99px;
+  background: var(--primary-color, #007AFF);
+  animation: uploadIndeterminate 1.2s ease-in-out infinite;
+}
+@keyframes uploadIndeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+.progress-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #8e8e93);
 }
 @keyframes progressPulse {
   0%,100% { opacity:1 } 50% { opacity:.6 }
@@ -457,9 +549,30 @@
   border-color: #FFD580;
 }
 
+/* Foco accesible en acciones y opciones */
+.btn:focus-visible,
+.btn-close:focus-visible,
+.format-option:focus-within {
+  outline: 2px solid var(--primary-color, #007AFF);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill,
+  .progress-indeterminate,
+  .modal-content,
+  .modal-overlay {
+    animation: none !important;
+    transition: none !important;
+  }
+  .progress-indeterminate { width: 100%; opacity: .6; }
+}
+
 @media (max-width: 640px) {
   .modal-content { width:95%; max-height:95vh; }
   .modal-header, .modal-body { padding-left:16px; padding-right:16px; }
-  .form-actions { flex-direction:column; }
+  .form-actions { flex-direction:column-reverse; }
   .btn { width:100%; justify-content:center; }
+  .upload-stepper { margin-bottom: 14px; }
+  .step-label { display: none; }
 }

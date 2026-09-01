@@ -4,9 +4,13 @@
     class="btn-evidence-manager"
     (click)="openModal()"
     [disabled]="isProcessing"
+    [attr.aria-busy]="isProcessing"
+    aria-haspopup="dialog"
+    [attr.aria-expanded]="showModal"
+    [title]="isProcessing ? processingMessage : 'Descargar evidencias o subirlas a Azure DevOps'"
     type="button">
     <ng-container *ngIf="!isProcessing">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px" aria-hidden="true">
         <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
         <line x1="12" y1="15" x2="12" y2="3"/>
@@ -14,33 +18,52 @@
       Gestionar evidencias
     </ng-container>
     <ng-container *ngIf="isProcessing">
-      <span class="btn-spinner"></span>
+      <span class="btn-spinner" aria-hidden="true"></span>
       {{ processingMessage }}
     </ng-container>
   </button>
 
   <!-- Modal unificado -->
   <div class="evidence-modal-backdrop" *ngIf="showModal" (click)="closeModal()">
-    <div class="evidence-modal" (click)="$event.stopPropagation()">
+    <div
+      class="evidence-modal"
+      (click)="$event.stopPropagation()"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="evidence-modal-title"
+      [attr.aria-busy]="isProcessing">
 
       <!-- Header con tabs -->
       <div class="evidence-modal-header">
         <div class="evidence-modal-titlebar">
-          <h3>Gestionar evidencias</h3>
-          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isProcessing">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <div class="evidence-modal-heading">
+            <h3 id="evidence-modal-title">Gestionar evidencias</h3>
+            <p class="evidence-modal-subtitle" *ngIf="contextLabel" [title]="contextLabel">
+              <span class="evidence-context-text">{{ contextLabel }}</span>
+              <span class="evidence-count-chip" *ngIf="evidenceCount > 0">
+                {{ evidenceCount }} {{ evidenceCount === 1 ? 'evidencia' : 'evidencias' }}
+              </span>
+            </p>
+          </div>
+          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isProcessing"
+            [title]="isProcessing ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
-        <div class="evidence-tabs" role="tablist">
+        <div class="evidence-tabs" role="tablist" aria-label="Acciones de evidencias" (keydown)="onTabsKeydown($event)">
           <button
             class="evidence-tab"
             role="tab"
+            id="evidence-tab-download"
+            aria-controls="evidence-panel-download"
+            [attr.aria-selected]="activeTab === 'download'"
+            [attr.tabindex]="activeTab === 'download' ? 0 : -1"
             [class.active]="activeTab === 'download'"
             [disabled]="isProcessing"
             (click)="selectTab('download')"
             type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
@@ -50,46 +73,66 @@
           <button
             class="evidence-tab"
             role="tab"
+            id="evidence-tab-upload"
+            aria-controls="evidence-panel-upload"
+            [attr.aria-selected]="activeTab === 'upload'"
+            [attr.tabindex]="activeTab === 'upload' ? 0 : -1"
             [class.active]="activeTab === 'upload'"
             [disabled]="isProcessing"
             (click)="selectTab('upload')"
             type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
             Subir a Azure DevOps
           </button>
-          <span class="evidence-tab-indicator" [class.upload]="activeTab === 'upload'"></span>
+          <span class="evidence-tab-indicator" [class.upload]="activeTab === 'upload'" aria-hidden="true"></span>
         </div>
       </div>
 
       <!-- Body: contenido de la pestaña activa -->
       <div class="evidence-modal-body">
-        <app-evidence-download-modal
+        <div
           *ngIf="activeTab === 'download'"
-          [embedded]="true"
-          [isOpen]="true"
-          [execution]="execution"
-          [testRun]="testRun"
-          [huData]="huData"
-          (closeRequested)="closeModal()"
-          (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
-        </app-evidence-download-modal>
+          role="tabpanel"
+          id="evidence-panel-download"
+          aria-labelledby="evidence-tab-download">
+          <app-evidence-download-modal
+            [embedded]="true"
+            [isOpen]="true"
+            [execution]="execution"
+            [testRun]="testRun"
+            [huData]="huData"
+            (closeRequested)="closeModal()"
+            (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
+          </app-evidence-download-modal>
+        </div>
 
-        <app-evidence-upload-modal
+        <div
           *ngIf="activeTab === 'upload'"
-          [embedded]="true"
-          [execution]="execution"
-          [testRun]="testRun"
-          [huData]="huData"
-          [prefillPlanId]="lastValidatedPlanId"
-          (onClose)="closeModal()"
-          (onProcessing)="setProcessing($event)"
-          (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
-          (planValidatedEvent)="handlePlanValidated($event)">
-        </app-evidence-upload-modal>
+          role="tabpanel"
+          id="evidence-panel-upload"
+          aria-labelledby="evidence-tab-upload">
+          <app-evidence-upload-modal
+            [embedded]="true"
+            [execution]="execution"
+            [testRun]="testRun"
+            [huData]="huData"
+            [prefillPlanId]="lastValidatedPlanId"
+            (onClose)="closeModal()"
+            (onProcessing)="setProcessing($event)"
+            (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
+            (planValidatedEvent)="handlePlanValidated($event)">
+          </app-evidence-upload-modal>
+        </div>
+      </div>
+
+      <!-- Aviso persistente mientras hay un proceso en curso -->
+      <div class="evidence-modal-processing" *ngIf="isProcessing" role="status" aria-live="polite">
+        <span class="btn-spinner dark" aria-hidden="true"></span>
+        <span>{{ processingMessage || 'Procesando...' }} No cierres esta ventana.</span>
       </div>
 
     </div>

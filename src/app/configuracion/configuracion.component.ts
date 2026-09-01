@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
@@ -24,7 +24,7 @@ import { CellsConfigService } from '../services/core/cells-config.service';
   templateUrl: './configuracion.component.html',
   styleUrl: './configuracion.component.css'
 })
-export class ConfiguracionComponent {
+export class ConfiguracionComponent implements OnInit, OnDestroy {
   organization = 'GrupoBancolombia';
   personalAccessToken = '';
   repositoryLink = '';
@@ -75,6 +75,10 @@ export class ConfiguracionComponent {
     cells: false,
   };
 
+  // ── Estado exclusivo de UI (no afecta la lógica de negocio) ──
+  showPat = false;
+  deviceCodeCopied = false;
+
   // ── Estado CRUD de "Nombre Célula" ──
   cellRows: string[] = [];
   savingCells = false;
@@ -112,6 +116,49 @@ export class ConfiguracionComponent {
 
   get isBusy(): boolean {
     return this.loadingConnection || this.savingConnection || this.validatingConnection || this.disconnectingConnection;
+  }
+
+  // ── Helpers de presentación ─────────────────────────────────────────
+  /** Alterna la visibilidad del PAT en el input (solo UI). */
+  togglePatVisibility(): void {
+    this.showPat = !this.showPat;
+  }
+
+  /** Copia el código del Device Flow al portapapeles y muestra confirmación. */
+  copyDeviceCode(): void {
+    if (!this.githubUserCode) { return; }
+    navigator.clipboard?.writeText(this.githubUserCode)
+      .then(() => {
+        this.deviceCodeCopied = true;
+        setTimeout(() => this.deviceCodeCopied = false, 2000);
+      })
+      .catch(() => this.toastService.error('No se pudo copiar el código.'));
+  }
+
+  /** Resumen corto que se muestra en la cabecera de cada sección. */
+  sectionSummary(section: 'azure' | 'github' | 'global' | 'cells'): string {
+    switch (section) {
+      case 'azure':
+        return this.connection ? this.connection.organization : 'Sin configurar';
+      case 'github':
+        return this.githubConnection
+          ? (this.githubEnabled ? 'Activo como proveedor' : 'Conectado (inactivo)')
+          : 'Sin conectar';
+      case 'global':
+        return `${this.teamRows.length} integrante${this.teamRows.length === 1 ? '' : 's'}`;
+      case 'cells':
+        return `${this.cellRows.length} célula${this.cellRows.length === 1 ? '' : 's'}`;
+      default:
+        return '';
+    }
+  }
+
+  get hasTeamRows(): boolean {
+    return this.teamRows.length > 0;
+  }
+
+  get hasCellRows(): boolean {
+    return this.cellRows.length > 0;
   }
 
   saveConnection(): void {
