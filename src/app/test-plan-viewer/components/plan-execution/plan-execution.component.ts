@@ -98,6 +98,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   serenityProgressPct = 0;
   showSerenityHistory = false;
   serenityHistory: SerenityReportRecord[] = [];
+  /** Solo UI: muestra skeleton/spinner mientras se consulta el historial. */
+  isLoadingSerenityHistory = false;
   // ── Vincular reporte a plan Azure DevOps ──
   attachingReportId: string | null = null;
   attachPlanIdInput = '';
@@ -1573,9 +1575,59 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   }
 
+  /**
+   * Tiempo relativo legible ("hace 5 min") para dar contexto rápido del reporte.
+   * Solo presentación: no altera datos ni comportamiento.
+   */
+  formatSerenityRelative(iso: string): string {
+    if (!iso) return '';
+    const ts = new Date(iso).getTime();
+    if (Number.isNaN(ts)) return '';
+
+    const diffSec = Math.floor((Date.now() - ts) / 1000);
+    if (diffSec < 0) return '';
+    if (diffSec < 60) return 'hace unos segundos';
+
+    const mins = Math.floor(diffSec / 60);
+    if (mins < 60) return `hace ${mins} min`;
+
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `hace ${hours} h`;
+
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'ayer';
+    if (days < 30) return `hace ${days} días`;
+    return '';
+  }
+
+  /** Texto accesible del estado del reporte. */
+  serenityStatusLabel(status: string): string {
+    if (status === 'pending') return 'Generando...';
+    if (status === 'completed') return 'Completado';
+    if (status === 'error') return 'Error';
+    return status;
+  }
+
   async openSerenityHistoryModal(): Promise<void> {
     this.showSerenityHistory = true;
-    await this.loadHistory();
+    this.isLoadingSerenityHistory = true;
+    try {
+      await this.loadHistory();
+    } finally {
+      this.isLoadingSerenityHistory = false;
+    }
+    this.startSerenityHistoryPolling();
+  }
+
+  /** Refresco manual del estado del reporte (además del polling automático). */
+  async refreshSerenityHistory(): Promise<void> {
+    if (this.isLoadingSerenityHistory) return;
+    this.isLoadingSerenityHistory = true;
+    try {
+      await this.loadHistory();
+    } finally {
+      this.isLoadingSerenityHistory = false;
+    }
     this.startSerenityHistoryPolling();
   }
 

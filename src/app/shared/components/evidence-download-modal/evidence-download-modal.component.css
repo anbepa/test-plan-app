@@ -365,6 +365,20 @@
   color: var(--text-secondary, #6E6E73);
 }
 
+/* Badge "Asíncrono" junto al título de Serenity */
+.opt-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(52, 199, 89, .12);
+  color: #1f8f42;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  white-space: nowrap;
+}
+
 /* Foco accesible en todas las acciones del panel */
 .download-option-btn:focus-visible,
 .serenity-action-btn:focus-visible,

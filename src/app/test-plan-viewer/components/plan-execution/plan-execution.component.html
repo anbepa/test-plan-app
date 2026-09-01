@@ -509,23 +509,48 @@
 
   <!-- Serenity History Modal -->
   <div *ngIf="showSerenityHistory" class="modal-backdrop" (click)="closeSerenityHistory()">
-    <div class="modal-box serenity-history-modal" (click)="$event.stopPropagation()">
+    <div class="modal-box serenity-history-modal" (click)="$event.stopPropagation()"
+      role="dialog" aria-modal="true" aria-labelledby="serenity-history-title">
       <div class="modal-top">
-        <span class="modal-title-strong">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="modal-title-strong" id="serenity-history-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Último reporte Serenity
         </span>
-        <button class="modal-close" (click)="closeSerenityHistory()">✕</button>
+        <div class="modal-top-actions">
+          <button class="sh-refresh-btn" type="button" (click)="refreshSerenityHistory()"
+            [disabled]="isLoadingSerenityHistory" title="Actualizar estado del reporte" aria-label="Actualizar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              [class.sh-spin]="isLoadingSerenityHistory" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
+          <button class="modal-close" (click)="closeSerenityHistory()" type="button" aria-label="Cerrar">✕</button>
+        </div>
       </div>
       <div class="serenity-history-body">
-        <div *ngIf="serenityHistory.length === 0" class="serenity-history-empty">
-          <p>Aún no se ha generado ningún reporte</p>
+        <!-- Skeleton mientras carga -->
+        <div *ngIf="isLoadingSerenityHistory && serenityHistory.length === 0" class="sh-skeleton" aria-hidden="true">
+          <div class="sh-skeleton-line w40"></div>
+          <div class="sh-skeleton-line w70"></div>
+          <div class="sh-skeleton-line w55"></div>
         </div>
-        <div *ngFor="let r of serenityHistory" class="sh-card">
+
+        <!-- Vacío -->
+        <div *ngIf="!isLoadingSerenityHistory && serenityHistory.length === 0" class="serenity-history-empty">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <p>Aún no se ha generado ningún reporte</p>
+          <small>Genera uno desde <strong>Gestionar evidencias → Descargar → Reporte Serenity</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
+        </div>
+
+        <div *ngFor="let r of serenityHistory" class="sh-card" [class.is-pending]="r.status === 'pending'">
           <div class="sh-card-row">
             <div class="sh-card-field">
               <span class="sh-card-label">Generado</span>
-              <span class="sh-card-value sh-date">{{ formatSerenityDate(r.generatedAt) }}</span>
+              <span class="sh-card-value sh-date" [title]="formatSerenityDate(r.generatedAt)">
+                {{ formatSerenityDate(r.generatedAt) }}
+                <em class="sh-relative" *ngIf="formatSerenityRelative(r.generatedAt)">{{ formatSerenityRelative(r.generatedAt) }}</em>
+              </span>
             </div>
             <div class="sh-card-field">
               <span class="sh-card-label">Backend</span>
@@ -533,50 +558,69 @@
             </div>
             <div class="sh-card-field">
               <span class="sh-card-label">Estado</span>
-              <span *ngIf="r.status == 'pending'" class="sh-status sh-status-pending">Generando...</span>
-              <span *ngIf="r.status == 'completed'" class="sh-status sh-status-done">Completado</span>
-              <span *ngIf="r.status == 'error'" class="sh-status sh-status-error">Error</span>
+              <span class="sh-status"
+                [class.sh-status-pending]="r.status === 'pending'"
+                [class.sh-status-done]="r.status === 'completed'"
+                [class.sh-status-error]="r.status === 'error'"
+                role="status" aria-live="polite">{{ serenityStatusLabel(r.status) }}</span>
             </div>
           </div>
+
+          <!-- Aviso contextual mientras el pipeline sigue corriendo -->
+          <p class="sh-pending-note" *ngIf="r.status === 'pending' && !r.artifactDownloadUrl">
+            El pipeline de Azure DevOps está generando el reporte. El estado se actualiza automáticamente cada 5 segundos; puedes cerrar esta ventana y volver más tarde.
+          </p>
+
           <div class="sh-actions">
             <a *ngIf="r.artifactDownloadUrl" [href]="r.artifactDownloadUrl" download="serenity-report.zip"
-               class="sh-btn sh-btn-dl" title="Descargar .zip">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              .zip
+               class="sh-btn sh-btn-dl" title="Descargar el reporte comprimido (.zip)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Descargar .zip
             </a>
-            <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" title="Vincular reporte a un plan de Azure DevOps"
+            <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" type="button"
+              title="Vincular reporte a un plan de Azure DevOps"
+              [attr.aria-expanded]="attachingReportId === r.id"
               (click)="startAttachToPlan(r.id)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               {{ attachingReportId === r.id ? 'Cerrar' : 'Vincular a plan' }}
             </button>
             <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
-              <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
+              <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
               Actualizando...
             </span>
-            <button class="sh-btn sh-btn-del" title="Eliminar del historial" (click)="removeFromHistory(r.id)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            <button class="sh-btn sh-btn-del" type="button" title="Eliminar del historial"
+              [disabled]="isAttaching" (click)="removeFromHistory(r.id)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
               Eliminar
             </button>
           </div>
           <!-- Formulario de vinculación a plan -->
           <div *ngIf="attachingReportId === r.id" class="sh-attach-form">
             <div class="sh-attach-hint" *ngIf="lastValidatedPlanId">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               Usando el plan ya validado <strong>{{ lastValidatedPlanId }}</strong>. Puedes cambiarlo si es necesario.
             </div>
-            <input type="text" class="form-input" [(ngModel)]="attachPlanIdInput"
+            <label class="sh-field-label" for="sh-plan-id">ID del Plan de Pruebas</label>
+            <input id="sh-plan-id" type="text" class="form-input" [(ngModel)]="attachPlanIdInput"
+              inputmode="numeric" autocomplete="off"
               placeholder="ID del Plan de Pruebas (ej: 7695070)"
+              [disabled]="isAttaching"
               (keyup.enter)="confirmAttachToPlan(getAttachingReport())">
-            <input type="text" class="form-input" [(ngModel)]="attachFileNameInput"
+            <label class="sh-field-label" for="sh-file-name">Nombre del archivo</label>
+            <input id="sh-file-name" type="text" class="form-input" [(ngModel)]="attachFileNameInput"
+              autocomplete="off"
               placeholder="Nombre del archivo (ej: Evidencia_EVC00057.zip)"
               title="Nombre del archivo"
+              [disabled]="isAttaching"
               (keyup.enter)="confirmAttachToPlan(getAttachingReport())">
             <div class="sh-attach-form-buttons">
-              <button class="btn btn-primary btn-sm" (click)="confirmAttachToPlan(getAttachingReport())"
+              <button class="btn btn-primary btn-sm" type="button" (click)="confirmAttachToPlan(getAttachingReport())"
+                [attr.aria-busy]="isAttaching"
+                [title]="(!attachPlanIdInput.trim() || !attachFileNameInput.trim()) ? 'Completa el ID del plan y el nombre del archivo' : 'Subir el reporte al plan'"
                 [disabled]="!attachPlanIdInput.trim() || !attachFileNameInput.trim() || isAttaching">
                 {{ isAttaching ? 'Subiendo...' : 'Subir evidencia' }}
               </button>
-              <button class="btn btn-secondary btn-sm" (click)="cancelAttachToPlan()">Cancelar</button>
+              <button class="btn btn-secondary btn-sm" type="button" [disabled]="isAttaching" (click)="cancelAttachToPlan()">Cancelar</button>
             </div>
           </div>
         </div>
