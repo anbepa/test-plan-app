@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, OnDestroy, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TestRun, HUData, PlanExecution } from '../../../models/hu-data.model';
 import { ExportService } from '../../../services/export/export.service';
@@ -32,8 +32,6 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
   serenityStatusMessage = '';
   private serenityStatusTimer: any = null;
 
-  /** Controla el menú desplegable de descarga (DOCX/PDF/Excel). Solo presentación. */
-  downloadMenuOpen = false;
 
   get effectiveTestRun(): TestRun | null {
     if (this.testRun) return this.testRun;
@@ -79,35 +77,6 @@ export class EvidenceDownloadModalComponent implements OnInit, OnDestroy {
 
   openSerenityHistory(): void {
     this.openSerenityHistoryRequested.emit();
-  }
-
-  toggleDownloadMenu(): void {
-    if (this.isDownloading || !this.execution) return;
-    this.downloadMenuOpen = !this.downloadMenuOpen;
-  }
-
-  /** Cierra el menú y lanza la descarga del formato elegido reutilizando la lógica existente. */
-  pickDownload(format: 'word' | 'pdf' | 'excel'): void {
-    this.downloadMenuOpen = false;
-    if (format === 'word') { this.downloadWord(); return; }
-    if (format === 'pdf') { this.downloadPDF(); return; }
-    this.downloadExcel();
-  }
-
-  @HostListener('document:click')
-  onDocumentClick(): void {
-    if (this.downloadMenuOpen) {
-      this.downloadMenuOpen = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    if (this.downloadMenuOpen) {
-      this.downloadMenuOpen = false;
-      this.cdr.detectChanges();
-    }
   }
 
   closeModal(): void {

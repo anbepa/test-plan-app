@@ -19,87 +19,84 @@
     <!-- Body -->
     <div class="modal-body">
 
-      <!-- Fila de acciones agrupadas -->
-      <div class="download-actions-row">
-
-        <!-- Menú único: Descargar (DOCX / PDF / Excel) -->
-        <div class="download-menu" (click)="$event.stopPropagation()">
-          <button
-            class="action-btn primary"
-            type="button"
-            (click)="toggleDownloadMenu()"
+      <!-- Descargar: tres formatos en una fila compacta -->
+      <div class="dl-group">
+        <span class="dl-group-label">Descargar como</span>
+        <div class="dl-format-row" role="group" aria-label="Formato de descarga">
+          <button class="dl-format-btn" type="button" (click)="downloadWord()"
             [disabled]="isDownloading || !execution"
-            [attr.aria-expanded]="downloadMenuOpen"
-            aria-haspopup="menu"
-            [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar evidencias en DOCX, PDF o Excel'">
-            <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat !== 'serenity'" aria-hidden="true"></span>
-            <svg *ngIf="!(isDownloading && downloadingFormat !== 'serenity')" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span>{{ (isDownloading && downloadingFormat !== 'serenity') ? (downloadProgressMessage || 'Generando...') : 'Descargar' }}</span>
-            <svg class="caret" *ngIf="!isDownloading" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            [class.is-loading]="isDownloading && downloadingFormat === 'word'"
+            [attr.aria-busy]="isDownloading && downloadingFormat === 'word'"
+            [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Word (DOCX)'">
+            <span class="opt-icon opt-icon-word" aria-hidden="true">
+              <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'word'"></span>
+              <svg *ngIf="!(isDownloading && downloadingFormat === 'word')" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+              </svg>
+            </span>
+            <span class="dl-format-name">Word</span>
+            <span class="dl-format-ext">.docx</span>
           </button>
 
-          <!-- Menú desplegable -->
-          <div class="download-menu-list" role="menu" *ngIf="downloadMenuOpen && !isDownloading">
-            <button class="menu-item" role="menuitem" type="button" (click)="pickDownload('word')">
-              <span class="opt-icon opt-icon-word" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
-                </svg>
-              </span>
-              <span class="menu-item-text">Word <small>(.docx)</small></span>
-            </button>
-            <button class="menu-item" role="menuitem" type="button" (click)="pickDownload('pdf')">
-              <span class="opt-icon opt-icon-pdf" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
-                </svg>
-              </span>
-              <span class="menu-item-text">PDF</span>
-            </button>
-            <button class="menu-item" role="menuitem" type="button" (click)="pickDownload('excel')">
-              <span class="opt-icon opt-icon-excel" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/>
-                </svg>
-              </span>
-              <span class="menu-item-text">Excel <small>(.xlsx)</small></span>
-            </button>
-          </div>
+          <button class="dl-format-btn" type="button" (click)="downloadPDF()"
+            [disabled]="isDownloading || !execution"
+            [class.is-loading]="isDownloading && downloadingFormat === 'pdf'"
+            [attr.aria-busy]="isDownloading && downloadingFormat === 'pdf'"
+            [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en PDF'">
+            <span class="opt-icon opt-icon-pdf" aria-hidden="true">
+              <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'pdf'"></span>
+              <svg *ngIf="!(isDownloading && downloadingFormat === 'pdf')" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>
+              </svg>
+            </span>
+            <span class="dl-format-name">PDF</span>
+            <span class="dl-format-ext">.pdf</span>
+          </button>
+
+          <button class="dl-format-btn" type="button" (click)="downloadExcel()"
+            [disabled]="isDownloading || !execution"
+            [class.is-loading]="isDownloading && downloadingFormat === 'excel'"
+            [attr.aria-busy]="isDownloading && downloadingFormat === 'excel'"
+            [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Excel (XLSX)'">
+            <span class="opt-icon opt-icon-excel" aria-hidden="true">
+              <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'excel'"></span>
+              <svg *ngIf="!(isDownloading && downloadingFormat === 'excel')" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/>
+              </svg>
+            </span>
+            <span class="dl-format-name">Excel</span>
+            <span class="dl-format-ext">.xlsx</span>
+          </button>
         </div>
+      </div>
 
-        <!-- Reporte Serenity (asíncrono) -->
-        <button
-          type="button"
-          class="action-btn secondary"
-          (click)="downloadSerenity()"
-          [title]="!execution ? 'No hay una ejecución cargada' : 'Generar reporte Serenity en el pipeline de Azure DevOps'"
-          [attr.aria-busy]="isDownloading && downloadingFormat === 'serenity'"
-          [disabled]="(isDownloading && downloadingFormat !== 'serenity') || !execution"
-          [class.is-loading]="isDownloading && downloadingFormat === 'serenity'">
-          <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'" aria-hidden="true"></span>
-          <svg *ngIf="!(isDownloading && downloadingFormat === 'serenity')" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span>
+      <!-- Reporte Serenity (asíncrono) -->
+      <div class="dl-group">
+        <span class="dl-group-label">Reporte Serenity <em>· asíncrono</em></span>
+        <div class="dl-serenity-row">
+          <button
+            type="button"
+            class="dl-action-btn primary"
+            (click)="downloadSerenity()"
+            [title]="!execution ? 'No hay una ejecución cargada' : 'Generar reporte Serenity en el pipeline de Azure DevOps'"
+            [attr.aria-busy]="isDownloading && downloadingFormat === 'serenity'"
+            [disabled]="(isDownloading && downloadingFormat !== 'serenity') || !execution"
+            [class.is-loading]="isDownloading && downloadingFormat === 'serenity'">
+            <span class="opt-spinner" *ngIf="isDownloading && downloadingFormat === 'serenity'" aria-hidden="true"></span>
             <ng-container *ngIf="isDownloading && downloadingFormat === 'serenity'">{{ serenityStatusMessage || 'Preparando...' }}</ng-container>
-            <ng-container *ngIf="!(isDownloading && downloadingFormat === 'serenity')">Reporte Serenity</ng-container>
-          </span>
-        </button>
+            <ng-container *ngIf="!(isDownloading && downloadingFormat === 'serenity')">Generar reporte</ng-container>
+          </button>
 
-        <!-- Consultar reportes generados -->
-        <button
-          type="button"
-          class="action-btn ghost"
-          (click)="openSerenityHistory()"
-          title="Consultar el estado y descargar el último reporte generado"
-          [disabled]="isDownloading">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span>Ver reportes</span>
-        </button>
+          <button
+            type="button"
+            class="dl-action-btn ghost"
+            (click)="openSerenityHistory()"
+            title="Consultar el estado y descargar el último reporte generado"
+            [disabled]="isDownloading">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Ver reportes
+          </button>
+        </div>
       </div>
 
       <!-- Mensaje post-dispatch Serenity -->
