@@ -1,4 +1,4 @@
-import { ApiError, getAuthenticatedUser, getSupabaseClients } from '../azure-devops/shared';
+import { ApiError, getAuthenticatedUser, getSupabaseClients } from '../azure-devops/_shared';
 
 export interface AzureSerenityConnectionRecord {
   id: string;
