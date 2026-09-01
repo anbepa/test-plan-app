@@ -81,6 +81,92 @@ export class ExportService {
     }
 
     /**
+     * Exporta los escenarios de UNA sola HU a PDF (matriz de ejecución).
+     *
+     * Replica el formato de `WordExporterComponent.downloadScenariosPdf()` usado en el
+     * preview del plan, pero acotado exclusivamente a los casos de prueba de la HU
+     * recibida (NO incluye el resto de HUs del plan de pruebas).
+     */
+    exportScenariosToPDF(hu: HUData, planTitle?: string): void {
+        if (!hu?.detailedTestCases || hu.detailedTestCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        const norm = (value: string | undefined | null): string =>
+            (value ?? '').replace(/\s+/g, ' ').trim();
+
+        const formatSteps = (steps: Array<{ numero_paso?: number; accion: string }> | undefined): string => {
+            if (!steps || steps.length === 0) return 'No hay pasos definidos';
+            return steps.map((step, i) => `${step.numero_paso ?? i + 1}. ${norm(step.accion)}`).join(' ');
+        };
+
+        const tableRows: string[][] = hu.detailedTestCases.map((tc, index) => ([
+            `${hu.id}_CP${index + 1}`,
+            norm(tc.title) || 'Sin escenario',
+            norm(tc.preconditions) || 'No especificadas',
+            formatSteps(tc.steps as any),
+            norm(tc.expectedResults) || 'No especificados'
+        ]));
+
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+        const margin = 44;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const contentWidth = pageWidth - (margin * 2);
+        const idWidth = 80;
+        const scenarioWidth = 150;
+        const preconditionsWidth = 170;
+        const stepsWidth = 190;
+        const expectedWidth = Math.max(contentWidth - (idWidth + scenarioWidth + preconditionsWidth + stepsWidth), 130);
+
+        const heading = `Matriz de Ejecución - ${hu.id}${hu.title ? ' - ' + hu.title : ''}`;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(heading, margin, margin, { maxWidth: contentWidth });
+
+        if (planTitle) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.text(`Plan de pruebas: ${planTitle}`, margin, margin + 16, { maxWidth: contentWidth });
+        }
+
+        autoTable(doc, {
+            startY: margin + (planTitle ? 34 : 20),
+            margin: { top: margin, right: margin, bottom: margin, left: margin },
+            head: [['ID Caso', 'Escenario', 'Precondiciones', 'Pasos', 'Resultado Esperado']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                font: 'helvetica',
+                fontSize: 10,
+                cellPadding: 6,
+                overflow: 'linebreak',
+                valign: 'top',
+                textColor: [17, 24, 39],
+                lineColor: [120, 120, 120],
+                lineWidth: 0.5
+            },
+            headStyles: {
+                fillColor: [235, 235, 235],
+                textColor: [17, 24, 39],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: idWidth, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: scenarioWidth },
+                2: { cellWidth: preconditionsWidth },
+                3: { cellWidth: stepsWidth },
+                4: { cellWidth: expectedWidth }
+            },
+            rowPageBreak: 'avoid',
+            showHead: 'everyPage'
+        });
+
+        doc.save(this.escapeFilename(`Matriz_Ejecucion_${hu.id}_${Date.now()}.pdf`));
+    }
+
+    /**
      * Exporta una HU como matriz de evidencias en formato DOCX
      * Reglas:
      * - Página personalizada: 55.8cm x 55.8cm

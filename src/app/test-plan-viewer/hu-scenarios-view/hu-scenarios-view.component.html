@@ -46,6 +46,7 @@
               </span>
             </button>
             <div class="export-menu-panel" *ngIf="exportMenuOpen" role="menu" (click)="$event.stopPropagation()">
+              <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('pdf', $event)">Descargar escenarios PDF</button>
               <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('docx', $event)">Exportar como .docx</button>
               <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('xlsx', $event)">Exportar como .xlsx</button>
             </div>
