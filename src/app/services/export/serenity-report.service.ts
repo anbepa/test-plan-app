@@ -86,7 +86,7 @@ export class SerenityReportService {
 
       this.state = { phase: 'hydrating', statusMessage: 'Cargando ejecucion desde BD...' };
 
-      const execution = await this.storage.getExecution(run.executionId);
+      const execution = await this.storage.getExecution(run.executionId, { throwOnError: true });
       if (!execution) {
         throw new Error('No se encontro la ejecucion en la base de datos.');
       }
