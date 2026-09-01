@@ -1984,6 +1984,7 @@ export class ExportService {
 
         // ── HOJA RESUMEN ──────────────────────────────────────────────
         const summary = workbook.addWorksheet('Escenarios', {
+            views: [{ showGridLines: false }],
             pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
         });
         summary.columns = [{ width: 8 }, { width: 90 }];
@@ -2031,6 +2032,7 @@ export class ExportService {
             if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
 
             const sheet = workbook.addWorksheet(sheetName, {
+                views: [{ showGridLines: false }],
                 pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
             });
 
