@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { ApiError, getAuthenticatedUser, getSupabaseClients } from './integrations/azure-devops/shared';
+import { ApiError, getAuthenticatedUser, getSupabaseClients } from './integrations/azure-devops/_shared';
 import { AzureSerenityRuntimeConfig, resolveAzureSerenityRuntimeConfig } from './integrations/serenity/shared';
 
 function azureGet(url: string, personalAccessToken: string): Promise<Response> {

@@ -99,19 +99,73 @@ export class ExecutionStorageService {
   // ════════════════════════════════════════════════════════════
 
   /**
-   * Ejecuta una consulta a Supabase con reintento automático en caso de error 403/401 (token expirado)
+   * Detecta errores de red/timeout (típicos en planes gratuitos con payloads grandes
+   * o cuando el proyecto Supabase está "frío"): `TypeError: Failed to fetch`,
+   * `ERR_TIMED_OUT`, `NetworkError`, `AbortError`, etc.
    */
-  private async withRetry<T>(operation: () => Promise<{ data: T | null; error: any }>): Promise<{ data: T | null; error: any }> {
-    let result = await operation();
+  private isNetworkError(error: any): boolean {
+    if (!error) return false;
+    const msg = `${error.message || ''} ${error.details || ''} ${error.name || ''}`.toLowerCase();
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('network error') ||
+      msg.includes('err_timed_out') ||
+      msg.includes('timeout') ||
+      msg.includes('aborted') ||
+      msg.includes('load failed')
+    );
+  }
 
-    if (result.error && (result.error.code === '403' || result.error.code === '401' || result.error.code === 'PGRST301' || result.error.message?.includes('violates row-level security policy'))) {
+  private isAuthError(error: any): boolean {
+    if (!error) return false;
+    return (
+      error.code === '403' ||
+      error.code === '401' ||
+      error.code === 'PGRST301' ||
+      !!error.message?.includes('violates row-level security policy')
+    );
+  }
+
+  /**
+   * Ejecuta una consulta a Supabase con reintento automático en caso de:
+   * - error 403/401 (token expirado) → refresca sesión y reintenta
+   * - error de red/timeout → reintenta con backoff exponencial
+   */
+  private async withRetry<T>(
+    operation: () => Promise<{ data: T | null; error: any }>,
+    maxNetworkRetries = 3
+  ): Promise<{ data: T | null; error: any }> {
+    const run = async (): Promise<{ data: T | null; error: any }> => {
+      try {
+        return await operation();
+      } catch (e: any) {
+        // supabase-js normalmente no lanza, pero el fetch puede fallar antes de entrar
+        return { data: null, error: e };
+      }
+    };
+
+    let result = await run();
+
+    if (this.isAuthError(result.error)) {
       console.warn('⚠️ Error de autenticación detectado (403/401). Forzando refresh de token y reintentando...');
-      // Forzar refresh de token
-      await this.supabase.auth.getUser();
+      try {
+        await this.supabase.auth.refreshSession();
+      } catch (_) {
+        try { await this.supabase.auth.getUser(); } catch (__) { /* noop */ }
+      }
       this.cachedUserId = null; // Invalidar caché
+      result = await run();
+    }
 
-      // Reintentar operación
-      result = await operation();
+    // Reintentos por errores de red / timeout con backoff exponencial
+    let attempt = 0;
+    while (this.isNetworkError(result.error) && attempt < maxNetworkRetries) {
+      const delay = 800 * Math.pow(2, attempt); // 800ms, 1.6s, 3.2s
+      console.warn(`⚠️ Error de red con Supabase (intento ${attempt + 1}/${maxNetworkRetries}). Reintentando en ${delay}ms...`, result.error?.message);
+      await new Promise(r => setTimeout(r, delay));
+      result = await run();
+      attempt++;
     }
 
     return result;
@@ -139,9 +193,16 @@ export class ExecutionStorageService {
   }
 
   /**
-   * Obtiene una ejecución específica por ID
+   * Obtiene una ejecución específica por ID.
+   *
+   * @param options.throwOnError Si es true, propaga el error real (red/timeout/permisos)
+   *        en lugar de devolver `null`. Evita mensajes engañosos del tipo
+   *        "No se encontró la ejecución" cuando en realidad falló la red.
    */
-  async getExecution(executionId: string): Promise<PlanExecution | null> {
+  async getExecution(
+    executionId: string,
+    options: { throwOnError?: boolean } = {}
+  ): Promise<PlanExecution | null> {
     const { data, error } = await this.withRetry(async () => {
       const userId = await this.getCurrentUserId();
       return await this.supabase
@@ -154,6 +215,15 @@ export class ExecutionStorageService {
 
     if (error) {
       console.error('❌ Error al obtener ejecución:', error);
+      if (options.throwOnError) {
+        if (this.isNetworkError(error)) {
+          throw new Error(
+            'No se pudo conectar con la base de datos (tiempo de espera agotado). ' +
+            'La ejecucion puede ser muy pesada o la conexion es inestable. Intentalo nuevamente en unos segundos.'
+          );
+        }
+        throw new Error(error.message || 'Error al obtener la ejecucion desde la base de datos.');
+      }
       return null;
     }
 

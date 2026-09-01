@@ -44,7 +44,7 @@ export class SerenityExportService {
     if (!run.executionId) {
       throw new Error('Esta ejecucion no tiene datos ejecutados todavia.');
     }
-    const execution = await this.storage.getExecution(run.executionId);
+    const execution = await this.storage.getExecution(run.executionId, { throwOnError: true });
     if (!execution) {
       throw new Error('No se encontro la ejecucion en la base de datos.');
     }
