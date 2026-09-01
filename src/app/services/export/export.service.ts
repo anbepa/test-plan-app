@@ -2100,8 +2100,23 @@ export class ExportService {
                         const ext = (mime.toLowerCase() === 'jpeg' ? 'jpeg' : mime.toLowerCase()) as 'png' | 'jpeg' | 'gif';
                         const base64Only = b64.includes(',') ? b64.split(',')[1] : b64;
 
-                        // Texto del paso solo en la primera fila de sus imágenes
-                        const stepText = i === 0 ? `${stepNumber}. ${stepAction}` : '';
+                        // Descripción/anotación de la imagen (si existe): fila de texto
+                        // en la columna "Evidencias", justo encima de la imagen.
+                        const descStr = (ev.description || '').trim();
+                        if (descStr) {
+                            const isFirstImg = i === 0;
+                            const descRow = sheet.addRow([isFirstImg ? `${stepNumber}. ${stepAction}` : '', descStr]);
+                            descRow.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                            descRow.getCell(1).border = allBorders;
+                            descRow.getCell(2).font = { italic: true, bold: true, color: { argb: 'FF2E74B5' } };
+                            descRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                            descRow.getCell(2).border = allBorders;
+                            descRow.height = Math.max(18, Math.min(80, Math.ceil(descStr.length / 60) * 15 + 6));
+                        }
+
+                        // Texto del paso solo en la primera fila de sus imágenes.
+                        // Si ya se imprimió en la fila de descripción, no repetir.
+                        const stepText = (i === 0 && !descStr) ? `${stepNumber}. ${stepAction}` : '';
                         const row = sheet.addRow([stepText, '']);
                         const rowIndex = row.number;
                         row.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
