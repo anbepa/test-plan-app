@@ -6,11 +6,14 @@
 
   <!-- SECCIÓN 1: Azure DevOps -->
   <div class="config-section">
-    <button class="section-toggle" type="button" (click)="toggleSection('azure')" [attr.aria-expanded]="accordionOpen.azure">
-      <span class="section-label">Conexión</span>
-      <span class="section-arrow" [class.open]="accordionOpen.azure">▾</span>
+    <button class="section-toggle" type="button" (click)="toggleSection('azure')"
+            [attr.aria-expanded]="accordionOpen.azure" aria-controls="panel-azure" id="toggle-azure">
+      <span class="section-label">Conexión
+        <span class="section-summary">{{ sectionSummary('azure') }}</span>
+      </span>
+      <span class="section-arrow" [class.open]="accordionOpen.azure" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.azure">
+    <div class="config-card" *ngIf="accordionOpen.azure" id="panel-azure" role="region" aria-labelledby="toggle-azure" [attr.aria-busy]="isBusy">
       <div class="card-header">
         <h3 class="card-title">Azure DevOps</h3>
         <span class="connection-badge" [attr.data-tone]="azureStatusTone">{{ azureStatusLabel }}</span>
@@ -31,6 +34,12 @@
         </div>
       </div>
 
+      <p class="card-description">
+        Conecta tu organización de Azure DevOps con un <strong>Personal Access Token</strong> para
+        consultar y publicar Work Items desde la aplicación. El token se almacena cifrado y solo se
+        muestra parcialmente.
+      </p>
+
       <div class="form-grid">
         <div class="form-group">
           <label for="organization">Organización</label>
@@ -41,31 +50,49 @@
             type="text"
             [(ngModel)]="organization"
             [disabled]="isBusy"
+            aria-describedby="organization-hint"
             placeholder="GrupoBancolombia">
+          <p class="field-hint" id="organization-hint">Nombre que aparece en dev.azure.com/<em>organizacion</em>.</p>
         </div>
 
         <div class="form-group">
           <label for="personalAccessToken">Personal Access Token (PAT)</label>
-          <input
-            id="personalAccessToken"
-            name="personalAccessToken"
-            class="form-control"
-            type="password"
-            [(ngModel)]="personalAccessToken"
-            [disabled]="isBusy"
-            autocomplete="new-password"
-            placeholder="Ingresa o reemplaza tu PAT">
+          <div class="input-with-action">
+            <input
+              id="personalAccessToken"
+              name="personalAccessToken"
+              class="form-control"
+              [type]="showPat ? 'text' : 'password'"
+              [(ngModel)]="personalAccessToken"
+              [disabled]="isBusy"
+              autocomplete="new-password"
+              aria-describedby="pat-hint"
+              placeholder="Ingresa o reemplaza tu PAT">
+            <button
+              type="button"
+              class="input-action-btn"
+              (click)="togglePatVisibility()"
+              [attr.aria-pressed]="showPat"
+              [title]="showPat ? 'Ocultar token' : 'Mostrar token'"
+              [attr.aria-label]="showPat ? 'Ocultar token' : 'Mostrar token'">
+              {{ showPat ? '🙈' : '👁️' }}
+            </button>
+          </div>
+          <p class="field-hint" id="pat-hint">Requiere permisos de lectura/escritura sobre Work Items.</p>
         </div>
       </div>
 
       <div class="actions-row">
-        <button class="btn-primary" type="button" (click)="saveConnection()" [disabled]="isBusy">
+        <button class="btn-primary" type="button" (click)="saveConnection()" [disabled]="isBusy"
+                title="Guarda y valida el PAT indicado">
           {{ savingConnection ? 'Guardando...' : 'Guardar PAT' }}
         </button>
-        <button class="btn-secondary" type="button" (click)="validateConnection()" [disabled]="isBusy">
+        <button class="btn-secondary" type="button" (click)="validateConnection()" [disabled]="isBusy"
+                title="Comprueba que la conexión actual sigue siendo válida">
           {{ validatingConnection ? 'Validando...' : 'Validar conexión' }}
         </button>
-        <button class="btn-danger" type="button" (click)="requestDisconnect('azure')" [disabled]="isBusy || !connection">
+        <button class="btn-danger" type="button" (click)="requestDisconnect('azure')" [disabled]="isBusy || !connection"
+                [title]="!connection ? 'No hay conexión activa para desconectar' : 'Elimina el PAT almacenado'">
           {{ disconnectingConnection ? 'Desconectando...' : 'Desconectar' }}
         </button>
       </div>
@@ -74,11 +101,14 @@
 
   <!-- SECCIÓN 2: GitHub Models (Copilot) -->
   <div class="config-section">
-    <button class="section-toggle" type="button" (click)="toggleSection('github')" [attr.aria-expanded]="accordionOpen.github">
-      <span class="section-label">GitHub Models (IA opcional)</span>
-      <span class="section-arrow" [class.open]="accordionOpen.github">▾</span>
+    <button class="section-toggle" type="button" (click)="toggleSection('github')"
+            [attr.aria-expanded]="accordionOpen.github" aria-controls="panel-github" id="toggle-github">
+      <span class="section-label">GitHub Models (IA opcional)
+        <span class="section-summary">{{ sectionSummary('github') }}</span>
+      </span>
+      <span class="section-arrow" [class.open]="accordionOpen.github" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.github">
+    <div class="config-card" *ngIf="accordionOpen.github" id="panel-github" role="region" aria-labelledby="toggle-github" [attr.aria-busy]="isGithubBusy">
       <div class="card-header">
         <h3 class="card-title">GitHub Models (Copilot)</h3>
         <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
@@ -107,16 +137,26 @@
       </div>
 
       <!-- Panel de autorización del Device Flow -->
-      <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode">
+      <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode" role="status" aria-live="polite">
         <p class="device-instructions">
           Se abrió GitHub en una pestaña nueva. Introduce este código para autorizar:
         </p>
-        <div class="device-code">{{ githubUserCode }}</div>
+        <div class="device-code-row">
+          <div class="device-code">{{ githubUserCode }}</div>
+          <button type="button" class="btn-copy-code" (click)="copyDeviceCode()"
+                  [attr.aria-label]="'Copiar código ' + githubUserCode"
+                  title="Copiar código al portapapeles">
+            {{ deviceCodeCopied ? '✓ Copiado' : 'Copiar' }}
+          </button>
+        </div>
         <p class="device-link">
           ¿No se abrió?
           <a [href]="githubVerificationUri" target="_blank" rel="noopener noreferrer">Abrir github.com/login/device</a>
         </p>
-        <p class="device-waiting">Esperando tu autorización en GitHub...</p>
+        <p class="device-waiting">
+          <span class="device-spinner" aria-hidden="true"></span>
+          Esperando tu autorización en GitHub...
+        </p>
         <button class="btn-secondary" type="button" (click)="cancelGithubConnect()">Cancelar</button>
       </div>
 
@@ -130,12 +170,16 @@
             class="form-control"
             [(ngModel)]="githubSelectedModel"
             (change)="onGithubModelChange()"
-            [disabled]="isGithubBusy || githubModels.length === 0">
+            [disabled]="isGithubBusy || githubModels.length === 0"
+            aria-describedby="githubModel-hint">
             <option value="" disabled>{{ loadingGithubModels ? 'Cargando modelos...' : 'Selecciona un modelo' }}</option>
             <option *ngFor="let model of githubModels" [value]="model.id">
               {{ model.displayName }}{{ model.publisher ? ' (' + model.publisher + ')' : '' }}
             </option>
           </select>
+          <p class="field-hint" id="githubModel-hint">
+            {{ githubModels.length ? githubModels.length + ' modelos disponibles en tu cuenta.' : 'Usa “Refrescar modelos” para cargar la lista.' }}
+          </p>
         </div>
 
         <div class="form-group">
@@ -147,9 +191,11 @@
               type="checkbox"
               [(ngModel)]="githubEnabled"
               (change)="onGithubEnabledChange()"
+              aria-describedby="githubEnabled-hint"
               [disabled]="isGithubBusy">
             <span class="slider"></span>
           </label>
+          <p class="field-hint" id="githubEnabled-hint">Si se desactiva, la app usa DeepSeek por defecto.</p>
         </div>
       </div>
 
@@ -173,29 +219,35 @@
           [disabled]="isGithubBusy">
           {{ githubConnecting ? 'Esperando autorización...' : 'Reconectar cuenta' }}
         </button>
-        <button class="btn-secondary" type="button" (click)="validateGithubConnection()" [disabled]="isGithubBusy || !githubConnection">
+        <button class="btn-secondary" type="button" (click)="validateGithubConnection()" [disabled]="isGithubBusy || !githubConnection"
+                [title]="!githubConnection ? 'Conecta tu cuenta de GitHub primero' : 'Comprueba la conexión actual'">
           {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
         </button>
-        <button class="btn-secondary" type="button" (click)="loadGithubModels()" [disabled]="isGithubBusy || !githubConnection">
+        <button class="btn-secondary" type="button" (click)="loadGithubModels()" [disabled]="isGithubBusy || !githubConnection"
+                [title]="!githubConnection ? 'Conecta tu cuenta de GitHub primero' : 'Vuelve a consultar los modelos disponibles'">
           {{ loadingGithubModels ? 'Actualizando...' : 'Refrescar modelos' }}
         </button>
-        <button class="btn-danger" type="button" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection">
+        <button class="btn-danger" type="button" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection"
+                [title]="!githubConnection ? 'No hay conexión activa para desconectar' : 'Elimina la conexión con GitHub'">
           {{ disconnectingGithub ? 'Desconectando...' : 'Desconectar' }}
         </button>
       </div>
 
-      <p *ngIf="githubInfoMessage" class="message success">{{ githubInfoMessage }}</p>
-      <p *ngIf="githubErrorMessage" class="message error">{{ githubErrorMessage }}</p>
+      <p *ngIf="githubInfoMessage" class="message success" role="status" aria-live="polite">{{ githubInfoMessage }}</p>
+      <p *ngIf="githubErrorMessage" class="message error" role="alert">{{ githubErrorMessage }}</p>
     </div>
   </div>
 
   <!-- SECCIÓN 4: Parámetros Globales -->
   <div class="config-section">
-    <button class="section-toggle" type="button" (click)="toggleSection('global')" [attr.aria-expanded]="accordionOpen.global">
-      <span class="section-label">Parámetros globales</span>
-      <span class="section-arrow" [class.open]="accordionOpen.global">▾</span>
+    <button class="section-toggle" type="button" (click)="toggleSection('global')"
+            [attr.aria-expanded]="accordionOpen.global" aria-controls="panel-global" id="toggle-global">
+      <span class="section-label">Parámetros globales
+        <span class="section-summary">{{ sectionSummary('global') }}</span>
+      </span>
+      <span class="section-arrow" [class.open]="accordionOpen.global" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.global">
+    <div class="config-card" *ngIf="accordionOpen.global" id="panel-global" role="region" aria-labelledby="toggle-global">
       <h3 class="card-title">Parámetros de Secciones Generales</h3>
       <p class="card-description">Estos valores se usarán por defecto para "Repositorio Pruebas VSTS" y "Equipo de Trabajo" al crear planes.</p>
 
@@ -215,12 +267,12 @@
         <div class="form-group full-width">
           <label>Equipo de trabajo</label>
           <p class="field-hint">Completa el Rol (incluye empresa si aplica) y el Nombre. Se exportará como tabla en el plan.</p>
-          <table class="team-config-table">
+          <table class="team-config-table" *ngIf="hasTeamRows">
             <thead>
               <tr>
-                <th>Rol</th>
-                <th>Nombre</th>
-                <th class="col-actions"></th>
+                <th scope="col">Rol</th>
+                <th scope="col">Nombre</th>
+                <th class="col-actions"><span class="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -230,6 +282,7 @@
                     class="form-control"
                     type="text"
                     [name]="'teamRole' + i"
+                    [attr.aria-label]="'Rol del integrante ' + (i + 1)"
                     [(ngModel)]="row.role"
                     placeholder="Ej: Analista de Pruebas – TCS">
                 </td>
@@ -238,6 +291,7 @@
                     class="form-control"
                     type="text"
                     [name]="'teamName' + i"
+                    [attr.aria-label]="'Nombre del integrante ' + (i + 1)"
                     [(ngModel)]="row.name"
                     placeholder="Ej: Andrés Antonio Bernal Padilla">
                 </td>
@@ -246,11 +300,15 @@
                     type="button"
                     class="btn-remove-row"
                     title="Eliminar fila"
+                    [attr.aria-label]="'Eliminar integrante ' + (i + 1)"
                     (click)="removeTeamRow(i)">✕</button>
                 </td>
               </tr>
             </tbody>
           </table>
+          <p class="empty-note" *ngIf="!hasTeamRows">
+            Aún no hay integrantes. Agrega al menos uno para que aparezca en el plan exportado.
+          </p>
           <button type="button" class="btn-add-row" (click)="addTeamRow()">+ Agregar integrante</button>
         </div>
       </div>
@@ -261,18 +319,21 @@
         </button>
       </div>
 
-      <p *ngIf="infoMessage" class="message success">{{ infoMessage }}</p>
-      <p *ngIf="errorMessage" class="message error">{{ errorMessage }}</p>
+      <p *ngIf="infoMessage" class="message success" role="status" aria-live="polite">{{ infoMessage }}</p>
+      <p *ngIf="errorMessage" class="message error" role="alert">{{ errorMessage }}</p>
     </div>
   </div>
 
   <!-- SECCIÓN 5: Nombre Célula -->
   <div class="config-section">
-    <button class="section-toggle" type="button" (click)="toggleSection('cells')" [attr.aria-expanded]="accordionOpen.cells">
-      <span class="section-label">Nombre Célula</span>
-      <span class="section-arrow" [class.open]="accordionOpen.cells">▾</span>
+    <button class="section-toggle" type="button" (click)="toggleSection('cells')"
+            [attr.aria-expanded]="accordionOpen.cells" aria-controls="panel-cells" id="toggle-cells">
+      <span class="section-label">Nombre Célula
+        <span class="section-summary">{{ sectionSummary('cells') }}</span>
+      </span>
+      <span class="section-arrow" [class.open]="accordionOpen.cells" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.cells">
+    <div class="config-card" *ngIf="accordionOpen.cells" id="panel-cells" role="region" aria-labelledby="toggle-cells" [attr.aria-busy]="savingCells">
       <h3 class="card-title">Lista de "Nombre Célula"</h3>
       <p class="card-description">
         Estas son las opciones que aparecen en el selector <strong>Nombre Célula</strong> del generador.
@@ -283,11 +344,11 @@
         <div class="form-group full-width">
           <label>Células disponibles</label>
           <p class="field-hint">Agrega, edita o elimina las células. No se permiten valores vacíos ni duplicados.</p>
-          <table class="team-config-table">
+          <table class="team-config-table" *ngIf="hasCellRows">
             <thead>
               <tr>
-                <th>Célula</th>
-                <th class="col-actions"></th>
+                <th scope="col">Célula</th>
+                <th class="col-actions"><span class="sr-only">Acciones</span></th>
               </tr>
             </thead>
             <tbody>
@@ -297,6 +358,7 @@
                     class="form-control"
                     type="text"
                     [name]="'cellRow' + i"
+                    [attr.aria-label]="'Célula ' + (i + 1)"
                     [(ngModel)]="cellRows[i]"
                     placeholder="Ej: BRAINSTORM">
                 </td>
@@ -305,11 +367,15 @@
                     type="button"
                     class="btn-remove-row"
                     title="Eliminar célula"
+                    [attr.aria-label]="'Eliminar célula ' + (i + 1)"
                     (click)="removeCellRow(i)">✕</button>
                 </td>
               </tr>
             </tbody>
           </table>
+          <p class="empty-note" *ngIf="!hasCellRows">
+            No hay células configuradas. Agrega una o restaura los valores por defecto.
+          </p>
           <button type="button" class="btn-add-row" (click)="addCellRow()">+ Agregar célula</button>
         </div>
       </div>
@@ -323,8 +389,8 @@
         </button>
       </div>
 
-      <p *ngIf="cellsInfoMessage" class="message success">{{ cellsInfoMessage }}</p>
-      <p *ngIf="cellsErrorMessage" class="message error">{{ cellsErrorMessage }}</p>
+      <p *ngIf="cellsInfoMessage" class="message success" role="status" aria-live="polite">{{ cellsInfoMessage }}</p>
+      <p *ngIf="cellsErrorMessage" class="message error" role="alert">{{ cellsErrorMessage }}</p>
     </div>
   </div>
 
