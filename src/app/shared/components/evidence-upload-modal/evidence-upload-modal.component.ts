@@ -44,7 +44,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   inputPlanId = '';
   inputFileName = 'Evidencia_EVC00057.zip';
   // Por defecto: Solo Serenity (DOCX/PDF deshabilitados por límite de 4.5MB en Vercel free tier)
-  selectedFormats = { docx: false, pdf: false };
+  selectedFormats = { docx: false, pdf: false, excel: false };
   isValidating = false;
   isUploading = false;
   planValidated = false;
@@ -262,7 +262,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   }
 
   hasSelectedFormat(): boolean {
-    return this.selectedFormats.docx || this.selectedFormats.pdf;
+    return this.selectedFormats.docx || this.selectedFormats.pdf || this.selectedFormats.excel;
   }
 
   private async buildExtraFiles(): Promise<{ name: string; base64: string }[]> {
@@ -281,6 +281,12 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
       this.onProcessing.emit({ isProcessing: true, message: 'Generando documento PDF...' });
       const blob = await this.exportService.exportExecutionToPDF(this.execution, this.huData, undefined, true) as Blob;
       files.push({ name: `${baseName}.pdf`, base64: await this.blobToBase64(blob) });
+    }
+
+    if (this.selectedFormats.excel) {
+      this.onProcessing.emit({ isProcessing: true, message: 'Generando documento Excel...' });
+      const blob = await this.exportService.exportExecutionToXLSX(this.execution, this.huData, undefined, true) as Blob;
+      files.push({ name: `${baseName}.xlsx`, base64: await this.blobToBase64(blob) });
     }
 
     return files;

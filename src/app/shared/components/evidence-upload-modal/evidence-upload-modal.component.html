@@ -148,6 +148,22 @@
               </span>
             </label>
 
+            <label class="format-option" [class.selected]="selectedFormats.excel">
+              <input type="checkbox" [(ngModel)]="selectedFormats.excel" />
+              <span class="opt-icon opt-icon-excel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="19"/>
+                  <line x1="16" y1="13" x2="8" y2="19"/>
+                </svg>
+              </span>
+              <span class="format-text">
+                <strong>Documento Excel</strong>
+                <small>Evidencias en formato XLSX (imágenes ajustadas a celda)</small>
+              </span>
+            </label>
+
           </div>
           <small class="formats-hint" *ngIf="!hasSelectedFormat()" role="alert">
             Selecciona al menos una evidencia para continuar.
