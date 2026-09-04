@@ -47,7 +47,6 @@
                   (change)="onToggleSelectAll($any($event.target).checked)">
               </th>
               <th>Nombre</th>
-              <th>Plan de Prueba</th>
               <th>HU</th>
               <th>Estado</th>
               <th>Etiquetas</th>
@@ -66,9 +65,6 @@
                   {{ run.name }}
                   <span *ngIf="navigatingRunId === run.id" class="spinner-sm" style="display:inline-block; margin-left:8px; vertical-align:middle; width: 12px; height: 12px; border-width: 2px;"></span>
                 </button>
-              </td>
-              <td data-label="Plan de Prueba">
-                <span class="cell-meta" [title]="run.testPlanTitle || 'N/A'">{{ run.testPlanTitle || 'N/A' }}</span>
               </td>
               <td data-label="HU">
                 <span class="cell-meta" [title]="run.huTitle || 'N/A'">{{ run.huTitle || 'N/A' }}</span>
