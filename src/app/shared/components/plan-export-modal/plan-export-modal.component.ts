@@ -53,9 +53,12 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
   ) {}
 
   private previousBodyOverflow: string | null = null;
+  /** Elemento que tenía el foco antes de abrir el modal, para restaurarlo al cerrar (accesibilidad). */
+  private lastFocusedElement: HTMLElement | null = null;
 
   ngOnInit(): void {
     if (typeof document !== 'undefined') {
+      this.lastFocusedElement = (document.activeElement as HTMLElement) || null;
       this.previousBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
     }
@@ -66,6 +69,9 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
       document.body.style.overflow = this.previousBodyOverflow;
       this.previousBodyOverflow = null;
     }
+    // Devuelve el foco al elemento que abrió el modal.
+    this.lastFocusedElement?.focus?.();
+    this.lastFocusedElement = null;
   }
 
   /** Cerrar con Escape (bloqueado si hay validación o envío en curso). */
@@ -107,6 +113,7 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
   }
 
   selectTab(tab: 'local' | 'azure'): void {
+    if (this.isBusy) return;
     this.activeTab = tab;
   }
 

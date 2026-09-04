@@ -14,7 +14,7 @@
       </div>
       <button class="btn-close" type="button" (click)="close()" [disabled]="isBusy" aria-label="Cerrar"
         [title]="isBusy ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -48,6 +48,7 @@
         </svg>
         Enviar a Azure DevOps
       </button>
+      <span class="tab-indicator" [class.at-azure]="activeTab === 'azure'" aria-hidden="true"></span>
     </div>
 
     <!-- Body -->
@@ -239,7 +240,11 @@
           </div>
 
           <div class="form-actions">
-            <button type="button" (click)="close()" class="btn btn-secondary">Cancelar</button>
+            <div class="footer-progress" *ngIf="isValidating" role="status" aria-live="polite">
+              <span class="btn-spinner-sm" aria-hidden="true"></span>
+              <span>Validando plan… No cierres esta ventana.</span>
+            </div>
+            <button type="button" (click)="close()" class="btn btn-secondary" [disabled]="isValidating">Cancelar</button>
             <button type="button" (click)="validatePlan()" class="btn btn-primary"
               [attr.aria-busy]="isValidating"
               [title]="!inputPlanId ? 'Ingresa el ID del plan para continuar' : 'Validar el plan en Azure DevOps'"
