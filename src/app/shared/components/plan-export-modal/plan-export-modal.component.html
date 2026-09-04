@@ -59,109 +59,64 @@
       <div class="tab-content" *ngIf="activeTab === 'local'"
         role="tabpanel" id="plan-panel-local" aria-labelledby="plan-tab-local">
 
-        <div class="action-list">
+        <div class="dl-group">
+          <span class="dl-group-label">Descargar como</span>
+          <div class="dl-format-row" role="group" aria-label="Formato de descarga">
 
-          <!-- Copiar al portapapeles -->
-          <div class="action-row">
-            <div class="action-meta">
-              <div class="action-icon icon-clipboard" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <!-- Copiar al portapapeles -->
+            <button type="button" class="dl-format-btn" (click)="copyToClipboard()"
+              [class.is-done]="copiedToClipboard"
+              [disabled]="!previewHtmlContent"
+              [title]="!previewHtmlContent ? 'No hay contenido de plan para copiar' : 'Copiar el plan al portapapeles'">
+              <span class="opt-icon opt-icon-clipboard" aria-hidden="true">
+                <svg *ngIf="!copiedToClipboard" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
                   <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
                 </svg>
-              </div>
-              <div class="action-texts">
-                <span class="action-label">Copiar al portapapeles</span>
-                <span class="action-desc">Formato APA</span>
-              </div>
-            </div>
-            <button type="button" (click)="copyToClipboard()" class="btn btn-action"
-              [class.btn-done]="copiedToClipboard"
-              [disabled]="!previewHtmlContent"
-              [title]="!previewHtmlContent ? 'No hay contenido de plan para copiar' : 'Copiar el plan al portapapeles'">
-              <ng-container *ngIf="!copiedToClipboard">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                </svg>
-                Copiar
-              </ng-container>
-              <ng-container *ngIf="copiedToClipboard">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <svg *ngIf="copiedToClipboard" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Copiado
-              </ng-container>
+              </span>
+              <span class="dl-format-name">{{ copiedToClipboard ? 'Copiado' : 'Copiar' }}</span>
+              <span class="dl-format-ext">Portapapeles</span>
             </button>
-          </div>
 
-          <div class="action-divider"></div>
-
-          <!-- Descargar PDF -->
-          <div class="action-row">
-            <div class="action-meta">
-              <div class="action-icon icon-pdf" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-              </div>
-              <div class="action-texts">
-                <span class="action-label">Escenarios en PDF</span>
-                <span class="action-desc">Matriz de ejecución</span>
-              </div>
-            </div>
-            <button type="button" (click)="downloadPdf()" class="btn btn-action"
+            <!-- Descargar PDF -->
+            <button type="button" class="dl-format-btn" (click)="downloadPdf()"
               [disabled]="hasNoScenarios"
               [title]="hasNoScenarios ? 'El plan no tiene escenarios para exportar' : 'Descargar la matriz de escenarios en PDF'">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              PDF
-            </button>
-          </div>
-
-          <div class="action-divider"></div>
-
-          <!-- Descargar DOCX -->
-          <div class="action-row">
-            <div class="action-meta">
-              <div class="action-icon icon-word" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <span class="opt-icon opt-icon-pdf" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                  <line x1="10" y1="9" x2="8" y2="9"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="13" y2="17"/>
                 </svg>
-              </div>
-              <div class="action-texts">
-                <span class="action-label">Documento Word</span>
-                <span class="action-desc">Plan completo (.docx)</span>
-              </div>
-            </div>
-            <button type="button" (click)="downloadDocx()" class="btn btn-action"
+              </span>
+              <span class="dl-format-name">PDF</span>
+              <span class="dl-format-ext">.pdf</span>
+            </button>
+
+            <!-- Descargar DOCX -->
+            <button type="button" class="dl-format-btn" (click)="downloadDocx()"
+              [class.is-loading]="wordExporter?.isExporting"
               [attr.aria-busy]="wordExporter?.isExporting"
               [disabled]="wordExporter?.isExporting || huCount === 0"
               [title]="huCount === 0 ? 'El plan no tiene historias de usuario' : 'Descargar el plan completo en Word'">
-              <ng-container *ngIf="!wordExporter?.isExporting">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
+              <span class="opt-icon opt-icon-word" aria-hidden="true">
+                <span class="opt-spinner" *ngIf="wordExporter?.isExporting"></span>
+                <svg *ngIf="!wordExporter?.isExporting" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
                 </svg>
-                DOCX
-              </ng-container>
-              <ng-container *ngIf="wordExporter?.isExporting">
-                <span class="btn-spinner-sm" aria-hidden="true"></span>
-                Generando...
-              </ng-container>
+              </span>
+              <span class="dl-format-name">Word</span>
+              <span class="dl-format-ext">.docx</span>
             </button>
-          </div>
 
+          </div>
         </div>
 
         <!-- Aviso cuando no hay escenarios que exportar -->
