@@ -7,7 +7,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -21,8 +21,8 @@
   background: var(--background-color, #ffffff);
   border-radius: 16px;
   width: 100%;
-  max-width: 480px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  max-width: 460px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.16);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -34,12 +34,11 @@
    Header
 ───────────────────────────────────────── */
 .modal-header {
-  padding: 18px 20px 14px 20px;
+  padding: 20px 22px 16px 22px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid var(--border-color, #e2e8f0);
   background: var(--background-color, #ffffff);
   position: sticky;
   top: 0;
@@ -57,9 +56,9 @@
   letter-spacing: -0.2px;
 }
 
-/* Contexto del plan sobre el que se actúa */
+/* Contexto del plan sobre el que se actúa — línea única y discreta */
 .modal-subtitle {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -69,19 +68,29 @@
   color: var(--text-secondary, #94a3b8);
 }
 .modal-subtitle-text {
-  max-width: 260px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
 }
 .meta-chip {
   flex-shrink: 0;
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: 999px;
-  background: var(--primary-tint, #eff6ff);
-  color: var(--primary-color, #2563eb);
+  background: var(--surface-color, #f1f5f9);
+  color: var(--text-secondary, #64748b);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.meta-dot { color: var(--border-color, #cbd5e1); }
+.meta-plain {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
   white-space: nowrap;
 }
 
@@ -115,9 +124,9 @@
 .modal-tabs {
   position: relative;
   display: flex;
-  background: var(--surface-color, #f8fafc);
+  background: var(--background-color, #ffffff);
   border-bottom: 1px solid var(--border-color, #e2e8f0);
-  padding: 0 12px;
+  padding: 0 16px;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -128,26 +137,23 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 11px 14px;
+  padding: 12px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, #94a3b8);
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease;
+  transition: color 0.2s ease;
   white-space: nowrap;
 }
 
 .tab-btn:hover:not(:disabled):not(.active) {
-  color: var(--text-color, #1e293b);
+  color: var(--text-color, #475569);
 }
 
 .tab-btn.active {
   color: var(--primary-color, #2563eb);
-  background: var(--background-color, #ffffff);
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
 }
 
 .tab-btn:disabled {
@@ -158,9 +164,9 @@
 /* Indicador deslizante entre pestañas */
 .tab-indicator {
   position: absolute;
-  bottom: 0;
-  left: 12px;
-  width: calc(50% - 14px);
+  bottom: -1px;
+  left: 16px;
+  width: calc(50% - 18px);
   height: 2px;
   background: var(--primary-color, #2563eb);
   border-radius: 2px;
@@ -174,7 +180,7 @@
    Body
 ───────────────────────────────────────── */
 .modal-body {
-  padding: 20px;
+  padding: 22px;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1;
@@ -187,22 +193,13 @@
 }
 
 /* ─────────────────────────────────────────
-   Tab description
-───────────────────────────────────────── */
-.tab-description {
-  margin: 0 0 4px 0;
-  font-size: 13px;
-  color: var(--text-secondary, #64748b);
-}
-
-/* ─────────────────────────────────────────
    Action list (Local Export Tab)
 ───────────────────────────────────────── */
 .action-list {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--background-color, #ffffff);
 }
@@ -211,7 +208,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 16px;
+  padding: 15px 16px;
   gap: 12px;
   transition: background 0.15s ease;
 }
@@ -222,7 +219,7 @@
 
 .action-divider {
   height: 1px;
-  background: #f1f5f9;
+  background: var(--border-color, #f1f5f9);
   margin: 0 16px;
 }
 
@@ -234,14 +231,17 @@
   min-width: 0;
 }
 
+/* Iconos sobrios: superficie neutra, acento sutil por tipo */
 .action-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  background: var(--surface-color, #f1f5f9);
+  color: var(--text-secondary, #64748b);
 }
 
 .action-icon.icon-clipboard {
@@ -250,39 +250,39 @@
 }
 
 .action-icon.icon-pdf {
-  background: #fff1f2;
-  color: #e11d48;
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 .action-icon.icon-word {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: #eff6ff;
+  color: #2563eb;
 }
 
 .action-texts {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .action-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-color, #1e293b);
   white-space: nowrap;
 }
 
-/* Describe qué genera cada acción antes de pulsarla */
+/* Descripción breve de cada acción */
 .action-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
   color: var(--text-secondary, #94a3b8);
 }
 
 /* Aviso cuando no hay escenarios exportables */
 .empty-note {
-  margin: 14px 0 0;
+  margin: 4px 0 0;
   padding: 10px 13px;
   border-radius: 8px;
   background: #fffbeb;
@@ -300,10 +300,10 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 8px 16px;
+  padding: 9px 16px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
@@ -339,15 +339,16 @@
 
 /* Botón de acción en filas */
 .btn-action {
-  background: var(--surface-color, #f8fafc);
+  background: var(--background-color, #ffffff);
   border: 1px solid var(--border-color, #e2e8f0);
   color: #334155;
-  padding: 7px 14px;
+  padding: 8px 15px;
   font-size: 13px;
+  min-width: 92px;
 }
 
 .btn-action:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--surface-color, #f8fafc);
   border-color: #cbd5e1;
 }
 
@@ -369,7 +370,7 @@
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .form-group label {
@@ -377,10 +378,11 @@
   font-weight: 600;
   color: var(--text-color, #1e293b);
 }
+.req { color: #dc2626; font-weight: 700; }
 
 .form-input {
   width: 100%;
-  padding: 9px 13px;
+  padding: 10px 13px;
   font-size: 14px;
   border: 1px solid var(--border-color, #e2e8f0);
   border-radius: 8px;
@@ -416,17 +418,10 @@
   color: var(--primary-color, #2563eb);
 }
 
-.help-text kbd {
-  display: inline-block;
-  padding: 1px 5px;
-  border: 1px solid var(--border-color, #e2e8f0);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: var(--surface-color, #f8fafc);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  color: #334155;
+.help-text .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--text-secondary, #64748b);
 }
 
 /* ── Indicador de pasos del envío a Azure ── */
@@ -557,23 +552,14 @@
 .plan-summary-box {
   background: var(--surface-color, #f8fafc);
   border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 9px;
-  padding: 13px 15px;
-}
-
-.summary-title {
-  margin: 0 0 10px 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-secondary, #94a3b8);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
+  border-radius: 10px;
+  padding: 14px 16px;
 }
 
 .summary-item {
   display: flex;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 13px;
 }
 
@@ -583,8 +569,8 @@
 
 .summary-label {
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
-  min-width: 120px;
+  color: var(--text-secondary, #94a3b8);
+  min-width: 72px;
   flex-shrink: 0;
 }
 

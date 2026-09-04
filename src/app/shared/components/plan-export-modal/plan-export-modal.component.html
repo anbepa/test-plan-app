@@ -9,7 +9,8 @@
         <p class="modal-subtitle" *ngIf="testPlanTitle || huCount > 0">
           <span class="modal-subtitle-text" *ngIf="testPlanTitle" [title]="testPlanTitle">{{ testPlanTitle }}</span>
           <span class="meta-chip" *ngIf="huCount > 0">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }}</span>
-          <span class="meta-chip" *ngIf="scenarioCount > 0">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
+          <span class="meta-dot" *ngIf="huCount > 0 && scenarioCount > 0" aria-hidden="true">·</span>
+          <span class="meta-plain" *ngIf="scenarioCount > 0">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
         </p>
       </div>
       <button class="btn-close" type="button" (click)="close()" [disabled]="isBusy" aria-label="Cerrar"
@@ -58,8 +59,6 @@
       <div class="tab-content" *ngIf="activeTab === 'local'"
         role="tabpanel" id="plan-panel-local" aria-labelledby="plan-tab-local">
 
-        <p class="tab-description">Exporta o copia el plan de pruebas en el formato que necesites.</p>
-
         <div class="action-list">
 
           <!-- Copiar al portapapeles -->
@@ -73,7 +72,7 @@
               </div>
               <div class="action-texts">
                 <span class="action-label">Copiar al portapapeles</span>
-                <span class="action-desc">Con formato APA, listo para pegar en Word</span>
+                <span class="action-desc">Formato APA</span>
               </div>
             </div>
             <button type="button" (click)="copyToClipboard()" class="btn btn-action"
@@ -109,8 +108,8 @@
                 </svg>
               </div>
               <div class="action-texts">
-                <span class="action-label">Descargar escenarios PDF</span>
-                <span class="action-desc">Matriz de ejecución con todos los casos del plan</span>
+                <span class="action-label">Escenarios en PDF</span>
+                <span class="action-desc">Matriz de ejecución</span>
               </div>
             </div>
             <button type="button" (click)="downloadPdf()" class="btn btn-action"
@@ -140,8 +139,8 @@
                 </svg>
               </div>
               <div class="action-texts">
-                <span class="action-label">Descargar Word (.docx)</span>
-                <span class="action-desc">Documento completo con normas APA</span>
+                <span class="action-label">Documento Word</span>
+                <span class="action-desc">Plan completo (.docx)</span>
               </div>
             </div>
             <button type="button" (click)="downloadDocx()" class="btn btn-action"
@@ -167,7 +166,7 @@
 
         <!-- Aviso cuando no hay escenarios que exportar -->
         <p class="empty-note" *ngIf="hasNoScenarios" role="status">
-          Este plan aún no tiene escenarios generados, por lo que la exportación de PDF no está disponible.
+          Aún no hay escenarios generados. La exportación de PDF no está disponible.
         </p>
 
       </div>
@@ -194,7 +193,7 @@
         <!-- Indicador de pasos -->
         <ol class="plan-stepper" *ngIf="!sendCompleted" aria-label="Progreso del envío">
           <li class="plan-step" [class.active]="!planValidated && !isSending" [class.done]="planValidated || isSending">
-            <span class="step-dot">1</span><span class="step-label">Validar plan</span>
+            <span class="step-dot">1</span><span class="step-label">Validar</span>
           </li>
           <li class="step-line" aria-hidden="true"></li>
           <li class="plan-step" [class.active]="planValidated && !isSending" [class.done]="isSending">
@@ -209,7 +208,7 @@
         <!-- PASO 1: Ingreso de Plan ID -->
         <div class="upload-section" *ngIf="!planValidated && !isSending">
           <div class="form-group">
-            <label for="planId">ID del Plan de Pruebas de Azure DevOps *</label>
+            <label for="planId">ID del Plan de Pruebas <span class="req">*</span></label>
             <input
               id="planId"
               type="text"
@@ -224,8 +223,7 @@
               aria-describedby="planId-help"
               [disabled]="isValidating">
             <small class="help-text" id="planId-help">
-              URL de Azure DevOps: dev.azure.com/.../test/define?planId=<strong>7695070</strong>
-              · Pulsa <kbd>Enter</kbd> para validar.
+              Lo encuentras en la URL de Azure DevOps <span class="mono">…?planId=<strong>7695070</strong></span>
             </small>
           </div>
 
@@ -242,7 +240,7 @@
           <div class="form-actions">
             <div class="footer-progress" *ngIf="isValidating" role="status" aria-live="polite">
               <span class="btn-spinner-sm" aria-hidden="true"></span>
-              <span>Validando plan… No cierres esta ventana.</span>
+              <span>Validando…</span>
             </div>
             <button type="button" (click)="close()" class="btn btn-secondary" [disabled]="isValidating">Cancelar</button>
             <button type="button" (click)="validatePlan()" class="btn btn-primary"
@@ -266,18 +264,13 @@
           </div>
 
           <div class="plan-summary-box">
-            <h4 class="summary-title">Resumen de actualización</h4>
             <div class="summary-item">
-              <span class="summary-label">Título:</span>
+              <span class="summary-label">Título</span>
               <span class="summary-value">{{ testPlanTitle || 'Plan de Pruebas' }}</span>
             </div>
             <div class="summary-item" *ngIf="huCount > 0">
-              <span class="summary-label">Alcance:</span>
-              <span class="summary-value">{{ huCount }} {{ huCount === 1 ? 'historia de usuario' : 'historias de usuario' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Contenido:</span>
-              <span class="summary-value">Alcance, fuera de alcance, estrategia, casos de prueba, limitaciones, supuestos y equipo.</span>
+              <span class="summary-label">Alcance</span>
+              <span class="summary-value">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
             </div>
           </div>
 
@@ -287,7 +280,7 @@
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <span>Esta acción reemplaza la descripción actual del Work Item en Azure DevOps.</span>
+            <span>Se reemplazará la descripción actual del Work Item.</span>
           </div>
 
           <div class="error-message" *ngIf="sendError" role="alert">
@@ -313,9 +306,8 @@
         <div class="upload-section" *ngIf="isSending">
           <div class="progress-container" role="status" aria-live="polite">
             <div class="spinner-large" aria-hidden="true"></div>
-            <h3>Enviando plan a Azure DevOps...</h3>
+            <h3>Enviando a Azure DevOps…</h3>
             <p>Actualizando Work Item {{ validatedPlan?.planId }}.</p>
-            <p class="progress-note">No cierres esta ventana hasta que finalice.</p>
           </div>
         </div>
 
@@ -328,7 +320,7 @@
               </svg>
             </div>
             <h3>¡Plan actualizado!</h3>
-            <p>El contenido fue enviado exitosamente al Work Item <strong>{{ validatedPlan?.planId }}</strong>.</p>
+            <p>Enviado al Work Item <strong>{{ validatedPlan?.planId }}</strong>.</p>
             <div class="form-actions" style="margin-top:16px;">
               <button type="button" (click)="close()" class="btn btn-primary">Cerrar</button>
             </div>
