@@ -128,11 +128,13 @@ export class SerenityReportService {
         hydrateProgress: undefined,
       };
 
-      // Subir el bundle DIRECTAMENTE a Supabase Storage desde el navegador y
-      // enviar solo la URL firmada. Esto evita el límite de body (4.5MB en el
-      // plan gratuito) de las funciones serverless de Vercel, que provocaba
-      // errores 413 Request Entity Too Large con evidencias pesadas.
-      const { url: bundleUrl, path: bundlePath } = await this.uploadBundleDirect(bundleJson);
+      // Subir el bundle DIRECTAMENTE a Supabase Storage desde el navegador.
+      // Esto evita el límite de body (4.5MB en el plan gratuito) de las
+      // funciones serverless de Vercel, que provocaba errores 413 con
+      // evidencias pesadas. La URL firmada la genera el BACKEND (service role)
+      // para no depender de policies de SELECT del lado del cliente, que
+      // provocaban URLs inválidas (curl 400) al descargarlas desde Azure.
+      const bundlePath = await this.uploadBundleDirect(bundleJson);
       this.bundlePath = bundlePath;
 
       this.state = {
@@ -142,7 +144,7 @@ export class SerenityReportService {
 
       const headers = await this.buildAuthHeaders();
 
-      await this.dispatchAzure(bundleUrl, headers, run.executionId);
+      await this.dispatchAzure(bundlePath, headers, run.executionId);
       this.cleanupBundle();
     } catch (err: any) {
       this.cleanupBundle();
@@ -153,10 +155,13 @@ export class SerenityReportService {
 
   /**
    * Sube el bundle JSON (con imágenes en base64) DIRECTAMENTE a Supabase Storage
-   * desde el navegador y devuelve una URL firmada (24h) + el path para limpieza.
-   * Evita el límite de 4.5MB del body de las funciones serverless de Vercel.
+   * desde el navegador y devuelve el path del objeto. Evita el límite de
+   * 4.5MB del body de las funciones serverless de Vercel. La URL firmada se
+   * genera del lado del backend con el service role (ver dispatchAzure), ya
+   * que firmar desde el navegador (sujeto a RLS) puede producir URLs que
+   * Azure no puede descargar (curl 400).
    */
-  private async uploadBundleDirect(bundleJson: string): Promise<{ url: string; path: string }> {
+  private async uploadBundleDirect(bundleJson: string): Promise<string> {
     const { data: userData } = await this.supabaseClient.supabase.auth.getUser();
     const userId = userData?.user?.id;
     if (!userId) throw new Error('Usuario no autenticado para subir el bundle.');
@@ -176,15 +181,7 @@ export class SerenityReportService {
       throw new Error('No se pudo subir el bundle a Storage: ' + error.message);
     }
 
-    const { data: signed, error: signErr } = await this.supabaseClient.supabase.storage
-      .from('execution-evidence')
-      .createSignedUrl(path, 86400);
-
-    if (signErr || !signed?.signedUrl) {
-      throw new Error('No se pudo generar la URL firmada del bundle.');
-    }
-
-    return { url: signed.signedUrl, path };
+    return path;
   }
 
   /** Elimina el bundle temporal de Storage una vez terminado (o si falla). */
@@ -197,9 +194,9 @@ export class SerenityReportService {
     } catch { /* no-op */ }
   }
 
-  private async dispatchAzure(bundleUrl: string, headers: HttpHeaders, executionId?: string): Promise<void> {
+  private async dispatchAzure(bundlePath: string, headers: HttpHeaders, executionId?: string): Promise<void> {
     const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundleUrl, executionId }, { headers })
+      this.http.post<any>(this.azApiUrl, { bundlePath, executionId }, { headers })
     );
 
     if (!startResult.success) {

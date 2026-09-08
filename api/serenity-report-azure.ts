@@ -81,6 +81,36 @@ async function deleteBundleFromStorage(userId: string, jobId: string): Promise<v
 }
 
 /**
+ * Firma una URL para un objeto YA subido a Storage (por el cliente, vía
+ * anon key) usando el ADMIN CLIENT (service role). Esto evita depender de
+ * policies de SELECT sujetas a RLS del lado del navegador, que en algunos
+ * casos generaban signed URLs inválidas (curl devolvía 400 al descargarlas
+ * desde el pipeline de Azure DevOps).
+ */
+async function signExistingBundle(path: string): Promise<string> {
+  const { adminClient } = getSupabaseClients();
+  const bucket = 'execution-evidence';
+
+  const { data: signedData, error: signedError } = await adminClient.storage
+    .from(bucket)
+    .createSignedUrl(path, 21600); // 6 horas: margen amplio para colas de release
+
+  if (signedError || !signedData?.signedUrl) {
+    console.error('[serenity-report-azure] Error al firmar bundle existente:', signedError);
+    throw new ApiError(500, 'Error al generar URL firmada para el bundle.');
+  }
+
+  return signedData.signedUrl;
+}
+
+async function deleteBundlePathFromStorage(path: string): Promise<void> {
+  try {
+    const { adminClient } = getSupabaseClients();
+    await adminClient.storage.from('execution-evidence').remove([path]);
+  } catch (_) { /* no-op */ }
+}
+
+/**
  * Elimina reportes previos del mismo usuario/ejecución antes de insertar uno nuevo.
  * Así solo se conserva el último reporte generado (no se guarda histórico).
  */
@@ -169,8 +199,8 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const { bundle, bundleUrl: providedBundleUrl, executionId } = req.body || {};
-    if (!bundle && !providedBundleUrl) {
+    const { bundle, bundleUrl: providedBundleUrl, bundlePath: providedBundlePath, executionId } = req.body || {};
+    if (!bundle && !providedBundleUrl && !providedBundlePath) {
       return res.status(400).json({ error: 'Se requiere un bundle' });
     }
 
@@ -179,10 +209,22 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
 
     // El cliente puede subir el bundle DIRECTAMENTE a Supabase Storage (evita el
     // límite de 4.5MB del body de Vercel cuando las evidencias pesan mucho) y
-    // enviar solo la URL firmada. Como fallback, aceptamos el bundle inline.
+    // enviar solo el path del objeto; este backend (service role) firma la
+    // URL para garantizar que sea válida sin depender de RLS del navegador.
+    // También se acepta bundleUrl (compatibilidad) o bundle inline (fallback).
     let bundleUrl: string;
     let bundleUploadedHere = false;
-    if (providedBundleUrl) {
+    let uploadedBundlePath: string | null = null;
+    if (providedBundlePath) {
+      try {
+        bundleUrl = await signExistingBundle(String(providedBundlePath));
+        uploadedBundlePath = String(providedBundlePath);
+        console.log(`[serenity-report-azure] Bundle firmado desde path provisto: ${providedBundlePath}`);
+      } catch (e: any) {
+        console.error('[serenity-report-azure] Error firmando bundle provisto:', e);
+        return res.status(502).json({ error: 'Error al firmar el bundle en Storage.' });
+      }
+    } else if (providedBundleUrl) {
       bundleUrl = String(providedBundleUrl);
       console.log(`[serenity-report-azure] Usando bundle URL provista por el cliente`);
     } else {
@@ -203,6 +245,9 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
     } catch (e: any) {
       if (bundleUploadedHere) {
         await deleteBundleFromStorage(user.id, jobId).catch(() => {});
+      }
+      if (uploadedBundlePath) {
+        await deleteBundlePathFromStorage(uploadedBundlePath).catch(() => {});
       }
       const message = e instanceof ApiError
         ? e.message
