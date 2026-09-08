@@ -262,6 +262,7 @@
   width: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   padding: 8px 10px;
   border: none;
@@ -291,6 +292,14 @@
   flex-shrink: 0;
 }
 .act-menu-icon svg { pointer-events: none; }
+
+.act-menu-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.2;
+  white-space: nowrap;
+}
 
 .act-menu-divider {
   height: 1px;
