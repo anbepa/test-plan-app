@@ -162,7 +162,10 @@ export class SerenityReportService {
     if (!userId) throw new Error('Usuario no autenticado para subir el bundle.');
 
     const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const path = `serenity-bundles/${userId}/${name}.json`;
+    // El primer segmento del path DEBE ser el userId: la policy RLS de Storage
+    // valida (storage.foldername(name))[1] = auth.uid(), igual que el resto de
+    // rutas de evidencia usadas en execution-storage-supabase.service.ts.
+    const path = `${userId}/serenity-bundles/${name}.json`;
     const blob = new Blob([bundleJson], { type: 'application/json' });
 
     const { error } = await this.supabaseClient.supabase.storage

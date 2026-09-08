@@ -50,7 +50,7 @@ function resolveArtifactDownloadUrlFromRelease(data: any): string | null {
 async function uploadBundleToStorage(bundleJson: string, userId: string, jobId: string): Promise<string> {
   const { adminClient } = getSupabaseClients();
   const bucket = 'execution-evidence';
-  const path = `serenity-bundles/${userId}/${jobId}.json`;
+  const path = `${userId}/serenity-bundles/${jobId}.json`;
 
   const { error } = await adminClient.storage.from(bucket).upload(path, bundleJson, {
     contentType: 'application/json',
@@ -75,7 +75,7 @@ async function deleteBundleFromStorage(userId: string, jobId: string): Promise<v
   try {
     const { adminClient } = getSupabaseClients();
     const bucket = 'execution-evidence';
-    const path = `serenity-bundles/${userId}/${jobId}.json`;
+    const path = `${userId}/serenity-bundles/${jobId}.json`;
     await adminClient.storage.from(bucket).remove([path]);
   } catch (_) { /* no-op */ }
 }

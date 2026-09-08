@@ -1322,7 +1322,7 @@ function resolveAzureArtifactDownloadUrlFromRelease(data) {
 const SERENITY_BUNDLE_BUCKET = 'execution-evidence';
 
 function serenityBundlePath(userId, jobId) {
-    return `serenity-bundles/${userId}/${jobId}.json`;
+    return `${userId}/serenity-bundles/${jobId}.json`;
 }
 
 async function deleteSerenityBundle(userId, jobId) {
