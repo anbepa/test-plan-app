@@ -51,6 +51,7 @@ export class SerenityReportService {
   _currentRunName = 'Reporte Serenity';
   private pollTimer: any = null;
   private readonly azApiUrl = '/api/serenity-report-azure';
+  private bundlePath: string | null = null;
 
   constructor(
     private http: HttpClient,
@@ -123,22 +124,79 @@ export class SerenityReportService {
 
       this.state = {
         phase: 'dispatching',
-        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a Azure DevOps...`,
+        statusMessage: `Subiendo evidencias (${(bundleJson.length / 1024 / 1024).toFixed(1)} MB)...`,
         hydrateProgress: undefined,
+      };
+
+      // Subir el bundle DIRECTAMENTE a Supabase Storage desde el navegador y
+      // enviar solo la URL firmada. Esto evita el límite de body (4.5MB en el
+      // plan gratuito) de las funciones serverless de Vercel, que provocaba
+      // errores 413 Request Entity Too Large con evidencias pesadas.
+      const { url: bundleUrl, path: bundlePath } = await this.uploadBundleDirect(bundleJson);
+      this.bundlePath = bundlePath;
+
+      this.state = {
+        ...this.state,
+        statusMessage: 'Iniciando pipeline en Azure DevOps...',
       };
 
       const headers = await this.buildAuthHeaders();
 
-      await this.dispatchAzure(bundle, headers, run.executionId);
+      await this.dispatchAzure(bundleUrl, headers, run.executionId);
+      this.cleanupBundle();
     } catch (err: any) {
+      this.cleanupBundle();
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
     }
   }
 
-  private async dispatchAzure(bundle: any, headers: HttpHeaders, executionId?: string): Promise<void> {
+  /**
+   * Sube el bundle JSON (con imágenes en base64) DIRECTAMENTE a Supabase Storage
+   * desde el navegador y devuelve una URL firmada (24h) + el path para limpieza.
+   * Evita el límite de 4.5MB del body de las funciones serverless de Vercel.
+   */
+  private async uploadBundleDirect(bundleJson: string): Promise<{ url: string; path: string }> {
+    const { data: userData } = await this.supabaseClient.supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error('Usuario no autenticado para subir el bundle.');
+
+    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const path = `serenity-bundles/${userId}/${name}.json`;
+    const blob = new Blob([bundleJson], { type: 'application/json' });
+
+    const { error } = await this.supabaseClient.supabase.storage
+      .from('execution-evidence')
+      .upload(path, blob, { contentType: 'application/json', upsert: true });
+
+    if (error) {
+      throw new Error('No se pudo subir el bundle a Storage: ' + error.message);
+    }
+
+    const { data: signed, error: signErr } = await this.supabaseClient.supabase.storage
+      .from('execution-evidence')
+      .createSignedUrl(path, 86400);
+
+    if (signErr || !signed?.signedUrl) {
+      throw new Error('No se pudo generar la URL firmada del bundle.');
+    }
+
+    return { url: signed.signedUrl, path };
+  }
+
+  /** Elimina el bundle temporal de Storage una vez terminado (o si falla). */
+  private async cleanupBundle(): Promise<void> {
+    if (!this.bundlePath) return;
+    const path = this.bundlePath;
+    this.bundlePath = null;
+    try {
+      await this.supabaseClient.supabase.storage.from('execution-evidence').remove([path]);
+    } catch { /* no-op */ }
+  }
+
+  private async dispatchAzure(bundleUrl: string, headers: HttpHeaders, executionId?: string): Promise<void> {
     const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundle, executionId }, { headers })
+      this.http.post<any>(this.azApiUrl, { bundleUrl, executionId }, { headers })
     );
 
     if (!startResult.success) {
