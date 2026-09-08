@@ -145,7 +145,15 @@ export class SerenityReportService {
       const headers = await this.buildAuthHeaders();
 
       await this.dispatchAzure(bundlePath, headers, run.executionId);
-      this.cleanupBundle();
+      // IMPORTANTE: no borrar el bundle aquí. El release recién creado queda
+      // en cola en Azure DevOps y la tarea "Descargar bundle" puede tardar
+      // minutos en ejecutarse; si se borra el objeto de Storage de inmediato,
+      // el curl del pipeline falla con 400 (Object not found) porque el
+      // archivo ya no existe cuando el agente intenta descargarlo. El bundle
+      // se conserva y expira solo (signed URL de 6h); Storage no lo borra
+      // automáticamente, pero el próximo reporte sobreescribe/limpia los
+      // bundles previos del usuario en el backend.
+      this.bundlePath = null;
     } catch (err: any) {
       this.cleanupBundle();
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
@@ -166,6 +174,12 @@ export class SerenityReportService {
     const userId = userData?.user?.id;
     if (!userId) throw new Error('Usuario no autenticado para subir el bundle.');
 
+    // Limpieza best-effort de bundles previos de este usuario (>1h) antes de
+    // subir el nuevo. Como ya no se borra el bundle justo tras el dispatch
+    // (eso causaba 400 en el pipeline si tardaba en ejecutarse), evitamos que
+    // Storage acumule bundles indefinidamente.
+    await this.cleanupOldBundles(userId);
+
     const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     // El primer segmento del path DEBE ser el userId: la policy RLS de Storage
     // valida (storage.foldername(name))[1] = auth.uid(), igual que el resto de
@@ -182,6 +196,35 @@ export class SerenityReportService {
     }
 
     return path;
+  }
+
+  /**
+   * Elimina bundles de Serenity subidos por este usuario hace más de 1 hora.
+   * Best-effort: los errores se ignoran para no bloquear la generación del
+   * reporte actual. Se asume que a esas alturas cualquier pipeline de Azure
+   * que los necesitara ya terminó de descargarlos.
+   */
+  private async cleanupOldBundles(userId: string): Promise<void> {
+    try {
+      const folder = `${userId}/serenity-bundles`;
+      const { data: files, error } = await this.supabaseClient.supabase.storage
+        .from('execution-evidence')
+        .list(folder, { limit: 100 });
+
+      if (error || !files?.length) return;
+
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const stale = files
+        .filter(f => {
+          const created = f.created_at ? new Date(f.created_at).getTime() : 0;
+          return created > 0 && created < oneHourAgo;
+        })
+        .map(f => `${folder}/${f.name}`);
+
+      if (stale.length) {
+        await this.supabaseClient.supabase.storage.from('execution-evidence').remove(stale);
+      }
+    } catch { /* no-op */ }
   }
 
   /** Elimina el bundle temporal de Storage una vez terminado (o si falla). */
