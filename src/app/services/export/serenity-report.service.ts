@@ -51,6 +51,7 @@ export class SerenityReportService {
   _currentRunName = 'Reporte Serenity';
   private pollTimer: any = null;
   private readonly azApiUrl = '/api/serenity-report-azure';
+  private bundlePath: string | null = null;
 
   constructor(
     private http: HttpClient,
@@ -123,22 +124,122 @@ export class SerenityReportService {
 
       this.state = {
         phase: 'dispatching',
-        statusMessage: `Enviando bundle (${(bundleJson.length / 1024).toFixed(0)} KB) a Azure DevOps...`,
+        statusMessage: `Subiendo evidencias (${(bundleJson.length / 1024 / 1024).toFixed(1)} MB)...`,
         hydrateProgress: undefined,
+      };
+
+      // Subir el bundle DIRECTAMENTE a Supabase Storage desde el navegador.
+      // Esto evita el límite de body (4.5MB en el plan gratuito) de las
+      // funciones serverless de Vercel, que provocaba errores 413 con
+      // evidencias pesadas. La URL firmada la genera el BACKEND (service role)
+      // para no depender de policies de SELECT del lado del cliente, que
+      // provocaban URLs inválidas (curl 400) al descargarlas desde Azure.
+      const bundlePath = await this.uploadBundleDirect(bundleJson);
+      this.bundlePath = bundlePath;
+
+      this.state = {
+        ...this.state,
+        statusMessage: 'Iniciando pipeline en Azure DevOps...',
       };
 
       const headers = await this.buildAuthHeaders();
 
-      await this.dispatchAzure(bundle, headers, run.executionId);
+      await this.dispatchAzure(bundlePath, headers, run.executionId);
+      // IMPORTANTE: no borrar el bundle aquí. El release recién creado queda
+      // en cola en Azure DevOps y la tarea "Descargar bundle" puede tardar
+      // minutos en ejecutarse; si se borra el objeto de Storage de inmediato,
+      // el curl del pipeline falla con 400 (Object not found) porque el
+      // archivo ya no existe cuando el agente intenta descargarlo. El bundle
+      // se conserva y expira solo (signed URL de 6h); Storage no lo borra
+      // automáticamente, pero el próximo reporte sobreescribe/limpia los
+      // bundles previos del usuario en el backend.
+      this.bundlePath = null;
     } catch (err: any) {
+      this.cleanupBundle();
       this.state = { phase: 'error', error: err?.message || 'Error desconocido' };
       throw err;
     }
   }
 
-  private async dispatchAzure(bundle: any, headers: HttpHeaders, executionId?: string): Promise<void> {
+  /**
+   * Sube el bundle JSON (con imágenes en base64) DIRECTAMENTE a Supabase Storage
+   * desde el navegador y devuelve el path del objeto. Evita el límite de
+   * 4.5MB del body de las funciones serverless de Vercel. La URL firmada se
+   * genera del lado del backend con el service role (ver dispatchAzure), ya
+   * que firmar desde el navegador (sujeto a RLS) puede producir URLs que
+   * Azure no puede descargar (curl 400).
+   */
+  private async uploadBundleDirect(bundleJson: string): Promise<string> {
+    const { data: userData } = await this.supabaseClient.supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error('Usuario no autenticado para subir el bundle.');
+
+    // Limpieza best-effort de bundles previos de este usuario (>1h) antes de
+    // subir el nuevo. Como ya no se borra el bundle justo tras el dispatch
+    // (eso causaba 400 en el pipeline si tardaba en ejecutarse), evitamos que
+    // Storage acumule bundles indefinidamente.
+    await this.cleanupOldBundles(userId);
+
+    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // El primer segmento del path DEBE ser el userId: la policy RLS de Storage
+    // valida (storage.foldername(name))[1] = auth.uid(), igual que el resto de
+    // rutas de evidencia usadas en execution-storage-supabase.service.ts.
+    const path = `${userId}/serenity-bundles/${name}.json`;
+    const blob = new Blob([bundleJson], { type: 'application/json' });
+
+    const { error } = await this.supabaseClient.supabase.storage
+      .from('execution-evidence')
+      .upload(path, blob, { contentType: 'application/json', upsert: true });
+
+    if (error) {
+      throw new Error('No se pudo subir el bundle a Storage: ' + error.message);
+    }
+
+    return path;
+  }
+
+  /**
+   * Elimina bundles de Serenity subidos por este usuario hace más de 1 hora.
+   * Best-effort: los errores se ignoran para no bloquear la generación del
+   * reporte actual. Se asume que a esas alturas cualquier pipeline de Azure
+   * que los necesitara ya terminó de descargarlos.
+   */
+  private async cleanupOldBundles(userId: string): Promise<void> {
+    try {
+      const folder = `${userId}/serenity-bundles`;
+      const { data: files, error } = await this.supabaseClient.supabase.storage
+        .from('execution-evidence')
+        .list(folder, { limit: 100 });
+
+      if (error || !files?.length) return;
+
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const stale = files
+        .filter(f => {
+          const created = f.created_at ? new Date(f.created_at).getTime() : 0;
+          return created > 0 && created < oneHourAgo;
+        })
+        .map(f => `${folder}/${f.name}`);
+
+      if (stale.length) {
+        await this.supabaseClient.supabase.storage.from('execution-evidence').remove(stale);
+      }
+    } catch { /* no-op */ }
+  }
+
+  /** Elimina el bundle temporal de Storage una vez terminado (o si falla). */
+  private async cleanupBundle(): Promise<void> {
+    if (!this.bundlePath) return;
+    const path = this.bundlePath;
+    this.bundlePath = null;
+    try {
+      await this.supabaseClient.supabase.storage.from('execution-evidence').remove([path]);
+    } catch { /* no-op */ }
+  }
+
+  private async dispatchAzure(bundlePath: string, headers: HttpHeaders, executionId?: string): Promise<void> {
     const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundle, executionId }, { headers })
+      this.http.post<any>(this.azApiUrl, { bundlePath, executionId }, { headers })
     );
 
     if (!startResult.success) {

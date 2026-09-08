@@ -1322,7 +1322,7 @@ function resolveAzureArtifactDownloadUrlFromRelease(data) {
 const SERENITY_BUNDLE_BUCKET = 'execution-evidence';
 
 function serenityBundlePath(userId, jobId) {
-    return `serenity-bundles/${userId}/${jobId}.json`;
+    return `${userId}/serenity-bundles/${jobId}.json`;
 }
 
 async function deleteSerenityBundle(userId, jobId) {
@@ -1371,8 +1371,8 @@ app.post('/api/serenity-report-azure', async (req, res) => {
             return res.status(400).json({ error: 'No hay configuración de Serenity Azure para este usuario.' });
         }
 
-        const { bundle, bundleUrl: providedBundleUrl, executionId } = req.body || {};
-        if (!bundle && !providedBundleUrl) {
+        const { bundle, bundleUrl: providedBundleUrl, bundlePath: providedBundlePath, executionId } = req.body || {};
+        if (!bundle && !providedBundleUrl && !providedBundlePath) {
             return res.status(400).json({ error: 'Se requiere un bundle' });
         }
 
@@ -1381,10 +1381,27 @@ app.post('/api/serenity-report-azure', async (req, res) => {
         const path = serenityBundlePath(config.userId, jobId);
 
         // El cliente puede subir el bundle DIRECTAMENTE a Storage (evita el límite
-        // de body cuando las evidencias pesan mucho) y enviar solo la URL firmada.
+        // de body cuando las evidencias pesan mucho) y enviar solo el path del
+        // objeto; este backend (service role) firma la URL para garantizar que
+        // sea válida sin depender de RLS del navegador. También se acepta
+        // bundleUrl (compatibilidad) o bundle inline (fallback).
         let bundleUrl;
         let bundleUploadedHere = false;
-        if (providedBundleUrl) {
+        let uploadedBundlePath = null;
+        if (providedBundlePath) {
+            const { data: signedData, error: signedError } = await adminClient.storage
+                .from(SERENITY_BUNDLE_BUCKET)
+                .createSignedUrl(String(providedBundlePath), 21600);
+
+            if (signedError || !signedData?.signedUrl) {
+                console.error('[serenity-report-azure][local] Error firmando bundle provisto:', signedError);
+                return res.status(502).json({ error: 'Error al firmar el bundle en Storage.' });
+            }
+
+            bundleUrl = signedData.signedUrl;
+            uploadedBundlePath = String(providedBundlePath);
+            console.log(`[serenity-report-azure][local] Bundle firmado desde path provisto: ${providedBundlePath}`);
+        } else if (providedBundleUrl) {
             bundleUrl = String(providedBundleUrl);
             console.log('[serenity-report-azure][local] Usando bundle URL provista por el cliente');
         } else {
