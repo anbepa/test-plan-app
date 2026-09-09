@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, Inject, PLATFORM_ID } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, Inject, PLATFORM_ID, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { isPlatformBrowser } from '@angular/common';
@@ -22,7 +22,7 @@ export interface RiskStrategyData {
     templateUrl: './general-sections.component.html',
     styleUrls: ['./general-sections.component.css']
 })
-export class GeneralSectionsComponent implements OnChanges {
+export class GeneralSectionsComponent implements OnChanges, AfterViewChecked {
     @Input() showOnlyRisk: boolean = false;
 
     // Inputs para el contenido
@@ -127,12 +127,42 @@ export class GeneralSectionsComponent implements OnChanges {
             });
     }
 
-    constructor(@Inject(PLATFORM_ID) private platformId: Object) { }
+    constructor(@Inject(PLATFORM_ID) private platformId: Object, private host: ElementRef<HTMLElement>) { }
+
+    private needsRiskAutoResize = false;
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['riskData']) {
             this.localRiskData = this.normalizeRiskData(this.riskData);
+            this.needsRiskAutoResize = true;
         }
+    }
+
+    ngAfterViewChecked(): void {
+        if (this.needsRiskAutoResize) {
+            this.needsRiskAutoResize = false;
+            this.autoResizeAll();
+        }
+    }
+
+    /** Ajusta la altura de un único textarea de riesgo al contenido (auto-resize). */
+    autoResize(event: Event): void {
+        this.fitTextarea(event.target as HTMLTextAreaElement);
+    }
+
+    /** Reajusta todos los textareas de riesgo tras cargar datos o generar con IA. */
+    autoResizeAll(): void {
+        if (!isPlatformBrowser(this.platformId)) {
+            return;
+        }
+        const nodes = this.host?.nativeElement?.querySelectorAll<HTMLTextAreaElement>('textarea.field-textarea');
+        nodes?.forEach(el => this.fitTextarea(el));
+    }
+
+    private fitTextarea(el: HTMLTextAreaElement | null): void {
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
     }
 
     toggleStaticEdit(section: StaticSectionName) {

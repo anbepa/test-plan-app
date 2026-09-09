@@ -190,38 +190,74 @@
                 <div class="risk-group">
                     <div class="field-label-row">
                         <label class="field-label">Probabilidad de: <span class="required">*</span></label>
-                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.probabilidadDe, 'probabilidadDe')"
-                            [disabled]="!localRiskData.probabilidadDe.trim()">
-                            {{ copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar' }}
+                    </div>
+                    <div class="input-with-copy">
+                        <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.probabilidadDe"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            placeholder="Evento" [disabled]="loadingRiskAI"></textarea>
+                        <button type="button" class="copy-icon-btn" (click)="copyRiskField(localRiskData.probabilidadDe, 'probabilidadDe')"
+                            [disabled]="!localRiskData.probabilidadDe.trim()"
+                            [class.copied]="copiedFieldKey === 'probabilidadDe'"
+                            [attr.aria-label]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'"
+                            [title]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'">
+                            <svg *ngIf="copiedFieldKey !== 'probabilidadDe'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <svg *ngIf="copiedFieldKey === 'probabilidadDe'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
                         </button>
                     </div>
-                    <input class="field-control" type="text" [(ngModel)]="localRiskData.probabilidadDe"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Evento" [disabled]="loadingRiskAI" />
                 </div>
 
                 <div class="risk-group">
                     <div class="field-label-row">
                         <label class="field-label">Puede ocurrir: <span class="required">*</span></label>
-                        <button type="button" class="copy-field-btn" (click)="copyRiskField(localRiskData.puedeOcurrir, 'puedeOcurrir')"
-                            [disabled]="!localRiskData.puedeOcurrir.trim()">
-                            {{ copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar' }}
+                    </div>
+                    <div class="input-with-copy">
+                        <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.puedeOcurrir"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            placeholder="Causa" [disabled]="loadingRiskAI"></textarea>
+                        <button type="button" class="copy-icon-btn" (click)="copyRiskField(localRiskData.puedeOcurrir, 'puedeOcurrir')"
+                            [disabled]="!localRiskData.puedeOcurrir.trim()"
+                            [class.copied]="copiedFieldKey === 'puedeOcurrir'"
+                            [attr.aria-label]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'"
+                            [title]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'">
+                            <svg *ngIf="copiedFieldKey !== 'puedeOcurrir'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <svg *ngIf="copiedFieldKey === 'puedeOcurrir'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
                         </button>
                     </div>
-                    <input class="field-control" type="text" [(ngModel)]="localRiskData.puedeOcurrir"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Causa" [disabled]="loadingRiskAI" />
                 </div>
 
                 <div class="risk-group">
                     <div class="field-label-row">
                         <label class="field-label">Lo que podría ocasionar: <span class="required">*</span></label>
-                        <button type="button" class="copy-field-btn"
+                    </div>
+                    <div class="input-with-copy">
+                        <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.loQuePodriaOcasionar"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            placeholder="Consecuencia" [disabled]="loadingRiskAI"></textarea>
+                        <button type="button" class="copy-icon-btn"
                             (click)="copyRiskField(localRiskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
-                            [disabled]="!localRiskData.loQuePodriaOcasionar.trim()">
-                            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar' }}
+                            [disabled]="!localRiskData.loQuePodriaOcasionar.trim()"
+                            [class.copied]="copiedFieldKey === 'loQuePodriaOcasionar'"
+                            [attr.aria-label]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'"
+                            [title]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'">
+                            <svg *ngIf="copiedFieldKey !== 'loQuePodriaOcasionar'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <svg *ngIf="copiedFieldKey === 'loQuePodriaOcasionar'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
                         </button>
                     </div>
-                    <input class="field-control" type="text" [(ngModel)]="localRiskData.loQuePodriaOcasionar"
-                        (ngModelChange)="onRiskFieldChange()" placeholder="Consecuencia" [disabled]="loadingRiskAI" />
                 </div>
             </div>
 
