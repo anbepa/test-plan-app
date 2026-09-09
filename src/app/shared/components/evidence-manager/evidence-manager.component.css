@@ -159,7 +159,9 @@
   color: #1d1d1f;
   transition: background 150ms, color 150ms;
 }
-.close-btn svg { display: block; stroke: currentColor; color: #1d1d1f; }
+.close-btn svg { display: block; color: #1d1d1f; }
+.close-btn svg line { stroke: #1d1d1f !important; }
+.close-btn:hover:not(:disabled) svg line { stroke: #000 !important; }
 .close-btn:hover:not(:disabled) { background: #E5E5EA; color: #000; }
 .close-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
