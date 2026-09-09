@@ -11,6 +11,7 @@
     <div class="topbar-actions">
       <button class="btn-action btn-ai" [disabled]="uiLocked" (click)="generateWithAI()">
         <span *ngIf="loadingAI" class="spinner-inline spinner-purple"></span>
+        <span *ngIf="!loadingAI" class="ai-icon" aria-hidden="true">✦</span>
         {{ loadingAI ? 'Generando...' : 'Generar con IA' }}
       </button>
       <button class="btn-action btn-primary" [disabled]="uiLocked" (click)="save()">
@@ -36,37 +37,46 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Probabilidad de: <span class="req">*</span></label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.probabilidadDe, 'probabilidadDe')"
-            [disabled]="!riskData.probabilidadDe.trim()">
-            {{ copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.probabilidadDe.trim()"
+            [attr.aria-label]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'probabilidadDe' ? '✓' : '📋' }}
           </button>
         </div>
-        <input type="text" [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input" />
+        <textarea [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input field-textarea"
+          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
       <div class="field-group">
         <div class="field-label-row">
           <label>Puede ocurrir: <span class="req">*</span></label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.puedeOcurrir, 'puedeOcurrir')"
-            [disabled]="!riskData.puedeOcurrir.trim()">
-            {{ copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.puedeOcurrir.trim()"
+            [attr.aria-label]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'puedeOcurrir' ? '✓' : '📋' }}
           </button>
         </div>
-        <input type="text" [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input" />
+        <textarea [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input field-textarea"
+          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
       <div class="field-group">
         <div class="field-label-row">
           <label>Lo que podría ocasionar: <span class="req">*</span></label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
-            [disabled]="!riskData.loQuePodriaOcasionar.trim()">
-            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.loQuePodriaOcasionar.trim()"
+            [attr.aria-label]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? '✓' : '📋' }}
           </button>
         </div>
-        <input type="text" [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input" />
+        <textarea [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input field-textarea"
+          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
     </div>
@@ -78,10 +88,12 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Impacto <span class="req">*</span></label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.impacto, 'impacto')"
-            [disabled]="!riskData.impacto.trim()">
-            {{ copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.impacto.trim()"
+            [attr.aria-label]="copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'impacto' ? '✓' : '📋' }}
           </button>
         </div>
         <select [(ngModel)]="riskData.impacto" class="field-input">
@@ -93,10 +105,12 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Probabilidad <span class="req">*</span></label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.probabilidad, 'probabilidad')"
-            [disabled]="!riskData.probabilidad.trim()">
-            {{ copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.probabilidad.trim()"
+            [attr.aria-label]="copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'probabilidad' ? '✓' : '📋' }}
           </button>
         </div>
         <select [(ngModel)]="riskData.probabilidad" class="field-input">
@@ -115,10 +129,12 @@
       <div *ngFor="let sc of riskData.positiveScenarios; let i = index" class="field-group">
         <div class="field-label-row">
           <label>Escenario positivo {{ i + 1 }} con el que cubres el riesgo:</label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.positiveScenarios[i], 'pos-' + i)"
-            [disabled]="!riskData.positiveScenarios[i].trim()">
-            {{ copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.positiveScenarios[i].trim()"
+            [attr.aria-label]="copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'pos-' + i ? '✓' : '📋' }}
           </button>
         </div>
         <div class="scenario-row">
@@ -131,7 +147,7 @@
             (click)="removePositiveScenario(i)">−</button>
         </div>
       </div>
-      <button type="button" class="btn-link-add" (click)="addPositiveScenario()">+ Agregar</button>
+      <button type="button" class="btn-link-add" (click)="addPositiveScenario()">Agregar</button>
     </div>
 
     <div class="scenarios-block">
@@ -139,10 +155,12 @@
       <div *ngFor="let sc of riskData.alternateScenarios; let i = index" class="field-group">
         <div class="field-label-row">
           <label>Escenario alterno {{ i + 1 }} con el que cubres el riesgo:</label>
-          <button type="button" class="copy-btn"
+          <button type="button" class="copy-btn copy-icon-btn"
             (click)="copyField(riskData.alternateScenarios[i], 'alt-' + i)"
-            [disabled]="!riskData.alternateScenarios[i].trim()">
-            {{ copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar' }}
+            [disabled]="!riskData.alternateScenarios[i].trim()"
+            [attr.aria-label]="copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar'"
+            [title]="copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar'">
+            {{ copiedFieldKey === 'alt-' + i ? '✓' : '📋' }}
           </button>
         </div>
         <div class="scenario-row">
@@ -155,7 +173,7 @@
             (click)="removeAlternateScenario(i)">−</button>
         </div>
       </div>
-      <button type="button" class="btn-link-add" (click)="addAlternateScenario()">+ Agregar</button>
+      <button type="button" class="btn-link-add" (click)="addAlternateScenario()">Agregar</button>
     </div>
 
     </fieldset>

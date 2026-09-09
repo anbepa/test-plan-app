@@ -528,3 +528,77 @@
     font-size: 0.8rem;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AJUSTES UI — Reporte de riesgos (feature/53535)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Ícono IA en el botón "Generar con IA" ── */
+.ai-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  color: #7c3aed;
+}
+
+/* ── Botón "Copiar" convertido en ícono discreto de portapapeles ── */
+.copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: #9ca3af;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Discreto por defecto; visible y resaltado al pasar el cursor por el campo o el propio botón */
+.field-group:hover .copy-icon-btn,
+.copy-icon-btn:hover:not(:disabled),
+.copy-icon-btn:focus-visible {
+  opacity: 1;
+}
+
+.copy-icon-btn:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #dbeafe;
+  color: var(--primary-color, #2563eb);
+  box-shadow: none;
+}
+
+.copy-icon-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* ── Descripción del riesgo: textareas con autoajuste de altura ── */
+.field-textarea {
+  resize: none;
+  overflow: hidden;
+  min-height: 46px;
+  line-height: 1.4;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Widget flotante negro (botón circular): separarlo del borde de la tarjeta ──
+   El widget se inyecta fuera del componente; se ajusta su margen derecho para
+   que no se superponga con la tarjeta de "Plan de Mitigación". */
+:host ::ng-deep .floating-widget,
+:host ::ng-deep .floating-action-button,
+:host ::ng-deep .fab,
+:host ::ng-deep .widget-toggle,
+:host ::ng-deep [class*="floating"] {
+  right: 24px !important;
+  margin-right: 12px;
+}
