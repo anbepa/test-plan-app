@@ -116,6 +116,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   private componentLoadedAt = Date.now();
   private huSyncSubscription: Subscription | null = null;
+  private aiStreamSub?: Subscription;
 
   get isAiBusy(): boolean {
     return this.isRefining;
@@ -337,6 +338,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.huSyncSubscription?.unsubscribe();
+    this.aiStreamSub?.unsubscribe();
     this.stopAiProgress();
   }
 
@@ -414,7 +416,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
           this.editedDescription, this.editedAcceptanceCriteria, this.editedSelectedTechnique
         );
 
-    stream$.subscribe({
+    this.aiStreamSub = stream$.subscribe({
       next: (event: any) => {
         this.streamingReasoning = event.reasoning || '';
         this.streamingContent = event.content || '';
@@ -828,6 +830,20 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
       this.cdr.markForCheck();
     }, 1800);
+  }
+
+  /** Cancela el refinamiento/identificación en curso desde el modal de progreso. */
+  cancelAiGeneration(): void {
+    this.aiStreamSub?.unsubscribe();
+    this.aiStreamSub = undefined;
+    this.stopAiProgress();
+    this.isLoading = false;
+    this.isRefining = false;
+    this.isAcceptancePhase = false;
+    this.acceptedScenarioIndices = [];
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.cdr.detectChanges();
   }
 
   private stopAiProgress(): void {

@@ -72,6 +72,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   cellName: string = '';
   cellOptions: string[] = CellsConfigService.DEFAULT_CELLS.slice();
   private cellsSub?: Subscription;
+  private aiStreamSub?: Subscription;
 
   generatedHUData: UIHUData | null = null;
 
@@ -134,6 +135,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopAiProgress();
+    this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();
   }
 
@@ -194,6 +196,20 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.aiProgressInterval = null;
     }
     this.aiProgressIndex = 0;
+  }
+
+  /** Cancela la generación/refinamiento en curso desde el modal de progreso. */
+  cancelAiGeneration(): void {
+    this.aiStreamSub?.unsubscribe();
+    this.aiStreamSub = undefined;
+    this.stopAiProgress();
+    this.loadingScope = false;
+    this.loadingScenarios = false;
+    this.isAcceptancePhase = false;
+    this.acceptedScenarioIndices = [];
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.cdr.detectChanges();
   }
 
   private finalizeAfterAcceptance(): void {
@@ -517,7 +533,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
       console.log('[GENERATION] Iniciando generación con STREAMING...');
 
-      this.aiService.generateTestCasesSmartStream(
+      this.aiStreamSub = this.aiService.generateTestCasesSmartStream(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique || this.AUTO_TECHNIQUE,

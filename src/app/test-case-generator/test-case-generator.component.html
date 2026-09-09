@@ -320,5 +320,7 @@
   [acceptedScenarioIndices]="acceptedScenarioIndices"
   [isAcceptancePhase]="isAcceptancePhase"
   [testPlanData]="currentHuDataForModal"
-  progressHint="">
+  progressHint=""
+  [allowCancelProgress]="!isAcceptancePhase"
+  (cancelProgress)="cancelAiGeneration()">
 </app-confirmation-modal>

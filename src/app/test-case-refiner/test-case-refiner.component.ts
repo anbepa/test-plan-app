@@ -9,6 +9,7 @@ import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations } from '../models/database.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { HuSyncService } from '../services/core/hu-sync.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-test-case-refiner',
@@ -23,6 +24,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   isContextPage: boolean = false;
   isLoading: boolean = false;
   isRefining: boolean = false;
+  private aiStreamSub?: Subscription;
   isLoadingDb: boolean = true;
 
   editedHuId: string = '';
@@ -134,6 +136,19 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopAiProgress();
+    this.aiStreamSub?.unsubscribe();
+  }
+
+  /** Cancela el refinamiento en curso desde el modal de progreso. */
+  cancelAiGeneration(): void {
+    this.aiStreamSub?.unsubscribe();
+    this.aiStreamSub = undefined;
+    this.stopAiProgress();
+    this.isLoading = false;
+    this.isRefining = false;
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.cdr.detectChanges();
   }
 
   get isAiBusy(): boolean {
@@ -248,7 +263,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
           this.editedSelectedTechnique
         );
 
-    stream$.subscribe({
+    this.aiStreamSub = stream$.subscribe({
       next: (event: any) => {
         this.streamingReasoning = event.reasoning || '';
         this.streamingContent = event.content || '';
