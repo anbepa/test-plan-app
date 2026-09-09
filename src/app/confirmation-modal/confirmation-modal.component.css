@@ -50,7 +50,27 @@
     padding: 22px 26px 12px 26px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.modal-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.modal-subtitle {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .modal-title {
@@ -101,7 +121,7 @@
     align-items: stretch; /* Permite que thought-bubble ocupe todo el ancho */
     text-align: center; /* Solo el texto fuera del bubble se centra */
     gap: 0.6rem;
-    padding: 16px 24px 20px 24px;
+    padding: 16px 24px 24px 24px;
     overflow-y: auto;
     flex: 1;
 }
@@ -138,6 +158,7 @@
     box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
     overflow: visible;
     margin-top: 0.9rem;
+    margin-bottom: 8px;
 }
 
 .progress-indeterminate {
@@ -857,7 +878,7 @@
     min-height: 0;    /* Clave para que flex + overflow funcione correctamente */
     position: relative;
     z-index: 1;
-    padding: 14px 20px 14px 20px;
+    padding: 18px 22px 18px 22px;
     text-align: left;
     align-items: flex-start;
 }
@@ -1332,3 +1353,62 @@
     }
 }
 
+
+/* ===== Spinner limpio de generación (reemplaza robot + burbujas) ===== */
+.gen-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 18px 0 6px 0;
+}
+
+.gen-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3.5px solid #e3ecfb;
+    border-top-color: var(--primary-color, #2563eb);
+    border-radius: 50%;
+    animation: spin 0.85s linear infinite;
+}
+
+.gen-loader-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    text-align: center;
+}
+
+/* ===== Acción de control del usuario (cancelar generación) ===== */
+.progress-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
+}
+
+.btn-cancel-progress {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 18px;
+    background: #fff;
+    color: #64748b;
+    border: 1px solid #d7dde5;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-cancel-progress:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+.btn-cancel-progress:focus-visible {
+    outline: 2px solid #dc2626;
+    outline-offset: 2px;
+}

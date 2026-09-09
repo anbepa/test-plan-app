@@ -38,40 +38,31 @@
               Mejorando…
             </span>
 
-            <!-- Modo EDICIÓN: Guardar + Cancelar -->
-            <ng-container *ngIf="editingSectionKey === section.key">
-              <button class="icon-btn icon-btn-save" (click)="saveSection(section)" title="Guardar cambios">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd"/>
-                </svg>
-              </button>
-              <button class="icon-btn icon-btn-cancel" (click)="cancelEditing()" title="Cancelar">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
-                </svg>
-              </button>
-            </ng-container>
-
-            <!-- Modo VISTA: Editar + IA -->
+            <!-- Modo VISTA: Editar + IA (los controles de guardar/cancelar se movieron al pie del editor) -->
             <ng-container *ngIf="editingSectionKey !== section.key && !section.loadingAI">
               <button
                 *ngIf="section.editable"
                 class="icon-btn icon-btn-edit"
                 (click)="startEditing(section)"
-                title="Editar">
+                title="Editar"
+                aria-label="Editar sección">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z"/>
                   <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
                 </svg>
               </button>
+              <!-- Acción IA: ícono estándar ✦ (sparkle) con etiqueta explícita -->
               <button
                 *ngIf="section.aiEnabled"
                 class="icon-btn icon-btn-ai"
                 (click)="improveWithAI(section)"
-                title="Mejorar con IA">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                title="Mejorar con IA"
+                aria-label="Mejorar con IA">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path d="M10 1.5l1.72 4.19a3 3 0 001.59 1.59L17.5 9l-4.19 1.72a3 3 0 00-1.59 1.59L10 16.5l-1.72-4.19a3 3 0 00-1.59-1.59L2.5 9l4.19-1.72a3 3 0 001.59-1.59L10 1.5z"/>
+                  <path d="M16.25 12.5l.62 1.5a1.4 1.4 0 00.74.74l1.5.62-1.5.62a1.4 1.4 0 00-.74.74l-.62 1.5-.62-1.5a1.4 1.4 0 00-.74-.74l-1.5-.62 1.5-.62a1.4 1.4 0 00.74-.74l.62-1.5z"/>
                 </svg>
+                <span class="icon-btn-label">Mejorar con IA</span>
               </button>
             </ng-container>
 
@@ -81,22 +72,43 @@
         <!-- CUERPO -->
         <div class="card-body">
 
-          <!-- Vista: texto; clic para editar si es editable -->
+          <!-- Vista: edit-in-place. El texto se muestra directo; hover indica editable (borde suave + cursor lápiz) -->
           <pre
             *ngIf="editingSectionKey !== section.key"
             class="section-text"
             [class.text-clickable]="section.editable && !section.loadingAI"
             (click)="section.editable && !section.loadingAI ? startEditing(section) : null"
+            [attr.role]="section.editable && !section.loadingAI ? 'button' : null"
+            [attr.tabindex]="section.editable && !section.loadingAI ? 0 : null"
+            (keydown.enter)="section.editable && !section.loadingAI ? startEditing(section) : null"
             [title]="section.editable && !section.loadingAI ? 'Haz clic para editar' : ''">{{ section.value || 'Sin información' }}</pre>
 
-          <!-- Edición inline -->
-          <textarea
-            *ngIf="editingSectionKey === section.key"
-            [ngModel]="editingBuffer"
-            (ngModelChange)="updateEditingBuffer($event)"
-            rows="6"
-            class="inline-editor"
-            placeholder="Escribe el contenido de la sección..."></textarea>
+          <!-- Edición inline (edit-in-place): sin caja anidada; la tarjeta ya está resaltada -->
+          <ng-container *ngIf="editingSectionKey === section.key">
+            <textarea
+              #inlineEditor
+              [ngModel]="editingBuffer"
+              (ngModelChange)="updateEditingBuffer($event)"
+              (keydown)="onEditorKeydown($event, section)"
+              rows="6"
+              class="inline-editor"
+              placeholder="Escribe el contenido de la sección..."></textarea>
+
+            <!-- Controles de guardar/cancelar al pie del área editable -->
+            <div class="editor-footer">
+              <span class="editor-hint-shortcuts">
+                <kbd>Ctrl</kbd>+<kbd>Enter</kbd> para guardar · <kbd>Esc</kbd> para cancelar
+              </span>
+              <div class="editor-footer-actions">
+                <button type="button" class="editor-btn editor-btn-cancel" (click)="cancelEditing()">
+                  Cancelar
+                </button>
+                <button type="button" class="editor-btn editor-btn-save" (click)="saveSection(section)">
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </ng-container>
 
           <!-- Error IA -->
           <div *ngIf="section.errorAI && editingSectionKey !== section.key" class="status-error">
@@ -110,13 +122,5 @@
       </div>
 
     </div>
-
-    <p class="page-hint">
-      Haz clic sobre el texto de las secciones editables para modificarlas. Usa los iconos
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" style="display:inline;width:12px;height:12px;vertical-align:middle;margin:0 2px"><path d="M13.488 2.513a1.75 1.75 0 00-2.475 0L4.75 8.774l-.28.607-.714 1.548a.75.75 0 00.975.975l1.548-.714.607-.28 6.26-6.262a1.75 1.75 0 000-2.475l-.658-.645z"/></svg>
-      para editar y
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" style="display:inline;width:12px;height:12px;vertical-align:middle;margin:0 2px"><path fill-rule="evenodd" d="M9.58.797A.75.75 0 0110 1.5v4h3a.75.75 0 01.615 1.18l-5.5 8a.75.75 0 01-1.23-.855L9.434 9H6a.75.75 0 01-.615-1.18l5.5-8a.75.75 0 01.695-.023z" clip-rule="evenodd"/></svg>
-      para mejorar con IA. Los campos "Repositorio Pruebas VSTS" y "Equipo de Trabajo" se gestionan desde el módulo de Configuración.
-    </p>
   </div>
 </div>

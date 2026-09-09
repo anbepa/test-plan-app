@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, AfterViewChecked, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -18,7 +18,7 @@ import { RiskStrategyData } from '../components/general-sections/general-section
   templateUrl: './risk-strategy-view.component.html',
   styleUrls: ['./risk-strategy-view.component.css']
 })
-export class RiskStrategyViewComponent implements OnInit {
+export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, AfterViewInit {
   testPlanId: string = '';
   testPlanTitle: string = '';
   isLoading = true;
@@ -53,7 +53,8 @@ export class RiskStrategyViewComponent implements OnInit {
     private databaseService: DatabaseService,
     private mapper: TestPlanMapperService,
     private aiService: AiUnifiedService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private host: ElementRef<HTMLElement>
   ) { }
 
   async ngOnInit(): Promise<void> {
@@ -67,6 +68,10 @@ export class RiskStrategyViewComponent implements OnInit {
     }
 
     await this.loadData();
+  }
+
+  ngAfterViewInit(): void {
+    this.scheduleAutoResize();
   }
 
   goBack(): void {
@@ -116,6 +121,8 @@ export class RiskStrategyViewComponent implements OnInit {
       this.toastService.error('Error al cargar los riesgos del plan');
     } finally {
       this.isLoading = false;
+      this.needsAutoResize = true;
+      this.scheduleAutoResize();
     }
   }
 
@@ -154,6 +161,8 @@ export class RiskStrategyViewComponent implements OnInit {
       .pipe(
         tap((response: any) => {
           this.riskData = this.mapAIResponse(response);
+          this.needsAutoResize = true;
+          this.scheduleAutoResize();
           this.toastService.success('Riesgo generado con IA');
         }),
         catchError(err => {
@@ -209,6 +218,42 @@ export class RiskStrategyViewComponent implements OnInit {
       this.copiedFieldKey = key;
       setTimeout(() => { if (this.copiedFieldKey === key) this.copiedFieldKey = ''; }, 1200);
     });
+  }
+
+  // ── Autoajuste de altura de los textareas ────────────────────────────────────
+
+  private needsAutoResize = false;
+
+  ngAfterViewChecked(): void {
+    if (this.needsAutoResize) {
+      this.needsAutoResize = false;
+      this.scheduleAutoResize();
+    }
+  }
+
+  private scheduleAutoResize(): void {
+    requestAnimationFrame(() => {
+      this.autoResizeAll();
+      setTimeout(() => this.autoResizeAll(), 120);
+    });
+  }
+
+  /** Ajusta la altura de un único textarea al contenido. */
+  autoResize(event: Event): void {
+    const el = event.target as HTMLTextAreaElement;
+    this.fitTextarea(el);
+  }
+
+  /** Reajusta todos los textareas del formulario (tras cargar datos o generar con IA). */
+  autoResizeAll(): void {
+    const nodes = this.host?.nativeElement?.querySelectorAll<HTMLTextAreaElement>('textarea.field-textarea');
+    nodes?.forEach(el => this.fitTextarea(el));
+  }
+
+  private fitTextarea(el: HTMLTextAreaElement | null): void {
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = el.scrollHeight + 'px';
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

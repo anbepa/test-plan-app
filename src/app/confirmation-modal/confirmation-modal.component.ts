@@ -20,6 +20,8 @@ export class ConfirmationModalComponent implements OnDestroy {
     @Input() progressStep = 'Procesando...';
     @Input() showProgressBar = true;
     @Input() allowBackdropClose = true;
+    @Input() allowCancelProgress = true;
+    @Input() cancelProgressText = 'Cancelar generación';
     /** Texto de razonamiento interno (CoT) del modelo recibido vía stream */
     @Input() streamingReasoning: string = '';
     /** Contenido JSON generándose en tiempo real vía stream */
@@ -473,14 +475,24 @@ export class ConfirmationModalComponent implements OnDestroy {
 
     @Output() confirm = new EventEmitter<void>();
     @Output() cancel = new EventEmitter<void>();
+    @Output() cancelProgress = new EventEmitter<void>();
 
     get isProgressMode(): boolean {
         return this.mode === 'progress';
     }
 
     onOverlayClick(): void {
-        if (this.isProgressMode || !this.allowBackdropClose) return;
+        if (this.isProgressMode) {
+            if (this.allowCancelProgress && this.allowBackdropClose) this.onCancelProgress();
+            return;
+        }
+        if (!this.allowBackdropClose) return;
         this.onCancel();
+    }
+
+    onCancelProgress(): void {
+        if (!this.isProgressMode || !this.allowCancelProgress) return;
+        this.cancelProgress.emit();
     }
 
     onConfirm() {

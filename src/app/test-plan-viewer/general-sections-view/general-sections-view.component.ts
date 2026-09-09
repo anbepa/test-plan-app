@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, finalize, from, of, switchMap } from 'rxjs';
@@ -27,7 +27,7 @@ interface SectionItem {
   templateUrl: './general-sections-view.component.html',
   styleUrls: ['./general-sections-view.component.css']
 })
-export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
+export class GeneralSectionsViewComponent implements OnInit, OnDestroy, AfterViewChecked {
   testPlanId: string = '';
   testPlanTitle: string = '';
   isLoading = true;
@@ -35,6 +35,9 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
   huList: HUData[] = [];
   editingSectionKey: StaticSectionName | null = null;
   editingBuffer = '';
+
+  @ViewChild('inlineEditor') inlineEditor?: ElementRef<HTMLTextAreaElement>;
+  private pendingFocus = false;
 
   sections: SectionItem[] = [
     { key: 'outOfScope', title: 'Fuera del Alcance', value: '', editable: true, aiEnabled: true, loadingAI: false, errorAI: null },
@@ -126,11 +129,36 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy {
     }
     this.editingSectionKey = section.key;
     this.editingBuffer = section.value || '';
+    this.pendingFocus = true;
   }
 
   cancelEditing(): void {
     this.editingSectionKey = null;
     this.editingBuffer = '';
+  }
+
+  /** Atajos dentro del editor inline: Ctrl/Cmd+Enter guarda, Esc cancela. */
+  onEditorKeydown(event: KeyboardEvent, section: SectionItem): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.saveSection(section);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelEditing();
+    }
+  }
+
+  /** Enfoca el textarea al entrar en modo edición (edit-in-place). */
+  ngAfterViewChecked(): void {
+    if (this.pendingFocus && this.inlineEditor) {
+      const el = this.inlineEditor.nativeElement;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+      this.pendingFocus = false;
+    }
   }
 
   async saveSection(section: SectionItem): Promise<void> {

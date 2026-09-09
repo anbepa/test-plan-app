@@ -72,6 +72,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   cellName: string = '';
   cellOptions: string[] = CellsConfigService.DEFAULT_CELLS.slice();
   private cellsSub?: Subscription;
+  private aiStreamSub?: Subscription;
 
   generatedHUData: UIHUData | null = null;
 
@@ -134,6 +135,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopAiProgress();
+    this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();
   }
 
@@ -194,6 +196,20 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.aiProgressInterval = null;
     }
     this.aiProgressIndex = 0;
+  }
+
+  /** Cancela la generación/refinamiento en curso desde el modal de progreso. */
+  cancelAiGeneration(): void {
+    this.aiStreamSub?.unsubscribe();
+    this.aiStreamSub = undefined;
+    this.stopAiProgress();
+    this.loadingScope = false;
+    this.loadingScenarios = false;
+    this.isAcceptancePhase = false;
+    this.acceptedScenarioIndices = [];
+    this.streamingReasoning = '';
+    this.streamingContent = '';
+    this.cdr.detectChanges();
   }
 
   private finalizeAfterAcceptance(): void {
@@ -275,7 +291,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.azureImportErrorMessage = null;
     this.azureNodeNameWarning = null;
 
-    const trimmedId = this.azureUserStoryIdInput.trim();
+    // Campo híbrido: el ID se toma del campo "ID de la HU"; se mantiene compatibilidad con azureUserStoryIdInput.
+    const rawId = (this.currentHuId && this.currentHuId.trim()) || this.azureUserStoryIdInput.trim();
+    const trimmedId = rawId.trim();
     const numericId = Number(trimmedId);
 
     if (!trimmedId || !Number.isInteger(numericId) || numericId <= 0) {
@@ -310,10 +328,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
           this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
           this.azureImportErrorMessage = null;
+          this.toastService.success(`HU ${importedHu.id} importada correctamente desde Azure DevOps.`);
+          setTimeout(() => this.autoGrowFormTextareas(), 0);
         },
         error: (error: unknown) => {
           this.azureImportErrorMessage = this.getAzureImportErrorMessage(error);
           this.azureImportSuccessMessage = null;
+          this.toastService.error(this.azureImportErrorMessage);
         }
       });
   }
@@ -351,6 +372,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
 
     return 'No fue posible importar la HU desde Azure DevOps. Verifica la conexión e intenta nuevamente.';
+  }
+
+  /** Ajusta la altura de los textareas del formulario inicial (descripcion, criterios, contexto). */
+  public autoGrowFormTextareas(): void {
+    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext'];
+    ids.forEach(id => {
+      const ta = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
+      if (ta) this.autoGrowTextarea(ta);
+    });
   }
 
   public autoGrowTextarea(element: any): void {
@@ -517,7 +547,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
       console.log('[GENERATION] Iniciando generación con STREAMING...');
 
-      this.aiService.generateTestCasesSmartStream(
+      this.aiStreamSub = this.aiService.generateTestCasesSmartStream(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique || this.AUTO_TECHNIQUE,

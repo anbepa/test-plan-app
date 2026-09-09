@@ -300,5 +300,6 @@
     [message]="aiProgressMessage" [progressStep]="aiProgressStep"
     [streamingReasoning]="streamingReasoning" [streamingContent]="streamingContent"
     [testPlanData]="currentHuDataForModal"
-    progressHint="">
+    progressHint=""
+    (cancelProgress)="cancelAiGeneration()">
 </app-confirmation-modal>

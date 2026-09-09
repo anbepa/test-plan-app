@@ -694,3 +694,115 @@ button:disabled {
     transition: none;
   }
 }
+
+
+/* ── Ajustes UX/UI: toggle en cabecera, refrescar ↻ y menú ••• ─────── */
+
+/* Acciones alineadas dentro de la cabecera del card (toggle + badge) */
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Toggle global de activación junto al título */
+.header-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-toggle-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+/* Botón de refrescar modelos como ícono discreto ↻ junto al desplegable */
+.refresh-models-btn {
+  position: static;
+  margin-left: 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.refresh-models-btn:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.refresh-models-btn.spinning {
+  animation: config-spin .8s linear infinite;
+}
+
+/* El select y el ícono ↻ comparten fila */
+.form-group .input-with-action select.form-control {
+  flex: 1;
+}
+
+/* Menú secundario (•••) para acciones poco frecuentes */
+.overflow-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.overflow-menu-trigger {
+  padding: 0 12px;
+  letter-spacing: 1px;
+  min-width: 44px;
+}
+
+.overflow-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.overflow-menu-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+
+.overflow-menu-item:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.overflow-menu-item:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .card-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .overflow-menu-list {
+    right: auto;
+    left: 0;
+  }
+}

@@ -528,3 +528,109 @@
     font-size: 0.8rem;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AJUSTES UI — Reporte de riesgos (feature/53535)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Ícono IA en el botón "Generar con IA" ── */
+.ai-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  color: #7c3aed;
+}
+
+/* ── Descripción del riesgo: textareas con autoajuste de altura ──
+   Sin altura fija: crecen con el contenido y muestran todo el texto. */
+.field-textarea {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 46px;
+  resize: none;
+  overflow-y: auto;          /* fallback: si el resize se retrasa, no se corta texto */
+  scrollbar-width: thin;
+  line-height: 1.5;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-sizing: border-box;
+  /* espacio a la derecha para no solaparse con el ícono de copiar interno */
+  padding: 0.7rem 2.6rem 0.7rem 1rem;
+}
+
+/* ── Contenedor del campo con el ícono de copiar DENTRO ── */
+.input-with-copy {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/* ── Botón de copiar como ícono discreto ── */
+.copy-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  color: #9ca3af;                 /* línea fina en gris neutro */
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.copy-icon-btn .icon-copy,
+.copy-icon-btn .icon-check {
+  display: block;
+  pointer-events: none;
+}
+
+/* Posición dentro del campo: esquina superior derecha del textarea */
+.input-with-copy .copy-icon-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Hover / focus → azul */
+.copy-icon-btn:hover:not(:disabled),
+.copy-icon-btn:focus-visible {
+  color: var(--primary-color, #2563eb);
+  background: #eff6ff;
+  border-color: #dbeafe;
+  outline: none;
+}
+
+.copy-icon-btn.copied {
+  color: #16a34a;                 /* verde al confirmar copiado */
+}
+
+.copy-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Variante alineada junto a la etiqueta (selects y escenarios) */
+.copy-icon-btn--inline {
+  flex-shrink: 0;
+}
+
+/* ── Widget flotante negro (botón circular): separarlo del borde de la tarjeta ──
+   El widget se inyecta fuera del componente; se ajusta su margen derecho para
+   que no se superponga con la tarjeta de "Plan de Mitigación". */
+:host ::ng-deep .floating-widget,
+:host ::ng-deep .floating-action-button,
+:host ::ng-deep .fab,
+:host ::ng-deep .widget-toggle,
+:host ::ng-deep [class*="floating"] {
+  right: 24px !important;
+  margin-right: 12px;
+}

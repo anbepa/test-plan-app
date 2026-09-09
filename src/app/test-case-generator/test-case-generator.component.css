@@ -116,6 +116,123 @@
     height: 44px;
 }
 
+/* === Campo único de ID (híbrido con botón Importar desde Azure) === */
+.id-hybrid-field {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+}
+
+.id-hybrid-input {
+    flex: 1;
+    padding-right: 48px;
+}
+
+.id-hybrid-import-btn {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: #eef4ff;
+    border: 1px solid #c7dbff;
+    border-radius: 8px;
+    color: #1d4ed8;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.id-hybrid-import-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Etiqueta oculta por defecto (botón sólo-icono); se muestra si hay espacio */
+.id-hybrid-import-label {
+    display: none;
+}
+
+.id-hybrid-import-btn:hover:not(:disabled) {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.id-hybrid-import-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.id-hybrid-field.is-loading .id-hybrid-input {
+    background: #f8fafc;
+}
+
+/* Spinner oscuro para fondos claros */
+.spinner-dark {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(29, 78, 216, 0.25);
+    border-top-color: #1d4ed8;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+
+
+/* En pantallas amplias el botón muestra el texto completo */
+@media (min-width: 1200px) {
+    .id-hybrid-input {
+        padding-right: 130px;
+    }
+    .id-hybrid-import-btn {
+        width: auto;
+        padding: 0 12px;
+    }
+    .id-hybrid-import-label {
+        display: inline;
+    }
+}
+
+@media (max-width: 560px) {
+    .id-hybrid-field {
+        flex-direction: column;
+    }
+    .id-hybrid-input {
+        padding-right: 12px;
+    }
+    .id-hybrid-import-btn {
+        position: static;
+        transform: none;
+        width: 100%;
+        height: 40px;
+        margin-top: 8px;
+        justify-content: center;
+    }
+    .id-hybrid-import-label {
+        display: inline;
+    }
+}
+
+/* Margen de seguridad a la derecha para no quedar tapado por widgets flotantes (p.ej. Vercel Toolbar en previews) */
+.form-section .form-grid {
+    padding-right: 8px;
+}
+
+
 .import-feedback {
     margin-top: 10px;
     padding: 10px 12px;
@@ -209,8 +326,16 @@
 }
 
 textarea.form-control {
-    min-height: 100px;
+    min-height: 88px;
     resize: vertical;
+}
+
+/* Auto-resize: sin scroll interno, crece con el contenido */
+textarea.form-control.auto-grow {
+    resize: none;
+    overflow-y: hidden;
+    min-height: 72px;
+    max-height: 480px;
 }
 
 @media (max-width: 768px) {
@@ -567,6 +692,26 @@ textarea.form-control {
 
 .full-width-action {
     width: 100%;
+}
+
+/* Botón principal compacto y alineado a la derecha */
+.main-form-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.compact-action {
+    width: 100%;
+    max-width: 300px;
+}
+
+@media (max-width: 640px) {
+    .main-form-actions {
+        justify-content: stretch;
+    }
+    .compact-action {
+        max-width: none;
+    }
 }
 
 /* Botón cancelar */
