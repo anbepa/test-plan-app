@@ -25,28 +25,27 @@
       <div class="exec-titlebar">
         <div class="exec-title-left">
           <h2 class="exec-title">{{ execution.huTitle }}</h2>
-          <span *ngIf="isHydratingEvidence" class="hydrating-badge">
-            <span class="hydrating-spinner"></span> Cargando imágenes…
-          </span>
-        </div>
-        <div class="exec-title-right">
-          <ng-container *ngIf="stats">
-            <div class="stat-pill stat-pill-evidence">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+          <div class="exec-meta" *ngIf="stats">
+            <div class="stat-pill stat-pill-evidence" title="Evidencias adjuntas en el plan">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
               <span class="stat-pill-value">{{ stats.totalImages }}</span>
               <span class="stat-pill-label">evidencias</span>
             </div>
-            <div class="progress-track-wrap">
+            <div class="progress-track-wrap" title="Progreso de ejecución">
               <div class="progress-track">
                 <div class="progress-fill" [style.width.%]="stats.completionPercentage"></div>
               </div>
               <span class="progress-pct">{{ stats.completionPercentage | number:'1.0-0' }}%</span>
             </div>
-            <div class="tb-divider"></div>
-          </ng-container>
+            <span *ngIf="isHydratingEvidence" class="hydrating-badge">
+              <span class="hydrating-spinner"></span> Cargando imágenes…
+            </span>
+          </div>
+        </div>
+        <div class="exec-title-right">
           <div class="tb-actions">
-            <button (click)="saveExecution()" class="btn-save-exec">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+            <button (click)="saveExecution()" class="btn-save-exec" title="Guardar la ejecución">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
               Guardar
             </button>
             <app-evidence-manager
