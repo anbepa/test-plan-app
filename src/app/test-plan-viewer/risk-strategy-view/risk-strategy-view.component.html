@@ -40,7 +40,7 @@
         </div>
         <div class="input-with-copy">
           <textarea [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input field-textarea"
-            rows="1" (input)="autoResize($event)"></textarea>
+            rows="1" (input)="autoResize($event)" (focus)="autoResize($event)"></textarea>
           <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.probabilidadDe, 'probabilidadDe')"
             [disabled]="!riskData.probabilidadDe.trim()"
@@ -64,7 +64,7 @@
         </div>
         <div class="input-with-copy">
           <textarea [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input field-textarea"
-            rows="1" (input)="autoResize($event)"></textarea>
+            rows="1" (input)="autoResize($event)" (focus)="autoResize($event)"></textarea>
           <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.puedeOcurrir, 'puedeOcurrir')"
             [disabled]="!riskData.puedeOcurrir.trim()"
@@ -88,7 +88,7 @@
         </div>
         <div class="input-with-copy">
           <textarea [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input field-textarea"
-            rows="1" (input)="autoResize($event)"></textarea>
+            rows="1" (input)="autoResize($event)" (focus)="autoResize($event)"></textarea>
           <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
             [disabled]="!riskData.loQuePodriaOcasionar.trim()"

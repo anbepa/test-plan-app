@@ -311,7 +311,8 @@
     height: auto;
     min-height: 46px;
     resize: none;
-    overflow: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
     line-height: 1.5;
     font-family: inherit;
     white-space: pre-wrap;

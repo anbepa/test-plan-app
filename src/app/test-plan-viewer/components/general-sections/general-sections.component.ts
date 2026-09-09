@@ -141,8 +141,18 @@ export class GeneralSectionsComponent implements OnChanges, AfterViewChecked {
     ngAfterViewChecked(): void {
         if (this.needsRiskAutoResize) {
             this.needsRiskAutoResize = false;
-            this.autoResizeAll();
+            this.scheduleAutoResize();
         }
+    }
+
+    private scheduleAutoResize(): void {
+        if (!isPlatformBrowser(this.platformId)) {
+            return;
+        }
+        requestAnimationFrame(() => {
+            this.autoResizeAll();
+            setTimeout(() => this.autoResizeAll(), 120);
+        });
     }
 
     /** Se dispara al abrir/cerrar el <details> de Riesgos. Al abrirse, los textareas
@@ -153,7 +163,7 @@ export class GeneralSectionsComponent implements OnChanges, AfterViewChecked {
         this.isRiskDetailsOpen = target.open;
         if (target.open) {
             if (isPlatformBrowser(this.platformId)) {
-                requestAnimationFrame(() => this.autoResizeAll());
+                this.scheduleAutoResize();
             }
         }
     }
@@ -174,7 +184,7 @@ export class GeneralSectionsComponent implements OnChanges, AfterViewChecked {
 
     private fitTextarea(el: HTMLTextAreaElement | null): void {
         if (!el) return;
-        el.style.height = 'auto';
+        el.style.height = '0px';
         el.style.height = el.scrollHeight + 'px';
     }
 

@@ -1,4 +1,4 @@
-import { Component, OnInit, AfterViewChecked, ElementRef } from '@angular/core';
+import { Component, OnInit, AfterViewChecked, AfterViewInit, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -18,7 +18,7 @@ import { RiskStrategyData } from '../components/general-sections/general-section
   templateUrl: './risk-strategy-view.component.html',
   styleUrls: ['./risk-strategy-view.component.css']
 })
-export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
+export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, AfterViewInit {
   testPlanId: string = '';
   testPlanTitle: string = '';
   isLoading = true;
@@ -70,6 +70,10 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
     await this.loadData();
   }
 
+  ngAfterViewInit(): void {
+    this.scheduleAutoResize();
+  }
+
   goBack(): void {
     this.goToPlanDetail();
   }
@@ -118,6 +122,7 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
     } finally {
       this.isLoading = false;
       this.needsAutoResize = true;
+      this.scheduleAutoResize();
     }
   }
 
@@ -157,6 +162,7 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
         tap((response: any) => {
           this.riskData = this.mapAIResponse(response);
           this.needsAutoResize = true;
+          this.scheduleAutoResize();
           this.toastService.success('Riesgo generado con IA');
         }),
         catchError(err => {
@@ -221,8 +227,15 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
   ngAfterViewChecked(): void {
     if (this.needsAutoResize) {
       this.needsAutoResize = false;
-      this.autoResizeAll();
+      this.scheduleAutoResize();
     }
+  }
+
+  private scheduleAutoResize(): void {
+    requestAnimationFrame(() => {
+      this.autoResizeAll();
+      setTimeout(() => this.autoResizeAll(), 120);
+    });
   }
 
   /** Ajusta la altura de un único textarea al contenido. */
@@ -239,7 +252,7 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked {
 
   private fitTextarea(el: HTMLTextAreaElement | null): void {
     if (!el) return;
-    el.style.height = 'auto';
+    el.style.height = '0px';
     el.style.height = el.scrollHeight + 'px';
   }
 

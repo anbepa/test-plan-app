@@ -193,7 +193,7 @@
                     </div>
                     <div class="input-with-copy">
                         <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.probabilidadDe"
-                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" (focus)="autoResize($event)" rows="1"
                             placeholder="Evento" [disabled]="loadingRiskAI"></textarea>
                         <button type="button" class="copy-icon-btn" (click)="copyRiskField(localRiskData.probabilidadDe, 'probabilidadDe')"
                             [disabled]="!localRiskData.probabilidadDe.trim()"
@@ -217,7 +217,7 @@
                     </div>
                     <div class="input-with-copy">
                         <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.puedeOcurrir"
-                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" (focus)="autoResize($event)" rows="1"
                             placeholder="Causa" [disabled]="loadingRiskAI"></textarea>
                         <button type="button" class="copy-icon-btn" (click)="copyRiskField(localRiskData.puedeOcurrir, 'puedeOcurrir')"
                             [disabled]="!localRiskData.puedeOcurrir.trim()"
@@ -241,7 +241,7 @@
                     </div>
                     <div class="input-with-copy">
                         <textarea class="field-control field-textarea" [(ngModel)]="localRiskData.loQuePodriaOcasionar"
-                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" rows="1"
+                            (ngModelChange)="onRiskFieldChange()" (input)="autoResize($event)" (focus)="autoResize($event)" rows="1"
                             placeholder="Consecuencia" [disabled]="loadingRiskAI"></textarea>
                         <button type="button" class="copy-icon-btn"
                             (click)="copyRiskField(localRiskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"

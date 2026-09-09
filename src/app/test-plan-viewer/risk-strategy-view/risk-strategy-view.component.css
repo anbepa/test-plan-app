@@ -551,7 +551,8 @@
   height: auto;
   min-height: 46px;
   resize: none;
-  overflow: hidden;          /* el JS ajusta scrollHeight; sin scrollbar */
+  overflow-y: auto;          /* fallback: si el resize se retrasa, no se corta texto */
+  scrollbar-width: thin;
   line-height: 1.5;
   font-family: inherit;
   white-space: pre-wrap;
