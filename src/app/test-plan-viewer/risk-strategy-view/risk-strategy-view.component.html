@@ -37,46 +37,73 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Probabilidad de: <span class="req">*</span></label>
-          <button type="button" class="copy-btn copy-icon-btn"
+        </div>
+        <div class="input-with-copy">
+          <textarea [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input field-textarea"
+            rows="1" (input)="autoResize($event)"></textarea>
+          <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.probabilidadDe, 'probabilidadDe')"
             [disabled]="!riskData.probabilidadDe.trim()"
+            [class.copied]="copiedFieldKey === 'probabilidadDe'"
             [attr.aria-label]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'probabilidadDe' ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'probabilidadDe'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'probabilidadDe'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
-        <textarea [(ngModel)]="riskData.probabilidadDe" placeholder="Evento" class="field-input field-textarea"
-          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
       <div class="field-group">
         <div class="field-label-row">
           <label>Puede ocurrir: <span class="req">*</span></label>
-          <button type="button" class="copy-btn copy-icon-btn"
+        </div>
+        <div class="input-with-copy">
+          <textarea [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input field-textarea"
+            rows="1" (input)="autoResize($event)"></textarea>
+          <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.puedeOcurrir, 'puedeOcurrir')"
             [disabled]="!riskData.puedeOcurrir.trim()"
+            [class.copied]="copiedFieldKey === 'puedeOcurrir'"
             [attr.aria-label]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'puedeOcurrir' ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'puedeOcurrir'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'puedeOcurrir'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
-        <textarea [(ngModel)]="riskData.puedeOcurrir" placeholder="Causa" class="field-input field-textarea"
-          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
       <div class="field-group">
         <div class="field-label-row">
           <label>Lo que podría ocasionar: <span class="req">*</span></label>
-          <button type="button" class="copy-btn copy-icon-btn"
+        </div>
+        <div class="input-with-copy">
+          <textarea [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input field-textarea"
+            rows="1" (input)="autoResize($event)"></textarea>
+          <button type="button" class="copy-icon-btn"
             (click)="copyField(riskData.loQuePodriaOcasionar, 'loQuePodriaOcasionar')"
             [disabled]="!riskData.loQuePodriaOcasionar.trim()"
+            [class.copied]="copiedFieldKey === 'loQuePodriaOcasionar'"
             [attr.aria-label]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'loQuePodriaOcasionar' ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'loQuePodriaOcasionar'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'loQuePodriaOcasionar'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
-        <textarea [(ngModel)]="riskData.loQuePodriaOcasionar" placeholder="Consecuencia" class="field-input field-textarea"
-          rows="1" (input)="autoResize($event)"></textarea>
       </div>
 
     </div>
@@ -88,12 +115,19 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Impacto <span class="req">*</span></label>
-          <button type="button" class="copy-btn copy-icon-btn"
+          <button type="button" class="copy-icon-btn copy-icon-btn--inline"
             (click)="copyField(riskData.impacto, 'impacto')"
             [disabled]="!riskData.impacto.trim()"
+            [class.copied]="copiedFieldKey === 'impacto'"
             [attr.aria-label]="copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'impacto' ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'impacto' ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'impacto'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'impacto'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
         <select [(ngModel)]="riskData.impacto" class="field-input">
@@ -105,12 +139,19 @@
       <div class="field-group">
         <div class="field-label-row">
           <label>Probabilidad <span class="req">*</span></label>
-          <button type="button" class="copy-btn copy-icon-btn"
+          <button type="button" class="copy-icon-btn copy-icon-btn--inline"
             (click)="copyField(riskData.probabilidad, 'probabilidad')"
             [disabled]="!riskData.probabilidad.trim()"
+            [class.copied]="copiedFieldKey === 'probabilidad'"
             [attr.aria-label]="copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'probabilidad' ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'probabilidad' ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'probabilidad'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'probabilidad'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
         <select [(ngModel)]="riskData.probabilidad" class="field-input">
@@ -129,12 +170,19 @@
       <div *ngFor="let sc of riskData.positiveScenarios; let i = index" class="field-group">
         <div class="field-label-row">
           <label>Escenario positivo {{ i + 1 }} con el que cubres el riesgo:</label>
-          <button type="button" class="copy-btn copy-icon-btn"
+          <button type="button" class="copy-icon-btn copy-icon-btn--inline"
             (click)="copyField(riskData.positiveScenarios[i], 'pos-' + i)"
             [disabled]="!riskData.positiveScenarios[i].trim()"
+            [class.copied]="copiedFieldKey === 'pos-' + i"
             [attr.aria-label]="copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'pos-' + i ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'pos-' + i ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'pos-' + i" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'pos-' + i" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
         <div class="scenario-row">
@@ -155,12 +203,19 @@
       <div *ngFor="let sc of riskData.alternateScenarios; let i = index" class="field-group">
         <div class="field-label-row">
           <label>Escenario alterno {{ i + 1 }} con el que cubres el riesgo:</label>
-          <button type="button" class="copy-btn copy-icon-btn"
+          <button type="button" class="copy-icon-btn copy-icon-btn--inline"
             (click)="copyField(riskData.alternateScenarios[i], 'alt-' + i)"
             [disabled]="!riskData.alternateScenarios[i].trim()"
+            [class.copied]="copiedFieldKey === 'alt-' + i"
             [attr.aria-label]="copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar'"
             [title]="copiedFieldKey === 'alt-' + i ? 'Copiado' : 'Copiar'">
-            {{ copiedFieldKey === 'alt-' + i ? '✓' : '📋' }}
+            <svg *ngIf="copiedFieldKey !== 'alt-' + i" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <svg *ngIf="copiedFieldKey === 'alt-' + i" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
           </button>
         </div>
         <div class="scenario-row">
