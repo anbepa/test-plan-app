@@ -145,6 +145,19 @@ export class GeneralSectionsComponent implements OnChanges, AfterViewChecked {
         }
     }
 
+    /** Se dispara al abrir/cerrar el <details> de Riesgos. Al abrirse, los textareas
+     *  estaban ocultos (scrollHeight = 0) durante el último auto-resize, así que hay
+     *  que recalcular su altura ahora que son visibles. */
+    onRiskDetailsToggle(event: Event): void {
+        const target = event.target as HTMLDetailsElement;
+        this.isRiskDetailsOpen = target.open;
+        if (target.open) {
+            if (isPlatformBrowser(this.platformId)) {
+                requestAnimationFrame(() => this.autoResizeAll());
+            }
+        }
+    }
+
     /** Ajusta la altura de un único textarea de riesgo al contenido (auto-resize). */
     autoResize(event: Event): void {
         this.fitTextarea(event.target as HTMLTextAreaElement);

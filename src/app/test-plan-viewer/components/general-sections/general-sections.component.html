@@ -175,7 +175,7 @@
     </details>
 
     <!-- Riesgos Para la Estrategia de Pruebas -->
-    <details class="plan-section-details static-block" [open]="isRiskDetailsOpen">
+    <details class="plan-section-details static-block" [open]="isRiskDetailsOpen" (toggle)="onRiskDetailsToggle($event)">
         <summary class="plan-section-summary">
             Riesgos Para la Estrategia de Pruebas
             <span class="summary-indicators">
