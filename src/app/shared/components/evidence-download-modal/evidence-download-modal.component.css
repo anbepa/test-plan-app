@@ -408,6 +408,14 @@
 .dl-group { margin-bottom: 18px; }
 .dl-group:last-of-type { margin-bottom: 0; }
 
+/* Línea divisoria sutil para separar el flujo de descarga del de Reporte Serenity */
+.dl-group-serenity {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #eceef1;
+}
+
+
 .dl-group-label {
   display: block;
   font-size: 12px;
