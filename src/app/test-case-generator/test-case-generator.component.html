@@ -33,51 +33,31 @@
     <div class="form-grid">
       <!-- Campos para modo 'text' -->
       <ng-container *ngIf="currentGenerationMode === 'text'">
-        <div class="azure-import-block full-width">
-          <div class="azure-import-row">
-            <div class="form-group azure-import-id-group">
-              <label for="azureUserStoryId">ID de la HU en Azure DevOps</label>
-              <input
-                id="azureUserStoryId"
-                type="text"
-                name="azureUserStoryId"
-                [(ngModel)]="azureUserStoryIdInput"
-                placeholder="Ej: 7632264"
-                class="form-control"
-                [disabled]="azureImportLoading">
-            </div>
-
-            <button
-              type="button"
-              class="button-secondary azure-import-btn"
-              (click)="importFromAzureDevOps()"
-              [disabled]="azureImportLoading">
-              <span *ngIf="azureImportLoading" class="spinner"></span>
-              {{ azureImportLoading ? 'Importando...' : 'Importar desde Azure' }}
-            </button>
-          </div>
-
-          <div *ngIf="azureImportSuccessMessage" class="import-feedback import-success" role="status">
-            {{ azureImportSuccessMessage }}
-          </div>
-          <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
-            {{ azureImportErrorMessage }}
-          </div>
-          <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
-            {{ azureNodeNameWarning }}
-          </div>
-        </div>
-
         <div class="metadata-block full-width">
           <div class="metadata-grid">
             <div class="form-group">
               <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
-              <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
-                placeholder="Ej: HU_1234" class="form-control">
+              <div class="id-hybrid-field" [class.is-loading]="azureImportLoading">
+                <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
+                  placeholder="Escribe o importa desde Azure (Ej: 7632264)" class="form-control id-hybrid-input"
+                  [disabled]="azureImportLoading">
+                <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
+                  [disabled]="azureImportLoading"
+                  title="Importar datos de la HU desde Azure DevOps usando el ID">
+                  <span *ngIf="azureImportLoading" class="spinner spinner-dark"></span>
+                  <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar desde Azure' }}</span>
+                </button>
+              </div>
               <div
                 *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
                 class="validation-error" role="alert">
                 ID de la HU es requerido.
+              </div>
+              <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
+                {{ azureImportErrorMessage }}
+              </div>
+              <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
+                {{ azureNodeNameWarning }}
               </div>
             </div>
             <div class="form-group metadata-title-group">
@@ -118,8 +98,9 @@
 
         <div class="form-group full-width">
           <label for="tcCurrentDescription">Descripción de la HU:<span class="required-indicator">*</span></label>
-          <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="4"
-            required placeholder="Ej: La HU describe la funcionalidad..." class="form-control"></textarea>
+          <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="3"
+            required placeholder="Ej: La HU describe la funcionalidad..." class="form-control auto-grow"
+            (input)="autoGrowTextarea($event.target)"></textarea>
           <div
             *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)"
             class="validation-error" role="alert">
@@ -130,8 +111,8 @@
           <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación:<span
               class="required-indicator">*</span></label>
           <textarea id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
-            [(ngModel)]="currentAcceptanceCriteria" rows="6" required placeholder="Ej: - Dado que..."
-            class="form-control"></textarea>
+            [(ngModel)]="currentAcceptanceCriteria" rows="4" required placeholder="Ej: - Dado que..."
+            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
           <div
             *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
             class="validation-error" role="alert">
@@ -142,16 +123,16 @@
         <div class="form-group full-width">
           <label for="tcCurrentGenerationContext">Contexto adicional (opcional):</label>
           <textarea id="tcCurrentGenerationContext" name="currentGenerationContext"
-            [(ngModel)]="currentGenerationContext" rows="4"
+            [(ngModel)]="currentGenerationContext" rows="3"
             placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
-            class="form-control"></textarea>
+            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
         </div>
       </ng-container>
 
     </div>
 
     <div class="form-actions main-form-actions">
-      <button type="submit" class="button-primary full-width-action"
+      <button type="submit" class="button-primary compact-action"
         [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios">
         <span *ngIf="loadingScope || loadingScenarios" class="spinner"></span>
         {{ (loadingScope || loadingScenarios) ? 'Generando...' : 'Generar Casos de Prueba' }}

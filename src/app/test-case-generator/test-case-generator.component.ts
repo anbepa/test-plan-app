@@ -291,7 +291,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.azureImportErrorMessage = null;
     this.azureNodeNameWarning = null;
 
-    const trimmedId = this.azureUserStoryIdInput.trim();
+    // Campo híbrido: el ID se toma del campo "ID de la HU"; se mantiene compatibilidad con azureUserStoryIdInput.
+    const rawId = (this.currentHuId && this.currentHuId.trim()) || this.azureUserStoryIdInput.trim();
+    const trimmedId = rawId.trim();
     const numericId = Number(trimmedId);
 
     if (!trimmedId || !Number.isInteger(numericId) || numericId <= 0) {
@@ -326,10 +328,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
           this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
           this.azureImportErrorMessage = null;
+          this.toastService.success(`HU ${importedHu.id} importada correctamente desde Azure DevOps.`);
+          setTimeout(() => this.autoGrowFormTextareas(), 0);
         },
         error: (error: unknown) => {
           this.azureImportErrorMessage = this.getAzureImportErrorMessage(error);
           this.azureImportSuccessMessage = null;
+          this.toastService.error(this.azureImportErrorMessage);
         }
       });
   }
@@ -367,6 +372,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
 
     return 'No fue posible importar la HU desde Azure DevOps. Verifica la conexión e intenta nuevamente.';
+  }
+
+  /** Ajusta la altura de los textareas del formulario inicial (descripcion, criterios, contexto). */
+  public autoGrowFormTextareas(): void {
+    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext'];
+    ids.forEach(id => {
+      const ta = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
+      if (ta) this.autoGrowTextarea(ta);
+    });
   }
 
   public autoGrowTextarea(element: any): void {
