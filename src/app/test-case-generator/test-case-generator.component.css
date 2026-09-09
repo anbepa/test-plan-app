@@ -125,7 +125,7 @@
 
 .id-hybrid-input {
     flex: 1;
-    padding-right: 168px;
+    padding-right: 48px;
 }
 
 .id-hybrid-import-btn {
@@ -135,18 +135,31 @@
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    height: calc(100% - 10px);
-    padding: 0 14px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
     background: #eef4ff;
     border: 1px solid #c7dbff;
     border-radius: 8px;
     color: #1d4ed8;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.id-hybrid-import-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Etiqueta oculta por defecto (botón sólo-icono); se muestra si hay espacio */
+.id-hybrid-import-label {
+    display: none;
 }
 
 .id-hybrid-import-btn:hover:not(:disabled) {
@@ -178,6 +191,22 @@
     to { transform: rotate(360deg); }
 }
 
+
+
+/* En pantallas amplias el botón muestra el texto completo */
+@media (min-width: 1200px) {
+    .id-hybrid-input {
+        padding-right: 130px;
+    }
+    .id-hybrid-import-btn {
+        width: auto;
+        padding: 0 12px;
+    }
+    .id-hybrid-import-label {
+        display: inline;
+    }
+}
+
 @media (max-width: 560px) {
     .id-hybrid-field {
         flex-direction: column;
@@ -192,6 +221,9 @@
         height: 40px;
         margin-top: 8px;
         justify-content: center;
+    }
+    .id-hybrid-import-label {
+        display: inline;
     }
 }
 

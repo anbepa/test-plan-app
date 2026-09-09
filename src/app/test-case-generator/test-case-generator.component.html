@@ -43,9 +43,14 @@
                   [disabled]="azureImportLoading">
                 <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
                   [disabled]="azureImportLoading"
-                  title="Importar datos de la HU desde Azure DevOps usando el ID">
+                  [attr.aria-label]="azureImportLoading ? 'Importando desde Azure DevOps' : 'Importar desde Azure DevOps'"
+                  title="Importar desde Azure DevOps">
                   <span *ngIf="azureImportLoading" class="spinner spinner-dark"></span>
-                  <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar desde Azure' }}</span>
+                  <svg *ngIf="!azureImportLoading" class="id-hybrid-import-icon" xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                  </svg>
+                  <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar' }}</span>
                 </button>
               </div>
               <div
