@@ -78,6 +78,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   // ── Estado exclusivo de UI (no afecta la lógica de negocio) ──
   showPat = false;
   deviceCodeCopied = false;
+  githubMenuOpen = false;
 
   // ── Estado CRUD de "Nombre Célula" ──
   cellRows: string[] = [];
@@ -135,6 +136,16 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       .catch(() => this.toastService.error('No se pudo copiar el código.'));
   }
 
+  /** Abre/cierra el menú secundario (•••) de GitHub Models (solo UI). */
+  toggleGithubMenu(): void {
+    this.githubMenuOpen = !this.githubMenuOpen;
+  }
+
+  /** Cierra el menú secundario (•••) de GitHub Models (solo UI). */
+  closeGithubMenu(): void {
+    this.githubMenuOpen = false;
+  }
+
   /** Resumen corto que se muestra en la cabecera de cada sección. */
   sectionSummary(section: 'azure' | 'github' | 'global' | 'cells'): string {
     switch (section) {
@@ -142,7 +153,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
         return this.connection ? this.connection.organization : 'Sin configurar';
       case 'github':
         return this.githubConnection
-          ? (this.githubEnabled ? 'Activo como proveedor' : 'Conectado (inactivo)')
+          ? (this.githubEnabled ? 'Activo como proveedor' : 'Inactivo')
           : 'Sin conectar';
       case 'global':
         return `${this.teamRows.length} integrante${this.teamRows.length === 1 ? '' : 's'}`;
@@ -508,7 +519,8 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     }
     switch (this.githubConnection.status) {
       case 'connected':
-        return 'Conectado';
+        // Si el toggle está desactivado, la conexión está conectada pero no se usa como proveedor.
+        return this.githubEnabled ? 'Conectado' : 'Inactivo';
       case 'disconnected':
         return 'Pendiente';
       case 'invalid':
@@ -525,7 +537,8 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     }
     switch (this.githubConnection.status) {
       case 'connected':
-        return 'success';
+        // Conectado pero inactivo (toggle apagado) => tono neutro/aviso, no verde.
+        return this.githubEnabled ? 'success' : 'warning';
       case 'disconnected':
         return 'warning';
       case 'invalid':

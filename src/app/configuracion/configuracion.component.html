@@ -8,7 +8,7 @@
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('azure')"
             [attr.aria-expanded]="accordionOpen.azure" aria-controls="panel-azure" id="toggle-azure">
-      <span class="section-label">Conexión
+      <span class="section-label">Azure DevOps
         <span class="section-summary">{{ sectionSummary('azure') }}</span>
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.azure" aria-hidden="true">▾</span>
@@ -85,11 +85,7 @@
       <div class="actions-row">
         <button class="btn-primary" type="button" (click)="saveConnection()" [disabled]="isBusy"
                 title="Guarda y valida el PAT indicado">
-          {{ savingConnection ? 'Guardando...' : 'Guardar PAT' }}
-        </button>
-        <button class="btn-secondary" type="button" (click)="validateConnection()" [disabled]="isBusy"
-                title="Comprueba que la conexión actual sigue siendo válida">
-          {{ validatingConnection ? 'Validando...' : 'Validar conexión' }}
+          {{ savingConnection || validatingConnection ? 'Guardando y validando...' : 'Guardar y validar' }}
         </button>
         <button class="btn-danger" type="button" (click)="requestDisconnect('azure')" [disabled]="isBusy || !connection"
                 [title]="!connection ? 'No hay conexión activa para desconectar' : 'Elimina el PAT almacenado'">
@@ -111,7 +107,25 @@
     <div class="config-card" *ngIf="accordionOpen.github" id="panel-github" role="region" aria-labelledby="toggle-github" [attr.aria-busy]="isGithubBusy">
       <div class="card-header">
         <h3 class="card-title">GitHub Models (Copilot)</h3>
-        <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
+        <div class="card-header-actions">
+          <!-- Toggle global de activación, junto al título -->
+          <div class="header-toggle" *ngIf="githubConnection">
+            <span class="header-toggle-text" id="githubEnabled-label">Usar GitHub Models</span>
+            <label class="switch">
+              <input
+                id="githubEnabled"
+                name="githubEnabled"
+                type="checkbox"
+                [(ngModel)]="githubEnabled"
+                (change)="onGithubEnabledChange()"
+                aria-labelledby="githubEnabled-label"
+                aria-describedby="githubEnabled-hint"
+                [disabled]="isGithubBusy">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
+        </div>
       </div>
 
       <p class="card-description">
@@ -120,21 +134,6 @@
         herramientas). Si se habilita y la conexión es válida, se usará como proveedor activo;
         ante cualquier error, la aplicación vuelve automáticamente a <strong>DeepSeek</strong>.
       </p>
-
-      <div class="inline-status-grid" *ngIf="githubConnection">
-        <div class="inline-status-item">
-          <span class="inline-status-label">Cuenta</span>
-          <strong class="inline-status-value">{{ githubConnection.tokenHint }}</strong>
-        </div>
-        <div class="inline-status-item">
-          <span class="inline-status-label">Modelo</span>
-          <strong class="inline-status-value">{{ githubConnection.selectedModel || 'Sin seleccionar' }}</strong>
-        </div>
-        <div class="inline-status-item">
-          <span class="inline-status-label">Última validación</span>
-          <strong class="inline-status-value">{{ githubConnection.lastValidatedAt ? (githubConnection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
-        </div>
-      </div>
 
       <!-- Panel de autorización del Device Flow -->
       <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode" role="status" aria-live="polite">
@@ -162,40 +161,35 @@
 
       <!-- Preferencias (solo con conexión activa) -->
       <div class="form-grid" *ngIf="githubConnection">
-        <div class="form-group">
+        <div class="form-group full-width">
           <label for="githubModel">Modelo</label>
-          <select
-            id="githubModel"
-            name="githubModel"
-            class="form-control"
-            [(ngModel)]="githubSelectedModel"
-            (change)="onGithubModelChange()"
-            [disabled]="isGithubBusy || githubModels.length === 0"
-            aria-describedby="githubModel-hint">
-            <option value="" disabled>{{ loadingGithubModels ? 'Cargando modelos...' : 'Selecciona un modelo' }}</option>
-            <option *ngFor="let model of githubModels" [value]="model.id">
-              {{ model.displayName }}{{ model.publisher ? ' (' + model.publisher + ')' : '' }}
-            </option>
-          </select>
+          <div class="input-with-action">
+            <select
+              id="githubModel"
+              name="githubModel"
+              class="form-control"
+              [(ngModel)]="githubSelectedModel"
+              (change)="onGithubModelChange()"
+              [disabled]="isGithubBusy || githubModels.length === 0"
+              aria-describedby="githubModel-hint">
+              <option value="" disabled>{{ loadingGithubModels ? 'Cargando modelos...' : 'Selecciona un modelo' }}</option>
+              <option *ngFor="let model of githubModels" [value]="model.id">
+                {{ model.displayName }}{{ model.publisher ? ' (' + model.publisher + ')' : '' }}
+              </option>
+            </select>
+            <!-- Refrescar modelos como ícono discreto de recarga junto al desplegable -->
+            <button
+              type="button"
+              class="input-action-btn refresh-models-btn"
+              (click)="loadGithubModels()"
+              [class.spinning]="loadingGithubModels"
+              [disabled]="isGithubBusy || !githubConnection"
+              [title]="!githubConnection ? 'Conecta tu cuenta de GitHub primero' : 'Refrescar modelos disponibles'"
+              [attr.aria-label]="loadingGithubModels ? 'Actualizando modelos' : 'Refrescar modelos'">↻</button>
+          </div>
           <p class="field-hint" id="githubModel-hint">
-            {{ githubModels.length ? githubModels.length + ' modelos disponibles en tu cuenta.' : 'Usa “Refrescar modelos” para cargar la lista.' }}
+            {{ githubModels.length ? githubModels.length + ' modelos disponibles en tu cuenta.' : 'Usa el ícono ↻ para cargar la lista.' }}
           </p>
-        </div>
-
-        <div class="form-group">
-          <label class="toggle-label" for="githubEnabled">Usar GitHub Models como proveedor</label>
-          <label class="switch">
-            <input
-              id="githubEnabled"
-              name="githubEnabled"
-              type="checkbox"
-              [(ngModel)]="githubEnabled"
-              (change)="onGithubEnabledChange()"
-              aria-describedby="githubEnabled-hint"
-              [disabled]="isGithubBusy">
-            <span class="slider"></span>
-          </label>
-          <p class="field-hint" id="githubEnabled-hint">Si se desactiva, la app usa DeepSeek por defecto.</p>
         </div>
       </div>
 
@@ -210,7 +204,7 @@
           {{ githubConnecting ? 'Esperando autorización...' : 'Conectar con GitHub Copilot' }}
         </button>
 
-        <!-- Con conexión: reconectar / validar / refrescar / desconectar -->
+        <!-- Con conexión: reconectar (primario) + menú secundario (•••) + desconectar -->
         <button
           class="btn-secondary"
           type="button"
@@ -219,19 +213,37 @@
           [disabled]="isGithubBusy">
           {{ githubConnecting ? 'Esperando autorización...' : 'Reconectar cuenta' }}
         </button>
-        <button class="btn-secondary" type="button" (click)="validateGithubConnection()" [disabled]="isGithubBusy || !githubConnection"
-                [title]="!githubConnection ? 'Conecta tu cuenta de GitHub primero' : 'Comprueba la conexión actual'">
-          {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
-        </button>
-        <button class="btn-secondary" type="button" (click)="loadGithubModels()" [disabled]="isGithubBusy || !githubConnection"
-                [title]="!githubConnection ? 'Conecta tu cuenta de GitHub primero' : 'Vuelve a consultar los modelos disponibles'">
-          {{ loadingGithubModels ? 'Actualizando...' : 'Refrescar modelos' }}
-        </button>
-        <button class="btn-danger" type="button" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection"
+
+        <div class="overflow-menu" *ngIf="githubConnection">
+          <button
+            type="button"
+            class="btn-secondary overflow-menu-trigger"
+            (click)="toggleGithubMenu()"
+            [attr.aria-expanded]="githubMenuOpen"
+            aria-haspopup="true"
+            aria-controls="github-overflow-menu"
+            [disabled]="isGithubBusy"
+            title="Más acciones"
+            aria-label="Más acciones">•••</button>
+          <div class="overflow-menu-list" id="github-overflow-menu" role="menu" *ngIf="githubMenuOpen">
+            <button
+              type="button"
+              class="overflow-menu-item"
+              role="menuitem"
+              (click)="validateGithubConnection(); closeGithubMenu()"
+              [disabled]="isGithubBusy || !githubConnection">
+              {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
+            </button>
+          </div>
+        </div>
+
+        <button class="btn-danger" type="button" *ngIf="githubConnection" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection"
                 [title]="!githubConnection ? 'No hay conexión activa para desconectar' : 'Elimina la conexión con GitHub'">
           {{ disconnectingGithub ? 'Desconectando...' : 'Desconectar' }}
         </button>
       </div>
+
+      <p class="field-hint" *ngIf="githubConnection" id="githubEnabled-hint">Si se desactiva el interruptor superior, la app usa DeepSeek por defecto.</p>
 
       <p *ngIf="githubInfoMessage" class="message success" role="status" aria-live="polite">{{ githubInfoMessage }}</p>
       <p *ngIf="githubErrorMessage" class="message error" role="alert">{{ githubErrorMessage }}</p>
