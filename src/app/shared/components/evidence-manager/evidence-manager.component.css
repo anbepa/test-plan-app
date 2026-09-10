@@ -509,6 +509,114 @@
   color: var(--warning-color, #FF9500);
 }
 
+/* ── Estado del último reporte Serenity (sub-modal) ── */
+.sr-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--text-secondary, #8e8e93);
+}
+
+.serenity-report-card {
+  border: 1px solid var(--border-color, #E5E5EA);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: var(--background-color, #fff);
+}
+.serenity-report-card.is-pending {
+  border-color: #fde68a;
+  background: #fffdf5;
+}
+
+.sr-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.sr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sr-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #8e8e93);
+}
+
+.sr-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color, #1c1c1e);
+}
+.sr-value em {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.sr-backend {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.sr-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.sr-status-pending { background: #fef3c7; color: #b45309; }
+.sr-status-done    { background: #dcfce7; color: #15803d; }
+.sr-status-error   { background: #fee2e2; color: #b91c1c; }
+
+.sr-pending-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #92400e;
+}
+
+.serenity-report-empty {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-color, #F5F5F7);
+  font-size: 13px;
+  color: var(--text-secondary, #8e8e93);
+}
+
 /* Aviso persistente mientras hay un proceso en curso */
 .evidence-modal-processing {
   display: flex;

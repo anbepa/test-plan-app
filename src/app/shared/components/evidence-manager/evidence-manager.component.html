@@ -253,7 +253,7 @@
   <div class="upload-modal-backdrop" *ngIf="showUploadModal" (click)="closeUploadModal()">
     <div class="upload-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
       <div class="upload-modal-header">
-        <h4 id="upload-modal-title">Cargar a Azure</h4>
+        <h4 id="upload-modal-title">{{ uploadMode === 'serenity' ? 'Último reporte Serenity' : 'Cargar a Azure' }}</h4>
         <button class="close-btn" (click)="closeUploadModal()" type="button" aria-label="Regresar" [disabled]="isBusy"
           [title]="isBusy ? 'Espera a que finalice el proceso' : 'Regresar'">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -278,6 +278,45 @@
 
         <!-- Cargar Azure: Serenity -->
         <ng-container *ngIf="uploadMode === 'serenity'">
+          <!-- Estado del último reporte -->
+          <div class="sr-loading" *ngIf="isLoadingSerenityReport">
+            <span class="btn-spinner" aria-hidden="true"></span> Consultando el último reporte...
+          </div>
+
+          <ng-container *ngIf="!isLoadingSerenityReport">
+            <div class="serenity-report-card" *ngIf="serenityReport" [class.is-pending]="serenityReport.status === 'pending'">
+              <div class="sr-row">
+                <div class="sr-field">
+                  <span class="sr-label">Generado</span>
+                  <span class="sr-value">
+                    {{ formatSerenityDate(serenityReport.generatedAt) }}
+                    <em *ngIf="formatSerenityRelative(serenityReport.generatedAt)">{{ formatSerenityRelative(serenityReport.generatedAt) }}</em>
+                  </span>
+                </div>
+                <div class="sr-field">
+                  <span class="sr-label">Backend</span>
+                  <span class="sr-backend">{{ serenityReport.backend }}</span>
+                </div>
+                <div class="sr-field">
+                  <span class="sr-label">Estado</span>
+                  <span class="sr-status"
+                    [class.sr-status-pending]="serenityReport.status === 'pending'"
+                    [class.sr-status-done]="serenityReport.status === 'completed'"
+                    [class.sr-status-error]="serenityReport.status === 'error'">
+                    {{ serenityStatusLabel(serenityReport.status) }}
+                  </span>
+                </div>
+              </div>
+              <p class="sr-pending-note" *ngIf="serenityReport.status === 'pending'">
+                El pipeline de Azure DevOps está generando el reporte. El estado se actualiza automáticamente cada 5 segundos; espera a que finalice para cargarlo.
+              </p>
+            </div>
+
+            <div class="serenity-report-empty" *ngIf="!serenityReport">
+              Aún no hay un reporte Serenity generado. Usa <strong>Generar reporte</strong> en el menú de la tabla.
+            </div>
+          </ng-container>
+
           <label for="serenity-zip-name" class="plan-id-label">Nombre del archivo (.zip)</label>
           <input
             id="serenity-zip-name"
@@ -288,7 +327,7 @@
             [disabled]="isBusy"
             autocomplete="off" />
           <p class="plan-id-hint muted">
-            El reporte se empaqueta de forma independiente y se carga al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
+            El reporte se carga al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
           </p>
         </ng-container>
       </div>
@@ -296,8 +335,8 @@
       <div class="upload-modal-footer">
         <button type="button" class="opt-btn" (click)="closeUploadModal()" [disabled]="isBusy">Regresar</button>
         <button type="button" class="opt-btn primary" (click)="confirmUpload()"
-          [disabled]="isBusy || !up.inputPlanId.trim() || (uploadMode === 'office' ? !up.hasSelectedFormat() : !up.serenityFileName.trim())"
-          title="Cargar a Azure DevOps">
+          [disabled]="isBusy || !up.inputPlanId.trim() || (uploadMode === 'office' ? !up.hasSelectedFormat() : (!up.serenityFileName.trim() || !serenityReady))"
+          [title]="uploadMode === 'serenity' && !serenityReady ? 'Aún no hay un reporte Serenity listo para cargar' : 'Cargar a Azure DevOps'">
           Cargar
         </button>
       </div>
