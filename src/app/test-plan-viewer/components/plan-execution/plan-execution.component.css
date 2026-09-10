@@ -190,7 +190,7 @@
 .tc-col-assignee { display: flex; align-items: center; }
 .tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
 /* La cabecera "Acciones" se reduce porque la columna ahora solo tiene el menú ⋮ */
-.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: visible; justify-content: flex-end; text-align: right; }
+.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: visible; display: block; justify-content: flex-end; text-align: right; padding-right: 6px; }
 
 /* Action icon circle buttons */
 .act-icon-btn {
@@ -496,12 +496,6 @@
 /* #2 step status select — minimal outline only */
 /* Coherente con .status-badge (pastilla rellena): mismo lenguaje visual,
    pero conserva su función de <select> interactivo para cambiar el estado. */
-.step-status-sel { appearance: none; -webkit-appearance: none; padding: 4px 11px; border-radius: 99px; border: 1px solid transparent; background: #f5f5f7; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap; text-transform: none; letter-spacing: 0; }
-.step-status-sel:focus { outline: none; box-shadow: 0 0 0 3px rgba(0,122,255,.14); }
-.step-status-sel.st-pending { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-.step-status-sel.st-in-progress { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-.step-status-sel.st-completed { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
-.step-status-sel.st-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 
 /* #1 step content typography */
 .step-content { flex: 1; display: flex; flex-direction: column; gap: 8px; }
@@ -1343,6 +1337,8 @@
   transform: translateY(-1px);
 }
 .btn-add-testcase-top:active { transform: translateY(0); }
+.btn-add-testcase-top:focus { outline: none; }
+.btn-add-testcase-top:focus-visible { outline: none; border-color: var(--primary-color, #007AFF); box-shadow: 0 0 0 3px rgba(0,122,255,0.18); }
 .btn-add-testcase-top svg { flex-shrink: 0; }
 
 
@@ -1367,14 +1363,6 @@
 .step-main-content .status-badge {
   flex-shrink: 0;
   white-space: nowrap;
-}
-
-/* Refuerzo del <select> de estado del paso para que, como control
-   interactivo, mantenga la misma forma de píldora que .status-badge. */
-.step-status-sel {
-  border-radius: 999px;
-  padding: 4px 11px;
-  font-weight: 600;
 }
 
 /* 4) Barra de evidencias: agrupar "+ Subir Evidencia", "Pegar imagen" y
@@ -1423,3 +1411,26 @@
 .btn-group-segmented .btn-report-settings:hover {
   transform: none;
 }
+
+
+/* ===== Ajustes de interfaz (paso, evidencias) ===== */
+
+/* Punto 2: badge de estado del paso identico al del escenario, con select transparente superpuesto */
+.step-status-badge-wrap { position: relative; display: inline-flex; }
+.step-status-badge-wrap .status-badge { pointer-events: none; }
+.step-status-overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; border: none; background: transparent;
+  -webkit-appearance: none; appearance: none; margin: 0; padding: 0;
+}
+
+/* Punto 3: grupo segmentado de la barra de evidencias (botones pegados) */
+.evidence-zone-header .btn-group-segmented { display: inline-flex; align-items: stretch; }
+.btn-group-segmented .upload-dropdown { display: inline-flex; }
+.btn-group-segmented .btn-upload,
+.btn-group-segmented .btn-report-settings,
+.btn-group-segmented .upload-dropdown > .btn-upload {
+  border-radius: 0 !important; border: none !important; box-shadow: none !important;
+  height: 32px; min-height: 32px; margin: 0;
+}
+.btn-group-segmented > * + * { border-left: 1.5px solid var(--border-color, #D1D1D6) !important; }

@@ -268,14 +268,22 @@
 
                     <!-- Estado + eliminar -->
                     <div class="step-item-actions" (click)="$event.stopPropagation()">
-                      <select class="step-status-sel" [ngClass]="'st-' + step.status"
-                              [ngModel]="step.status"
-                              (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)">
-                        <option value="pending">Pendiente</option>
-                        <option value="in-progress">En Progreso</option>
-                        <option value="completed">Completado</option>
-                        <option value="failed">Falló</option>
-                      </select>
+                      <!-- Badge de estado identico al del escenario; el select transparente encima permite cambiarlo -->
+                      <div class="step-status-badge-wrap">
+                        <span class="status-badge" [ngClass]="'status-badge-' + step.status">
+                          <span class="status-dot"></span>
+                          {{ getStatusDisplayLabel(step.status) }}
+                        </span>
+                        <select class="step-status-overlay"
+                                [ngModel]="step.status"
+                                (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)"
+                                title="Cambiar estado del paso">
+                          <option value="pending">Pendiente</option>
+                          <option value="in-progress">En Progreso</option>
+                          <option value="completed">Completado</option>
+                          <option value="failed">Falló</option>
+                        </select>
+                      </div>
                       <button class="btn-delete-step-minimal" (click)="deleteStep(getOriginalIndex(tc), si, $event)" title="Eliminar paso">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
