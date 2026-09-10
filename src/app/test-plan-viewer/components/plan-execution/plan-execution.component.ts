@@ -154,6 +154,9 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
   /** Plan validado recientemente en el modal de subida de evidencias (para no pedirlo de nuevo). */
   lastValidatedPlanId = '';
   lastValidatedPlanTitle = '';
+  /** URL del plan y reporte tras publicar evidencia desde el historial (para "Abrir en DevOps"). */
+  lastAttachedPlanUrl = '';
+  lastAttachedReportId: string | null = null;
   private huSyncSubscription: Subscription | null = null;
   /** Timestamp de cuando el componente terminó de cargar — filtra emits stale del BehaviorSubject */
   private componentLoadedAt: number = 0;
@@ -1757,6 +1760,13 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     return this.serenityHistory.find(r => r.id === this.attachingReportId);
   }
 
+  /** Abre en Azure DevOps el plan al que se publicó la evidencia desde el historial. */
+  openAttachedPlanInDevOps(): void {
+    if (this.lastAttachedPlanUrl) {
+      window.open(this.lastAttachedPlanUrl, '_blank', 'noopener');
+    }
+  }
+
   async confirmAttachToPlan(report: SerenityReportRecord | undefined): Promise<void> {
     if (!report) return;
     const planId = this.attachPlanIdInput.trim();
@@ -1782,9 +1792,11 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         validated.projectId
       );
 
-      this.toastService.success('Reporte Serenity vinculado al plan de pruebas');
+      this.toastService.success('Evidencia publicada en el plan de pruebas');
       this.lastValidatedPlanId = planId;
       this.lastValidatedPlanTitle = validated.planTitle;
+      this.lastAttachedPlanUrl = validated.sourceUrl || '';
+      this.lastAttachedReportId = report.id;
       this.cancelAttachToPlan();
     } catch (err: any) {
       this.toastService.error('Error al vincular: ' + (err?.message || 'Error desconocido'));

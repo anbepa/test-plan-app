@@ -615,11 +615,11 @@
               Descargar .zip
             </a>
             <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" type="button"
-              title="Vincular reporte a un plan de Azure DevOps"
+              title="Publicar el reporte en un plan de Azure DevOps"
               [attr.aria-expanded]="attachingReportId === r.id"
               (click)="startAttachToPlan(r.id)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              {{ attachingReportId === r.id ? 'Cerrar' : 'Vincular a plan' }}
+              {{ attachingReportId === r.id ? 'Cerrar' : 'Publicar en DevOps' }}
             </button>
             <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
               <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
@@ -629,6 +629,11 @@
               [disabled]="isAttaching" (click)="removeFromHistory(r.id)">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
               Eliminar
+            </button>
+            <button *ngIf="lastAttachedReportId === r.id && lastAttachedPlanUrl" class="sh-btn sh-btn-azure"
+              type="button" title="Abrir el plan en Azure DevOps" (click)="openAttachedPlanInDevOps()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Abrir en DevOps
             </button>
           </div>
           <!-- Formulario de vinculación a plan -->
@@ -653,9 +658,9 @@
             <div class="sh-attach-form-buttons">
               <button class="btn btn-primary btn-sm" type="button" (click)="confirmAttachToPlan(getAttachingReport())"
                 [attr.aria-busy]="isAttaching"
-                [title]="(!attachPlanIdInput.trim() || !attachFileNameInput.trim()) ? 'Completa el ID del plan y el nombre del archivo' : 'Subir el reporte al plan'"
+                [title]="(!attachPlanIdInput.trim() || !attachFileNameInput.trim()) ? 'Completa el ID del plan y el nombre del archivo' : 'Publicar el reporte en el plan'"
                 [disabled]="!attachPlanIdInput.trim() || !attachFileNameInput.trim() || isAttaching">
-                {{ isAttaching ? 'Subiendo...' : 'Subir evidencia' }}
+                {{ isAttaching ? 'Publicando...' : 'Publicar evidencia' }}
               </button>
               <button class="btn btn-secondary btn-sm" type="button" [disabled]="isAttaching" (click)="cancelAttachToPlan()">Cancelar</button>
             </div>

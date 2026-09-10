@@ -106,6 +106,14 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.openSerenityHistoryRequested.emit();
   }
 
+  /** Abre el plan recién vinculado en Azure DevOps (nueva pestaña). */
+  openPlanInDevOps(): void {
+    const url = this.validatedPlan?.sourceUrl;
+    if (url) {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
   async dispatchSerenity(): Promise<void> {
     const run = this.buildEffectiveTestRun();
     if (!run?.executionId) {
