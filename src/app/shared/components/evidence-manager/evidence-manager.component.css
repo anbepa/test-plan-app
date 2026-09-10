@@ -276,17 +276,6 @@
   border-top: 1px solid var(--border-color, #E5E5EA);
 }
 
-/* Subgrupo secundario (solo Serenity): acciones alineadas a la izquierda */
-.format-row-secondary {
-  display: flex;
-  padding-top: 10px;
-  padding-bottom: 14px;
-}
-.format-row-secondary .format-actions.secondary {
-  justify-content: flex-start;
-  padding-left: 48px;
-}
-
 .format-info {
   display: flex;
   align-items: center;
@@ -464,10 +453,6 @@
 
   .format-actions {
     justify-content: flex-start;
-  }
-
-  .format-row-secondary .format-actions.secondary {
-    padding-left: 0;
   }
 
   .evidence-modal-subtitle {

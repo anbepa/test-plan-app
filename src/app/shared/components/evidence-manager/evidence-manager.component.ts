@@ -107,9 +107,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   // ── Reporte Serenity ──
   /** Generar reporte Serenity (mismo comportamiento actual). */
   generateSerenity(): void { this.down?.downloadSerenity(); }
-  /** Descargar Reporte Serenity: mantiene el comportamiento actual de generación/envío. */
-  downloadSerenity(): void { this.down?.downloadSerenity(); }
-  /** Historial de reportes Serenity. */
+  /** Historial de reportes Serenity (descarga y publicación del artefacto generado). */
   serenityHistory(): void { this.down?.openSerenityHistory(); }
 
   /**
@@ -138,33 +136,6 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
       pdf: format === 'pdf',
       excel: format === 'excel'
     };
-    try {
-      await this.up.startUpload();
-    } finally {
-      this.up.selectedFormats = previousFormats;
-    }
-  }
-
-  /**
-   * Cargar el Reporte Serenity a Azure: usa el mismo flujo simplificado de carga,
-   * solicitando únicamente el ID del Test Plan.
-   */
-  async uploadSerenity(): Promise<void> {
-    if (!this.up) return;
-    const planId = (this.planIdInput || '').trim();
-    if (!planId) return;
-
-    this.up.inputPlanId = planId;
-
-    const needsValidation = !this.up.planValidated || this.up.validatedPlan?.planId !== planId;
-    if (needsValidation) {
-      await this.up.validatePlan();
-      if (!this.up.planValidated) return;
-    }
-
-    // Carga sin formatos ofimáticos adicionales (el ZIP incluye las evidencias de la ejecución).
-    const previousFormats = { ...this.up.selectedFormats };
-    this.up.selectedFormats = { docx: false, pdf: false, excel: false };
     try {
       await this.up.startUpload();
     } finally {

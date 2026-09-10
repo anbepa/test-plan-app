@@ -192,23 +192,6 @@
               </span>
             </div>
             <div class="format-actions">
-              <button type="button" class="opt-btn" (click)="downloadSerenity()"
-                [disabled]="isBusy || !execution"
-                [class.is-loading]="downloadingFormat === 'serenity'"
-                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar el reporte Serenity generado'">
-                Descargar
-              </button>
-              <button type="button" class="opt-btn ghost" (click)="uploadSerenity()"
-                [disabled]="isBusy || !execution || !planIdInput.trim()"
-                [title]="!planIdInput.trim() ? 'Ingresa el ID del Plan de Pruebas para publicar en DevOps' : 'Publicar el reporte Serenity en DevOps'">
-                Publicar en DevOps
-              </button>
-            </div>
-          </div>
-
-          <!-- Acciones secundarias de Serenity: generar / historial -->
-          <div class="format-row format-row-secondary serenity" role="listitem">
-            <div class="format-actions secondary">
               <button type="button" class="opt-btn primary" (click)="generateSerenity()"
                 [disabled]="isBusy || !execution"
                 [class.is-loading]="downloadingFormat === 'serenity'"
