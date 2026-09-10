@@ -113,7 +113,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   serenityHistory(): void { this.down?.openSerenityHistory(); }
 
   /**
-   * Cargar a Azure un formato concreto (word/pdf/excel) usando el flujo de upload existente.
+   * Publicar en DevOps un formato concreto (word/pdf/excel) usando el flujo de upload existente.
    * Simplificado: solo se solicita el ID del Test Plan; la validación y la carga se hacen
    * internamente y el subcomponente ya notifica éxito/error mediante toasts.
    */
