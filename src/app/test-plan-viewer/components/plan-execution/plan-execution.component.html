@@ -251,10 +251,6 @@
                     <!-- Badge PASO N + texto acción en la misma fila -->
                     <div class="step-main-content">
                       <span class="step-num-label">PASO {{ step.numero_paso }}</span>
-                      <span class="status-badge" [ngClass]="'status-badge-' + step.status">
-                        <span class="status-dot"></span>
-                        {{ getStatusDisplayLabel(step.status) }}
-                      </span>
                       <div class="step-action-wrapper">
                         <div class="step-action-text"
                              [attr.contenteditable]="editingStepId === step.stepId ? true : null"
