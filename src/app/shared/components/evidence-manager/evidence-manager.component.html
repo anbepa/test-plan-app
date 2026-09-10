@@ -53,16 +53,16 @@
       <!-- Body -->
       <div class="evidence-modal-body">
 
-        <!-- Campo simplificado: ID del Test Plan (solo para publicar en DevOps) -->
+        <!-- Campo simplificado: ID del Plan de Pruebas (solo para publicar en DevOps) -->
         <div class="plan-id-field">
-          <label for="evidence-plan-id" class="plan-id-label">ID del Test Plan</label>
+          <label for="evidence-plan-id" class="plan-id-label">ID del Plan de Pruebas</label>
           <div class="plan-id-inputs">
             <input
               id="evidence-plan-id"
               class="plan-id-input"
               type="text"
               inputmode="numeric"
-              placeholder="Ej. 12345"
+              placeholder="Ej: 7695070"
               [(ngModel)]="planIdInput"
               [disabled]="isBusy"
               autocomplete="off" />
@@ -78,9 +78,15 @@
             Plan validado: <strong>{{ validatedPlanTitle }}</strong>
           </p>
           <p class="plan-id-hint muted" *ngIf="!validatedPlanTitle">
-            Necesario únicamente para <strong>publicar en DevOps</strong>. Las descargas no lo requieren.
+            Solo es necesario para <strong>publicar en DevOps</strong>; las descargas no lo requieren.
           </p>
         </div>
+
+        <!-- Aviso: publicar requiere el ID del Plan de Pruebas -->
+        <p class="publish-gate-hint" *ngIf="!planIdInput.trim()" role="status">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Ingresa el <strong>ID del Plan de Pruebas</strong> para habilitar <strong>Publicar en DevOps</strong>.
+        </p>
 
         <!-- Formatos: descargar / publicar -->
         <div class="format-list" role="list" aria-label="Formatos y opciones de evidencias">
@@ -108,7 +114,7 @@
               </button>
               <button type="button" class="opt-btn ghost" (click)="uploadFormat('docx')"
                 [disabled]="isBusy || !execution || !planIdInput.trim()"
-                [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Publicar Word en DevOps'">
+                [title]="!planIdInput.trim() ? 'Ingresa el ID del Plan de Pruebas para publicar en DevOps' : 'Publicar Word en DevOps'">
                 Publicar en DevOps
               </button>
             </div>
@@ -137,7 +143,7 @@
               </button>
               <button type="button" class="opt-btn ghost" (click)="uploadFormat('pdf')"
                 [disabled]="isBusy || !execution || !planIdInput.trim()"
-                [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Publicar PDF en DevOps'">
+                [title]="!planIdInput.trim() ? 'Ingresa el ID del Plan de Pruebas para publicar en DevOps' : 'Publicar PDF en DevOps'">
                 Publicar en DevOps
               </button>
             </div>
@@ -166,7 +172,7 @@
               </button>
               <button type="button" class="opt-btn ghost" (click)="uploadFormat('excel')"
                 [disabled]="isBusy || !execution || !planIdInput.trim()"
-                [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Publicar Excel en DevOps'">
+                [title]="!planIdInput.trim() ? 'Ingresa el ID del Plan de Pruebas para publicar en DevOps' : 'Publicar Excel en DevOps'">
                 Publicar en DevOps
               </button>
             </div>
@@ -186,6 +192,23 @@
               </span>
             </div>
             <div class="format-actions">
+              <button type="button" class="opt-btn" (click)="downloadSerenity()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'serenity'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar el reporte Serenity generado'">
+                Descargar
+              </button>
+              <button type="button" class="opt-btn ghost" (click)="uploadSerenity()"
+                [disabled]="isBusy || !execution || !planIdInput.trim()"
+                [title]="!planIdInput.trim() ? 'Ingresa el ID del Plan de Pruebas para publicar en DevOps' : 'Publicar el reporte Serenity en DevOps'">
+                Publicar en DevOps
+              </button>
+            </div>
+          </div>
+
+          <!-- Acciones secundarias de Serenity: generar / historial -->
+          <div class="format-row format-row-secondary serenity" role="listitem">
+            <div class="format-actions secondary">
               <button type="button" class="opt-btn primary" (click)="generateSerenity()"
                 [disabled]="isBusy || !execution"
                 [class.is-loading]="downloadingFormat === 'serenity'"
@@ -196,18 +219,8 @@
               <button type="button" class="opt-btn ghost" (click)="serenityHistory()"
                 [disabled]="isBusy"
                 title="Consultar historial y estado de reportes generados">
-                Historial
-              </button>
-              <button type="button" class="opt-btn" (click)="downloadSerenity()"
-                [disabled]="isBusy || !execution"
-                [class.is-loading]="downloadingFormat === 'serenity'"
-                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar el reporte Serenity generado'">
-                Descargar
-              </button>
-              <button type="button" class="opt-btn ghost" (click)="uploadSerenity()"
-                [disabled]="isBusy || !execution || !planIdInput.trim()"
-                [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Publicar el reporte Serenity en DevOps'">
-                Publicar en DevOps
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Historial de reportes
               </button>
             </div>
           </div>
