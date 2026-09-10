@@ -297,37 +297,37 @@
                         </div>
                       </div>
                       <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
+                      <div class="report-settings-dropdown">
+                        <button (click)="openReportSettings($event)" class="btn-report-settings" title="Ajustes de reporte de evidencias">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                          </svg>
+                        </button>
+                        <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
+                        <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
+                          <div class="popover-header">Ajustes de Reporte</div>
+                          <div class="popover-body">
+                            <div class="popover-grid-inputs">
+                              <div class="popover-input-group">
+                                <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
+                                       (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" class="popover-input" />
+                                <span class="popover-input-hint">Cols</span>
+                              </div>
+                              <span class="popover-sep">×</span>
+                              <div class="popover-input-group">
+                                <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
+                                       (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" class="popover-input" />
+                                <span class="popover-input-hint">Filas</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
                       <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
 
                       <div class="ev-header-right">
                         <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ step.evidences.length }}</span></span>
-                        <div class="report-settings-dropdown">
-                          <button (click)="openReportSettings($event)" class="btn-report-settings" title="Configuración de reporte">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                            </svg>
-                          </button>
-                          <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
-                          <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
-                            <div class="popover-header">Ajustes de Reporte</div>
-                            <div class="popover-body">
-                              <div class="popover-grid-inputs">
-                                <div class="popover-input-group">
-                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
-                                         (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" class="popover-input" />
-                                  <span class="popover-input-hint">Cols</span>
-                                </div>
-                                <span class="popover-sep">×</span>
-                                <div class="popover-input-group">
-                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
-                                         (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" class="popover-input" />
-                                  <span class="popover-input-hint">Filas</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
 

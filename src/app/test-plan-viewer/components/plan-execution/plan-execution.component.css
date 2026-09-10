@@ -188,9 +188,9 @@
 }
 .tc-col-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tc-col-assignee { display: flex; align-items: center; }
-.tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: center; flex-wrap: nowrap; }
+.tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
 /* La cabecera "Acciones" se reduce porque la columna ahora solo tiene el menú ⋮ */
-.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: visible; justify-content: center; text-align: center; }
+.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: visible; justify-content: flex-end; text-align: right; }
 
 /* Action icon circle buttons */
 .act-icon-btn {
@@ -492,12 +492,14 @@
 .ssi-pending { color: #d1d5db; }
 
 /* #2 step status select — minimal outline only */
-.step-status-sel { appearance: none; -webkit-appearance: none; padding: 2px 8px; border-radius: 6px; border: 1.5px solid currentColor; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.3px; }
-.step-status-sel:focus { outline: none; }
-.step-status-sel.st-pending { color: #9ca3af; }
-.step-status-sel.st-in-progress { color: #3b82f6; }
-.step-status-sel.st-completed { color: #22c55e; }
-.step-status-sel.st-failed { color: #ef4444; }
+/* Coherente con .status-badge (pastilla rellena): mismo lenguaje visual,
+   pero conserva su función de <select> interactivo para cambiar el estado. */
+.step-status-sel { appearance: none; -webkit-appearance: none; padding: 4px 11px; border-radius: 99px; border: 1px solid transparent; background: #f5f5f7; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap; text-transform: none; letter-spacing: 0; }
+.step-status-sel:focus { outline: none; box-shadow: 0 0 0 3px rgba(0,122,255,.14); }
+.step-status-sel.st-pending { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+.step-status-sel.st-in-progress { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.step-status-sel.st-completed { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.step-status-sel.st-failed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 
 /* #1 step content typography */
 .step-content { flex: 1; display: flex; flex-direction: column; gap: 8px; }
@@ -1304,19 +1306,15 @@
 /* Botones: Agregar paso / Agregar escenario */
 .add-step-row { padding: 10px 0 6px 34px; }
 .btn-add-step {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: rgba(0,122,255,0.10); color: var(--primary-color, #007AFF);
-  border: 1.5px dashed var(--primary-color, #007AFF); border-radius: 8px;
-  padding: 8px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; color: var(--primary-color, #007AFF);
+  border: none; border-radius: 6px;
+  padding: 6px 4px; font-size: 13px; font-weight: 600; cursor: pointer;
   letter-spacing: 0.2px;
-  transition: background 200ms, color 200ms, box-shadow 200ms, transform 120ms;
+  transition: color 160ms, opacity 160ms;
 }
-.btn-add-step:hover {
-  background: var(--primary-color, #007AFF); color: #fff;
-  box-shadow: 0 3px 10px rgba(0,122,255,0.30);
-  transform: translateY(-1px);
-}
-.btn-add-step:active { transform: translateY(0); }
+.btn-add-step:hover { color: #0069d9; text-decoration: underline; }
+.btn-add-step:active { opacity: 0.7; }
 .btn-add-step svg { flex-shrink: 0; }
 
 /* Botón "Agregar escenario" reubicado en la barra superior (junto al buscador).
