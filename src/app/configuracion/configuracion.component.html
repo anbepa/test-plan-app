@@ -34,12 +34,6 @@
         </div>
       </div>
 
-      <p class="card-description">
-        Conecta tu organización de Azure DevOps con un <strong>Personal Access Token</strong> para
-        consultar y publicar Work Items desde la aplicación. El token se almacena cifrado y solo se
-        muestra parcialmente.
-      </p>
-
       <div class="form-grid">
         <div class="form-group">
           <label for="organization">Organización</label>
@@ -127,13 +121,6 @@
           <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
         </div>
       </div>
-
-      <p class="card-description">
-        Proveedor de IA opcional que usa tu suscripción de <strong>GitHub Copilot</strong>.
-        Conéctate con tu cuenta de GitHub (te redirigimos para autorizar, igual que en otras
-        herramientas). Si se habilita y la conexión es válida, se usará como proveedor activo;
-        ante cualquier error, la aplicación vuelve automáticamente a <strong>DeepSeek</strong>.
-      </p>
 
       <!-- Panel de autorización del Device Flow -->
       <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode" role="status" aria-live="polite">
@@ -243,8 +230,6 @@
         </button>
       </div>
 
-      <p class="field-hint" *ngIf="githubConnection" id="githubEnabled-hint">Si se desactiva el interruptor superior, la app usa DeepSeek por defecto.</p>
-
       <p *ngIf="githubInfoMessage" class="message success" role="status" aria-live="polite">{{ githubInfoMessage }}</p>
       <p *ngIf="githubErrorMessage" class="message error" role="alert">{{ githubErrorMessage }}</p>
     </div>
@@ -261,8 +246,6 @@
     </button>
     <div class="config-card" *ngIf="accordionOpen.global" id="panel-global" role="region" aria-labelledby="toggle-global">
       <h3 class="card-title">Parámetros de Secciones Generales</h3>
-      <p class="card-description">Estos valores se usarán por defecto para "Repositorio Pruebas VSTS" y "Equipo de Trabajo" al crear planes.</p>
-
       <div class="form-grid">
         <div class="form-group full-width">
           <label for="repositoryLink">Repositorio Pruebas VSTS</label>
@@ -278,7 +261,6 @@
 
         <div class="form-group full-width">
           <label>Equipo de trabajo</label>
-          <p class="field-hint">Completa el Rol (incluye empresa si aplica) y el Nombre. Se exportará como tabla en el plan.</p>
           <table class="team-config-table" *ngIf="hasTeamRows">
             <thead>
               <tr>
@@ -347,15 +329,9 @@
     </button>
     <div class="config-card" *ngIf="accordionOpen.cells" id="panel-cells" role="region" aria-labelledby="toggle-cells" [attr.aria-busy]="savingCells">
       <h3 class="card-title">Lista de "Nombre Célula"</h3>
-      <p class="card-description">
-        Estas son las opciones que aparecen en el selector <strong>Nombre Célula</strong> del generador.
-        Por defecto todos ven la lista estándar; si la personalizas, los cambios se guardan en tu cuenta y solo tú los verás.
-      </p>
-
       <div class="form-grid">
         <div class="form-group full-width">
           <label>Células disponibles</label>
-          <p class="field-hint">Agrega, edita o elimina las células. No se permiten valores vacíos ni duplicados.</p>
           <table class="team-config-table" *ngIf="hasCellRows">
             <thead>
               <tr>
