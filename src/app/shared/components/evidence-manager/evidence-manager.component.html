@@ -7,7 +7,7 @@
     [attr.aria-busy]="isProcessing"
     aria-haspopup="dialog"
     [attr.aria-expanded]="showModal"
-    [title]="isProcessing ? processingMessage : 'Descargar evidencias o subirlas a Azure DevOps'"
+    [title]="isProcessing ? processingMessage : 'Descargar evidencias o cargarlas a Azure DevOps'"
     type="button">
     <ng-container *ngIf="!isProcessing">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px" aria-hidden="true">
@@ -31,102 +31,197 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="evidence-modal-title"
-      [attr.aria-busy]="isProcessing">
+      [attr.aria-busy]="isBusy">
 
-      <!-- Header con tabs -->
+      <!-- Header -->
       <div class="evidence-modal-header">
         <div class="evidence-modal-titlebar">
           <div class="evidence-modal-heading">
             <h3 id="evidence-modal-title">Gestionar evidencias</h3>
+            <p class="evidence-modal-subtitle" *ngIf="contextLabel">
+              <span class="evidence-context-text">{{ contextLabel }}</span>
+              <span class="evidence-count-chip" *ngIf="evidenceCount > 0">{{ evidenceCount }} evidencia(s)</span>
+            </p>
           </div>
-          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isProcessing"
-            [title]="isProcessing ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
+          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isBusy"
+            [title]="isBusy ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="#1d1d1f"/><line x1="6" y1="6" x2="18" y2="18" stroke="#1d1d1f"/></svg>
           </button>
         </div>
-
-        <div class="evidence-tabs" role="tablist" aria-label="Acciones de evidencias" (keydown)="onTabsKeydown($event)">
-          <button
-            class="evidence-tab"
-            role="tab"
-            id="evidence-tab-download"
-            aria-controls="evidence-panel-download"
-            [attr.aria-selected]="activeTab === 'download'"
-            [attr.tabindex]="activeTab === 'download' ? 0 : -1"
-            [class.active]="activeTab === 'download'"
-            [disabled]="isProcessing"
-            (click)="selectTab('download')"
-            type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Descargar
-          </button>
-          <button
-            class="evidence-tab"
-            role="tab"
-            id="evidence-tab-upload"
-            aria-controls="evidence-panel-upload"
-            [attr.aria-selected]="activeTab === 'upload'"
-            [attr.tabindex]="activeTab === 'upload' ? 0 : -1"
-            [class.active]="activeTab === 'upload'"
-            [disabled]="isProcessing"
-            (click)="selectTab('upload')"
-            type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Publicar en DevOps
-          </button>
-          <span class="evidence-tab-indicator" [class.upload]="activeTab === 'upload'" aria-hidden="true"></span>
-        </div>
       </div>
 
-      <!-- Body: contenido de la pestaña activa -->
+      <!-- Body -->
       <div class="evidence-modal-body">
-        <div
-          *ngIf="activeTab === 'download'"
-          role="tabpanel"
-          id="evidence-panel-download"
-          aria-labelledby="evidence-tab-download">
-          <app-evidence-download-modal
-            [embedded]="true"
-            [isOpen]="true"
-            [execution]="execution"
-            [testRun]="testRun"
-            [huData]="huData"
-            (closeRequested)="closeModal()"
-            (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
-          </app-evidence-download-modal>
+
+        <!-- Campo simplificado: ID del Test Plan (solo para cargar a Azure) -->
+        <div class="plan-id-field">
+          <label for="evidence-plan-id" class="plan-id-label">ID del Test Plan</label>
+          <div class="plan-id-inputs">
+            <input
+              id="evidence-plan-id"
+              class="plan-id-input"
+              type="text"
+              inputmode="numeric"
+              placeholder="Ej. 12345"
+              [(ngModel)]="planIdInput"
+              [disabled]="isBusy"
+              autocomplete="off" />
+            <button
+              *ngIf="validatedPlanTitle"
+              type="button"
+              class="plan-id-change"
+              (click)="changePlan()"
+              [disabled]="isBusy">Cambiar</button>
+          </div>
+          <p class="plan-id-hint" *ngIf="validatedPlanTitle">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Plan validado: <strong>{{ validatedPlanTitle }}</strong>
+          </p>
+          <p class="plan-id-hint muted" *ngIf="!validatedPlanTitle">
+            Necesario únicamente para <strong>cargar a Azure</strong>. Las descargas no lo requieren.
+          </p>
         </div>
 
-        <div
-          *ngIf="activeTab === 'upload'"
-          role="tabpanel"
-          id="evidence-panel-upload"
-          aria-labelledby="evidence-tab-upload">
-          <app-evidence-upload-modal
-            [embedded]="true"
-            [execution]="execution"
-            [testRun]="testRun"
-            [huData]="huData"
-            [prefillPlanId]="lastValidatedPlanId"
-            (onClose)="closeModal()"
-            (onProcessing)="setProcessing($event)"
-            (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
-            (planValidatedEvent)="handlePlanValidated($event)">
-          </app-evidence-upload-modal>
+        <!-- Tabla Formato / Opciones -->
+        <div class="evidence-table-wrap" role="region" aria-label="Formatos y opciones de evidencias">
+          <table class="evidence-table">
+            <thead>
+              <tr>
+                <th scope="col" class="col-format">Formato</th>
+                <th scope="col" class="col-options">Opciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- 1. Word -->
+              <tr>
+                <th scope="row" class="format-cell">
+                  <span class="format-badge word">1</span> Word
+                </th>
+                <td class="options-cell">
+                  <button type="button" class="opt-btn" (click)="downloadWord()"
+                    [disabled]="isBusy || !execution"
+                    [class.is-loading]="downloadingFormat === 'word'"
+                    [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Word (.docx)'">
+                    <span class="opt-spinner" *ngIf="downloadingFormat === 'word'" aria-hidden="true"></span>
+                    Descargar
+                  </button>
+                  <button type="button" class="opt-btn ghost" (click)="uploadFormat('docx')"
+                    [disabled]="isBusy || !execution || !planIdInput.trim()"
+                    [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Cargar Word a Azure DevOps'">
+                    Cargar a Azure
+                  </button>
+                </td>
+              </tr>
+
+              <!-- 2. PDF -->
+              <tr>
+                <th scope="row" class="format-cell">
+                  <span class="format-badge pdf">2</span> PDF
+                </th>
+                <td class="options-cell">
+                  <button type="button" class="opt-btn" (click)="downloadPDF()"
+                    [disabled]="isBusy || !execution"
+                    [class.is-loading]="downloadingFormat === 'pdf'"
+                    [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en PDF'">
+                    <span class="opt-spinner" *ngIf="downloadingFormat === 'pdf'" aria-hidden="true"></span>
+                    Descargar
+                  </button>
+                  <button type="button" class="opt-btn ghost" (click)="uploadFormat('pdf')"
+                    [disabled]="isBusy || !execution || !planIdInput.trim()"
+                    [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Cargar PDF a Azure DevOps'">
+                    Cargar a Azure
+                  </button>
+                </td>
+              </tr>
+
+              <!-- 3. Excel -->
+              <tr>
+                <th scope="row" class="format-cell">
+                  <span class="format-badge excel">3</span> Excel
+                </th>
+                <td class="options-cell">
+                  <button type="button" class="opt-btn" (click)="downloadExcel()"
+                    [disabled]="isBusy || !execution"
+                    [class.is-loading]="downloadingFormat === 'excel'"
+                    [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Excel (.xlsx)'">
+                    <span class="opt-spinner" *ngIf="downloadingFormat === 'excel'" aria-hidden="true"></span>
+                    Descargar
+                  </button>
+                  <button type="button" class="opt-btn ghost" (click)="uploadFormat('excel')"
+                    [disabled]="isBusy || !execution || !planIdInput.trim()"
+                    [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Cargar Excel a Azure DevOps'">
+                    Cargar a Azure
+                  </button>
+                </td>
+              </tr>
+
+              <!-- 4. Reporte Serenity -->
+              <tr>
+                <th scope="row" class="format-cell">
+                  <span class="format-badge serenity">4</span> Reporte Serenity
+                </th>
+                <td class="options-cell">
+                  <button type="button" class="opt-btn primary" (click)="generateSerenity()"
+                    [disabled]="isBusy || !execution"
+                    [class.is-loading]="downloadingFormat === 'serenity'"
+                    [title]="!execution ? 'No hay una ejecución cargada' : 'Generar reporte Serenity en el pipeline de Azure DevOps'">
+                    <span class="opt-spinner" *ngIf="downloadingFormat === 'serenity'" aria-hidden="true"></span>
+                    Generar reporte
+                  </button>
+                  <button type="button" class="opt-btn ghost" (click)="serenityHistory()"
+                    [disabled]="isBusy"
+                    title="Consultar historial y estado de reportes generados">
+                    Historial de reportes
+                  </button>
+                  <button type="button" class="opt-btn" (click)="downloadSerenity()"
+                    [disabled]="isBusy || !execution"
+                    [class.is-loading]="downloadingFormat === 'serenity'"
+                    [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar el reporte Serenity generado'">
+                    Descargar
+                  </button>
+                  <button type="button" class="opt-btn ghost" (click)="uploadSerenity()"
+                    [disabled]="isBusy || !execution || !planIdInput.trim()"
+                    [title]="!planIdInput.trim() ? 'Escribe el ID del Test Plan' : 'Cargar el reporte Serenity a Azure DevOps'">
+                    Cargar a Azure
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- Aviso persistente mientras hay un proceso en curso -->
-      <div class="evidence-modal-processing" *ngIf="isProcessing" role="status" aria-live="polite">
+      <div class="evidence-modal-processing" *ngIf="isBusy" role="status" aria-live="polite">
         <span class="btn-spinner dark" aria-hidden="true"></span>
         <span>{{ processingMessage || 'Procesando...' }} No cierres esta ventana.</span>
+      </div>
+
+      <!-- Subcomponentes embebidos (ocultos): reutilizan la lógica sin duplicarla -->
+      <div class="evidence-hidden-logic" aria-hidden="true">
+        <app-evidence-download-modal
+          #down
+          [embedded]="true"
+          [isOpen]="true"
+          [execution]="execution"
+          [testRun]="testRun"
+          [huData]="huData"
+          (closeRequested)="closeModal()"
+          (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
+        </app-evidence-download-modal>
+
+        <app-evidence-upload-modal
+          #up
+          [embedded]="true"
+          [execution]="execution"
+          [testRun]="testRun"
+          [huData]="huData"
+          [prefillPlanId]="lastValidatedPlanId"
+          (onClose)="closeModal()"
+          (onProcessing)="setProcessing($event)"
+          (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
+          (planValidatedEvent)="handlePlanValidated($event)">
+        </app-evidence-upload-modal>
       </div>
 
     </div>
