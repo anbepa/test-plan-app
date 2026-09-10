@@ -53,6 +53,8 @@
               [testRun]="null"
               [huData]="hu"
               (openSerenityHistory)="openSerenityHistoryModal()"
+              (downloadSerenityZip)="downloadLatestSerenityZip()"
+              (publishSerenityZip)="publishLatestSerenityZip()"
               (planValidated)="onEvidencePlanValidated($event)">
             </app-evidence-manager>
           </div>
@@ -577,7 +579,7 @@
             <polyline points="14 2 14 8 20 8"/>
           </svg>
           <p>Aún no se ha generado ningún reporte</p>
-          <small>Genera uno desde <strong>Gestionar evidencias → Descargar → Reporte Serenity</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
+          <small>Genera uno desde <strong>Gestionar evidencias → Reporte Serenity → Generar reporte</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
         </div>
 
         <div *ngFor="let r of serenityHistory" class="sh-card" [class.is-pending]="r.status === 'pending'">
@@ -609,18 +611,6 @@
           </p>
 
           <div class="sh-actions">
-            <a *ngIf="r.artifactDownloadUrl" [href]="r.artifactDownloadUrl" download="serenity-report.zip"
-               class="sh-btn sh-btn-dl" title="Descargar el reporte comprimido (.zip)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Descargar .zip
-            </a>
-            <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" type="button"
-              title="Publicar el reporte en un plan de Azure DevOps"
-              [attr.aria-expanded]="attachingReportId === r.id"
-              (click)="startAttachToPlan(r.id)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              {{ attachingReportId === r.id ? 'Cerrar' : 'Publicar en DevOps' }}
-            </button>
             <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
               <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
               Actualizando...

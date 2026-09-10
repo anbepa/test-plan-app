@@ -1685,6 +1685,40 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.stopSerenityHistoryPolling();
   }
 
+  /** Descarga el último reporte Serenity generado (.zip), desde el menú ⋮ de Gestionar evidencias. */
+  async downloadLatestSerenityZip(): Promise<void> {
+    await this.loadHistory();
+    const latest = this.serenityHistory.find(r => r.artifactDownloadUrl);
+    if (!latest) {
+      this.toastService.warning('Aún no hay un reporte Serenity generado');
+      await this.openSerenityHistoryModal();
+      return;
+    }
+    this.triggerDownload(latest.artifactDownloadUrl!, 'serenity-report.zip');
+    this.toastService.success('Descargando reporte Serenity');
+  }
+
+  /** Abre el historial y prepara la publicación del último reporte Serenity en DevOps. */
+  async publishLatestSerenityZip(): Promise<void> {
+    await this.openSerenityHistoryModal();
+    const latest = this.serenityHistory.find(r => r.artifactDownloadUrl);
+    if (!latest) {
+      this.toastService.warning('Aún no hay un reporte Serenity generado');
+      return;
+    }
+    this.startAttachToPlan(latest.id);
+  }
+
+  private triggerDownload(url: string, filename: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   private serenityHistoryPollTimer: any = null;
 
   private startSerenityHistoryPolling(): void {

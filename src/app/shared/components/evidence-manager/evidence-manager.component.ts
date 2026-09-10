@@ -17,16 +17,23 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   @Input() testRun: TestRun | null = null;
   @Input() huData: HUData | null = null;
   @Output() openSerenityHistory = new EventEmitter<void>();
+  /** Se emite para descargar el último reporte Serenity (.zip) generado. */
+  @Output() downloadSerenityZip = new EventEmitter<void>();
+  /** Se emite para publicar el último reporte Serenity generado en DevOps. */
+  @Output() publishSerenityZip = new EventEmitter<void>();
   /** Se emite cuando el usuario valida un Plan ID de Azure DevOps, para recordarlo y no volver a pedirlo. */
   @Output() planValidated = new EventEmitter<{ planId: string; planTitle: string }>();
 
   /** Referencias a los subcomponentes embebidos (ocultos): reutilizamos su lógica sin duplicarla. */
   @ViewChild('down') down!: EvidenceDownloadModalComponent;
   @ViewChild('up') up!: EvidenceUploadModalComponent;
+  @ViewChild('serenityMenuWrap') serenityMenuWrap!: ElementRef<HTMLElement>;
 
   showModal = false;
   isProcessing = false;
   processingMessage = '';
+  /** Menú ⋮ de opciones secundarias de Serenity. */
+  showSerenityMenu = false;
   /** Último Plan ID validado en esta sesión, para precargarlo y evitar pedirlo de nuevo. */
   lastValidatedPlanId = '';
   /** ID de Test Plan que teclea el usuario en el modal unificado (flujo simplificado de carga a Azure). */
@@ -88,12 +95,26 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   /** Cerrar con Escape (bloqueado mientras hay un proceso en curso). */
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.showSerenityMenu) {
+      this.showSerenityMenu = false;
+      return;
+    }
     if (this.showModal) this.closeModal();
+  }
+
+  /** Cierra el menú ⋮ de Serenity al hacer clic fuera de él. */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.showSerenityMenu) return;
+    if (this.serenityMenuWrap && !this.serenityMenuWrap.nativeElement.contains(event.target as Node)) {
+      this.showSerenityMenu = false;
+    }
   }
 
   closeModal(): void {
     if (this.isBusy) return;
     this.showModal = false;
+    this.showSerenityMenu = false;
     this.unlockBodyScroll();
     this.lastFocusedElement?.focus?.();
     this.lastFocusedElement = null;
@@ -107,8 +128,34 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   // ── Reporte Serenity ──
   /** Generar reporte Serenity (mismo comportamiento actual). */
   generateSerenity(): void { this.down?.downloadSerenity(); }
-  /** Historial de reportes Serenity (descarga y publicación del artefacto generado). */
-  serenityHistory(): void { this.down?.openSerenityHistory(); }
+
+  /** Alterna el menú ⋮ de opciones secundarias de Serenity. */
+  toggleSerenityMenu(): void {
+    if (this.isBusy) return;
+    this.showSerenityMenu = !this.showSerenityMenu;
+  }
+
+  /** Abre el historial de reportes Serenity. */
+  handleOpenSerenityHistory(): void {
+    this.showSerenityMenu = false;
+    this.showModal = false;
+    this.unlockBodyScroll();
+    this.openSerenityHistory.emit();
+  }
+
+  /** Descarga el último reporte Serenity (.zip) generado. */
+  handleDownloadSerenityZip(): void {
+    this.showSerenityMenu = false;
+    this.downloadSerenityZip.emit();
+  }
+
+  /** Publica el último reporte Serenity generado en DevOps. */
+  handlePublishSerenityZip(): void {
+    this.showSerenityMenu = false;
+    this.showModal = false;
+    this.unlockBodyScroll();
+    this.publishSerenityZip.emit();
+  }
 
   /**
    * Publicar en DevOps un formato concreto (word/pdf/excel) usando el flujo de upload existente.
@@ -149,12 +196,6 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.validatedPlanTitle = '';
     this.lastValidatedPlanId = '';
     this.up?.resetToPlantId?.();
-  }
-
-  handleOpenSerenityHistory(): void {
-    this.showModal = false;
-    this.unlockBodyScroll();
-    this.openSerenityHistory.emit();
   }
 
   handlePlanValidated(event: { planId: string; planTitle: string }): void {

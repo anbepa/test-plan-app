@@ -199,12 +199,29 @@
                 <span class="opt-spinner" *ngIf="downloadingFormat === 'serenity'" aria-hidden="true"></span>
                 Generar reporte
               </button>
-              <button type="button" class="opt-btn ghost" (click)="serenityHistory()"
-                [disabled]="isBusy"
-                title="Consultar historial y estado de reportes generados">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Historial de reportes
-              </button>
+              <div class="serenity-menu-wrap" #serenityMenuWrap>
+                <button type="button" class="opt-btn icon-btn" (click)="toggleSerenityMenu()"
+                  [disabled]="isBusy"
+                  aria-haspopup="menu"
+                  [attr.aria-expanded]="showSerenityMenu"
+                  title="Más opciones del reporte Serenity">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+                </button>
+                <div class="serenity-menu" *ngIf="showSerenityMenu" role="menu" aria-label="Opciones del reporte Serenity">
+                  <button type="button" role="menuitem" (click)="handleOpenSerenityHistory()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Historial de reportes
+                  </button>
+                  <button type="button" role="menuitem" (click)="handleDownloadSerenityZip()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Descargar .zip
+                  </button>
+                  <button type="button" role="menuitem" (click)="handlePublishSerenityZip()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Publicar en DevOps
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
