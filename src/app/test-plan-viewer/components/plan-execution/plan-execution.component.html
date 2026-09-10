@@ -170,7 +170,7 @@
 
                   <div class="act-menu-divider"></div>
 
-                  <div class="act-menu-label">Cambiar estado</div>
+                  <div class="act-menu-label">Opciones</div>
 
                   <button class="act-menu-item" type="button" role="menuitem"
                           (click)="setAllStepsStatus(getOriginalIndex(tc), 'pending'); closeActionsMenu()">
@@ -212,7 +212,7 @@
                     <span class="act-menu-text">Marcar como Falló</span>
                   </button>
 
-                  <div class="act-menu-divider"></div>
+                  <hr class="act-menu-hr" />
 
                   <button class="act-menu-item act-menu-item-danger" type="button" role="menuitem"
                           (click)="deleteTestCase(tc, $event); closeActionsMenu()">
@@ -250,14 +250,10 @@
 
                     <!-- Badge PASO N + texto acción en la misma fila -->
                     <div class="step-main-content">
-                      <span class="step-num-label">
-                        <span class="step-status-icon" [ngClass]="'ssi-' + step.status">
-                          <ng-container *ngIf="step.status === 'completed'">✓</ng-container>
-                          <ng-container *ngIf="step.status === 'failed'">✗</ng-container>
-                          <ng-container *ngIf="step.status === 'in-progress'">▷</ng-container>
-                          <ng-container *ngIf="step.status === 'pending'">·</ng-container>
-                        </span>
-                        PASO {{ step.numero_paso }}
+                      <span class="step-num-label">PASO {{ step.numero_paso }}</span>
+                      <span class="status-badge" [ngClass]="'status-badge-' + step.status">
+                        <span class="status-dot"></span>
+                        {{ getStatusDisplayLabel(step.status) }}
                       </span>
                       <div class="step-action-wrapper">
                         <div class="step-action-text"
@@ -294,6 +290,7 @@
                   <div class="step-evidence-zone"
                        *ngIf="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)">
                     <div class="evidence-zone-header">
+                      <div class="btn-group-segmented">
                       <div class="upload-dropdown">
                         <button (click)="openUploadMenu($event)" class="btn-upload btn-unified">
                           + Subir Evidencia <span class="chevron">▾</span>
@@ -331,6 +328,7 @@
                           </div>
                         </div>
                       </div>
+                      </div><!-- /btn-group-segmented -->
                       <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
                       <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
 

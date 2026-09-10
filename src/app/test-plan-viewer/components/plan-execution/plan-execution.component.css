@@ -310,6 +310,14 @@
   background: #e5e5ea;
 }
 
+/* Línea divisoria (<hr>) antes de la acción destructiva "Eliminar de esta ejecución" */
+.act-menu-hr {
+  border: none;
+  height: 1px;
+  margin: 6px 4px;
+  background: #e5e5ea;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .act-menu-panel { animation: none; }
   .act-kebab-btn, .act-menu-item { transition: none; }
@@ -516,6 +524,25 @@
 .step-evidence-zone { border-top: 1px solid var(--border-color, #D1D1D6); padding: 14px; background: var(--surface-color, #F5F5F7); display: flex; flex-direction: column; gap: 12px; }
 /* #3 evidence header: buttons left, label+cells right */
 .evidence-zone-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Grupo de botones segmentado: unifica "+ Subir Evidencia", "Pegar imagen" y el ícono ⚙ */
+.btn-group-segmented { display: inline-flex; align-items: stretch; border: 1.5px solid var(--border-color, #D1D1D6); border-radius: 8px; overflow: hidden; background: var(--background-color, #fff); }
+.btn-group-segmented > * { position: relative; }
+.btn-group-segmented .upload-dropdown > .btn-upload,
+.btn-group-segmented > .btn-upload,
+.btn-group-segmented .report-settings-dropdown > .btn-report-settings {
+  border-radius: 0 !important;
+  border: none !important;
+  min-height: 32px;
+  height: 32px;
+  box-shadow: none !important;
+}
+/* Separadores internos entre segmentos */
+.btn-group-segmented > * + * { border-left: 1.5px solid var(--border-color, #D1D1D6); }
+.btn-group-segmented .report-settings-dropdown > .btn-report-settings {
+  width: 34px; border-radius: 0 !important; border-left: 1.5px solid var(--border-color, #D1D1D6);
+  transform: none;
+}
+.btn-group-segmented .report-settings-dropdown > .btn-report-settings:hover { transform: none; }
 .evidence-zone-label { font-size: 13px; font-weight: 700; color: var(--text-primary, #1D1D1F); }
 .ev-label-right { margin-left: auto; }
 /* #4 edit-state action button */
@@ -1320,22 +1347,100 @@
 .btn-add-step svg { flex-shrink: 0; }
 
 /* Botón "Agregar escenario" reubicado en la barra superior (junto al buscador).
-   Estilo discreto alineado al de "+ Agregar paso": outline punteado sutil. */
+   Estilo de botón secundario estándar: borde sólido (sin línea punteada). */
 .btn-add-testcase-top {
   display: inline-flex; align-items: center; gap: 6px;
   height: 34px; box-sizing: border-box;
   padding: 0 14px;
-  background: rgba(0,122,255,0.08); color: var(--primary-color, #007AFF);
-  border: 1.5px dashed var(--primary-color, #007AFF); border-radius: 8px;
+  background: var(--background-color, #fff); color: var(--primary-color, #007AFF);
+  border: 1.5px solid rgba(0,122,255,.3); border-radius: 8px;
   font-size: 13px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px;
   white-space: nowrap;
   transition: background 200ms, color 200ms, box-shadow 200ms, transform 120ms;
 }
 .btn-add-testcase-top:hover {
-  background: var(--primary-color, #007AFF); color: #fff;
-  box-shadow: 0 3px 10px rgba(0,122,255,0.28);
+  background: rgba(0,122,255,.09);
+  box-shadow: 0 3px 10px rgba(0,122,255,0.14);
   transform: translateY(-1px);
 }
 .btn-add-testcase-top:active { transform: translateY(0); }
 .btn-add-testcase-top svg { flex-shrink: 0; }
 
+
+/* ────────────────────────────────────────────────────────────────
+   AJUSTES DE UNIFICACIÓN VISUAL (execute-plan)
+   ──────────────────────────────────────────────────────────────── */
+
+/* 1) Menú contextual (⋮): línea divisoria <hr> antes de "Eliminar de
+      esta ejecución", con el mismo estilo que .act-menu-divider.
+      El título de sección "Opciones" usa .act-menu-label (uppercase → OPCIONES). */
+.act-menu-hr {
+  border: none;
+  height: 1px;
+  margin: 6px 4px;
+  background: #e5e5ea;
+}
+
+/* 2) Badges de estado en pasos: pastilla rellena idéntica a la del
+      escenario. Los pasos ya usan <span class="status-badge ...">, por lo
+      que heredan .status-badge / .status-badge-*. Se refuerza aquí para
+      garantizar coherencia dentro de la fila del paso. */
+.step-main-content .status-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Refuerzo del <select> de estado del paso para que, como control
+   interactivo, mantenga la misma forma de píldora que .status-badge. */
+.step-status-sel {
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-weight: 600;
+}
+
+/* 4) Barra de evidencias: agrupar "+ Subir Evidencia", "Pegar imagen" y
+      el ícono ⚙ en un único button group segmentado. */
+.btn-group-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1.5px solid var(--border-color, #D1D1D6);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--background-color, #fff);
+}
+.btn-group-segmented:focus-within {
+  border-color: var(--primary-color, #007AFF);
+  box-shadow: 0 0 0 3px rgba(0,122,255,.14);
+}
+/* Neutraliza radios/bordes/sombras propios de cada segmento interno */
+.btn-group-segmented > * {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+/* Separador vertical entre segmentos */
+.btn-group-segmented > * + * {
+  border-left: 1.5px solid var(--border-color, #D1D1D6) !important;
+}
+/* Los dropdowns internos (upload / ⚙) son wrappers: se normalizan igual */
+.btn-group-segmented .upload-dropdown,
+.btn-group-segmented .report-settings-dropdown {
+  display: inline-flex;
+  align-items: stretch;
+}
+/* Alturas homogéneas de los segmentos */
+.btn-group-segmented .btn-upload {
+  height: 34px;
+  border-radius: 0 !important;
+  padding: 0 .9rem;
+}
+.btn-group-segmented .btn-report-settings {
+  width: 40px;
+  height: 34px;
+  border-radius: 0 !important;
+}
+/* Dentro del grupo el ⚙ no debe girar ni comportarse como botón circular */
+.btn-group-segmented .btn-report-settings:hover {
+  transform: none;
+}
