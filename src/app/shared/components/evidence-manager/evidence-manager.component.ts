@@ -17,29 +17,16 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   @Input() testRun: TestRun | null = null;
   @Input() huData: HUData | null = null;
   @Output() openSerenityHistory = new EventEmitter<void>();
-  /** Se emite para descargar el último reporte Serenity (.zip) generado. */
-  @Output() downloadSerenityZip = new EventEmitter<void>();
-  /** Se emite para publicar el último reporte Serenity generado en DevOps. */
-  @Output() publishSerenityZip = new EventEmitter<void>();
   /** Se emite cuando el usuario valida un Plan ID de Azure DevOps, para recordarlo y no volver a pedirlo. */
   @Output() planValidated = new EventEmitter<{ planId: string; planTitle: string }>();
 
   /** Referencias a los subcomponentes embebidos (ocultos): reutilizamos su lógica sin duplicarla. */
   @ViewChild('down') down!: EvidenceDownloadModalComponent;
   @ViewChild('up') up!: EvidenceUploadModalComponent;
-  @ViewChild('serenityMenuWrap') serenityMenuWrap!: ElementRef<HTMLElement>;
 
   showModal = false;
   isProcessing = false;
   processingMessage = '';
-  /** Menú ⋮ de opciones secundarias de Serenity. */
-  showSerenityMenu = false;
-  /** Último Plan ID validado en esta sesión, para precargarlo y evitar pedirlo de nuevo. */
-  lastValidatedPlanId = '';
-  /** ID de Test Plan que teclea el usuario en el modal unificado (flujo simplificado de carga a Azure). */
-  planIdInput = '';
-  /** Título del plan una vez validado, solo informativo para el usuario. */
-  validatedPlanTitle = '';
 
   private previousBodyOverflow: string | null = null;
   private lastFocusedElement: HTMLElement | null = null;
@@ -50,26 +37,6 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.unlockBodyScroll();
-  }
-
-  /**
-   * Subtítulo contextual del modal: indica sobre qué ejecución se está trabajando.
-   * Es solo informativo (UX), no altera el comportamiento.
-   */
-  get contextLabel(): string {
-    const name = this.testRun?.name || this.huData?.title || this.execution?.huTitle || '';
-    const id = this.huData?.id || this.execution?.huId || '';
-    if (id && name) return `${id} — ${name}`;
-    return name || id || '';
-  }
-
-  /** Nº total de evidencias adjuntas, para dar contexto antes de descargar/subir. */
-  get evidenceCount(): number {
-    const testCases = this.execution?.testCases || [];
-    return testCases.reduce(
-      (sum, tc) => sum + (tc.steps || []).reduce((s, step: any) => s + (step.evidences?.length || 0), 0),
-      0
-    );
   }
 
   /** ¿Hay alguna operación en curso? Combina los estados de ambos subcomponentes. */
@@ -95,26 +62,12 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   /** Cerrar con Escape (bloqueado mientras hay un proceso en curso). */
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.showSerenityMenu) {
-      this.showSerenityMenu = false;
-      return;
-    }
     if (this.showModal) this.closeModal();
-  }
-
-  /** Cierra el menú ⋮ de Serenity al hacer clic fuera de él. */
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent): void {
-    if (!this.showSerenityMenu) return;
-    if (this.serenityMenuWrap && !this.serenityMenuWrap.nativeElement.contains(event.target as Node)) {
-      this.showSerenityMenu = false;
-    }
   }
 
   closeModal(): void {
     if (this.isBusy) return;
     this.showModal = false;
-    this.showSerenityMenu = false;
     this.unlockBodyScroll();
     this.lastFocusedElement?.focus?.();
     this.lastFocusedElement = null;
@@ -125,83 +78,52 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   downloadPDF(): void { this.down?.downloadPDF(); }
   downloadExcel(): void { this.down?.downloadExcel(); }
 
-  // ── Reporte Serenity ──
-  /** Generar reporte Serenity (mismo comportamiento actual). */
-  generateSerenity(): void { this.down?.downloadSerenity(); }
+  // ── Publicación de evidencias ──
 
-  /** Alterna el menú ⋮ de opciones secundarias de Serenity. */
-  toggleSerenityMenu(): void {
-    if (this.isBusy) return;
-    this.showSerenityMenu = !this.showSerenityMenu;
+  /** Valida el plan si aún no está validado o si el ID cambió. Devuelve true si quedó listo para publicar. */
+  private async ensurePlanValidated(): Promise<boolean> {
+    if (!this.up) return false;
+    const planId = (this.up.inputPlanId || '').trim();
+    if (!planId) return false;
+
+    const needsValidation = !this.up.planValidated || this.up.validatedPlan?.planId !== planId;
+    if (needsValidation) {
+      await this.up.validatePlan();
+      if (!this.up.planValidated) return false;
+    }
+    return true;
   }
 
-  /** Abre el historial de reportes Serenity. */
+  /** Publica en DevOps los formatos Word/Excel/PDF seleccionados (juntos, como un único .zip). */
+  async publishOfficeFormats(): Promise<void> {
+    if (!this.up) return;
+    if (!this.up.hasSelectedFormat()) return;
+    const ready = await this.ensurePlanValidated();
+    if (!ready) return;
+    await this.up.startUpload();
+  }
+
+  /** Publica en DevOps el reporte Serenity (se empaqueta de forma independiente). */
+  async publishSerenity(): Promise<void> {
+    if (!this.up) return;
+    if (!(this.up.serenityFileName || '').trim()) return;
+    const ready = await this.ensurePlanValidated();
+    if (!ready) return;
+    await this.up.startSerenityUpload();
+  }
+
+  /** Permite al usuario cambiar el ID de plan tras haberlo validado. */
+  changePlan(): void {
+    this.up?.resetToPlantId?.();
+  }
+
   handleOpenSerenityHistory(): void {
-    this.showSerenityMenu = false;
     this.showModal = false;
     this.unlockBodyScroll();
     this.openSerenityHistory.emit();
   }
 
-  /** Descarga el último reporte Serenity (.zip) generado. */
-  handleDownloadSerenityZip(): void {
-    this.showSerenityMenu = false;
-    this.downloadSerenityZip.emit();
-  }
-
-  /** Publica el último reporte Serenity generado en DevOps. */
-  handlePublishSerenityZip(): void {
-    this.showSerenityMenu = false;
-    this.showModal = false;
-    this.unlockBodyScroll();
-    this.publishSerenityZip.emit();
-  }
-
-  /**
-   * Publicar en DevOps un formato concreto (word/pdf/excel) usando el flujo de upload existente.
-   * Simplificado: solo se solicita el ID del Test Plan; la validación y la carga se hacen
-   * internamente y el subcomponente ya notifica éxito/error mediante toasts.
-   */
-  async uploadFormat(format: 'docx' | 'pdf' | 'excel'): Promise<void> {
-    if (!this.up) return;
-    const planId = (this.planIdInput || '').trim();
-    if (!planId) return;
-
-    this.up.inputPlanId = planId;
-
-    // Valida el plan solo si aún no está validado o si el ID cambió.
-    const needsValidation = !this.up.planValidated || this.up.validatedPlan?.planId !== planId;
-    if (needsValidation) {
-      await this.up.validatePlan();
-      if (!this.up.planValidated) return; // el subcomponente ya mostró el error
-    }
-
-    // Fuerza únicamente el formato elegido y restaura el estado previo al terminar.
-    const previousFormats = { ...this.up.selectedFormats };
-    this.up.selectedFormats = {
-      docx: format === 'docx',
-      pdf: format === 'pdf',
-      excel: format === 'excel'
-    };
-    try {
-      await this.up.startUpload();
-    } finally {
-      this.up.selectedFormats = previousFormats;
-    }
-  }
-
-  /** Permite al usuario cambiar el ID de plan tras haberlo validado. */
-  changePlan(): void {
-    this.planIdInput = '';
-    this.validatedPlanTitle = '';
-    this.lastValidatedPlanId = '';
-    this.up?.resetToPlantId?.();
-  }
-
   handlePlanValidated(event: { planId: string; planTitle: string }): void {
-    this.lastValidatedPlanId = event.planId;
-    this.validatedPlanTitle = event.planTitle;
-    if (!this.planIdInput) this.planIdInput = event.planId;
     this.planValidated.emit(event);
   }
 
