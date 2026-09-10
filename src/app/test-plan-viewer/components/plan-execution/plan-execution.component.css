@@ -209,6 +209,8 @@
 .act-done:hover     { background: #f0fdf4 !important; }
 .act-fail     { color: #ef4444 !important; }
 .act-fail:hover     { background: #fef2f2 !important; }
+.act-edit-title { color: var(--primary-color, #007AFF) !important; }
+.act-edit-title:hover { background: #eff6ff !important; }
 .act-delete-tc { color: #94a3b8 !important; }
 .act-delete-tc:hover { background: #fef2f2 !important; color: #ef4444 !important; }
 
