@@ -17,6 +17,8 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   @Input() testRun: TestRun | null = null;
   @Input() huData: HUData | null = null;
   @Output() openSerenityHistory = new EventEmitter<void>();
+  /** Se emite para descargar el reporte Serenity (.zip) generado. */
+  @Output() downloadSerenityZip = new EventEmitter<void>();
   /** Se emite cuando el usuario valida un Plan ID de Azure DevOps, para recordarlo y no volver a pedirlo. */
   @Output() planValidated = new EventEmitter<{ planId: string; planTitle: string }>();
 
@@ -27,6 +29,11 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   showModal = false;
   isProcessing = false;
   processingMessage = '';
+  /** Menú ⋮ abierto actualmente (formato), o null si ninguno. */
+  activeMenu: 'word' | 'pdf' | 'excel' | 'serenity' | null = null;
+  /** Sub-modal de "Cargar Azure" abierto. */
+  showUploadModal = false;
+  uploadMode: 'office' | 'serenity' | null = null;
 
   private previousBodyOverflow: string | null = null;
   private lastFocusedElement: HTMLElement | null = null;
@@ -59,28 +66,79 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.lockBodyScroll();
   }
 
-  /** Cerrar con Escape (bloqueado mientras hay un proceso en curso). */
+  /** Cerrar con Escape: sub-modal → menú ⋮ → modal principal. */
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.showUploadModal) {
+      this.closeUploadModal();
+      return;
+    }
+    if (this.activeMenu) {
+      this.activeMenu = null;
+      return;
+    }
     if (this.showModal) this.closeModal();
+  }
+
+  /** Cierra el menú ⋮ al hacer clic fuera de él. */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.activeMenu) return;
+    const target = event.target as HTMLElement;
+    const wraps = this.hostRef.nativeElement.querySelectorAll('.row-menu-wrap');
+    let inside = false;
+    wraps.forEach(w => { if (w.contains(target)) inside = true; });
+    if (!inside) this.activeMenu = null;
   }
 
   closeModal(): void {
     if (this.isBusy) return;
     this.showModal = false;
+    this.showUploadModal = false;
+    this.activeMenu = null;
     this.unlockBodyScroll();
     this.lastFocusedElement?.focus?.();
     this.lastFocusedElement = null;
   }
 
-  // ── Descargas Word / PDF / Excel (reutilizan la lógica del download-modal) ──
-  downloadWord(): void { this.down?.downloadWord(); }
-  downloadPDF(): void { this.down?.downloadPDF(); }
-  downloadExcel(): void { this.down?.downloadExcel(); }
+  // ── Descargas (reutilizan la lógica del download-modal) ──
+  downloadWord(): void { this.activeMenu = null; this.down?.downloadWord(); }
+  downloadPDF(): void { this.activeMenu = null; this.down?.downloadPDF(); }
+  downloadExcel(): void { this.activeMenu = null; this.down?.downloadExcel(); }
 
-  // ── Publicación de evidencias ──
+  // ── Reporte Serenity ──
+  /** Generar reporte Serenity (dispatch al pipeline). */
+  generateSerenity(): void {
+    this.activeMenu = null;
+    this.down?.downloadSerenity();
+  }
 
-  /** Valida el plan si aún no está validado o si el ID cambió. Devuelve true si quedó listo para publicar. */
+  /** Descargar el reporte Serenity (.zip) ya generado. */
+  downloadSerenityZipEmit(): void {
+    this.activeMenu = null;
+    this.downloadSerenityZip.emit();
+  }
+
+  // ── Menú ⋮ ──
+  toggleMenu(format: 'word' | 'pdf' | 'excel' | 'serenity'): void {
+    if (this.isBusy) return;
+    this.activeMenu = this.activeMenu === format ? null : format;
+  }
+
+  // ── Sub-modal "Cargar Azure" ──
+  openUploadModal(mode: 'office' | 'serenity'): void {
+    this.activeMenu = null;
+    this.uploadMode = mode;
+    this.showUploadModal = true;
+  }
+
+  closeUploadModal(): void {
+    if (this.isBusy) return;
+    this.showUploadModal = false;
+    this.uploadMode = null;
+  }
+
+  /** Valida el plan si aún no está validado o si el ID cambió. */
   private async ensurePlanValidated(): Promise<boolean> {
     if (!this.up) return false;
     const planId = (this.up.inputPlanId || '').trim();
@@ -94,7 +152,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** Publica en DevOps los formatos Word/Excel/PDF seleccionados (juntos, como un único .zip). */
+  /** Publica en DevOps los formatos Word/Excel/PDF marcados (juntos, como un único .zip). */
   async publishOfficeFormats(): Promise<void> {
     if (!this.up) return;
     if (!this.up.hasSelectedFormat()) return;
@@ -110,6 +168,17 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     const ready = await this.ensurePlanValidated();
     if (!ready) return;
     await this.up.startSerenityUpload();
+  }
+
+  /** Acción del botón "Cargar" del sub-modal. */
+  async confirmUpload(): Promise<void> {
+    const mode = this.uploadMode;
+    this.closeUploadModal();
+    if (mode === 'serenity') {
+      await this.publishSerenity();
+    } else {
+      await this.publishOfficeFormats();
+    }
   }
 
   /** Permite al usuario cambiar el ID de plan tras haberlo validado. */

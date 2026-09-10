@@ -1685,6 +1685,25 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     this.stopSerenityHistoryPolling();
   }
 
+  /** Descarga el reporte Serenity (.zip) más reciente generado. */
+  async downloadLatestSerenityZip(): Promise<void> {
+    await this.loadHistory();
+    const latest = this.serenityHistory.find(r => r.artifactDownloadUrl);
+    if (!latest) {
+      this.toastService.warning('Aún no hay un reporte Serenity generado');
+      await this.openSerenityHistoryModal();
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = latest.artifactDownloadUrl!;
+    a.download = 'serenity-report.zip';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    this.toastService.success('Descargando reporte Serenity');
+  }
+
   private serenityHistoryPollTimer: any = null;
 
   private startSerenityHistoryPolling(): void {

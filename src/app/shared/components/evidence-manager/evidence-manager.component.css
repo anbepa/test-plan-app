@@ -147,21 +147,9 @@
   padding: 16px 20px 20px;
 }
 
-/* ── Secciones ── */
-.ev-section {
-  margin: 0;
-}
-
-.ev-divider {
-  height: 1px;
-  background: var(--border-color, #E5E5EA);
-  margin: 18px 0;
-}
-
 /* ── Campos ── */
 .plan-id-field,
-.zip-name-field,
-.formats-field {
+.zip-name-field {
   margin-bottom: 16px;
 }
 
@@ -226,26 +214,52 @@
 .plan-id-hint.muted { color: var(--text-secondary, #8e8e93); }
 .plan-id-hint strong { font-weight: 700; }
 
-/* ── Checkboxes de formatos ── */
-.format-checks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
+/* ── Tabla Formato / Opciones ── */
+.ev-table {
+  border: 1px solid var(--border-color, #E5E5EA);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--background-color, #fff);
 }
 
+.ev-table-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--surface-color, #F5F5F7);
+  border-bottom: 1px solid var(--border-color, #E5E5EA);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #8e8e93);
+}
+
+.ev-col-options {
+  text-align: right;
+}
+
+.ev-table-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+}
+
+.ev-table-row + .ev-table-row {
+  border-top: 1px solid var(--border-color, #E5E5EA);
+}
+
+/* Checkbox + nombre de formato */
 .format-check {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color, #E5E5EA);
-  border-radius: 10px;
   cursor: pointer;
-  transition: border-color 150ms, background 150ms;
 }
-.format-check:hover { border-color: rgba(0, 122, 255, 0.4); background: rgba(0, 122, 255, 0.02); }
-.format-check:has(input:checked) { border-color: var(--primary-color, #007AFF); background: rgba(0, 122, 255, 0.05); }
 
 .format-check input[type="checkbox"] {
   width: 16px;
@@ -255,7 +269,7 @@
   flex-shrink: 0;
 }
 
-.format-check-name {
+.format-name {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -269,49 +283,93 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  display: inline-block;
 }
-.format-dot.word  { background: #007AFF; }
-.format-dot.excel { background: #217346; }
-.format-dot.pdf   { background: #FF3B30; }
+.format-dot.word     { background: #007AFF; }
+.format-dot.pdf      { background: #FF3B30; }
+.format-dot.excel    { background: #217346; }
+.format-dot.serenity { background: #6b4fbb; }
 
-/* ── Info de formato (Serenity) ── */
-.format-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  margin-bottom: 14px;
+/* ── Menú ⋮ ── */
+.row-menu-wrap {
+  position: relative;
+  display: inline-flex;
 }
 
-.format-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+.row-menu-btn {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  border: 1px solid var(--border-color, #E5E5EA);
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary, #6e6e73);
+  transition: background 150ms ease, color 150ms ease;
 }
-.format-icon.serenity { background: rgba(107, 79, 187, 0.12); color: #6b4fbb; }
+.row-menu-btn:hover:not(:disabled) {
+  background: var(--surface-color, #F5F5F7);
+  color: var(--text-primary, #1d1d1f);
+}
+.row-menu-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.format-text {
+.row-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  background: var(--background-color, #fff);
+  border: 1px solid var(--border-color, #E5E5EA);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+  z-index: 50;
+  animation: menuIn 140ms ease;
+}
+
+/* El menú de la última fila (Serenity) se abre hacia arriba para no recortarse */
+.row-menu-wrap.up .row-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.row-menu button {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.format-text strong {
-  font-size: 13.5px;
-  font-weight: 700;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-color, #1c1c1e);
-  line-height: 1.2;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: none;
+  transition: background 140ms ease;
 }
-.format-text small {
-  font-size: 12px;
-  color: var(--text-secondary, #8e8e93);
+.row-menu button:hover:not(:disabled) {
+  background: var(--surface-color, #F5F5F7);
+}
+.row-menu button svg {
+  flex-shrink: 0;
+  color: var(--text-secondary, #6e6e73);
 }
 
-/* ── Botones de acción ── */
+/* ── Botones ── */
 .opt-btn {
   display: inline-flex;
   align-items: center;
@@ -342,7 +400,6 @@
   outline-offset: 2px;
 }
 
-/* Variante primaria */
 .opt-btn.primary {
   background: var(--primary-color, #007AFF);
   border-color: var(--primary-color, #007AFF);
@@ -356,18 +413,6 @@
 
 .opt-btn.is-loading { opacity: 0.85; }
 
-.publish-btn {
-  width: 100%;
-  min-height: 42px;
-  font-size: 13px;
-}
-
-.download-btns {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .opt-spinner {
   display: inline-block;
   width: 12px;
@@ -377,6 +422,91 @@
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
+}
+
+/* ── Sub-modal "Cargar Azure" ── */
+.upload-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  animation: fdIn 150ms ease;
+}
+
+.upload-modal {
+  background: var(--background-color, #fff);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  width: 420px;
+  max-width: 94vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 180ms ease;
+}
+
+.upload-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #E5E5EA);
+}
+
+.upload-modal-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-color, #1c1c1e);
+}
+
+.upload-modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+
+.upload-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color, #E5E5EA);
+}
+
+.upload-modal-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary, #8e8e93);
+  line-height: 1.5;
+}
+.upload-modal-hint strong { font-weight: 700; color: var(--text-color, #1c1c1e); }
+
+.upload-modal-formats {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-modal-formats li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-color, #1c1c1e);
+}
+
+.upload-modal-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warning-color, #FF9500);
 }
 
 /* Aviso persistente mientras hay un proceso en curso */
@@ -402,6 +532,9 @@
 @media (prefers-reduced-motion: reduce) {
   .evidence-modal,
   .evidence-modal-backdrop,
+  .upload-modal,
+  .upload-modal-backdrop,
+  .row-menu,
   .btn-evidence-manager {
     animation: none !important;
     transition: none !important;
@@ -420,19 +553,16 @@
     display: block;
   }
 
-  /* En móvil el modal se comporta como hoja inferior: más alcanzable con el pulgar */
-  .evidence-modal-backdrop {
+  .evidence-modal-backdrop,
+  .upload-modal-backdrop {
     align-items: flex-end;
   }
 
-  .evidence-modal {
+  .evidence-modal,
+  .upload-modal {
     width: 100%;
     max-width: 100%;
     max-height: 92vh;
     border-radius: 16px 16px 0 0;
-  }
-
-  .download-btns .opt-btn {
-    flex: 1;
   }
 }
