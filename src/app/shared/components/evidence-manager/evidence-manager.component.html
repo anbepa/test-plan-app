@@ -7,7 +7,7 @@
     [attr.aria-busy]="isProcessing"
     aria-haspopup="dialog"
     [attr.aria-expanded]="showModal"
-    [title]="isProcessing ? processingMessage : 'Descargar evidencias o subirlas a Azure DevOps'"
+    [title]="isProcessing ? processingMessage : 'Descargar evidencias o cargarlas a Azure DevOps'"
     type="button">
     <ng-container *ngIf="!isProcessing">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px" aria-hidden="true">
@@ -31,104 +31,319 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="evidence-modal-title"
-      [attr.aria-busy]="isProcessing">
+      [attr.aria-busy]="isBusy">
 
-      <!-- Header con tabs -->
+      <!-- Header -->
       <div class="evidence-modal-header">
         <div class="evidence-modal-titlebar">
           <div class="evidence-modal-heading">
             <h3 id="evidence-modal-title">Gestionar evidencias</h3>
           </div>
-          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isProcessing"
-            [title]="isProcessing ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" stroke="#1d1d1f"/><line x1="6" y1="6" x2="18" y2="18" stroke="#1d1d1f"/></svg>
+          <button class="close-btn" (click)="closeModal()" type="button" aria-label="Cerrar" [disabled]="isBusy"
+            [title]="isBusy ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
-        </div>
-
-        <div class="evidence-tabs" role="tablist" aria-label="Acciones de evidencias" (keydown)="onTabsKeydown($event)">
-          <button
-            class="evidence-tab"
-            role="tab"
-            id="evidence-tab-download"
-            aria-controls="evidence-panel-download"
-            [attr.aria-selected]="activeTab === 'download'"
-            [attr.tabindex]="activeTab === 'download' ? 0 : -1"
-            [class.active]="activeTab === 'download'"
-            [disabled]="isProcessing"
-            (click)="selectTab('download')"
-            type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Descargar
-          </button>
-          <button
-            class="evidence-tab"
-            role="tab"
-            id="evidence-tab-upload"
-            aria-controls="evidence-panel-upload"
-            [attr.aria-selected]="activeTab === 'upload'"
-            [attr.tabindex]="activeTab === 'upload' ? 0 : -1"
-            [class.active]="activeTab === 'upload'"
-            [disabled]="isProcessing"
-            (click)="selectTab('upload')"
-            type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Subir a DevOps
-          </button>
-          <span class="evidence-tab-indicator" [class.upload]="activeTab === 'upload'" aria-hidden="true"></span>
         </div>
       </div>
 
-      <!-- Body: contenido de la pestaña activa -->
+      <!-- Body -->
       <div class="evidence-modal-body">
-        <div
-          *ngIf="activeTab === 'download'"
-          role="tabpanel"
-          id="evidence-panel-download"
-          aria-labelledby="evidence-tab-download">
-          <app-evidence-download-modal
-            [embedded]="true"
-            [isOpen]="true"
-            [execution]="execution"
-            [testRun]="testRun"
-            [huData]="huData"
-            (closeRequested)="closeModal()"
-            (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
-          </app-evidence-download-modal>
+
+        <!-- ID del Plan de Pruebas -->
+        <div class="plan-id-field">
+          <label for="evidence-plan-id" class="plan-id-label">ID del Plan de Pruebas</label>
+          <div class="plan-id-inputs">
+            <input
+              id="evidence-plan-id"
+              class="plan-id-input"
+              type="text"
+              inputmode="numeric"
+              placeholder="Ej: 7695070"
+              [(ngModel)]="up.inputPlanId"
+              [disabled]="up.isValidating || isBusy"
+              autocomplete="off" />
+            <button
+              *ngIf="up.planValidated"
+              type="button"
+              class="plan-id-change"
+              (click)="changePlan()"
+              [disabled]="isBusy">Cambiar</button>
+          </div>
+          <p class="plan-id-hint" *ngIf="up.planValidated">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Plan validado: <strong>{{ up.validatedPlan?.planTitle }}</strong>
+          </p>
+          <p class="plan-id-hint muted" *ngIf="!up.planValidated">
+            Necesario para <strong>cargar a Azure</strong>.
+          </p>
         </div>
 
-        <div
-          *ngIf="activeTab === 'upload'"
-          role="tabpanel"
-          id="evidence-panel-upload"
-          aria-labelledby="evidence-tab-upload">
-          <app-evidence-upload-modal
-            [embedded]="true"
-            [execution]="execution"
-            [testRun]="testRun"
-            [huData]="huData"
-            [prefillPlanId]="lastValidatedPlanId"
-            (onClose)="closeModal()"
-            (onProcessing)="setProcessing($event)"
-            (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
-            (planValidatedEvent)="handlePlanValidated($event)">
-          </app-evidence-upload-modal>
+        <!-- Nombre del archivo (.zip) -->
+        <div class="zip-name-field">
+          <label for="evidence-zip-name" class="plan-id-label">Nombre del archivo (.zip)</label>
+          <input
+            id="evidence-zip-name"
+            class="plan-id-input"
+            type="text"
+            placeholder="Evidencia_7695070.zip"
+            [(ngModel)]="up.inputFileName"
+            [disabled]="isBusy"
+            autocomplete="off" />
+          <p class="plan-id-hint muted">Con este nombre se empaquetan los formatos seleccionados (Word, Excel, PDF).</p>
+        </div>
+
+        <!-- Tabla Formato / Acciones -->
+        <div class="ev-table" role="table" aria-label="Formatos y acciones">
+          <div class="ev-table-head" role="row">
+            <div class="ev-col-format" role="columnheader">Formato</div>
+            <div class="ev-col-options" role="columnheader">Acciones</div>
+          </div>
+
+          <!-- Word -->
+          <div class="ev-table-row" role="row">
+            <div class="ev-col-format" role="cell">
+              <label class="format-check">
+                <input type="checkbox" [(ngModel)]="up.selectedFormats.docx" [disabled]="isBusy" />
+                <span class="format-icon word">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                </span>
+                <span class="format-name">Word</span>
+              </label>
+            </div>
+            <div class="ev-col-options" role="cell">
+              <button type="button" class="opt-btn" (click)="downloadWord()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'word'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Word (.docx)'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'word'" aria-hidden="true"></span>
+                Descargar
+              </button>
+            </div>
+          </div>
+
+          <!-- PDF -->
+          <div class="ev-table-row" role="row">
+            <div class="ev-col-format" role="cell">
+              <label class="format-check">
+                <input type="checkbox" [(ngModel)]="up.selectedFormats.pdf" [disabled]="isBusy" />
+                <span class="format-icon pdf">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+                </span>
+                <span class="format-name">PDF</span>
+              </label>
+            </div>
+            <div class="ev-col-options" role="cell">
+              <button type="button" class="opt-btn" (click)="downloadPDF()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'pdf'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en PDF'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'pdf'" aria-hidden="true"></span>
+                Descargar
+              </button>
+            </div>
+          </div>
+
+          <!-- Excel -->
+          <div class="ev-table-row" role="row">
+            <div class="ev-col-format" role="cell">
+              <label class="format-check">
+                <input type="checkbox" [(ngModel)]="up.selectedFormats.excel" [disabled]="isBusy" />
+                <span class="format-icon excel">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/></svg>
+                </span>
+                <span class="format-name">Excel</span>
+              </label>
+            </div>
+            <div class="ev-col-options" role="cell">
+              <button type="button" class="opt-btn" (click)="downloadExcel()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'excel'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Excel (.xlsx)'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'excel'" aria-hidden="true"></span>
+                Descargar
+              </button>
+            </div>
+          </div>
+
+          <!-- Reporte Serenity -->
+          <div class="ev-table-row" role="row">
+            <div class="ev-col-format" role="cell">
+              <span class="format-check">
+                <span class="fi-spacer"></span>
+                <span class="format-icon serenity">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-5"/></svg>
+                </span>
+                <span class="format-name">Reporte Serenity</span>
+              </span>
+            </div>
+            <div class="ev-col-options" role="cell">
+              <div class="row-menu-wrap up">
+                <button type="button" class="row-menu-btn" (click)="toggleMenu('serenity')"
+                  [attr.aria-expanded]="activeMenu === 'serenity'" aria-haspopup="menu" title="Opciones">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+                </button>
+                <div class="row-menu" *ngIf="activeMenu === 'serenity'" role="menu">
+                  <button type="button" role="menuitem" (click)="generateSerenity()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Generar reporte
+                  </button>
+                  <button type="button" role="menuitem" (click)="downloadSerenityZipEmit()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Descargar
+                  </button>
+                  <button type="button" role="menuitem" (click)="openUploadModal('serenity')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Ver reporte y Cargar Azure
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cargar Azure (bulk): empaqueta los formatos marcados -->
+        <div class="bulk-upload">
+          <button type="button" class="opt-btn primary publish-btn" (click)="openUploadModal('office')"
+            [disabled]="isBusy || !up.hasSelectedFormat() || !up.inputPlanId.trim()"
+            [title]="!up.inputPlanId.trim() ? 'Ingresa el ID del Plan de Pruebas' : (!up.hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Cargar los formatos seleccionados a Azure')">
+            Cargar Azure
+          </button>
+          <p class="bulk-upload-hint">Empaqueta los formatos marcados en <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong>.</p>
         </div>
       </div>
 
       <!-- Aviso persistente mientras hay un proceso en curso -->
-      <div class="evidence-modal-processing" *ngIf="isProcessing" role="status" aria-live="polite">
+      <div class="evidence-modal-processing" *ngIf="isBusy" role="status" aria-live="polite">
         <span class="btn-spinner dark" aria-hidden="true"></span>
         <span>{{ processingMessage || 'Procesando...' }} No cierres esta ventana.</span>
       </div>
 
+      <!-- Subcomponentes embebidos (ocultos): reutilizan la lógica sin duplicarla -->
+      <div class="evidence-hidden-logic" aria-hidden="true">
+        <app-evidence-download-modal
+          #down
+          [embedded]="true"
+          [isOpen]="true"
+          [execution]="execution"
+          [testRun]="testRun"
+          [huData]="huData"
+          (closeRequested)="closeModal()"
+          (openSerenityHistoryRequested)="handleOpenSerenityHistory()">
+        </app-evidence-download-modal>
+
+        <app-evidence-upload-modal
+          #up
+          [embedded]="true"
+          [execution]="execution"
+          [testRun]="testRun"
+          [huData]="huData"
+          (onClose)="closeModal()"
+          (onProcessing)="setProcessing($event)"
+          (openSerenityHistoryRequested)="handleOpenSerenityHistory()"
+          (planValidatedEvent)="handlePlanValidated($event)">
+        </app-evidence-upload-modal>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Sub-modal "Cargar Azure" -->
+  <div class="upload-modal-backdrop" *ngIf="showUploadModal" (click)="closeUploadModal()">
+    <div class="upload-modal" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title">
+      <div class="upload-modal-header">
+        <h4 id="upload-modal-title">{{ uploadMode === 'serenity' ? 'Último reporte Serenity' : 'Cargar a Azure' }}</h4>
+        <button class="close-btn" (click)="closeUploadModal()" type="button" aria-label="Regresar" [disabled]="isBusy"
+          [title]="isBusy ? 'Espera a que finalice el proceso' : 'Regresar'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="upload-modal-body">
+        <!-- Cargar Azure: office formats -->
+        <ng-container *ngIf="uploadMode === 'office'">
+          <p class="upload-modal-hint">
+            Se empaquetarán los formatos seleccionados en un único archivo <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong> y se cargarán al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
+          </p>
+          <ul class="upload-modal-formats">
+            <li *ngIf="up.selectedFormats.docx">
+              <span class="format-icon word"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Word (.docx)
+            </li>
+            <li *ngIf="up.selectedFormats.pdf">
+              <span class="format-icon pdf"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span> PDF (.pdf)
+            </li>
+            <li *ngIf="up.selectedFormats.excel">
+              <span class="format-icon excel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/></svg></span> Excel (.xlsx)
+            </li>
+          </ul>
+          <p class="upload-modal-empty" *ngIf="!up.hasSelectedFormat()">
+            Marca al menos un formato (Word, Excel o PDF) en la tabla para poder cargar.
+          </p>
+        </ng-container>
+
+        <!-- Cargar Azure: Serenity -->
+        <ng-container *ngIf="uploadMode === 'serenity'">
+          <!-- Estado del último reporte -->
+          <div class="sr-loading" *ngIf="isLoadingSerenityReport">
+            <span class="btn-spinner" aria-hidden="true"></span> Consultando el último reporte...
+          </div>
+
+          <ng-container *ngIf="!isLoadingSerenityReport">
+            <div class="serenity-report-card" *ngIf="serenityReport" [class.is-pending]="serenityReport.status === 'pending'">
+              <div class="sr-row">
+                <div class="sr-field">
+                  <span class="sr-label">Generado</span>
+                  <span class="sr-value">
+                    {{ formatSerenityDate(serenityReport.generatedAt) }}
+                    <em *ngIf="formatSerenityRelative(serenityReport.generatedAt)">{{ formatSerenityRelative(serenityReport.generatedAt) }}</em>
+                  </span>
+                </div>
+                <div class="sr-field">
+                  <span class="sr-label">Backend</span>
+                  <span class="sr-backend">{{ serenityReport.backend }}</span>
+                </div>
+                <div class="sr-field">
+                  <span class="sr-label">Estado</span>
+                  <span class="sr-status"
+                    [class.sr-status-pending]="serenityReport.status === 'pending'"
+                    [class.sr-status-done]="serenityReport.status === 'completed'"
+                    [class.sr-status-error]="serenityReport.status === 'error'">
+                    {{ serenityStatusLabel(serenityReport.status) }}
+                  </span>
+                </div>
+              </div>
+              <p class="sr-pending-note" *ngIf="serenityReport.status === 'pending'">
+                El pipeline de Azure DevOps está generando el reporte. El estado se actualiza automáticamente cada 5 segundos; espera a que finalice para cargarlo.
+              </p>
+            </div>
+
+            <div class="serenity-report-empty" *ngIf="!serenityReport">
+              Aún no hay un reporte Serenity generado. Usa <strong>Generar reporte</strong> en el menú de la tabla.
+            </div>
+          </ng-container>
+
+          <label for="serenity-zip-name" class="plan-id-label">Nombre del archivo (.zip)</label>
+          <input
+            id="serenity-zip-name"
+            class="plan-id-input"
+            type="text"
+            placeholder="Reporte_Serenity.zip"
+            [(ngModel)]="up.serenityFileName"
+            [disabled]="isBusy"
+            autocomplete="off" />
+          <p class="plan-id-hint muted">
+            El reporte se carga al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
+          </p>
+        </ng-container>
+      </div>
+
+      <div class="upload-modal-footer">
+        <button type="button" class="opt-btn" (click)="closeUploadModal()" [disabled]="isBusy">Regresar</button>
+        <button type="button" class="opt-btn primary" (click)="confirmUpload()"
+          [disabled]="isBusy || !up.inputPlanId.trim() || (uploadMode === 'office' ? !up.hasSelectedFormat() : (!up.serenityFileName.trim() || !serenityReady))"
+          [title]="uploadMode === 'serenity' && !serenityReady ? 'Aún no hay un reporte Serenity listo para cargar' : 'Cargar a Azure DevOps'">
+          Cargar
+        </button>
+      </div>
     </div>
   </div>
 </div>

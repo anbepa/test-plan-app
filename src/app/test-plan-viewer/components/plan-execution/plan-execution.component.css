@@ -104,13 +104,13 @@
 
 /* Test Cases Table */
 .tc-table-container { background: var(--background-color, #fff); border: 1px solid #e6ebf3; border-radius: var(--radius-lg, 14px); box-shadow: 0 4px 16px rgba(15,23,42,.05); overflow: hidden; }
-.tc-table-head { display: grid; grid-template-columns: 40px 40px 1fr 220px 56px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #e6ebf3; background: linear-gradient(180deg, #f8fbff 0%, #f3f7fe 100%); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; }
+.tc-table-head { display: grid; grid-template-columns: 40px 40px 1fr 220px 44px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #e6ebf3; background: linear-gradient(180deg, #f8fbff 0%, #f3f7fe 100%); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; }
 .tc-row { border-bottom: 1px solid #eef2f8; }
 .tc-row:last-child { border-bottom: none; }
-.tc-row-expanded { background: #fbfdff; }
-.tc-row-header { display: grid; grid-template-columns: 40px 40px 1fr 220px 56px; align-items: center; padding: 13px 16px; min-height: 58px; cursor: pointer; transition: background 150ms, box-shadow 150ms; user-select: none; }
+.tc-row-expanded { background: #fafafa; }
+.tc-row-header { display: grid; grid-template-columns: 40px 40px 1fr 220px 44px; align-items: center; padding: 13px 16px; min-height: 58px; cursor: pointer; transition: background 150ms, box-shadow 150ms; user-select: none; }
 .tc-row-header:hover { background: #f5f9ff; }
-.tc-row-expanded .tc-row-header { background: #eff6ff; box-shadow: inset 3px 0 0 var(--primary-color, #007AFF); }
+.tc-row-expanded .tc-row-header { background: #f5f5f7; box-shadow: inset 3px 0 0 #cbd0d8; }
 .tc-col-expander { display: flex; align-items: center; justify-content: center; }
 .tc-col-check { display: flex; align-items: center; justify-content: center; }
 .tc-col-title { display: flex; flex-direction: column; gap: 3px; padding-right: 12px; }
@@ -188,9 +188,9 @@
 }
 .tc-col-status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tc-col-assignee { display: flex; align-items: center; }
-.tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: flex-end; flex-wrap: wrap; }
+.tc-col-actions { display: flex; align-items: center; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; }
 /* La cabecera "Acciones" se reduce porque la columna ahora solo tiene el menú ⋮ */
-.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: hidden; }
+.tc-table-head .tc-col-actions { font-size: 10px; letter-spacing: .2px; white-space: nowrap; overflow: visible; display: block; justify-content: flex-end; text-align: right; padding-right: 6px; }
 
 /* Action icon circle buttons */
 .act-icon-btn {
@@ -209,6 +209,8 @@
 .act-done:hover     { background: #f0fdf4 !important; }
 .act-fail     { color: #ef4444 !important; }
 .act-fail:hover     { background: #fef2f2 !important; }
+.act-edit-title { color: var(--primary-color, #007AFF) !important; }
+.act-edit-title:hover { background: #eff6ff !important; }
 .act-delete-tc { color: #94a3b8 !important; }
 .act-delete-tc:hover { background: #fef2f2 !important; color: #ef4444 !important; }
 
@@ -303,6 +305,14 @@
 }
 
 .act-menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: #e5e5ea;
+}
+
+/* Línea divisoria (<hr>) antes de la acción destructiva "Eliminar de esta ejecución" */
+.act-menu-hr {
+  border: none;
   height: 1px;
   margin: 6px 4px;
   background: #e5e5ea;
@@ -409,7 +419,7 @@
 /* ── Step row layout ── */
 .step-item { border: 1px solid #e6ebf3; border-radius: 10px; overflow: hidden; margin-bottom: 8px; background: #fff; transition: border-color 200ms, box-shadow 200ms; }
 .step-item:hover { border-color: #cfd9e8; }
-.step-item-active { border-color: var(--primary-color, #007AFF); box-shadow: 0 0 0 3px rgba(0,122,255,.12); }
+.step-item-active { border-color: #d7dbe0; box-shadow: none; background: #fafafa; }
 .step-item-row {
   display: flex;
   align-items: center;
@@ -422,7 +432,7 @@
   box-sizing: border-box;
 }
 .step-item-row:hover { background: #f5f9ff; }
-.step-item-active .step-item-row { background: #eff6ff; }
+.step-item-active .step-item-row { background: #f5f5f7; }
 
 /* badge PASO N */
 .step-num-label {
@@ -482,22 +492,10 @@
 .step-item:hover .step-item-actions,
 .step-item-active .step-item-actions { opacity: 1; }
 
-.step-num-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
-/* #2 status icon + num col */
-.step-num-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
-.step-status-icon { font-size: 12px; font-weight: 800; line-height: 1; }
-.ssi-completed { color: #22c55e; }
-.ssi-failed { color: #ef4444; }
-.ssi-in-progress { color: #3b82f6; }
-.ssi-pending { color: #d1d5db; }
 
 /* #2 step status select — minimal outline only */
-.step-status-sel { appearance: none; -webkit-appearance: none; padding: 2px 8px; border-radius: 6px; border: 1.5px solid currentColor; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; flex-shrink: 0; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.3px; }
-.step-status-sel:focus { outline: none; }
-.step-status-sel.st-pending { color: #9ca3af; }
-.step-status-sel.st-in-progress { color: #3b82f6; }
-.step-status-sel.st-completed { color: #22c55e; }
-.step-status-sel.st-failed { color: #ef4444; }
+/* Coherente con .status-badge (pastilla rellena): mismo lenguaje visual,
+   pero conserva su función de <select> interactivo para cambiar el estado. */
 
 /* #1 step content typography */
 .step-content { flex: 1; display: flex; flex-direction: column; gap: 8px; }
@@ -512,6 +510,12 @@
 .step-evidence-zone { border-top: 1px solid var(--border-color, #D1D1D6); padding: 14px; background: var(--surface-color, #F5F5F7); display: flex; flex-direction: column; gap: 12px; }
 /* #3 evidence header: buttons left, label+cells right */
 .evidence-zone-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Grupo de botones segmentado: unifica Subir Evidencia, Pegar imagen y el icono de ajustes */
+.btn-group-segmented { display: inline-flex; align-items: stretch; border: 1.5px solid var(--border-color, #D1D1D6); border-radius: 8px; overflow: hidden; background: var(--background-color, #fff); }
+.btn-group-segmented .btn-upload, .btn-group-segmented .btn-report-settings { border-radius: 0 !important; border: none !important; height: 32px; min-height: 32px; box-shadow: none !important; }
+.btn-group-segmented > * + * { border-left: 1.5px solid var(--border-color, #D1D1D6); }
+.btn-group-segmented .btn-report-settings { width: 34px; transform: none; }
+.btn-group-segmented .btn-report-settings:hover { transform: none; }
 .evidence-zone-label { font-size: 13px; font-weight: 700; color: var(--text-primary, #1D1D1F); }
 .ev-label-right { margin-left: auto; }
 /* #4 edit-state action button */
@@ -1304,53 +1308,129 @@
 /* Botones: Agregar paso / Agregar escenario */
 .add-step-row { padding: 10px 0 6px 34px; }
 .btn-add-step {
-  display: inline-flex; align-items: center; gap: 7px;
-  background: rgba(0,122,255,0.10); color: var(--primary-color, #007AFF);
-  border: 1.5px dashed var(--primary-color, #007AFF); border-radius: 8px;
-  padding: 8px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; color: var(--primary-color, #007AFF);
+  border: none; border-radius: 6px;
+  padding: 6px 4px; font-size: 13px; font-weight: 600; cursor: pointer;
   letter-spacing: 0.2px;
-  transition: background 200ms, color 200ms, box-shadow 200ms, transform 120ms;
+  transition: color 160ms, opacity 160ms;
 }
-.btn-add-step:hover {
-  background: var(--primary-color, #007AFF); color: #fff;
-  box-shadow: 0 3px 10px rgba(0,122,255,0.30);
-  transform: translateY(-1px);
-}
-.btn-add-step:active { transform: translateY(0); }
+.btn-add-step:hover { color: #0069d9; text-decoration: underline; }
+.btn-add-step:active { opacity: 0.7; }
 .btn-add-step svg { flex-shrink: 0; }
 
-.add-testcase-row {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 22px 0 10px;
-  margin-top: 6px;
-  border-top: 1px dashed var(--border-color, #D1D1D6);
+/* Botón "Agregar escenario" reubicado en la barra superior (junto al buscador).
+   Estilo de botón secundario estándar: borde sólido (sin línea punteada). */
+.btn-add-testcase-top {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; box-sizing: border-box;
+  padding: 0 14px;
+  background: var(--background-color, #fff); color: var(--primary-color, #007AFF);
+  border: 1.5px solid rgba(0,122,255,.3); border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer; letter-spacing: 0.2px;
+  white-space: nowrap;
+  transition: background 200ms, color 200ms, box-shadow 200ms, transform 120ms;
 }
-.add-testcase-row::before {
-  content: 'Puedes crear y editar escenarios y pasos aquí';
-  font-size: 12px; font-weight: 600; color: var(--text-secondary, #6E6E73);
-  letter-spacing: 0.2px;
+.btn-add-testcase-top:hover {
+  background: rgba(0,122,255,.09);
+  box-shadow: 0 3px 10px rgba(0,122,255,0.14);
+  transform: translateY(-1px);
 }
-.btn-add-testcase {
-  position: relative;
-  display: inline-flex; align-items: center; gap: 9px;
-  background: linear-gradient(135deg, #0A84FF 0%, #007AFF 100%); color: #fff;
-  border: none; border-radius: 12px; padding: 13px 28px;
-  font-size: 15px; font-weight: 700; cursor: pointer; letter-spacing: 0.3px;
-  box-shadow: 0 4px 14px rgba(0,122,255,0.38);
-  transition: filter 200ms, transform 120ms, box-shadow 200ms;
-  animation: addTcPulse 2.4s ease-in-out infinite;
-}
-.btn-add-testcase:hover {
-  filter: brightness(1.06);
-  box-shadow: 0 6px 20px rgba(0,122,255,0.48);
-  transform: translateY(-2px);
-  animation: none;
-}
-.btn-add-testcase:active { transform: translateY(0); }
-.btn-add-testcase svg { flex-shrink: 0; }
+.btn-add-testcase-top:active { transform: translateY(0); }
+.btn-add-testcase-top:focus { outline: none; }
+.btn-add-testcase-top:focus-visible { outline: none; border-color: var(--primary-color, #007AFF); box-shadow: 0 0 0 3px rgba(0,122,255,0.18); }
+.btn-add-testcase-top svg { flex-shrink: 0; }
 
-@keyframes addTcPulse {
-  0%, 100% { box-shadow: 0 4px 14px rgba(0,122,255,0.38); }
-  50% { box-shadow: 0 4px 22px rgba(0,122,255,0.55); }
+
+/* ────────────────────────────────────────────────────────────────
+   AJUSTES DE UNIFICACIÓN VISUAL (execute-plan)
+   ──────────────────────────────────────────────────────────────── */
+
+/* 1) Menú contextual (⋮): línea divisoria <hr> antes de "Eliminar de
+      esta ejecución", con el mismo estilo que .act-menu-divider.
+      El título de sección "Opciones" usa .act-menu-label (uppercase → OPCIONES). */
+.act-menu-hr {
+  border: none;
+  height: 1px;
+  margin: 6px 4px;
+  background: #e5e5ea;
 }
 
+/* 2) Badges de estado en pasos: pastilla rellena idéntica a la del
+      escenario. Los pasos ya usan <span class="status-badge ...">, por lo
+      que heredan .status-badge / .status-badge-*. Se refuerza aquí para
+      garantizar coherencia dentro de la fila del paso. */
+.step-main-content .status-badge {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 4) Barra de evidencias: agrupar "+ Subir Evidencia", "Pegar imagen" y
+      el ícono ⚙ en un único button group segmentado. */
+.btn-group-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1.5px solid var(--border-color, #D1D1D6);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--background-color, #fff);
+}
+.btn-group-segmented:focus-within {
+  border-color: var(--primary-color, #007AFF);
+  box-shadow: 0 0 0 3px rgba(0,122,255,.14);
+}
+/* Neutraliza radios/bordes/sombras propios de cada segmento interno */
+.btn-group-segmented > * {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+/* Separador vertical entre segmentos */
+.btn-group-segmented > * + * {
+  border-left: 1.5px solid var(--border-color, #D1D1D6) !important;
+}
+/* Los dropdowns internos (upload / ⚙) son wrappers: se normalizan igual */
+.btn-group-segmented .upload-dropdown,
+.btn-group-segmented .report-settings-dropdown {
+  display: inline-flex;
+  align-items: stretch;
+}
+/* Alturas homogéneas de los segmentos */
+.btn-group-segmented .btn-upload {
+  height: 34px;
+  border-radius: 0 !important;
+  padding: 0 .9rem;
+}
+.btn-group-segmented .btn-report-settings {
+  width: 40px;
+  height: 34px;
+  border-radius: 0 !important;
+}
+/* Dentro del grupo el ⚙ no debe girar ni comportarse como botón circular */
+.btn-group-segmented .btn-report-settings:hover {
+  transform: none;
+}
+
+
+/* ===== Ajustes de interfaz (paso, evidencias) ===== */
+
+/* Punto 2: badge de estado del paso identico al del escenario, con select transparente superpuesto */
+.step-status-badge-wrap { position: relative; display: inline-flex; }
+.step-status-badge-wrap .status-badge { pointer-events: none; }
+.step-status-overlay {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; border: none; background: transparent;
+  -webkit-appearance: none; appearance: none; margin: 0; padding: 0;
+}
+
+/* Punto 3: grupo segmentado de la barra de evidencias (botones pegados) */
+.evidence-zone-header .btn-group-segmented { display: inline-flex; align-items: stretch; }
+.btn-group-segmented .upload-dropdown { display: inline-flex; }
+.btn-group-segmented .btn-upload,
+.btn-group-segmented .btn-report-settings,
+.btn-group-segmented .upload-dropdown > .btn-upload {
+  border-radius: 0 !important; border: none !important; box-shadow: none !important;
+  height: 32px; min-height: 32px; margin: 0;
+}
+.btn-group-segmented > * + * { border-left: 1.5px solid var(--border-color, #D1D1D6) !important; }

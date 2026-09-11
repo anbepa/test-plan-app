@@ -185,7 +185,7 @@
           <button (click)="startUpload()" class="btn btn-primary" type="button"
             [title]="!hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Generar los documentos y adjuntarlos al plan'"
             [disabled]="!hasSelectedFormat()">
-            Generar y subir
+            Publicar evidencia
           </button>
         </div>
       </div>
@@ -209,12 +209,25 @@
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
-          <h3>¡Éxito!</h3>
+          <h3>Evidencia publicada</h3>
           <p>Las evidencias se generaron y vincularon correctamente al plan de Azure DevOps.</p>
         </div>
 
+        <!-- Resumen del plan vinculado -->
+        <div class="plan-validated-pill" *ngIf="validatedPlan">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Plan <strong>{{ validatedPlan.planId }}</strong> — {{ validatedPlan.planTitle }}</span>
+        </div>
+
         <div class="form-actions">
-          <button (click)="close()" class="btn btn-primary" type="button">Cerrar</button>
+          <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
+          <button *ngIf="validatedPlan?.sourceUrl" (click)="openPlanInDevOps()" class="btn btn-primary" type="button"
+            title="Abrir el plan en Azure DevOps">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="margin-right:4px">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Abrir en DevOps
+          </button>
         </div>
       </div>
 

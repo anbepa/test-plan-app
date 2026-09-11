@@ -529,29 +529,78 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /** Un escenario se considera vacio si no tiene titulo ni pasos con accion. */
+  private isTestCaseEmpty(tc: DetailedTestCase): boolean {
+    const hasTitle = !!tc.title?.trim();
+    const hasSteps = (tc.steps || []).some(s => s.accion?.trim());
+    const hasExpected = !!tc.expectedResults?.trim();
+    const hasPreconditions = !!tc.preconditions?.trim();
+    return !hasTitle && !hasSteps && !hasExpected && !hasPreconditions;
+  }
+
   async saveEditTestCase(index: number): Promise<void> {
+    if (!this.hu || !this.hu.detailedTestCases) {
+      this.editingTestCaseIndex = null;
+      return;
+    }
+
+    const wasCreatingNewCase = this.isCreatingNewCase;
+    const testCase = this.hu.detailedTestCases[index];
+
+    // ── BUG 3: no permitir guardar un escenario vacio ──
+    if (this.isTestCaseEmpty(testCase)) {
+      this.toastService.warning('No se puede guardar un escenario vacío. Completa al menos el título o un paso.');
+      if (wasCreatingNewCase) {
+        // Descartar el caso recien creado para no dejarlo en el listado
+        this.hu.detailedTestCases.splice(index, 1);
+        this.editingTestCaseIndex = null;
+        this.isCreatingNewCase = false;
+        this.editingBackup = null;
+      }
+      // Si NO era nuevo, mantener el modo edicion para que el usuario corrija
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Ademas exigir titulo (regla minima de negocio)
+    if (!testCase.title?.trim()) {
+      this.toastService.warning('El escenario debe tener un título para poder guardarse.');
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.editingTestCaseIndex = null;
 
     const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
-    if (!userStoryId || !this.hu || !this.hu.detailedTestCases) {
+    if (!userStoryId) {
       this.toastService.error('Error de sistema: ID de HU no válido para guardado');
       return;
     }
 
-    const testCase = this.hu.detailedTestCases[index];
+    // ── BUG 1: si es un caso nuevo (estaba al inicio), moverlo al FINAL con su consecutivo ──
+    let saveIndex = index;
+    if (wasCreatingNewCase) {
+      const [movedCase] = this.hu.detailedTestCases.splice(index, 1);
+      this.hu.detailedTestCases.push(movedCase);
+      saveIndex = this.hu.detailedTestCases.length - 1;
+    }
+
+    const caseToSave = this.hu.detailedTestCases[saveIndex];
 
     try {
       // Usar la función optimizada para guardar solo este caso
-      const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, testCase, index);
+      const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, caseToSave, saveIndex);
 
       // Actualizar el modelo en memoria con el ID (por si era nuevo) y pasos limpios
-      this.hu.detailedTestCases[index] = {
+      this.hu.detailedTestCases[saveIndex] = {
         ...updatedCase,
         steps: (updatedCase.steps || [])
           .filter(s => s.accion?.trim())
           .map((s, sIdx) => ({ ...s, numero_paso: sIdx + 1 }))
       };
 
+      this.isCreatingNewCase = false;
+      this.editingBackup = null;
       this.toastService.success(`Escenario guardado correctamente`);
 
       // Notificar cambios al resto de la app
@@ -566,17 +615,24 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   cancelEditTestCase(index: number): void {
-    if (this.editingBackup && this.hu) {
+    if (this.isCreatingNewCase && this.hu?.detailedTestCases) {
+      // Caso recien creado y no guardado: eliminarlo del listado
+      this.hu.detailedTestCases.splice(index, 1);
+    } else if (this.editingBackup && this.hu) {
       this.hu.detailedTestCases![index] = this.cloneTestCase(this.editingBackup);
     }
     this.editingTestCaseIndex = null;
     this.editingBackup = null;
+    this.isCreatingNewCase = false;
     this.cdr.detectChanges();
   }
 
   addNewTestCase(): void {
     if (!this.hu) return;
     if (!this.hu.detailedTestCases) this.hu.detailedTestCases = [];
+
+    // Evitar crear otro caso si ya hay uno en edicion
+    if (this.editingTestCaseIndex !== null) return;
 
     const newTestCase: DetailedTestCase = {
       title: '',
@@ -586,8 +642,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       isExpanded: false
     };
 
-    this.hu.detailedTestCases.push(newTestCase);
-    this.startEditTestCase(this.hu.detailedTestCases.length - 1);
+    // BUG 1: insertar al INICIO para evitar el scroll hasta el final.
+    // Al guardar se movera al final con su consecutivo.
+    this.hu.detailedTestCases.unshift(newTestCase);
+    // Ajustar seleccion existente porque todos los indices se desplazan +1
+    this.selectedTestCaseIndexes = this.selectedTestCaseIndexes.map(i => i + 1);
+    this.startEditTestCase(0);
     this.isCreatingNewCase = true;
     this.cdr.detectChanges();
   }
@@ -660,13 +720,19 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   onConfirmDeleteTestCase(): void {
     if (!this.hu) return;
     const indices = this.pendingDeleteTestCaseIndexes.sort((a, b) => b - a);
+    const deletedCount = indices.length;
     for (const idx of indices) {
       if (this.hu.detailedTestCases && idx < this.hu.detailedTestCases.length) {
         this.hu.detailedTestCases.splice(idx, 1);
       }
     }
     this.selectedTestCaseIndexes = [];
-    this.saveData();
+    this.pendingDeleteTestCaseIndexes = [];
+    // BUG 2: mensaje que refleja cuantos se eliminaron, no el total guardado.
+    const msg = deletedCount === 1
+      ? 'Escenario eliminado correctamente'
+      : `${deletedCount} escenarios eliminados correctamente`;
+    this.saveData(msg);
     this.isDeleteModalOpen = false;
     this.cdr.detectChanges();
   }
@@ -754,7 +820,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async saveData(): Promise<boolean> {
+  private async saveData(successMessage?: string): Promise<boolean> {
     // Intentar usar dbUuid o id (si el id es un UUID)
     const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
 
@@ -774,7 +840,9 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     try {
       const result = await this.databaseService.saveHuScenariosTransactional(userStoryId, cases);
       console.log('✅ Guardado exitoso. Registros en BD:', result);
-      this.toastService.success(`${cases.length} escenarios guardados en base de datos`);
+      // BUG 2: usar mensaje personalizado si se provee (ej. al eliminar),
+      // en lugar del generico "N escenarios guardados en base de datos".
+      this.toastService.success(successMessage ?? `${cases.length} escenarios guardados en base de datos`);
 
       // ── Recargar desde BD para obtener los dbIds reales ──
       // Esto asegura que la sincronización con PlanExecution (reconciliation) funcione correctamente

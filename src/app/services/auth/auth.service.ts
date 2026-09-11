@@ -152,14 +152,25 @@ export class AuthService {
   }
 
   async signOut(): Promise<void> {
-    const { error } = await this.supabaseClient.supabase.auth.signOut();
-
-    if (error) {
-      throw error;
-    }
-
+    // Limpiar el estado local PRIMERO para que la UI reaccione al instante.
+    // Antes se esperaba el round-trip global de Supabase (revoca la sesion en
+    // todos los dispositivos), lo que hacia que el boton pareciera no responder
+    // durante varios segundos si la red estaba lenta.
     this.sessionSubject.next(null);
     this.userSubject.next(null);
+
+    try {
+      // scope 'local' elimina el token de este navegador de inmediato,
+      // sin depender de una llamada de red que invalide sesiones globales.
+      const { error } = await this.supabaseClient.supabase.auth.signOut({ scope: 'local' });
+      if (error) {
+        // No relanzamos: la sesion local ya se limpio arriba; solo lo registramos.
+        console.warn('signOut: el proveedor devolvio un error, pero la sesion local ya se cerro.', error);
+      }
+    } catch (err) {
+      // Errores de red no deben impedir el cierre de sesion local.
+      console.warn('signOut: fallo la llamada remota, la sesion local se cerro igualmente.', err);
+    }
   }
 
   getDisplayName(user: User | null): string {

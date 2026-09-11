@@ -53,6 +53,7 @@
               [testRun]="null"
               [huData]="hu"
               (openSerenityHistory)="openSerenityHistoryModal()"
+              (downloadSerenityZip)="downloadLatestSerenityZip()"
               (planValidated)="onEvidencePlanValidated($event)">
             </app-evidence-manager>
           </div>
@@ -78,6 +79,10 @@
             </select>
           </div>
           <div class="search-zone">
+            <button type="button" class="btn-add-testcase-top" (click)="addTestCase($event)" title="Agregar un escenario en blanco">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Agregar escenario
+            </button>
             <div class="search-input-wrap">
               <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input class="search-input" type="text" placeholder="Buscar..." [(ngModel)]="searchQuery" (ngModelChange)="onFilterChange()" />
@@ -123,12 +128,6 @@
                         (click)="editingTestCaseId === tc.testCaseId ? $event.stopPropagation() : null"
                         (blur)="finishEditingTitle(tc, $event)"
                         #titleSpan>{{ tc.title }}</span>
-                  <button *ngIf="editingTestCaseId !== tc.testCaseId"
-                          class="btn-edit-title-minimal"
-                          (click)="startEditingTitle(tc, $event, titleSpan); $event.stopPropagation()"
-                          title="Editar título">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
                 </div>
               </div>
               <div class="tc-col-status">
@@ -158,7 +157,21 @@
                      [style.top.px]="actionsMenuPos.top"
                      [style.left.px]="actionsMenuPos.left"
                      (click)="$event.stopPropagation()">
-                  <div class="act-menu-label">Cambiar estado</div>
+                  <div class="act-menu-label">Escenario</div>
+
+                  <button class="act-menu-item" type="button" role="menuitem"
+                          (click)="startEditingTitle(tc, $event, titleSpan); closeActionsMenu()">
+                    <span class="act-menu-icon act-edit-title">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </span>
+                    <span class="act-menu-text">Editar título</span>
+                  </button>
+
+                  <div class="act-menu-divider"></div>
+
+                  <div class="act-menu-label">Opciones</div>
 
                   <button class="act-menu-item" type="button" role="menuitem"
                           (click)="setAllStepsStatus(getOriginalIndex(tc), 'pending'); closeActionsMenu()">
@@ -200,7 +213,7 @@
                     <span class="act-menu-text">Marcar como Falló</span>
                   </button>
 
-                  <div class="act-menu-divider"></div>
+                  <hr class="act-menu-hr" />
 
                   <button class="act-menu-item act-menu-item-danger" type="button" role="menuitem"
                           (click)="deleteTestCase(tc, $event); closeActionsMenu()">
@@ -238,15 +251,7 @@
 
                     <!-- Badge PASO N + texto acción en la misma fila -->
                     <div class="step-main-content">
-                      <span class="step-num-label">
-                        <span class="step-status-icon" [ngClass]="'ssi-' + step.status">
-                          <ng-container *ngIf="step.status === 'completed'">✓</ng-container>
-                          <ng-container *ngIf="step.status === 'failed'">✗</ng-container>
-                          <ng-container *ngIf="step.status === 'in-progress'">▷</ng-container>
-                          <ng-container *ngIf="step.status === 'pending'">·</ng-container>
-                        </span>
-                        PASO {{ step.numero_paso }}
-                      </span>
+                      <span class="step-num-label">PASO {{ step.numero_paso }}</span>
                       <div class="step-action-wrapper">
                         <div class="step-action-text"
                              [attr.contenteditable]="editingStepId === step.stepId ? true : null"
@@ -264,14 +269,22 @@
 
                     <!-- Estado + eliminar -->
                     <div class="step-item-actions" (click)="$event.stopPropagation()">
-                      <select class="step-status-sel" [ngClass]="'st-' + step.status"
-                              [ngModel]="step.status"
-                              (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)">
-                        <option value="pending">Pendiente</option>
-                        <option value="in-progress">En Progreso</option>
-                        <option value="completed">Completado</option>
-                        <option value="failed">Falló</option>
-                      </select>
+                      <!-- Badge de estado identico al del escenario; el select transparente encima permite cambiarlo -->
+                      <div class="step-status-badge-wrap">
+                        <span class="status-badge" [ngClass]="'status-badge-' + step.status">
+                          <span class="status-dot"></span>
+                          {{ getStatusDisplayLabel(step.status) }}
+                        </span>
+                        <select class="step-status-overlay"
+                                [ngModel]="step.status"
+                                (ngModelChange)="updateStepStatusInAccordion(getOriginalIndex(tc), si, $event)"
+                                title="Cambiar estado del paso">
+                          <option value="pending">Pendiente</option>
+                          <option value="in-progress">En Progreso</option>
+                          <option value="completed">Completado</option>
+                          <option value="failed">Falló</option>
+                        </select>
+                      </div>
                       <button class="btn-delete-step-minimal" (click)="deleteStep(getOriginalIndex(tc), si, $event)" title="Eliminar paso">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
@@ -282,6 +295,7 @@
                   <div class="step-evidence-zone"
                        *ngIf="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)">
                     <div class="evidence-zone-header">
+                      <div class="btn-group-segmented">
                       <div class="upload-dropdown">
                         <button (click)="openUploadMenu($event)" class="btn-upload btn-unified">
                           + Subir Evidencia <span class="chevron">▾</span>
@@ -293,37 +307,38 @@
                         </div>
                       </div>
                       <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
+                      <div class="report-settings-dropdown">
+                        <button (click)="openReportSettings($event)" class="btn-report-settings" title="Ajustes de reporte de evidencias">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                          </svg>
+                        </button>
+                        <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
+                        <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
+                          <div class="popover-header">Ajustes de Reporte</div>
+                          <div class="popover-body">
+                            <div class="popover-grid-inputs">
+                              <div class="popover-input-group">
+                                <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
+                                       (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" class="popover-input" />
+                                <span class="popover-input-hint">Cols</span>
+                              </div>
+                              <span class="popover-sep">×</span>
+                              <div class="popover-input-group">
+                                <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
+                                       (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" class="popover-input" />
+                                <span class="popover-input-hint">Filas</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      </div><!-- /btn-group-segmented -->
                       <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
                       <input #csvInput type="file" accept=".csv" (change)="onCsvSelected($event)" hidden />
 
                       <div class="ev-header-right">
                         <span class="evidence-zone-label">Evidencias <span class="ev-count">{{ step.evidences.length }}</span></span>
-                        <div class="report-settings-dropdown">
-                          <button (click)="openReportSettings($event)" class="btn-report-settings" title="Configuración de reporte">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-                            </svg>
-                          </button>
-                          <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
-                          <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
-                            <div class="popover-header">Ajustes de Reporte</div>
-                            <div class="popover-body">
-                              <div class="popover-grid-inputs">
-                                <div class="popover-input-group">
-                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceColumns || 1"
-                                         (ngModelChange)="updateGridConfig($event, step.evidenceRows || 1)" class="popover-input" />
-                                  <span class="popover-input-hint">Cols</span>
-                                </div>
-                                <span class="popover-sep">×</span>
-                                <div class="popover-input-group">
-                                  <input type="number" min="1" max="10" [ngModel]="step.evidenceRows || 1"
-                                         (ngModelChange)="updateGridConfig(step.evidenceColumns || 1, $event)" class="popover-input" />
-                                  <span class="popover-input-hint">Filas</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
 
@@ -404,14 +419,6 @@
 
           <div class="tc-empty-state" *ngIf="filteredTestCases.length === 0">
             <p>No se encontraron casos de prueba con el filtro seleccionado.</p>
-          </div>
-
-          <!-- Botón: Agregar escenario en blanco -->
-          <div class="add-testcase-row">
-            <button type="button" class="btn-add-testcase" (click)="addTestCase($event)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Agregar escenario
-          </button>
           </div>
 
           <!-- Pagination -->
@@ -571,7 +578,7 @@
             <polyline points="14 2 14 8 20 8"/>
           </svg>
           <p>Aún no se ha generado ningún reporte</p>
-          <small>Genera uno desde <strong>Gestionar evidencias → Descargar → Reporte Serenity</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
+          <small>Genera uno desde <strong>Gestionar evidencias → Reporte Serenity → Generar reporte</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
         </div>
 
         <div *ngFor="let r of serenityHistory" class="sh-card" [class.is-pending]="r.status === 'pending'">
@@ -603,18 +610,6 @@
           </p>
 
           <div class="sh-actions">
-            <a *ngIf="r.artifactDownloadUrl" [href]="r.artifactDownloadUrl" download="serenity-report.zip"
-               class="sh-btn sh-btn-dl" title="Descargar el reporte comprimido (.zip)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Descargar .zip
-            </a>
-            <button *ngIf="r.artifactDownloadUrl" class="sh-btn sh-btn-azure sh-btn-azure-text" type="button"
-              title="Vincular reporte a un plan de Azure DevOps"
-              [attr.aria-expanded]="attachingReportId === r.id"
-              (click)="startAttachToPlan(r.id)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              {{ attachingReportId === r.id ? 'Cerrar' : 'Vincular a plan' }}
-            </button>
             <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
               <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
               Actualizando...
@@ -623,6 +618,11 @@
               [disabled]="isAttaching" (click)="removeFromHistory(r.id)">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
               Eliminar
+            </button>
+            <button *ngIf="lastAttachedReportId === r.id && lastAttachedPlanUrl" class="sh-btn sh-btn-azure"
+              type="button" title="Abrir el plan en Azure DevOps" (click)="openAttachedPlanInDevOps()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Abrir en DevOps
             </button>
           </div>
           <!-- Formulario de vinculación a plan -->
@@ -647,9 +647,9 @@
             <div class="sh-attach-form-buttons">
               <button class="btn btn-primary btn-sm" type="button" (click)="confirmAttachToPlan(getAttachingReport())"
                 [attr.aria-busy]="isAttaching"
-                [title]="(!attachPlanIdInput.trim() || !attachFileNameInput.trim()) ? 'Completa el ID del plan y el nombre del archivo' : 'Subir el reporte al plan'"
+                [title]="(!attachPlanIdInput.trim() || !attachFileNameInput.trim()) ? 'Completa el ID del plan y el nombre del archivo' : 'Publicar el reporte en el plan'"
                 [disabled]="!attachPlanIdInput.trim() || !attachFileNameInput.trim() || isAttaching">
-                {{ isAttaching ? 'Subiendo...' : 'Subir evidencia' }}
+                {{ isAttaching ? 'Publicando...' : 'Publicar evidencia' }}
               </button>
               <button class="btn btn-secondary btn-sm" type="button" [disabled]="isAttaching" (click)="cancelAttachToPlan()">Cancelar</button>
             </div>

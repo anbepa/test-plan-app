@@ -189,13 +189,14 @@ interface MenuItem {
                   <div class="user-name">{{ getDisplayName(user) }}</div>
                   <div class="user-email">{{ user.email }}</div>
                 </div>
-                <button class="logout-btn" (click)="logout()" title="Cerrar sesión">
+                <button class="logout-btn" (click)="logout()" [disabled]="isLoggingOut"
+                        [attr.aria-busy]="isLoggingOut" [title]="isLoggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'">
                   <span class="logout-icon" aria-hidden="true">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H9m4 8H7a2 2 0 01-2-2V6a2 2 0 012-2h6" />
                     </svg>
                   </span>
-                  <span class="logout-label">Cerrar sesión</span>
+                  <span class="logout-label">{{ isLoggingOut ? 'Cerrando sesión...' : 'Cerrar sesión' }}</span>
                 </button>
               </div>
             </div>
@@ -232,6 +233,7 @@ export class AppComponent {
   hoveredMenuItem: string | null = null; // Para controlar el hover en menú contraído
   temporaryExpanded = false; // Para expansión temporal en hover
   showOnboardingTip = false;
+  isLoggingOut = false;
   recentPlans: any[] = [];
 
   readonly isAuthenticated$;
@@ -412,7 +414,20 @@ export class AppComponent {
   }
 
   async logout(): Promise<void> {
-    await this.authService.signOut();
+    // Evitar dobles clics mientras se procesa el cierre de sesion.
+    if (this.isLoggingOut) return;
+    this.isLoggingOut = true;
+    this.closeSidebar();
+
+    try {
+      await this.authService.signOut();
+    } catch (err) {
+      console.error('Error al cerrar sesion:', err);
+    } finally {
+      // Redirigir siempre al login, aunque la llamada remota haya fallado.
+      this.isLoggingOut = false;
+      this.router.navigateByUrl('/login');
+    }
   }
 
   showOnboarding(): void {

@@ -43,6 +43,8 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   // Estado del modal
   inputPlanId = '';
   inputFileName = 'Evidencia_EVC00057.zip';
+  /** Nombre del .zip del reporte Serenity (se empaqueta de forma independiente). */
+  serenityFileName = '';
   // Por defecto: Solo Serenity (DOCX/PDF deshabilitados por límite de 4.5MB en Vercel free tier)
   selectedFormats = { docx: false, pdf: false, excel: false };
   isValidating = false;
@@ -104,6 +106,14 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
 
   openSerenityHistory(): void {
     this.openSerenityHistoryRequested.emit();
+  }
+
+  /** Abre el plan recién vinculado en Azure DevOps (nueva pestaña). */
+  openPlanInDevOps(): void {
+    const url = this.validatedPlan?.sourceUrl;
+    if (url) {
+      window.open(url, '_blank', 'noopener');
+    }
   }
 
   async dispatchSerenity(): Promise<void> {
@@ -212,6 +222,42 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
       console.error('[startUpload] Error:', error);
       
       this.uploadError = error?.message || 'Error desconocido al cargar las evidencias';
+      this.toastService.error(this.uploadError);
+      this.canRetryStep = true;
+    } finally {
+      this.isUploading = false;
+      this.onProcessing.emit({ isProcessing: false, message: '' });
+    }
+  }
+
+  /** Publica el reporte Serenity: lo genera, empaqueta de forma independiente y lo vincula al plan validado. */
+  async startSerenityUpload(): Promise<void> {
+    if (!this.validatedPlan || !this.execution) {
+      this.toastService.error('Falta información necesaria para publicar el reporte');
+      return;
+    }
+
+    this.isUploading = true;
+    this.uploadError = '';
+    this.uploadCompleted = false;
+    this.onProcessing.emit({ isProcessing: true, message: 'Generando reporte Serenity...' });
+
+    try {
+      const zipNameTemplate = (this.serenityFileName || 'Reporte_Serenity.zip').trim();
+      const effectiveTestRun = this.buildEffectiveTestRun();
+
+      await this.orchestrator.executeFlow(
+        this.validatedPlan.planId,
+        effectiveTestRun,
+        zipNameTemplate,
+        { formats: { serenity: true, docx: false, pdf: false, excel: false }, extraFiles: [] }
+      );
+
+      this.uploadCompleted = true;
+      this.toastService.success('Reporte Serenity publicado correctamente');
+    } catch (error: any) {
+      console.error('[startSerenityUpload] Error:', error);
+      this.uploadError = error?.message || 'Error al publicar el reporte Serenity';
       this.toastService.error(this.uploadError);
       this.canRetryStep = true;
     } finally {
