@@ -92,11 +92,11 @@
           <p class="plan-id-hint muted">Con este nombre se empaquetan los formatos seleccionados (Word, Excel, PDF).</p>
         </div>
 
-        <!-- Tabla Formato / Opciones -->
-        <div class="ev-table" role="table" aria-label="Formatos y opciones">
+        <!-- Tabla Formato / Acciones -->
+        <div class="ev-table" role="table" aria-label="Formatos y acciones">
           <div class="ev-table-head" role="row">
             <div class="ev-col-format" role="columnheader">Formato</div>
-            <div class="ev-col-options" role="columnheader">Opciones</div>
+            <div class="ev-col-options" role="columnheader">Acciones</div>
           </div>
 
           <!-- Word -->
@@ -104,26 +104,20 @@
             <div class="ev-col-format" role="cell">
               <label class="format-check">
                 <input type="checkbox" [(ngModel)]="up.selectedFormats.docx" [disabled]="isBusy" />
-                <span class="format-name"><span class="format-dot word"></span>Word</span>
+                <span class="format-icon word">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+                </span>
+                <span class="format-name">Word</span>
               </label>
             </div>
             <div class="ev-col-options" role="cell">
-              <div class="row-menu-wrap">
-                <button type="button" class="row-menu-btn" (click)="toggleMenu('word')"
-                  [attr.aria-expanded]="activeMenu === 'word'" aria-haspopup="menu" title="Opciones">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
-                </button>
-                <div class="row-menu" *ngIf="activeMenu === 'word'" role="menu">
-                  <button type="button" role="menuitem" (click)="downloadWord()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Descargar
-                  </button>
-                  <button type="button" role="menuitem" (click)="openUploadModal('office')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Cargar Azure
-                  </button>
-                </div>
-              </div>
+              <button type="button" class="opt-btn" (click)="downloadWord()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'word'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Word (.docx)'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'word'" aria-hidden="true"></span>
+                Descargar
+              </button>
             </div>
           </div>
 
@@ -132,26 +126,20 @@
             <div class="ev-col-format" role="cell">
               <label class="format-check">
                 <input type="checkbox" [(ngModel)]="up.selectedFormats.pdf" [disabled]="isBusy" />
-                <span class="format-name"><span class="format-dot pdf"></span>PDF</span>
+                <span class="format-icon pdf">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+                </span>
+                <span class="format-name">PDF</span>
               </label>
             </div>
             <div class="ev-col-options" role="cell">
-              <div class="row-menu-wrap">
-                <button type="button" class="row-menu-btn" (click)="toggleMenu('pdf')"
-                  [attr.aria-expanded]="activeMenu === 'pdf'" aria-haspopup="menu" title="Opciones">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
-                </button>
-                <div class="row-menu" *ngIf="activeMenu === 'pdf'" role="menu">
-                  <button type="button" role="menuitem" (click)="downloadPDF()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Descargar
-                  </button>
-                  <button type="button" role="menuitem" (click)="openUploadModal('office')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Cargar Azure
-                  </button>
-                </div>
-              </div>
+              <button type="button" class="opt-btn" (click)="downloadPDF()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'pdf'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en PDF'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'pdf'" aria-hidden="true"></span>
+                Descargar
+              </button>
             </div>
           </div>
 
@@ -160,33 +148,33 @@
             <div class="ev-col-format" role="cell">
               <label class="format-check">
                 <input type="checkbox" [(ngModel)]="up.selectedFormats.excel" [disabled]="isBusy" />
-                <span class="format-name"><span class="format-dot excel"></span>Excel</span>
+                <span class="format-icon excel">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/></svg>
+                </span>
+                <span class="format-name">Excel</span>
               </label>
             </div>
             <div class="ev-col-options" role="cell">
-              <div class="row-menu-wrap up">
-                <button type="button" class="row-menu-btn" (click)="toggleMenu('excel')"
-                  [attr.aria-expanded]="activeMenu === 'excel'" aria-haspopup="menu" title="Opciones">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
-                </button>
-                <div class="row-menu" *ngIf="activeMenu === 'excel'" role="menu">
-                  <button type="button" role="menuitem" (click)="downloadExcel()">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Descargar
-                  </button>
-                  <button type="button" role="menuitem" (click)="openUploadModal('office')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Cargar Azure
-                  </button>
-                </div>
-              </div>
+              <button type="button" class="opt-btn" (click)="downloadExcel()"
+                [disabled]="isBusy || !execution"
+                [class.is-loading]="downloadingFormat === 'excel'"
+                [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Excel (.xlsx)'">
+                <span class="opt-spinner" *ngIf="downloadingFormat === 'excel'" aria-hidden="true"></span>
+                Descargar
+              </button>
             </div>
           </div>
 
           <!-- Reporte Serenity -->
           <div class="ev-table-row" role="row">
             <div class="ev-col-format" role="cell">
-              <span class="format-name"><span class="format-dot serenity"></span>Reporte Serenity</span>
+              <span class="format-check">
+                <span class="fi-spacer"></span>
+                <span class="format-icon serenity">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 4-5"/></svg>
+                </span>
+                <span class="format-name">Reporte Serenity</span>
+              </span>
             </div>
             <div class="ev-col-options" role="cell">
               <div class="row-menu-wrap up">
@@ -211,6 +199,16 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Cargar Azure (bulk): empaqueta los formatos marcados -->
+        <div class="bulk-upload">
+          <button type="button" class="opt-btn primary publish-btn" (click)="openUploadModal('office')"
+            [disabled]="isBusy || !up.hasSelectedFormat() || !up.inputPlanId.trim()"
+            [title]="!up.inputPlanId.trim() ? 'Ingresa el ID del Plan de Pruebas' : (!up.hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Cargar los formatos seleccionados a Azure')">
+            Cargar Azure
+          </button>
+          <p class="bulk-upload-hint">Empaqueta los formatos marcados en <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong>.</p>
         </div>
       </div>
 
@@ -267,9 +265,15 @@
             Se empaquetarán los formatos seleccionados en un único archivo <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong> y se cargarán al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
           </p>
           <ul class="upload-modal-formats">
-            <li *ngIf="up.selectedFormats.docx"><span class="format-dot word"></span> Word (.docx)</li>
-            <li *ngIf="up.selectedFormats.pdf"><span class="format-dot pdf"></span> PDF (.pdf)</li>
-            <li *ngIf="up.selectedFormats.excel"><span class="format-dot excel"></span> Excel (.xlsx)</li>
+            <li *ngIf="up.selectedFormats.docx">
+              <span class="format-icon word"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg></span> Word (.docx)
+            </li>
+            <li *ngIf="up.selectedFormats.pdf">
+              <span class="format-icon pdf"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span> PDF (.pdf)
+            </li>
+            <li *ngIf="up.selectedFormats.excel">
+              <span class="format-icon excel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="19"/><line x1="16" y1="13" x2="8" y2="19"/></svg></span> Excel (.xlsx)
+            </li>
           </ul>
           <p class="upload-modal-empty" *ngIf="!up.hasSelectedFormat()">
             Marca al menos un formato (Word, Excel o PDF) en la tabla para poder cargar.

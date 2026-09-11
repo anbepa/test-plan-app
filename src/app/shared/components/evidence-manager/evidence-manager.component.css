@@ -278,17 +278,37 @@
   color: var(--text-color, #1c1c1e);
 }
 
-.format-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+/* Iconos reales de tipo de archivo (no puntos de estado) */
+.format-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  display: inline-block;
 }
-.format-dot.word     { background: #007AFF; }
-.format-dot.pdf      { background: #FF3B30; }
-.format-dot.excel    { background: #217346; }
-.format-dot.serenity { background: #6b4fbb; }
+.format-icon.word     { background: rgba(43, 87, 154, 0.12); color: #2b579a; }
+.format-icon.pdf      { background: rgba(217, 48, 37, 0.12);  color: #d93025; }
+.format-icon.excel    { background: rgba(33, 115, 70, 0.12);  color: #217346; }
+.format-icon.serenity { background: rgba(107, 79, 187, 0.12); color: #6b4fbb; }
+
+.fi-spacer {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Botón Cargar Azure (bulk) + hint */
+.bulk-upload {
+  margin-top: 14px;
+}
+.bulk-upload-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #8e8e93);
+}
+.bulk-upload-hint strong { font-weight: 700; }
 
 /* ── Menú ⋮ ── */
 .row-menu-wrap {
