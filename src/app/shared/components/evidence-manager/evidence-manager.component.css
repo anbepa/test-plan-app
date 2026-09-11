@@ -218,7 +218,6 @@
 .ev-table {
   border: 1px solid var(--border-color, #E5E5EA);
   border-radius: 12px;
-  overflow: hidden;
   background: var(--background-color, #fff);
 }
 
@@ -230,6 +229,7 @@
   padding: 10px 14px;
   background: var(--surface-color, #F5F5F7);
   border-bottom: 1px solid var(--border-color, #E5E5EA);
+  border-radius: 11px 11px 0 0;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
