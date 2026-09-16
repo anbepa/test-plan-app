@@ -439,7 +439,7 @@ app.post('/api/deepseek-proxy', async (req, res) => {
         }
 
         if (!apiBody.model) {
-            apiBody.model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+            apiBody.model = process.env.DEEPSEEK_MODEL || 'deepseek-flash';
         }
 
         if (apiBody.stream === true) {

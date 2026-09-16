@@ -14,14 +14,17 @@ import { GeminiParserService, PartialParseResult } from './gemini-parser.service
 })
 export class DeepSeekService {
 
-    private readonly MODEL = 'deepseek-reasoner';
+    // deepseek-chat y deepseek-reasoner fueron descontinuados (2026-07-24). El modelo
+    // vigente en la API de DeepSeek es 'deepseek-flash' (DeepSeek-V4.1-Flash), que soporta
+    // tanto modo thinking como non-thinking. Ver: https://api-docs.deepseek.com/quick_start/pricing
+    private readonly MODEL = 'deepseek-flash';
     /**
      * Modelo usado en generación/refinamiento por streaming.
-     * Vercel Hobby limita cada función serverless a 60s, y deepseek-reasoner
-     * suele superar ese límite por el razonamiento interno (CoT), cortando el
-     * stream antes de emitir el JSON final. deepseek-chat responde dentro del límite.
+     * Vercel Hobby limita cada función serverless a 60s. Usamos 'deepseek-flash' en modo
+     * non-thinking (ver PROMPTS/parámetros) para evitar que el razonamiento interno (CoT)
+     * supere ese límite y corte el stream antes de emitir el JSON final.
      */
-    private readonly STREAM_MODEL = 'deepseek-chat';
+    private readonly STREAM_MODEL = 'deepseek-flash';
     /** Tope de tokens para streaming: suficiente para la matriz y acorde a los 60s. */
     private readonly STREAM_MAX_TOKENS = 8000;
     private readonly MAX_CONTINUATIONS = 2; // Máximo de llamadas de continuación
@@ -36,9 +39,9 @@ export class DeepSeekService {
         return response?.choices?.[0]?.message?.content || '';
     }
 
-    // deepseek-reasoner consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
+    // En modo thinking, deepseek-flash consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
     // El JSON de risk-strategy tiene ~300-500 tokens de output. Total necesario: ~3000-4000 tokens.
-    private readonly RISK_STRATEGY_MODEL = 'deepseek-chat'; // Usa chat para evitar overhead de razonamiento
+    private readonly RISK_STRATEGY_MODEL = 'deepseek-flash'; // Usa deepseek-flash para evitar overhead de razonamiento
 
     private buildRiskStrategyPayload(promptText: string, isRetry = false): DeepSeekRequest {
         const retryInstruction = isRetry
@@ -115,9 +118,9 @@ export class DeepSeekService {
     public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string, huCount: number = 1): Observable<string> {
         const promptText = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
         const payload: DeepSeekRequest = {
-            // Usamos deepseek-chat (no el reasoner): la sección estática es texto breve y con
-            // deepseek-reasoner el razonamiento interno (reasoning_content) agotaba los max_tokens
-            // dejando message.content = "" (finish_reason=length), lo que provocaba que la app
+            // Usamos deepseek-flash: la sección estática es texto breve y en modo thinking
+            // el razonamiento interno (reasoning_content) agotaba los max_tokens dejando
+            // message.content = "" (finish_reason=length), lo que provocaba que la app
             // creyera que "ya estaba completa" y no actualizara el front.
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],

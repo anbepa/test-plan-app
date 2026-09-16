@@ -41,7 +41,7 @@ export function getAIConfig(): AIConfig {
                 id: 'deepseek',
                 name: 'deepseek',
                 displayName: 'DeepSeek',
-                model: process.env['DEEPSEEK_MODEL'] || 'deepseek-chat',
+                model: process.env['DEEPSEEK_MODEL'] || 'deepseek-flash',
                 apiKey: process.env['DEEPSEEK_API_KEY'] || '',
                 enabled: !!process.env['DEEPSEEK_API_KEY']
             }

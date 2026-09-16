@@ -195,7 +195,7 @@ export class AiUnifiedService {
 
     /**
      * Generación de casos de prueba en modo STREAM — emite tokens en tiempo real.
-     * Solo soportado por DeepSeek (deepseek-reasoner).
+     * Solo soportado por DeepSeek (deepseek-flash).
      */
     public generateTestCasesSmartStream(
         description: string,
@@ -217,7 +217,7 @@ export class AiUnifiedService {
 
     /**
      * Refinamiento de casos de prueba en modo STREAM — emite tokens en tiempo real.
-     * Solo soportado por DeepSeek (deepseek-reasoner).
+     * Solo soportado por DeepSeek (deepseek-flash).
      */
     public refineTestCasesDirectStream(
         originalHuInput: HUData['originalInput'],

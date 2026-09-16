@@ -537,7 +537,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.refinementTechnique = this.currentSelectedTechnique || this.AUTO_TECHNIQUE;
     this.cdr.detectChanges();
 
-    // GENERACIÓN EN MODO STREAM (deepseek-reasoner)
+    // GENERACIÓN EN MODO STREAM (deepseek-flash)
     if (huData.originalInput.generationMode === 'text') {
       this.loadingScenarios = true;
       this.errorScenarios = null;

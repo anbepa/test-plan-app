@@ -54,7 +54,7 @@ export class AiProvidersService {
       name: 'deepseek',
       displayName: 'DeepSeek',
       endpointUrl: 'https://api.deepseek.com/chat/completions',
-      defaultModel: 'deepseek-chat',
+      defaultModel: 'deepseek-flash',
       isActive: true, // ACTIVO POR DEFECTO (y fallback global)
       hasApiKey: true,
       metadata: { tier: 'paid', rateLimit: 'varies' }

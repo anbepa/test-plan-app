@@ -170,7 +170,7 @@ export class DeepSeekClientService {
                         const delta = parsed?.choices?.[0]?.delta;
                         if (!delta) return;
 
-                        // deepseek-reasoner emite reasoning_content (CoT) separado del content (JSON final)
+                        // deepseek-flash (modo thinking) emite reasoning_content (CoT) separado del content (JSON final)
                         const reasoningToken: string = (delta.reasoning_content != null && delta.reasoning_content !== '') ? delta.reasoning_content : '';
                         const contentToken: string = (delta.content != null && delta.content !== '') ? delta.content : '';
 

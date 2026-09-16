@@ -144,7 +144,7 @@ export default async function handler(
         if (!apiBody.messages || !apiBody.model) {
             // Si falta el modelo, usar el configurado en variables de entorno
             if (!apiBody.model) {
-                apiBody.model = process.env['DEEPSEEK_MODEL'] || 'deepseek-chat';
+                apiBody.model = process.env['DEEPSEEK_MODEL'] || 'deepseek-flash';
             }
             if (!apiBody.messages) {
                 return response.status(400).json({
