@@ -126,7 +126,8 @@ async function callProvider(provider, promptText) {
         model: 'deepseek-flash',
         messages: [{ role: 'user', content: promptText }],
         temperature: 0.3,
-        max_tokens: 2200
+        max_tokens: 2200,
+        thinking: { type: 'disabled' }
       },
       action: 'promptValidation'
     };

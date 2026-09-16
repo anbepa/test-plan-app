@@ -53,7 +53,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: `${promptText}${retryInstruction}` }],
             temperature: isRetry ? 0.2 : 0.35,
             max_tokens: isRetry ? 3000 : 2500,
-            response_format: { type: 'json_object' }
+            response_format: { type: 'json_object' },
+            thinking: { type: 'disabled' }
         };
     }
 
@@ -102,7 +103,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 250
+            max_tokens: 250,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek SCOPE] Enviando petición');
@@ -125,7 +127,8 @@ export class DeepSeekService {
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 2500
+            max_tokens: 2500,
+            thinking: { type: 'disabled' }
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
@@ -176,7 +179,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -219,7 +223,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Smart] 🚀 Generando casos con continuación automática...');
@@ -286,7 +291,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' }
         };
 
         console.log(`[DeepSeek Smart] 🔄 Continuación ${continuationCount + 1}/${this.MAX_CONTINUATIONS}...`);
@@ -353,7 +359,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
@@ -389,7 +396,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
             max_tokens: this.STREAM_MAX_TOKENS,
-            stream: true
+            stream: true,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Stream] 🚀 Iniciando generación con streaming...');
@@ -414,7 +422,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
             max_tokens: this.STREAM_MAX_TOKENS,
-            stream: true
+            stream: true,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Stream] 🔄 Iniciando refinamiento con streaming...');
