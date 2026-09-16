@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import { PROMPTS } from '../../config/prompts.config';
 import {
@@ -14,14 +14,17 @@ import { GeminiParserService, PartialParseResult } from './gemini-parser.service
 })
 export class DeepSeekService {
 
-    private readonly MODEL = 'deepseek-reasoner';
+    // deepseek-chat y deepseek-reasoner fueron descontinuados (2026-07-24). El modelo
+    // vigente en la API de DeepSeek es 'deepseek-flash' (DeepSeek-V4.1-Flash), que soporta
+    // tanto modo thinking como non-thinking. Ver: https://api-docs.deepseek.com/quick_start/pricing
+    private readonly MODEL = 'deepseek-flash';
     /**
      * Modelo usado en generación/refinamiento por streaming.
-     * Vercel Hobby limita cada función serverless a 60s, y deepseek-reasoner
-     * suele superar ese límite por el razonamiento interno (CoT), cortando el
-     * stream antes de emitir el JSON final. deepseek-chat responde dentro del límite.
+     * Vercel Hobby limita cada función serverless a 60s. Usamos 'deepseek-flash' en modo
+     * non-thinking (ver PROMPTS/parámetros) para evitar que el razonamiento interno (CoT)
+     * supere ese límite y corte el stream antes de emitir el JSON final.
      */
-    private readonly STREAM_MODEL = 'deepseek-chat';
+    private readonly STREAM_MODEL = 'deepseek-flash';
     /** Tope de tokens para streaming: suficiente para la matriz y acorde a los 60s. */
     private readonly STREAM_MAX_TOKENS = 8000;
     private readonly MAX_CONTINUATIONS = 2; // Máximo de llamadas de continuación
@@ -36,9 +39,9 @@ export class DeepSeekService {
         return response?.choices?.[0]?.message?.content || '';
     }
 
-    // deepseek-reasoner consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
+    // En modo thinking, deepseek-flash consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
     // El JSON de risk-strategy tiene ~300-500 tokens de output. Total necesario: ~3000-4000 tokens.
-    private readonly RISK_STRATEGY_MODEL = 'deepseek-chat'; // Usa chat para evitar overhead de razonamiento
+    private readonly RISK_STRATEGY_MODEL = 'deepseek-flash'; // Usa deepseek-flash para evitar overhead de razonamiento
 
     private buildRiskStrategyPayload(promptText: string, isRetry = false): DeepSeekRequest {
         const retryInstruction = isRetry
@@ -50,7 +53,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: `${promptText}${retryInstruction}` }],
             temperature: isRetry ? 0.2 : 0.35,
             max_tokens: isRetry ? 3000 : 2500,
-            response_format: { type: 'json_object' }
+            response_format: { type: 'json_object' },
+            thinking: { type: 'disabled' }
         };
     }
 
@@ -99,7 +103,8 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 250
+            max_tokens: 250,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek SCOPE] Enviando petición');
@@ -115,14 +120,15 @@ export class DeepSeekService {
     public generateEnhancedStaticSectionContent(sectionName: string, existingContent: string, huSummary: string, huCount: number = 1): Observable<string> {
         const promptText = PROMPTS.STATIC_SECTION_ENHANCEMENT(sectionName, existingContent, huSummary, huCount);
         const payload: DeepSeekRequest = {
-            // Usamos deepseek-chat (no el reasoner): la sección estática es texto breve y con
-            // deepseek-reasoner el razonamiento interno (reasoning_content) agotaba los max_tokens
-            // dejando message.content = "" (finish_reason=length), lo que provocaba que la app
+            // Usamos deepseek-flash: la sección estática es texto breve y en modo thinking
+            // el razonamiento interno (reasoning_content) agotaba los max_tokens dejando
+            // message.content = "" (finish_reason=length), lo que provocaba que la app
             // creyera que "ya estaba completa" y no actualizara el front.
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.2,
-            max_tokens: 2500
+            max_tokens: 2500,
+            thinking: { type: 'disabled' }
         };
 
         return this.deepSeekClient.callDeepSeek('enhanceStaticSection', payload).pipe(
@@ -173,7 +179,9 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -182,6 +190,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Direct] Contenido vacío (finish_reason=${finishReason})`);
+                    throw {
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de generar los casos de prueba. Intenta con una HU más corta o vuelve a intentarlo.'
+                            : 'La IA no devolvió contenido para los casos de prueba. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    };
+                }
                 const finalJSON = this.parserService.cleanAndParseJSON(textContent);
 
                 // Filtrar pasos nulos o vacíos en cada test case
@@ -216,7 +234,9 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Smart] 🚀 Generando casos con continuación automática...');
@@ -225,6 +245,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
             switchMap(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Smart] Contenido vacío en primera llamada (finish_reason=${finishReason})`);
+                    return throwError(() => ({
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de generar los escenarios. Intenta con una HU más corta o vuelve a intentarlo.'
+                            : 'La IA no devolvió contenido para los escenarios. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    }));
+                }
                 const result: PartialParseResult = this.parserService.cleanAndParseJSONWithMeta(textContent);
 
                 // Filtrar pasos nulos
@@ -283,7 +313,9 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log(`[DeepSeek Smart] 🔄 Continuación ${continuationCount + 1}/${this.MAX_CONTINUATIONS}...`);
@@ -350,7 +382,9 @@ export class DeepSeekService {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
-            max_tokens: 16000
+            max_tokens: 16000,
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
@@ -359,6 +393,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('refineDetailedTestCases', payload).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Direct Refine] Contenido vacío (finish_reason=${finishReason})`);
+                    throw {
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de completar el refinamiento. Intenta nuevamente.'
+                            : 'La IA no devolvió contenido para el refinamiento. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    };
+                }
                 const finalJSON = this.parserService.cleanAndParseJSON(textContent);
 
                 const totalTime = Date.now() - startTime;
@@ -386,7 +430,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
             max_tokens: this.STREAM_MAX_TOKENS,
-            stream: true
+            stream: true,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Stream] 🚀 Iniciando generación con streaming...');
@@ -411,7 +456,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
             max_tokens: this.STREAM_MAX_TOKENS,
-            stream: true
+            stream: true,
+            thinking: { type: 'disabled' }
         };
 
         console.log('[DeepSeek Stream] 🔄 Iniciando refinamiento con streaming...');

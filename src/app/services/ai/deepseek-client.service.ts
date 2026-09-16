@@ -18,6 +18,16 @@ export interface DeepSeekRequest {
     response_format?: {
         type: 'json_object' | 'text';
     };
+    /**
+     * Control del modo thinking (CoT) de deepseek-flash. Por defecto el modelo
+     * responde en modo thinking (effort 'high'), lo cual puede agotar max_tokens
+     * en el razonamiento interno y dejar el content final vacío. Usar
+     * { type: 'disabled' } para las llamadas que requieren respuesta directa en JSON.
+     * Ver: https://api-docs.deepseek.com/guides/thinking_mode
+     */
+    thinking?: {
+        type: 'enabled' | 'disabled';
+    };
 }
 
 export interface DeepSeekChoice {
@@ -170,7 +180,7 @@ export class DeepSeekClientService {
                         const delta = parsed?.choices?.[0]?.delta;
                         if (!delta) return;
 
-                        // deepseek-reasoner emite reasoning_content (CoT) separado del content (JSON final)
+                        // deepseek-flash (modo thinking) emite reasoning_content (CoT) separado del content (JSON final)
                         const reasoningToken: string = (delta.reasoning_content != null && delta.reasoning_content !== '') ? delta.reasoning_content : '';
                         const contentToken: string = (delta.content != null && delta.content !== '') ? delta.content : '';
 
