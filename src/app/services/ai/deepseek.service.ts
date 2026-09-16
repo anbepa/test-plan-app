@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import { PROMPTS } from '../../config/prompts.config';
 import {
@@ -180,7 +180,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
             max_tokens: 16000,
-            thinking: { type: 'disabled' }
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
@@ -189,6 +190,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Direct] Contenido vacío (finish_reason=${finishReason})`);
+                    throw {
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de generar los casos de prueba. Intenta con una HU más corta o vuelve a intentarlo.'
+                            : 'La IA no devolvió contenido para los casos de prueba. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    };
+                }
                 const finalJSON = this.parserService.cleanAndParseJSON(textContent);
 
                 // Filtrar pasos nulos o vacíos en cada test case
@@ -224,7 +235,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
             max_tokens: 16000,
-            thinking: { type: 'disabled' }
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Smart] 🚀 Generando casos con continuación automática...');
@@ -233,6 +245,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
             switchMap(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Smart] Contenido vacío en primera llamada (finish_reason=${finishReason})`);
+                    return throwError(() => ({
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de generar los escenarios. Intenta con una HU más corta o vuelve a intentarlo.'
+                            : 'La IA no devolvió contenido para los escenarios. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    }));
+                }
                 const result: PartialParseResult = this.parserService.cleanAndParseJSONWithMeta(textContent);
 
                 // Filtrar pasos nulos
@@ -292,7 +314,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
             max_tokens: 16000,
-            thinking: { type: 'disabled' }
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log(`[DeepSeek Smart] 🔄 Continuación ${continuationCount + 1}/${this.MAX_CONTINUATIONS}...`);
@@ -360,7 +383,8 @@ export class DeepSeekService {
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
             max_tokens: 16000,
-            thinking: { type: 'disabled' }
+            thinking: { type: 'disabled' },
+            response_format: { type: 'json_object' }
         };
 
         console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
@@ -369,6 +393,16 @@ export class DeepSeekService {
         return this.deepSeekClient.callDeepSeek('refineDetailedTestCases', payload).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
+                const finishReason = response?.choices?.[0]?.finish_reason || 'unknown';
+                if (!textContent) {
+                    console.error(`[DeepSeek Direct Refine] Contenido vacío (finish_reason=${finishReason})`);
+                    throw {
+                        userMessage: finishReason === 'length'
+                            ? 'La IA agotó el presupuesto de tokens antes de completar el refinamiento. Intenta nuevamente.'
+                            : 'La IA no devolvió contenido para el refinamiento. Vuelve a intentarlo.',
+                        technicalDetails: `content vacío (finish_reason=${finishReason})`
+                    };
+                }
                 const finalJSON = this.parserService.cleanAndParseJSON(textContent);
 
                 const totalTime = Date.now() - startTime;
