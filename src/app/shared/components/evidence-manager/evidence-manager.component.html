@@ -113,6 +113,7 @@
             <div class="ev-col-options" role="cell">
               <button type="button" class="opt-btn" (click)="downloadWord()"
                 [disabled]="isBusy || !execution"
+                aria-label="Descargar en Word (.docx)"
                 [class.is-loading]="downloadingFormat === 'word'"
                 [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Word (.docx)'">
                 <span class="opt-spinner" *ngIf="downloadingFormat === 'word'" aria-hidden="true"></span>
@@ -135,6 +136,7 @@
             <div class="ev-col-options" role="cell">
               <button type="button" class="opt-btn" (click)="downloadPDF()"
                 [disabled]="isBusy || !execution"
+                aria-label="Descargar en PDF"
                 [class.is-loading]="downloadingFormat === 'pdf'"
                 [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en PDF'">
                 <span class="opt-spinner" *ngIf="downloadingFormat === 'pdf'" aria-hidden="true"></span>
@@ -157,6 +159,7 @@
             <div class="ev-col-options" role="cell">
               <button type="button" class="opt-btn" (click)="downloadExcel()"
                 [disabled]="isBusy || !execution"
+                aria-label="Descargar en Excel (.xlsx)"
                 [class.is-loading]="downloadingFormat === 'excel'"
                 [title]="!execution ? 'No hay una ejecución cargada' : 'Descargar en Excel (.xlsx)'">
                 <span class="opt-spinner" *ngIf="downloadingFormat === 'excel'" aria-hidden="true"></span>
@@ -208,7 +211,7 @@
             [title]="!up.inputPlanId.trim() ? 'Ingresa el ID del Plan de Pruebas' : (!up.hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Cargar los formatos seleccionados a Azure')">
             Cargar Azure
           </button>
-          <p class="bulk-upload-hint">Empaqueta los formatos marcados en <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong>.</p>
+          <p class="bulk-upload-hint">Empaqueta los formatos marcados en <strong>{{ (up.inputFileName || '').trim() || 'Evidencia.zip' }}</strong>.</p>
         </div>
       </div>
 
@@ -262,7 +265,7 @@
         <!-- Cargar Azure: office formats -->
         <ng-container *ngIf="uploadMode === 'office'">
           <p class="upload-modal-hint">
-            Se empaquetarán los formatos seleccionados en un único archivo <strong>{{ up.inputFileName || 'Evidencia.zip' }}</strong> y se cargarán al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
+            Se empaquetarán los formatos seleccionados en un único archivo <strong>{{ (up.inputFileName || '').trim() || 'Evidencia.zip' }}</strong> y se cargarán al plan <strong>{{ (up.validatedPlan?.planId || up.inputPlanId || '').trim() || '—' }}</strong>.
           </p>
           <ul class="upload-modal-formats">
             <li *ngIf="up.selectedFormats.docx">
@@ -331,7 +334,7 @@
             [disabled]="isBusy"
             autocomplete="off" />
           <p class="plan-id-hint muted">
-            El reporte se carga al plan <strong>{{ up.validatedPlan?.planId || up.inputPlanId || '—' }}</strong>.
+            El reporte se carga al plan <strong>{{ (up.validatedPlan?.planId || up.inputPlanId || '').trim() || '—' }}</strong>.
           </p>
         </ng-container>
       </div>

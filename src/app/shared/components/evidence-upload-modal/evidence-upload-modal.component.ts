@@ -42,11 +42,11 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
 
   // Estado del modal
   inputPlanId = '';
-  inputFileName = 'Evidencia_EVC00057.zip';
+  inputFileName = '';
   /** Nombre del .zip del reporte Serenity (se empaqueta de forma independiente). */
   serenityFileName = '';
-  // Por defecto: Solo Serenity (DOCX/PDF deshabilitados por límite de 4.5MB en Vercel free tier)
-  selectedFormats = { docx: false, pdf: false, excel: false };
+  // Por defecto se marcan los tres formatos ofimáticos para agilizar la carga.
+  selectedFormats = { docx: true, pdf: true, excel: true };
   isValidating = false;
   isUploading = false;
   planValidated = false;
@@ -188,7 +188,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     try {
       console.log('[startUpload] Iniciando carga para plan:', this.validatedPlan.planId);
       
-      const zipNameTemplate = (this.inputFileName || 'Evidencia.zip').trim();
+      const zipNameTemplate = this.sanitizeZipName(this.inputFileName, 'Evidencia.zip');
       
       console.log('[startUpload] Nombre archivo ZIP:', zipNameTemplate);
 
@@ -243,7 +243,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.onProcessing.emit({ isProcessing: true, message: 'Generando reporte Serenity...' });
 
     try {
-      const zipNameTemplate = (this.serenityFileName || 'Reporte_Serenity.zip').trim();
+      const zipNameTemplate = this.sanitizeZipName(this.serenityFileName, 'Reporte_Serenity.zip');
       const effectiveTestRun = this.buildEffectiveTestRun();
 
       await this.orchestrator.executeFlow(
@@ -305,6 +305,41 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.uploadCompleted = false;
     this.inputPlanId = '';
     this.serenityDispatched = false;
+  }
+
+  /**
+   * Sanea un nombre de archivo .zip: elimina caracteres inválidos y garantiza la extensión.
+   */
+  sanitizeZipName(name: string, fallback: string): string {
+    let n = (name || '').trim() || fallback;
+    n = n.replace(/[\\/:*?"<>|]+/g, '_');
+    if (!/\.zip$/i.test(n)) n += '.zip';
+    return n;
+  }
+
+  /** Identificador del plan disponible (validado o tecleado). */
+  private currentPlanRef(): string {
+    return (this.validatedPlan?.planId || this.inputPlanId || '').trim();
+  }
+
+  /**
+   * Inicializa el nombre del .zip de evidencias ofimáticas SOLO si el campo está vacío.
+   * Nunca pisa lo que el usuario ya escribió.
+   */
+  ensureOfficeFileName(): void {
+    if (this.inputFileName && this.inputFileName.trim()) return;
+    const ref = this.currentPlanRef();
+    this.inputFileName = ref ? `Evidencia_${ref}.zip` : 'Evidencia.zip';
+  }
+
+  /**
+   * Inicializa el nombre del .zip del reporte Serenity SOLO si el campo está vacío.
+   * Corrige el bug en el que el campo quedaba vacío o se sobrescribía con el ID del plan.
+   */
+  ensureSerenityFileName(): void {
+    if (this.serenityFileName && this.serenityFileName.trim()) return;
+    const ref = this.currentPlanRef();
+    this.serenityFileName = ref ? `Reporte_Serenity_${ref}.zip` : 'Reporte_Serenity.zip';
   }
 
   hasSelectedFormat(): boolean {
