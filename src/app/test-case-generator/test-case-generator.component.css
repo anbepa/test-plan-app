@@ -1031,3 +1031,38 @@ textarea.form-control.auto-grow {
         justify-content: center;
     }
 }
+
+
+/* ── Tags rápidos de "Contexto adicional" ── */
+.tc-quick-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.tc-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border: 1.5px dashed #93c5fd;
+  border-radius: 999px;
+  background: #f0f9ff;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.tc-tag:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #60a5fa;
+  color: #1e3a8a;
+}
+
+.tc-tag:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

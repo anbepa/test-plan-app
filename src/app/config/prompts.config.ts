@@ -380,7 +380,7 @@ SALIDA:
 Actúa como QA Senior especializado en refinamiento de matrices. Todo el contenido de salida debe estar en español.
 
 INSTRUCCIÓN DEL ANALISTA:
-${userRequest}
+${userRequest?.trim() || 'No se proporcionó una instrucción adicional.'}
 
 REQUISITOS ORIGINALES:
 ${originalRequirements}

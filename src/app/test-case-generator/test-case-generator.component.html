@@ -131,6 +131,13 @@
             [(ngModel)]="currentGenerationContext" rows="3"
             placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
             class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
+          <div class="tc-quick-tags">
+            <button *ngFor="let tag of contextQuickTags" type="button"
+              class="tc-tag" (click)="applyContextTag(tag)"
+              [disabled]="loadingScope || loadingScenarios">
+              {{ tag }}
+            </button>
+          </div>
         </div>
       </ng-container>
 

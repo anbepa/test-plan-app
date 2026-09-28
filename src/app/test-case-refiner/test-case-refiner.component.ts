@@ -76,7 +76,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     '+ Validaciones de frontera',
     '+ Datos inválidos',
     '+ Solo 5 escenarios',
-    '+ Flujo alternativo'
+    '+ Flujo alternativo',
+    '+ Creación de ruta crítica'
   ];
 
   inputDataCollapsed: boolean = false;
@@ -92,9 +93,8 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   }
 
   appendContextTag(tag: string): void {
-    const clean = tag.replace(/^\+\s*/, '');
-    const prefix = this.editedContext?.trim() ? this.editedContext.trimEnd() + '. ' : '';
-    this.editedContext = prefix + clean;
+    // Reemplaza por completo el contexto con el tag seleccionado.
+    this.editedContext = tag.replace(/^\+\s*/, '');
   }
 
   private userStoryDbId: string | null = null;
