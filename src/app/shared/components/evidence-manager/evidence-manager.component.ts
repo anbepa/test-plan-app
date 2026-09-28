@@ -152,8 +152,13 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.activeMenu = null;
     this.uploadMode = mode;
     this.showUploadModal = true;
+    // Pre-inicializa el nombre del .zip (solo si está vacío) para habilitar el botón "Cargar"
+    // y evitar que el campo quede vacío o se sobrescriba con el ID del plan.
     if (mode === 'serenity') {
+      this.up?.ensureSerenityFileName?.();
       this.loadSerenityReport();
+    } else {
+      this.up?.ensureOfficeFileName?.();
     }
   }
 

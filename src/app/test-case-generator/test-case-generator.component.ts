@@ -385,9 +385,20 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   public autoGrowTextarea(element: any): void {
     if (element && element instanceof HTMLTextAreaElement) {
+      // Altura maxima permitida (debe coincidir con max-height de .auto-grow en el CSS)
+      const MAX_HEIGHT = 480;
       element.style.height = 'auto';
       element.scrollTop = element.scrollTop;
-      element.style.height = (element.scrollHeight) + 'px';
+      const contentHeight = element.scrollHeight;
+      if (contentHeight > MAX_HEIGHT) {
+        // El contenido excede el maximo: fijar altura y habilitar scroll interno
+        element.style.height = MAX_HEIGHT + 'px';
+        element.style.overflowY = 'auto';
+      } else {
+        // El contenido cabe: crecer con el contenido y ocultar el scroll
+        element.style.height = contentHeight + 'px';
+        element.style.overflowY = 'hidden';
+      }
     }
   }
 
