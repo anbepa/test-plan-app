@@ -51,6 +51,23 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   currentDescription: string = '';
   currentAcceptanceCriteria: string = '';
   currentGenerationContext: string = '';
+
+  // Tags rápidos para el campo de "Contexto adicional". Al pulsarlos se
+  // reemplaza por completo el contenido actual del textarea.
+  readonly contextQuickTags: string[] = [
+    '+ Solo happy path',
+    '+ Casos negativos',
+    '+ Validaciones de frontera',
+    '+ Datos inválidos',
+    '+ Solo 5 escenarios',
+    '+ Flujo alternativo',
+    '+ Creación de ruta crítica'
+  ];
+
+  /** Reemplaza el contexto actual con el tag seleccionado (borra lo previo). */
+  applyContextTag(tag: string): void {
+    this.currentGenerationContext = tag.replace(/^\+\s*/, '');
+  }
   currentSelectedTechnique: string = this.AUTO_TECHNIQUE;
   refinementTechnique: string = this.AUTO_TECHNIQUE;
   userRefinementContext: string = '';

@@ -71,7 +71,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   };
   readonly contextQuickTags: string[] = [
     '+ Solo happy path', '+ Casos negativos', '+ Validaciones de frontera',
-    '+ Datos inválidos', '+ Solo 5 escenarios', '+ Flujo alternativo'
+    '+ Datos inválidos', '+ Solo 5 escenarios', '+ Flujo alternativo',
+    '+ Creación de ruta crítica'
   ];
 
   get techniqueDescription(): string {
@@ -83,9 +84,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   appendContextTag(tag: string): void {
-    const clean = tag.replace(/^\+\s*/, '');
-    const prefix = this.editedContext?.trim() ? this.editedContext.trimEnd() + '. ' : '';
-    this.editedContext = prefix + clean;
+    // Reemplaza por completo el contexto con el tag seleccionado.
+    this.editedContext = tag.replace(/^\+\s*/, '');
   }
 
   // Seleccion / eliminacion masiva
