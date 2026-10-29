@@ -1,0 +1,555 @@
+import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS, CodeEvidenceSource } from '../../config/code-agent-prompts.config';
+import type {
+  AzureBranchChange,
+  AzureBranchDiff,
+  AzureFileDiff,
+  AzureRepoFile,
+  AzureRepoFileRequest,
+  AzureRepoSearchResult,
+  AzureRepoTree,
+  CodeAgentEvent,
+  CodeExplorationInput,
+  WorkItemChangeGroup,
+  WorkItemChanges,
+} from '../../models/code-agent.model';
+
+/**
+ * Ciclo del Agente de exploración de código, sin dependencias de Angular.
+ * Lo usa CodeExplorerAgentService en la app y el arnés de pruebas en Node,
+ * así ambos ejecutan exactamente la misma lógica.
+ */
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+export interface LlmUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_cache_hit_tokens?: number;
+}
+
+/** Versión a leer: rama o commit exacto. */
+export interface RepoRef {
+  project: string;
+  repositoryId: string;
+  branch?: string;
+  commit?: string;
+}
+
+export interface CodeAgentGateway {
+  llm(messages: ChatMessage[], options: { tools: unknown[]; forceFinish: boolean }): Promise<{ message: ChatMessage; usage?: LlmUsage }>;
+  getWorkItemChanges(workItemId: number): Promise<WorkItemChanges>;
+  getTree(ref: RepoRef, scopePath: string): Promise<AzureRepoTree>;
+  readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Promise<AzureRepoFile[]>;
+  search(ref: RepoRef, terms: string[], paths: string[]): Promise<AzureRepoSearchResult>;
+  getBranchDiff(ref: RepoRef, baseBranch: string): Promise<AzureBranchDiff>;
+  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string): Promise<AzureFileDiff>;
+}
+
+export interface CodeAgentResult {
+  context: string;
+  filesReviewed: string[];
+  /** Commit(s) analizados: sirve como clave de caché. */
+  versionKey: string;
+  stats: { llmCalls: number; promptTokens: number; completionTokens: number; cachedTokens: number; durationMs: number };
+}
+
+/** Presupuesto del agente: mantiene tiempo y tokens acotados. */
+export const CODE_AGENT_BUDGET = {
+  maxSteps: 8,
+  maxFilesRead: 24,
+  maxToolOutputChars: 90_000,
+  maxToolResultChars: 24_000,
+  maxDurationMs: 240_000,
+  treeListingLimit: 250,
+  branchChangesListingLimit: 80,
+  /** Diffs que se envían de entrada (sin gastar pasos del agente). */
+  preloadDiffChars: 28_000,
+  diffConcurrency: 4,
+};
+
+const STOPWORDS = new Set([
+  'para', 'como', 'quiero', 'poder', 'desde', 'hasta', 'cuando', 'donde', 'debe', 'deben', 'sistema',
+  'usuario', 'usuarios', 'entonces', 'dado', 'que', 'una', 'uno', 'unos', 'unas', 'este', 'esta', 'estos',
+  'estas', 'con', 'sin', 'por', 'los', 'las', 'del', 'sus', 'mas', 'más', 'sea', 'ser', 'esto', 'cada',
+  'todo', 'todos', 'toda', 'todas', 'otro', 'otra', 'pero', 'tambien', 'también', 'tiene', 'tener', 'hace',
+  'dentro', 'sobre', 'entre', 'mediante', 'según', 'segun', 'pantalla', 'opcion', 'opción', 'campo', 'campos',
+  'requiere', 'requiero', 'realizar', 'manera', 'forma', 'deben', 'debera', 'deberá', 'momento', 'correspondiente',
+  'with', 'that', 'this', 'from', 'when', 'then', 'should', 'user', 'given'
+]);
+
+const SOURCE_HINTS = /(controller|service|handler|validator|validation|rule|usecase|use-case|component|model|entity|dto|repository|adapter|resolver|router|routes|api|command|query|schema|policy|guard|spec|test)/i;
+const TEST_FILE = /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.(spec|test)\.|Test\.(java|kt|cs)$|Tests?\.(cs|py)$/i;
+const BUILD_FILE = /(^|\/)(build\.gradle|settings\.gradle|pom\.xml|package\.json|.*\.csproj|.*\.ya?ml|.*\.properties|dockerfile|.*\.sh)$/i;
+
+interface Workspace {
+  name: string;
+  ref: RepoRef;
+  files: { path: string; changeType: string; baseCommit: string; targetCommit: string }[];
+  group: WorkItemChangeGroup;
+}
+
+export class CodeAgentRunner {
+  constructor(private gateway: CodeAgentGateway) {}
+
+  async run(
+    input: CodeExplorationInput,
+    emit: (event: CodeAgentEvent) => void,
+    isCancelled: () => boolean = () => false
+  ): Promise<CodeAgentResult | null> {
+    const startedAt = Date.now();
+    const stats = { llmCalls: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, durationMs: 0 };
+    const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
+
+    // 1) Fuente de evidencia más precisa disponible: PRs/commits de la HU → diff de rama → rama completa.
+    const workspaces = await this.loadWorkItemWorkspaces(input.workItemId, emit);
+    let source: CodeEvidenceSource;
+    let primaryRef: RepoRef;
+    let repoLabel: string;
+    let changesBlock: string;
+    let branchDiff: AzureBranchDiff | null = null;
+    let versionKey: string;
+
+    if (workspaces.length > 0) {
+      source = 'changeset';
+      primaryRef = workspaces[0].ref;
+      repoLabel = workspaces.map((ws) => ws.name).join(', ');
+      versionKey = workspaces.map((ws) => ws.ref.commit).join(',');
+      changesBlock = await this.buildChangesetBlock(workspaces, keywords, emit);
+    } else {
+      const target = input.target;
+      if (!target) {
+        throw new Error('La HU no tiene PRs/commits vinculados. Selecciona repositorio y rama para explorar.');
+      }
+      primaryRef = { project: target.project, repositoryId: target.repositoryId, branch: target.branch };
+      repoLabel = `${target.repositoryName} (rama ${target.branch}${target.scopePath && target.scopePath !== '/' ? `, alcance ${target.scopePath}` : ''})`;
+      versionKey = target.commitId;
+      branchDiff = await this.loadBranchDiff(primaryRef, target.baseBranch, target.scopePath, emit);
+      source = branchDiff && branchDiff.changes.length > 0 ? 'branch-diff' : 'full';
+      changesBlock = this.buildBranchChangesSummary(branchDiff, target.baseBranch, this.rankFiles((branchDiff?.changes || []).map((c) => c.path), keywords));
+    }
+
+    if (isCancelled()) return null;
+
+    // 2) Árbol del repositorio principal (para list_files / search_code).
+    const scopePath = (source !== 'changeset' && input.target?.scopePath) || '/';
+    emit({ type: 'progress', message: 'Descargando árbol de archivos…' });
+    const tree = await this.gateway.getTree(primaryRef, scopePath);
+    const changedPaths = new Set<string>([
+      ...workspaces.flatMap((ws) => ws.files.map((file) => file.path)),
+      ...(branchDiff?.changes || []).map((change) => change.path),
+    ]);
+    const rankedFiles = [
+      ...this.rankFiles(tree.files.filter((path) => changedPaths.has(path)), keywords),
+      ...this.rankFiles(tree.files.filter((path) => !changedPaths.has(path)), keywords),
+    ];
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: CODE_AGENT_PROMPTS.SYSTEM(input.mode, CODE_AGENT_BUDGET.maxSteps, source) },
+      {
+        role: 'user',
+        content: CODE_AGENT_PROMPTS.USER(
+          input.description,
+          input.acceptanceCriteria,
+          input.userRequest,
+          repoLabel,
+          changesBlock,
+          this.buildTreeSummary(rankedFiles, tree.truncated, source === 'changeset')
+        ),
+      },
+    ];
+
+    const filesReviewed = new Set<string>(workspaces.flatMap((ws) => ws.files.map((file) => file.path)).filter((path) => changesBlock.includes(`=== ${path}`)));
+    let toolOutputChars = 0;
+
+    for (let step = 1; step <= CODE_AGENT_BUDGET.maxSteps + 1; step++) {
+      if (isCancelled()) return null;
+
+      const overBudget = step > CODE_AGENT_BUDGET.maxSteps
+        || Date.now() - startedAt > CODE_AGENT_BUDGET.maxDurationMs
+        || toolOutputChars > CODE_AGENT_BUDGET.maxToolOutputChars
+        || filesReviewed.size >= CODE_AGENT_BUDGET.maxFilesRead;
+
+      if (overBudget) {
+        messages.push({ role: 'user', content: CODE_AGENT_PROMPTS.FORCE_FINISH });
+      }
+
+      emit({ type: 'progress', message: overBudget ? 'Sintetizando contexto técnico…' : `Paso ${step}: analizando…` });
+      const { message: reply, usage } = await this.gateway.llm(messages, { tools: CODE_AGENT_TOOLS, forceFinish: overBudget });
+      stats.llmCalls++;
+      stats.promptTokens += usage?.prompt_tokens || 0;
+      stats.completionTokens += usage?.completion_tokens || 0;
+      stats.cachedTokens += usage?.prompt_cache_hit_tokens || 0;
+
+      const toolCalls = (reply.tool_calls || []).filter((call) => call?.function?.name);
+
+      // Sin herramientas: el modelo respondió en texto → se toma como contexto final.
+      if (toolCalls.length === 0) {
+        const text = (reply.content || '').trim();
+        if (!text) throw new Error('El agente no devolvió contexto técnico. Intenta de nuevo.');
+        return this.result(text, filesReviewed, versionKey, stats, startedAt);
+      }
+
+      messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
+
+      for (const call of toolCalls) {
+        const args = this.parseArgs(call.function.arguments);
+
+        if (call.function.name === 'finish') {
+          const context = String(args.technical_context || '').trim();
+          if (context) return this.result(context, filesReviewed, versionKey, stats, startedAt);
+        }
+
+        const result = overBudget
+          ? 'Presupuesto agotado. Llama a finish ahora.'
+          : await this.executeTool(call.function.name, args, { primaryRef, workspaces, branchDiff, treeFiles: tree.files, rankedFiles, filesReviewed, emit });
+
+        const clipped = result.length > CODE_AGENT_BUDGET.maxToolResultChars
+          ? `${result.slice(0, CODE_AGENT_BUDGET.maxToolResultChars)}\n…[resultado truncado]`
+          : result;
+        toolOutputChars += clipped.length;
+        messages.push({ role: 'tool', tool_call_id: call.id, content: clipped });
+      }
+    }
+
+    throw new Error('El agente no logró completar la exploración dentro del presupuesto.');
+  }
+
+  private result(context: string, filesReviewed: Set<string>, versionKey: string, stats: CodeAgentResult['stats'], startedAt: number): CodeAgentResult {
+    stats.durationMs = Date.now() - startedAt;
+    return { context, filesReviewed: Array.from(filesReviewed), versionKey, stats };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fuentes de evidencia
+  // ---------------------------------------------------------------------------
+
+  private async loadWorkItemWorkspaces(workItemId: number | undefined, emit: (event: CodeAgentEvent) => void): Promise<Workspace[]> {
+    if (!workItemId || !Number.isInteger(workItemId) || workItemId <= 0) return [];
+    emit({ type: 'progress', message: `Buscando PRs y commits vinculados a la HU ${workItemId}…` });
+    try {
+      const changes = await this.gateway.getWorkItemChanges(workItemId);
+      const workspaces = changes.groups.map((group: WorkItemChangeGroup) => ({
+        name: group.repositoryName,
+        ref: { project: group.projectId, repositoryId: group.repositoryId, commit: group.lastCommit },
+        files: group.files,
+        group,
+      }));
+      if (workspaces.length === 0) {
+        emit({ type: 'progress', message: 'La HU no tiene PRs/commits vinculados con código; se usará la rama seleccionada.' });
+      }
+      for (const ws of workspaces) {
+        const prs = ws.group.prs.map((pr) => `PR ${pr.id}`).join(', ') || `${ws.group.commits.length} commit(s)`;
+        const also = ws.group.alsoMergedInto.length ? ` (también en ${ws.group.alsoMergedInto.join(', ')})` : '';
+        emit({ type: 'progress', message: `${ws.name} → ${ws.group.targetBranch}${also}: ${prs}, ${ws.files.length} archivo(s).` });
+      }
+      return workspaces;
+    } catch (error: any) {
+      emit({ type: 'tool', message: `⚠️ No se pudieron leer los PRs de la HU: ${error?.error?.message || error?.message || 'error'}.` });
+      return [];
+    }
+  }
+
+  /** Precarga los diffs del conjunto de cambios (código primero, luego pruebas, build al final). */
+  private async buildChangesetBlock(workspaces: Workspace[], keywords: string[], emit: (event: CodeAgentEvent) => void): Promise<string> {
+    const multiRepo = workspaces.length > 1;
+    const entries = workspaces.flatMap((ws) => ws.files.map((file) => ({ ws, file })));
+    const priority = (path: string) => (BUILD_FILE.test(path) ? 2 : TEST_FILE.test(path) ? 1 : 0);
+    const rankedPaths = this.rankFiles(entries.map((entry) => entry.file.path), keywords);
+    entries.sort((a, b) => priority(a.file.path) - priority(b.file.path) || rankedPaths.indexOf(a.file.path) - rankedPaths.indexOf(b.file.path));
+
+    emit({ type: 'tool', message: `🧬 Precargando diffs de ${entries.filter((entry) => priority(entry.file.path) < 2).length} archivo(s) de la HU…` });
+    const diffs = await this.mapLimit(entries, CODE_AGENT_BUDGET.diffConcurrency, async ({ ws, file }) => {
+      if (priority(file.path) === 2) return null; // build/config: solo se listan
+      return this.gateway.getFileDiff(ws.ref, { path: file.path, changeType: file.changeType }, file.baseCommit, file.targetCommit)
+        .catch((error: any) => ({ path: file.path, error: error?.message || 'error' } as AzureFileDiff));
+    });
+
+    let used = 0;
+    const listed: string[] = [];
+    const inlined: string[] = [];
+    entries.forEach(({ ws, file }, index) => {
+      const label = multiRepo ? `${ws.name}:${file.path}` : file.path;
+      const diff = diffs[index];
+      const kind = priority(file.path) === 2 ? 'build/config' : priority(file.path) === 1 ? 'prueba' : 'código';
+      if (diff && diff.diff && used + diff.diff.length <= CODE_AGENT_BUDGET.preloadDiffChars) {
+        used += diff.diff.length;
+        inlined.push(`=== ${file.path} [${file.changeType}, ${kind}${multiRepo ? `, repo ${ws.name}` : ''}; +${diff.added}/-${diff.removed}] ===\n${diff.diff}`);
+      } else {
+        listed.push(`- [${file.changeType}, ${kind}] ${label}${diff?.error ? ` (diff no disponible: ${diff.error})` : priority(file.path) < 2 ? ' (usa diff_file)' : ''}`);
+      }
+    });
+
+    const header = workspaces.map((ws) => {
+      const group = ws.group;
+      const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`);
+      const commits = group.commits.map((commit) => `commit ${commit.sha.slice(0, 8)} "${commit.comment || ''}"`);
+      return `Repositorio ${ws.name} → ${group.targetBranch}${group.alsoMergedInto.length ? ` (también integrado en ${group.alsoMergedInto.join(', ')})` : ''}:\n${[...prs, ...commits].map((line) => `  - ${line}`).join('\n')}`;
+    }).join('\n');
+
+    return [
+      'CAMBIOS DE CÓDIGO DE LA HU (PRs/commits vinculados en Azure Boards; es exactamente lo que se construyó para esta HU):',
+      header,
+      '',
+      inlined.length ? `DIFFS (líneas "+" agregadas, "-" eliminadas, espacios normalizados):\n\n${inlined.join('\n\n')}` : '',
+      listed.length ? `\nOTROS ARCHIVOS CAMBIADOS (no precargados):\n${listed.join('\n')}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  private async loadBranchDiff(
+    ref: RepoRef,
+    baseBranch: string,
+    scopePath: string,
+    emit: (event: CodeAgentEvent) => void
+  ): Promise<AzureBranchDiff | null> {
+    if (!baseBranch || baseBranch === ref.branch) return null;
+
+    emit({ type: 'progress', message: `Comparando ${ref.branch} contra ${baseBranch}…` });
+    try {
+      const diff = await this.gateway.getBranchDiff(ref, baseBranch);
+      const prefix = this.normalizePrefix(scopePath);
+      if (prefix) {
+        diff.changes = diff.changes.filter((change) => change.path.toLowerCase().startsWith(prefix));
+      }
+      emit({
+        type: 'progress',
+        message: diff.changes.length
+          ? `La rama tiene ${diff.aheadCount} commit(s) propios y ${diff.changes.length} archivo(s) de código modificados vs ${baseBranch}.`
+          : `La rama no tiene cambios de código propios vs ${baseBranch}; se explorará el código existente.`
+      });
+      return diff;
+    } catch (error: any) {
+      emit({ type: 'tool', message: `⚠️ No se pudo comparar con ${baseBranch}: ${error?.error?.message || error?.message || 'error'}. Se explora la rama completa.` });
+      return null;
+    }
+  }
+
+  private buildBranchChangesSummary(diff: AzureBranchDiff | null, baseBranch: string, rankedChanged: string[]): string {
+    if (!diff) {
+      return 'CAMBIOS DE LA RAMA: sin comparación con rama base (se explora el código completo de la rama).';
+    }
+    if (diff.changes.length === 0) {
+      return `CAMBIOS DE LA RAMA: ninguno de código respecto a ${baseBranch} (la HU puede estar ya integrada o no iniciada). Explora el código existente.`;
+    }
+    const byPath = new Map(diff.changes.map((change) => [change.path, change]));
+    const shown = rankedChanged.slice(0, CODE_AGENT_BUDGET.branchChangesListingLimit);
+    return [
+      `CAMBIOS DE LA RAMA vs ${baseBranch} (desde el ancestro común; ${diff.aheadCount} commit(s) propios, último commit ${diff.targetCommit?.slice(0, 8)}):`,
+      ...shown.map((path) => `- [${byPath.get(path)?.changeType}] ${path}`),
+      diff.changes.length > shown.length ? `…y ${diff.changes.length - shown.length} archivo(s) más.` : '',
+      diff.allChangesIncluded ? '' : 'Nota: la lista de cambios es parcial (rama muy grande).',
+      diff.changes.length > 60 ? 'ATENCIÓN: son demasiados archivos para una sola HU; la rama probablemente incluye trabajo ajeno. Prioriza los que coinciden con el vocabulario de la HU.' : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Herramientas
+  // ---------------------------------------------------------------------------
+
+  private async executeTool(
+    name: string,
+    args: any,
+    ctx: {
+      primaryRef: RepoRef;
+      workspaces: Workspace[];
+      branchDiff: AzureBranchDiff | null;
+      treeFiles: string[];
+      rankedFiles: string[];
+      filesReviewed: Set<string>;
+      emit: (event: CodeAgentEvent) => void;
+    }
+  ): Promise<string> {
+    const { emit, filesReviewed } = ctx;
+    const workspace = this.resolveWorkspace(ctx.workspaces, args.repo);
+    const ref = workspace ? workspace.ref : ctx.primaryRef;
+
+    try {
+      switch (name) {
+        case 'diff_file': {
+          const requested = this.normalizePath(args.path);
+          const wsFile = workspace?.files.find((file) => file.path.toLowerCase() === requested);
+          if (wsFile) {
+            emit({ type: 'tool', message: `🧬 Diff de ${wsFile.path.split('/').pop()}` });
+            const fileDiff = await this.gateway.getFileDiff(ref, { path: wsFile.path, changeType: wsFile.changeType }, wsFile.baseCommit, wsFile.targetCommit);
+            if (fileDiff.error) return `=== ${wsFile.path} ===\nERROR: ${fileDiff.error}`;
+            filesReviewed.add(wsFile.path);
+            return `=== ${wsFile.path} (+${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
+          }
+          const change = ctx.branchDiff?.changes.find((item) => item.path.toLowerCase() === requested);
+          if (!change || !ctx.branchDiff?.commonCommit || !ctx.branchDiff.targetCommit) {
+            return 'Ese archivo no está en los cambios de la HU. Usa read_files para leerlo completo.';
+          }
+          emit({ type: 'tool', message: `🧬 Diff de ${change.path.split('/').pop()} (${change.changeType})` });
+          const fileDiff = await this.gateway.getFileDiff(ref, change, ctx.branchDiff.commonCommit, ctx.branchDiff.targetCommit);
+          if (fileDiff.error) return `=== ${change.path} ===\nERROR: ${fileDiff.error}`;
+          filesReviewed.add(change.path);
+          return `=== ${change.path} (${change.changeType}; +${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
+        }
+
+        case 'list_files': {
+          const prefix = this.normalizePrefix(args.path_prefix);
+          const contains = String(args.contains || '').toLowerCase();
+          const matches = ctx.treeFiles.filter((path) =>
+            (!prefix || path.toLowerCase().startsWith(prefix)) && (!contains || path.toLowerCase().includes(contains)));
+          emit({ type: 'tool', message: `📂 Listando ${prefix || '/'}${contains ? ` (“${contains}”)` : ''}: ${matches.length} archivos` });
+          const shown = matches.slice(0, 150);
+          return shown.length
+            ? `${shown.join('\n')}${matches.length > shown.length ? `\n…y ${matches.length - shown.length} más (acota con path_prefix/contains)` : ''}`
+            : 'Sin coincidencias.';
+        }
+
+        case 'search_code': {
+          const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter(Boolean).slice(0, 8);
+          const prefix = this.normalizePrefix(args.path_prefix);
+          const pool = prefix ? ctx.rankedFiles.filter((path) => path.toLowerCase().startsWith(prefix)) : ctx.rankedFiles;
+          const candidates = this.rankFiles(pool, terms.map((term) => this.normalizeText(term))).slice(0, 30);
+          emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidates.length} archivos` });
+          if (candidates.length === 0) return 'No hay archivos candidatos para buscar.';
+          const result = await this.gateway.search(ctx.primaryRef, terms, candidates);
+          return result.matches.length
+            ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
+            : `Sin coincidencias en ${result.searchedFiles} archivos revisados.`;
+        }
+
+        case 'read_files': {
+          const requested = (Array.isArray(args.files) ? args.files : [])
+            .slice(0, 6)
+            .map((file: any) => ({
+              path: String(file?.path || ''),
+              startLine: Number(file?.start_line) || undefined,
+              endLine: Number(file?.end_line) || undefined,
+            }))
+            .filter((file: { path: string }) => file.path);
+          if (requested.length === 0) return 'Debes indicar al menos un archivo en "files".';
+
+          emit({ type: 'tool', message: `📄 Leyendo ${requested.map((file: { path: string }) => file.path.split('/').pop()).join(', ')}` });
+          const files = await this.gateway.readFiles(ref, requested);
+          return files.map((file) => {
+            if (file.error) return `=== ${file.path} ===\nERROR: ${file.error}`;
+            filesReviewed.add(file.path);
+            const header = `=== ${file.path} (líneas ${file.startLine}-${file.endLine} de ${file.totalLines}${file.truncated ? ', truncado' : ''}) ===`;
+            return `${header}\n${file.content}`;
+          }).join('\n\n');
+        }
+
+        case 'finish':
+          return 'El argumento "technical_context" llegó vacío. Vuelve a llamar a finish con el contexto técnico completo.';
+
+        default:
+          return `Herramienta desconocida: ${name}`;
+      }
+    } catch (error: any) {
+      const message = error?.error?.message || error?.message || 'Error desconocido';
+      emit({ type: 'tool', message: `⚠️ ${name}: ${message}` });
+      return `ERROR al ejecutar ${name}: ${message}`;
+    }
+  }
+
+  private resolveWorkspace(workspaces: Workspace[], repo: unknown): Workspace | undefined {
+    if (workspaces.length === 0) return undefined;
+    const wanted = String(repo || '').trim().toLowerCase();
+    return (wanted && workspaces.find((ws) => ws.name.toLowerCase() === wanted)) || workspaces[0];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pre-filtro determinista (sin IA)
+  // ---------------------------------------------------------------------------
+
+  private async mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+    const worker = async () => {
+      while (index < items.length) {
+        const current = index++;
+        results[current] = await fn(items[current]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
+  }
+
+  private normalizeText(value: string): string {
+    return value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  private normalizePath(path: unknown): string {
+    return ('/' + String(path || '').trim().replace(/^[^:/]+:(?=\/)/, '').replace(/^\/+/, '')).toLowerCase();
+  }
+
+  private normalizePrefix(prefix: unknown): string {
+    const raw = String(prefix || '').trim();
+    if (!raw || raw === '/') return '';
+    return ('/' + raw.replace(/^\/+/, '')).toLowerCase();
+  }
+
+  private extractKeywords(text: string): string[] {
+    const counts = new Map<string, number>();
+    for (const word of this.normalizeText(text).split(/[^a-z0-9ñ]+/)) {
+      if (word.length < 4 || STOPWORDS.has(word) || /^\d+$/.test(word)) continue;
+      counts.set(word, (counts.get(word) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([word]) => word);
+  }
+
+  /** Ordena rutas por coincidencia con palabras clave (raíz de 5 letras) y tipo de archivo. */
+  private rankFiles(files: string[], keywords: string[]): string[] {
+    const stems = keywords.map((keyword) => keyword.slice(0, 5)).filter((stem) => stem.length >= 3);
+    const scored = files.map((path, index) => {
+      const normalized = this.normalizeText(path);
+      let score = 0;
+      for (const stem of stems) {
+        if (normalized.includes(stem)) score += normalized.split('/').pop()!.includes(stem) ? 3 : 1;
+      }
+      if (SOURCE_HINTS.test(path)) score += 0.5;
+      return { path, score, index };
+    });
+    return scored
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((item) => item.path);
+  }
+
+  private buildTreeSummary(rankedFiles: string[], truncated: boolean, compact: boolean): string {
+    // Con el conjunto de cambios de la HU el árbol es secundario: se envía más corto para ahorrar tokens.
+    const limit = compact ? 60 : CODE_AGENT_BUDGET.treeListingLimit;
+    const shown = rankedFiles.slice(0, limit);
+    const folders = new Map<string, number>();
+    for (const path of rankedFiles) {
+      const folder = path.split('/').slice(0, 4).join('/') || '/';
+      folders.set(folder, (folders.get(folder) || 0) + 1);
+    }
+    const folderSummary = Array.from(folders.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, compact ? 15 : 40)
+      .map(([folder, count]) => `${folder}/ (${count})`)
+      .join('\n');
+
+    return [
+      `Carpetas principales (${rankedFiles.length} archivos${truncated ? ', árbol truncado' : ''}):`,
+      folderSummary,
+      '',
+      `Archivos más relevantes (${shown.length}${rankedFiles.length > shown.length ? ` de ${rankedFiles.length}; usa list_files para ver más` : ''}):`,
+      shown.join('\n'),
+    ].join('\n');
+  }
+
+  private parseArgs(raw: string): any {
+    try {
+      return JSON.parse(raw || '{}');
+    } catch {
+      return {};
+    }
+  }
+}

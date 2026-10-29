@@ -87,13 +87,16 @@
                 (ngModelChange)="clearCodeContext()" placeholder="Ej: /src/modules/pagos" [disabled]="codeExploring">
             </div>
           </div>
-          <p *ngIf="usesCodeContext && isCodeTargetReady" class="code-source-hint">
+          <div *ngIf="usesCodeContext && hasHuChangeset" class="import-feedback import-success" role="status">
+            Se analizarán los cambios de la HU: {{ codeHuChangesSummary }}. Repositorio y rama solo se usan si la HU no tiene PRs.
+          </div>
+          <p *ngIf="usesCodeContext && !hasHuChangeset && isManualCodeTargetReady" class="code-source-hint">
             <ng-container *ngIf="codeBaseBranch && codeBaseBranch !== codeBranch; else fullBranchHint">
               Se analizarán solo los cambios que <strong>{{ codeBranch }}</strong> hizo desde que salió de <strong>{{ codeBaseBranch }}</strong>, hasta su último commit.
             </ng-container>
             <ng-template #fullBranchHint>Se explorará el código completo de <strong>{{ codeBranch }}</strong> (último commit), sin aislar los cambios de la HU.</ng-template>
           </p>
-          <div *ngIf="usesCodeContext && codeLinkedBranchHint" class="import-feedback import-success" role="status">
+          <div *ngIf="usesCodeContext && !hasHuChangeset && codeLinkedBranchHint" class="import-feedback import-success" role="status">
             {{ codeLinkedBranchHint }}
           </div>
           <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">

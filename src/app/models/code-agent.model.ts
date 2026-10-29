@@ -85,6 +85,34 @@ export interface AzureFileDiff {
   error?: string;
 }
 
+/** Archivo del conjunto de cambios de la HU, con su base y destino para el diff. */
+export interface WorkItemChangedFile {
+  path: string;
+  changeType: string;
+  baseCommit: string;
+  targetCommit: string;
+}
+
+/** Cambios de la HU en un repositorio + rama destino (PRs/commits vinculados). */
+export interface WorkItemChangeGroup {
+  projectId: string;
+  repositoryId: string;
+  repositoryName: string;
+  targetBranch: string;
+  sourceBranches: string[];
+  prs: { id: number; title: string; status: string; sourceBranch: string; targetBranch: string }[];
+  commits: { sha: string; comment?: string }[];
+  lastDate: string | null;
+  lastCommit: string;
+  files: WorkItemChangedFile[];
+  alsoMergedInto: string[];
+}
+
+export interface WorkItemChanges {
+  workItemId: number;
+  groups: WorkItemChangeGroup[];
+}
+
 export interface AzureRepoSearchResult {
   searchedFiles: number;
   matches: { path: string; line: number; text: string }[];
@@ -103,7 +131,10 @@ export interface CodeExplorationTarget {
 }
 
 export interface CodeExplorationInput {
-  target: CodeExplorationTarget;
+  /** Rama elegida en el formulario. Puede ser null si la HU tiene PRs/commits vinculados. */
+  target: CodeExplorationTarget | null;
+  /** ID de la HU en Azure Boards: permite usar sus PRs/commits vinculados. */
+  workItemId?: number;
   mode: ContextSource;
   description: string;
   acceptanceCriteria: string;

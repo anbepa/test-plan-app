@@ -186,6 +186,16 @@ function versionQuery(version, versionType = 'branch') {
   return `versionDescriptor.version=${encodeURIComponent(version)}&versionDescriptor.versionType=${versionType}`;
 }
 
+/**
+ * Versión a leer: commit exacto (si viene "commit") o rama. Leer por commit
+ * permite analizar justo el código que entró con los PRs de la HU.
+ */
+function resolveVersion(body) {
+  const commit = typeof body.commit === 'string' ? body.commit.trim() : '';
+  if (commit) return { version: requireCommit(commit, 'commit'), versionType: 'commit' };
+  return { version: normalizeBranch(body.branch), versionType: 'branch' };
+}
+
 function requireCommit(value, fieldName) {
   const commit = requireString(value, fieldName);
   if (!/^[0-9a-f]{40}$/i.test(commit)) throw new CodeAgentError(400, `El campo "${fieldName}" no es un commit válido.`);
@@ -237,10 +247,10 @@ async function listBranches(organization, pat, project, repositoryId) {
  * Árbol de archivos legibles de la rama (un solo llamado a Azure).
  * Devuelve solo rutas de código/texto, sin carpetas excluidas ni secretos.
  */
-async function getTree(organization, pat, project, repositoryId, branch, scopePath) {
+async function getTree(organization, pat, project, repositoryId, ver, scopePath) {
   const scope = normalizeRepoPath(scopePath);
   const url = `${repoBase(organization, project, repositoryId)}/items?scopePath=${encodeURIComponent(scope)}`
-    + `&recursionLevel=Full&${versionQuery(branch)}&api-version=${API_VERSION}`;
+    + `&recursionLevel=Full&${versionQuery(ver.version, ver.versionType)}&api-version=${API_VERSION}`;
   const data = await azureRepoGet(url, pat);
 
   const allFiles = (data.value || []).filter((item) => !item.isFolder && item.gitObjectType !== 'tree');
@@ -266,7 +276,7 @@ async function fetchFileContent(organization, pat, project, repositoryId, versio
  * Lee archivos (con rango de líneas opcional). El contenido se devuelve con
  * número de línea para que la IA pueda citar archivo:línea.
  */
-async function readFiles(organization, pat, project, repositoryId, branch, requests) {
+async function readFiles(organization, pat, project, repositoryId, ver, requests) {
   const list = Array.isArray(requests) ? requests.slice(0, LIMITS.maxFilesPerRead) : [];
   if (list.length === 0) throw new CodeAgentError(400, 'Debes indicar al menos un archivo.');
 
@@ -277,7 +287,7 @@ async function readFiles(organization, pat, project, repositoryId, branch, reque
     }
 
     try {
-      const raw = await fetchFileContent(organization, pat, project, repositoryId, branch, path);
+      const raw = await fetchFileContent(organization, pat, project, repositoryId, ver.version, path, ver.versionType);
       const lines = redactSecrets(raw).split(/\r?\n/);
       const startLine = Math.max(1, Number(request.startLine) || 1);
       const endLine = Math.min(lines.length, Number(request.endLine) || lines.length);
@@ -306,7 +316,7 @@ async function readFiles(organization, pat, project, repositoryId, branch, reque
 }
 
 /** Búsqueda de texto (grep) sobre un conjunto acotado de archivos candidatos. */
-async function searchInFiles(organization, pat, project, repositoryId, branch, terms, paths) {
+async function searchInFiles(organization, pat, project, repositoryId, ver, terms, paths) {
   const cleanTerms = (Array.isArray(terms) ? terms : [terms])
     .map((term) => String(term || '').trim().toLowerCase())
     .filter((term) => term.length >= 2)
@@ -325,7 +335,7 @@ async function searchInFiles(organization, pat, project, repositoryId, branch, t
     while (index < candidates.length && matches.length < LIMITS.maxSearchMatches) {
       const path = candidates[index++];
       try {
-        const lines = redactSecrets(await fetchFileContent(organization, pat, project, repositoryId, branch, path)).split(/\r?\n/);
+        const lines = redactSecrets(await fetchFileContent(organization, pat, project, repositoryId, ver.version, path, ver.versionType)).split(/\r?\n/);
         for (let i = 0; i < lines.length && matches.length < LIMITS.maxSearchMatches; i++) {
           const lower = lines[i].toLowerCase();
           if (cleanTerms.some((term) => lower.includes(term))) {
@@ -377,22 +387,32 @@ async function getBranchDiff(organization, pat, project, repositoryId, baseBranc
   };
 }
 
+/** Clave de comparación: ignora indentación y espacios repetidos (re-formateos no son cambios funcionales). */
+function lineKey(line) {
+  return line.trim().replace(/\s+/g, ' ');
+}
+
 /**
- * Diff por líneas (LCS) entre dos textos. Recorta prefijo/sufijo comunes y
- * devuelve null si el bloque central es demasiado grande para calcularlo.
+ * Diff por líneas (LCS) entre dos textos, ignorando diferencias de espacios.
+ * Recorta prefijo/sufijo comunes y devuelve null si el bloque central es
+ * demasiado grande para calcularlo.
  */
-function computeLineDiff(baseLines, targetLines) {
+function computeLineDiff(baseText, targetText) {
+  const baseLines = baseText;
+  const targetLines = targetText;
+  const baseKeys = baseLines.map(lineKey);
+  const targetKeys = targetLines.map(lineKey);
   let start = 0;
-  while (start < baseLines.length && start < targetLines.length && baseLines[start] === targetLines[start]) start++;
+  while (start < baseKeys.length && start < targetKeys.length && baseKeys[start] === targetKeys[start]) start++;
   let endBase = baseLines.length;
   let endTarget = targetLines.length;
-  while (endBase > start && endTarget > start && baseLines[endBase - 1] === targetLines[endTarget - 1]) {
+  while (endBase > start && endTarget > start && baseKeys[endBase - 1] === targetKeys[endTarget - 1]) {
     endBase--;
     endTarget--;
   }
 
-  const a = baseLines.slice(start, endBase);
-  const b = targetLines.slice(start, endTarget);
+  const a = baseKeys.slice(start, endBase);
+  const b = targetKeys.slice(start, endTarget);
   const n = a.length;
   const m = b.length;
   if ((n + 1) * (m + 1) > LIMITS.maxDiffCells) return null;
@@ -410,23 +430,23 @@ function computeLineDiff(baseLines, targetLines) {
 
   // ops: { type: ' ' | '-' | '+', baseLine, targetLine, text } (líneas 1-based)
   const ops = [];
-  for (let k = 0; k < start; k++) ops.push({ type: ' ', baseLine: k + 1, targetLine: k + 1, text: baseLines[k] });
+  for (let k = 0; k < start; k++) ops.push({ type: ' ', baseLine: k + 1, targetLine: k + 1, text: targetLines[k] });
   let i = 0;
   let j = 0;
   while (i < n || j < m) {
     if (i < n && j < m && a[i] === b[j]) {
-      ops.push({ type: ' ', baseLine: start + i + 1, targetLine: start + j + 1, text: a[i] });
+      ops.push({ type: ' ', baseLine: start + i + 1, targetLine: start + j + 1, text: targetLines[start + j] });
       i++; j++;
     } else if (i < n && (j >= m || lcs[(i + 1) * width + j] >= lcs[i * width + j + 1])) {
-      ops.push({ type: '-', baseLine: start + i + 1, text: a[i] });
+      ops.push({ type: '-', baseLine: start + i + 1, text: baseLines[start + i] });
       i++;
     } else {
-      ops.push({ type: '+', targetLine: start + j + 1, text: b[j] });
+      ops.push({ type: '+', targetLine: start + j + 1, text: targetLines[start + j] });
       j++;
     }
   }
   for (let k = 0; k < baseLines.length - endBase; k++) {
-    ops.push({ type: ' ', baseLine: endBase + k + 1, targetLine: endTarget + k + 1, text: baseLines[endBase + k] });
+    ops.push({ type: ' ', baseLine: endBase + k + 1, targetLine: endTarget + k + 1, text: targetLines[endTarget + k] });
   }
   return ops;
 }
@@ -454,7 +474,7 @@ function formatHunks(ops) {
       inHunk = true;
     }
     const lineNumber = op.type === '-' ? `base ${op.baseLine}` : String(op.targetLine);
-    output += `${op.type} ${lineNumber}| ${op.text}\n`;
+    output += `${op.type} ${lineNumber}| ${lineKey(op.text)}\n`;
     if (output.length > LIMITS.maxCharsPerFile) {
       output += '…[diff truncado: usa read_files con rango de líneas para ver más]\n';
       break;
@@ -494,6 +514,160 @@ async function getFileDiff(organization, pat, project, repositoryId, body) {
   const added = ops.filter((op) => op.type === '+').length;
   const removed = ops.filter((op) => op.type === '-').length;
   return { path, changeType, added, removed, diff: formatHunks(ops) };
+}
+
+/**
+ * Cambios de código vinculados a la HU (Development en Azure Boards):
+ * PRs (completados o activos) y commits "Fixed in Commit".
+ *
+ * Es la forma más precisa de aislar lo que se construyó para la HU: las ramas
+ * de feature suelen ser de larga vida y un diff contra trunk/develop trae
+ * cientos de archivos ajenos.
+ *
+ * Agrupa por repositorio + rama destino. Por archivo toma como base el padre
+ * del primer cambio y como destino el último cambio del grupo, de modo que un
+ * diff muestra el efecto acumulado de todos los PRs de la HU sobre ese archivo.
+ */
+async function getWorkItemChanges(organization, pat, workItemId) {
+  const id = Number(workItemId);
+  if (!Number.isInteger(id) || id <= 0) throw new CodeAgentError(400, 'ID de HU inválido.');
+
+  const base = buildBaseUrl(organization);
+  const workItem = await azureRepoGet(`${base}/_apis/wit/workitems/${id}?$expand=relations&api-version=${API_VERSION}`, pat);
+
+  const prRefs = [];
+  const commitRefs = [];
+  for (const relation of workItem.relations || []) {
+    const url = decodeURIComponent(String(relation.url || ''));
+    if (relation.rel !== 'ArtifactLink') continue;
+    if (url.startsWith('vstfs:///Git/PullRequestId/')) {
+      const [projectId, repositoryId, prId] = url.slice('vstfs:///Git/PullRequestId/'.length).split('/');
+      if (projectId && repositoryId && prId) prRefs.push({ projectId, repositoryId, prId });
+    } else if (url.startsWith('vstfs:///Git/Commit/')) {
+      const [projectId, repositoryId, sha] = url.slice('vstfs:///Git/Commit/'.length).split('/');
+      if (projectId && repositoryId && /^[0-9a-f]{40}$/i.test(sha || '')) commitRefs.push({ projectId, repositoryId, sha });
+    }
+  }
+
+  const getCommit = (ref, sha) => azureRepoGet(
+    `${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/commits/${sha}?changeCount=500&api-version=${API_VERSION}`, pat);
+  const fileChangesOf = (changes) => (changes || [])
+    .filter((change) => change.item && !change.item.isFolder && change.item.gitObjectType !== 'tree')
+    .map((change) => ({ path: change.item.path, changeType: String(change.changeType || 'edit').toLowerCase() }));
+
+  // Cada "segmento" es un cambio atómico (PR o commit) con su base y su destino.
+  const segments = [];
+  const coveredCommits = new Set();
+
+  await Promise.all(prRefs.map(async (ref) => {
+    try {
+      const pr = await azureRepoGet(`${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/pullrequests/${ref.prId}?api-version=${API_VERSION}`, pat);
+      const info = {
+        id: Number(ref.prId),
+        title: String(pr.title || '').slice(0, 160),
+        status: pr.status,
+        sourceBranch: String(pr.sourceRefName || '').replace(/^refs\/heads\//, ''),
+        targetBranch: String(pr.targetRefName || '').replace(/^refs\/heads\//, ''),
+      };
+
+      if (pr.status === 'completed' && pr.lastMergeCommit && pr.lastMergeCommit.commitId) {
+        const mergeSha = pr.lastMergeCommit.commitId;
+        const commit = await getCommit(ref, mergeSha);
+        coveredCommits.add(mergeSha);
+        segments.push({
+          ...ref, repositoryName: pr.repository && pr.repository.name, pr: info, targetBranch: info.targetBranch,
+          date: pr.closedDate || (commit.committer && commit.committer.date), baseCommit: (commit.parents || [])[0], targetCommit: mergeSha,
+          files: fileChangesOf(commit.changes),
+        });
+      } else if (pr.status === 'active' && pr.lastMergeSourceCommit && pr.lastMergeTargetCommit) {
+        const source = pr.lastMergeSourceCommit.commitId;
+        const diff = await azureRepoGet(
+          `${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/diffs/commits`
+          + `?baseVersion=${pr.lastMergeTargetCommit.commitId}&baseVersionType=commit&targetVersion=${source}&targetVersionType=commit`
+          + `&diffCommonCommit=true&$top=${LIMITS.maxBranchChanges}&api-version=${API_VERSION}`, pat);
+        segments.push({
+          ...ref, repositoryName: pr.repository && pr.repository.name, pr: info, targetBranch: info.targetBranch,
+          date: pr.creationDate, baseCommit: diff.commonCommit, targetCommit: source,
+          files: fileChangesOf(diff.changes),
+        });
+      }
+      // PRs abandonados no aportan código.
+    } catch (error) {
+      console.warn('[CODE_AGENT][WORK_ITEM_CHANGES] PR omitido:', ref.prId, error && error.message);
+    }
+  }));
+
+  await Promise.all(commitRefs.filter((ref) => !coveredCommits.has(ref.sha)).map(async (ref) => {
+    try {
+      const commit = await getCommit(ref, ref.sha);
+      segments.push({
+        ...ref, repositoryName: null, pr: null, targetBranch: '(commits vinculados)',
+        date: commit.committer && commit.committer.date, baseCommit: (commit.parents || [])[0], targetCommit: ref.sha,
+        comment: String(commit.comment || '').split('\n')[0].slice(0, 160),
+        files: fileChangesOf(commit.changes),
+      });
+    } catch (error) {
+      console.warn('[CODE_AGENT][WORK_ITEM_CHANGES] commit omitido:', ref.sha, error && error.message);
+    }
+  }));
+
+  // Agrupar por repo + rama destino.
+  const groupsByKey = new Map();
+  for (const segment of segments.filter((item) => item.baseCommit && item.targetCommit)) {
+    const key = `${segment.repositoryId}|${segment.targetBranch}`;
+    if (!groupsByKey.has(key)) groupsByKey.set(key, []);
+    groupsByKey.get(key).push(segment);
+  }
+
+  const groups = [];
+  for (const groupSegments of groupsByKey.values()) {
+    groupSegments.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+    const first = groupSegments[0];
+    const files = new Map();
+    for (const segment of groupSegments) {
+      for (const file of segment.files) {
+        if (!isReadableFile(file.path)) continue;
+        const existing = files.get(file.path);
+        files.set(file.path, {
+          path: file.path,
+          changeType: existing && existing.changeType === 'add' ? 'add' : file.changeType,
+          baseCommit: existing ? existing.baseCommit : segment.baseCommit,
+          targetCommit: segment.targetCommit,
+        });
+      }
+    }
+    if (files.size === 0) continue;
+
+    groups.push({
+      projectId: first.projectId,
+      repositoryId: first.repositoryId,
+      repositoryName: groupSegments.map((item) => item.repositoryName).find(Boolean) || first.repositoryId,
+      targetBranch: first.targetBranch,
+      sourceBranches: Array.from(new Set(groupSegments.map((item) => item.pr && item.pr.sourceBranch).filter(Boolean))),
+      prs: groupSegments.map((item) => item.pr).filter(Boolean),
+      commits: groupSegments.filter((item) => !item.pr).map((item) => ({ sha: item.targetCommit, comment: item.comment })),
+      lastDate: groupSegments[groupSegments.length - 1].date || null,
+      lastCommit: groupSegments[groupSegments.length - 1].targetCommit,
+      files: Array.from(files.values()),
+      alsoMergedInto: [],
+    });
+  }
+
+  // Si un repo tiene el mismo cambio integrado en varias ramas (release + trunk),
+  // se conserva el grupo más reciente y los demás se informan como "también en".
+  groups.sort((a, b) => String(b.lastDate || '').localeCompare(String(a.lastDate || '')));
+  const result = [];
+  for (const group of groups) {
+    const keeper = result.find((kept) => kept.repositoryId === group.repositoryId
+      && group.files.every((file) => kept.files.some((keptFile) => keptFile.path === file.path)));
+    if (keeper) {
+      keeper.alsoMergedInto.push(group.targetBranch);
+      continue;
+    }
+    result.push(group);
+  }
+
+  return { workItemId: id, groups: result };
 }
 
 /**
@@ -602,9 +776,10 @@ async function saveCachedContext(adminClient, userId, body) {
  *   GET  repositories?project=
  *   GET  branches?project=&repositoryId=
  *   GET  work-item-links?workItemId=
- *   POST tree        { project, repositoryId, branch, scopePath? }
- *   POST files       { project, repositoryId, branch, files: [{ path, startLine?, endLine? }] }
- *   POST search      { project, repositoryId, branch, terms: [], paths: [] }
+ *   GET  work-item-changes?workItemId=   (PRs/commits vinculados a la HU)
+ *   POST tree        { project, repositoryId, branch | commit, scopePath? }
+ *   POST files       { project, repositoryId, branch | commit, files: [{ path, startLine?, endLine? }] }
+ *   POST search      { project, repositoryId, branch | commit, terms: [], paths: [] }
  *   POST branch-diff { project, repositoryId, baseBranch, branch }
  *   POST file-diff   { project, repositoryId, path, changeType, originalPath?, baseCommit, targetCommit }
  *   POST cache/get   { repositoryId, commitId, scopePath, mode, description, acceptanceCriteria }
@@ -624,6 +799,8 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
         return listBranches(organization, pat, requireString(q.project, 'project'), requireString(q.repositoryId, 'repositoryId'));
       case 'work-item-links':
         return getWorkItemLinkedBranches(organization, pat, q.workItemId);
+      case 'work-item-changes':
+        return getWorkItemChanges(organization, pat, q.workItemId);
       default:
         break;
     }
@@ -632,15 +809,15 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
   if (method === 'POST') {
     switch (route) {
       case 'tree':
-        return getTree(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.scopePath);
+        return getTree(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.scopePath);
       case 'files':
-        return readFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.files);
+        return readFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.files);
       case 'branch-diff':
         return getBranchDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.baseBranch), normalizeBranch(b.branch));
       case 'file-diff':
         return getFileDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), b);
       case 'search':
-        return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.terms, b.paths);
+        return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
       case 'cache/get':
         return { cached: await getCachedContext(adminClient, userId, b) };
       case 'cache/save':

@@ -15,13 +15,9 @@ import {
   AzureRepoTree,
   AzureRepository,
   ContextSource,
+  WorkItemChanges,
 } from '../../models/code-agent.model';
-
-interface RepoRef {
-  project: string;
-  repositoryId: string;
-  branch: string;
-}
+import { RepoRef } from '../ai/code-agent-runner';
 
 export interface CodeContextCacheKey {
   repositoryId: string;
@@ -62,6 +58,11 @@ export class AzureReposService {
 
   getLinkedBranches(workItemId: number): Observable<AzureLinkedBranch[]> {
     return this.authorizedGet<AzureLinkedBranch[]>(`${this.baseUrl}/work-item-links`, { workItemId: String(workItemId) });
+  }
+
+  /** PRs/commits vinculados a la HU con los archivos que cambiaron (base → destino). */
+  getWorkItemChanges(workItemId: number): Observable<WorkItemChanges> {
+    return this.authorizedGet<WorkItemChanges>(`${this.baseUrl}/work-item-changes`, { workItemId: String(workItemId) });
   }
 
   getTree(ref: RepoRef, scopePath: string): Observable<AzureRepoTree> {

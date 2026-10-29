@@ -14,7 +14,7 @@ import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, WorkItemChanges } from '../models/code-agent.model';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -86,6 +86,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeLoadingTarget: boolean = false;
   codeTargetError: string | null = null;
   codeLinkedBranchHint: string | null = null;
+  /** PRs/commits vinculados a la HU: si existen, el agente analiza exactamente esos cambios. */
+  codeHuChanges: WorkItemChanges | null = null;
   codeExploring: boolean = false;
   codeAgentLog: string[] = [];
   codeAgentError: string | null = null;
@@ -98,8 +100,28 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return this.contextSource !== 'criteria';
   }
 
-  get isCodeTargetReady(): boolean {
+  get isManualCodeTargetReady(): boolean {
     return !!(this.codeProject && this.codeRepositoryId && this.codeBranch);
+  }
+
+  get hasHuChangeset(): boolean {
+    return String(this.codeHuChanges?.workItemId) === String(this.currentHuId).trim()
+      && !!this.codeHuChanges?.groups.some((group) => group.files.length > 0);
+  }
+
+  get isCodeTargetReady(): boolean {
+    return this.hasHuChangeset || this.isManualCodeTargetReady;
+  }
+
+  /** Resumen legible del conjunto de cambios de la HU (repo → rama: PRs, archivos). */
+  get codeHuChangesSummary(): string {
+    return (this.codeHuChanges?.groups || [])
+      .filter((group) => group.files.length > 0)
+      .map((group) => {
+        const origin = group.prs.length ? `${group.prs.length} PR(s)` : `${group.commits.length} commit(s)`;
+        return `${group.repositoryName} → ${group.targetBranch} (${origin}, ${group.files.length} archivo(s))`;
+      })
+      .join('; ');
   }
 
   /** Conteo de estados por criterio a partir de la matriz de cobertura del contexto técnico. */
@@ -407,8 +429,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           }
 
           this.clearCodeContext();
+          this.codeHuChanges = null;
           if (this.usesCodeContext) {
-            this.suggestLinkedBranch(importedHu.id);
+            this.loadHuCodeChanges(importedHu.id);
           }
 
           this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
@@ -593,7 +616,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
     const huId = Number(this.currentHuId);
     if (this.usesCodeContext && !this.isCodeTargetReady && Number.isInteger(huId) && huId > 0) {
-      this.suggestLinkedBranch(huId);
+      this.loadHuCodeChanges(huId);
     }
   }
 
@@ -677,6 +700,40 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.clearCodeContext();
   }
 
+  /**
+   * Consulta los PRs/commits vinculados a la HU. Si hay cambios, el agente los
+   * usa directamente (no hace falta elegir rama); si no, sugiere la rama vinculada.
+   */
+  private loadHuCodeChanges(workItemId: number): void {
+    this.codeLinkedBranchHint = null;
+    this.azureReposService.getWorkItemChanges(workItemId).subscribe({
+      next: async (changes) => {
+        if (String(workItemId) !== String(this.currentHuId).trim()) return;
+        this.codeHuChanges = changes;
+        const primary = changes.groups.find((group) => group.files.length > 0);
+        if (!primary) {
+          this.suggestLinkedBranch(workItemId);
+          return;
+        }
+        // Preselección informativa del repo/rama principal de la HU.
+        if (!this.isManualCodeTargetReady) {
+          if (this.codeProjects.length === 0) {
+            this.codeProjects = await firstValueFrom(this.azureReposService.listProjects()).catch(() => []);
+          }
+          const project = this.codeProjects.find((p) => p.id === primary.projectId);
+          if (project) {
+            this.onCodeProjectChange(project.name, {
+              repositoryId: primary.repositoryId,
+              branch: primary.sourceBranches[0] || primary.targetBranch
+            });
+          }
+        }
+        this.cdr.markForCheck();
+      },
+      error: () => this.suggestLinkedBranch(workItemId)
+    });
+  }
+
   /** Autosugiere repo + rama a partir de las ramas vinculadas a la HU en Azure Boards. */
   private suggestLinkedBranch(workItemId: number): void {
     this.codeLinkedBranchHint = null;
@@ -716,8 +773,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeContextFromCache = false;
     this.cdr.detectChanges();
 
+    const workItemId = Number(this.currentHuId);
     this.codeAgentSub = this.codeExplorerAgent.explore({
-      target: {
+      workItemId: this.hasHuChangeset && Number.isInteger(workItemId) ? workItemId : undefined,
+      target: !this.isManualCodeTargetReady ? null : {
         project: this.codeProject,
         repositoryId: this.codeRepositoryId,
         repositoryName: repository?.name || this.codeRepositoryId,

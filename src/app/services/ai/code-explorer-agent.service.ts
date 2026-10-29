@@ -4,51 +4,19 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { AiProvidersService } from './ai-providers.service';
 import { AzureReposService, CodeContextCacheKey } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
-import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS } from '../../config/code-agent-prompts.config';
-import { AzureBranchDiff, CodeAgentEvent, CodeExplorationInput } from '../../models/code-agent.model';
+import { CodeAgentEvent, CodeExplorationInput, WorkItemChanges } from '../../models/code-agent.model';
+import { ChatMessage, CodeAgentGateway, CodeAgentRunner, LlmUsage } from './code-agent-runner';
 
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: ToolCall[];
-  tool_call_id?: string;
-}
-
-interface ToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
-}
-
-/** Presupuesto del agente: mantiene tiempo y tokens acotados. */
-const BUDGET = {
-  maxSteps: 10,
-  maxFilesRead: 24,
-  maxToolOutputChars: 120_000,
-  maxToolResultChars: 30_000,
-  maxDurationMs: 240_000,
-  treeListingLimit: 350,
-  branchChangesListingLimit: 80,
-};
-
-const STOPWORDS = new Set([
-  'para', 'como', 'quiero', 'poder', 'desde', 'hasta', 'cuando', 'donde', 'debe', 'deben', 'sistema',
-  'usuario', 'usuarios', 'entonces', 'dado', 'que', 'una', 'uno', 'unos', 'unas', 'este', 'esta', 'estos',
-  'estas', 'con', 'sin', 'por', 'los', 'las', 'del', 'sus', 'mas', 'más', 'sea', 'ser', 'esto', 'cada',
-  'todo', 'todos', 'toda', 'todas', 'otro', 'otra', 'pero', 'tambien', 'también', 'tiene', 'tener', 'hace',
-  'dentro', 'sobre', 'entre', 'mediante', 'según', 'segun', 'pantalla', 'opcion', 'opción', 'campo', 'campos',
-  'with', 'that', 'this', 'from', 'when', 'then', 'should', 'user', 'given'
-]);
-
-const SOURCE_HINTS = /(controller|service|handler|validator|validation|rule|usecase|use-case|component|model|entity|dto|repository|resolver|router|routes|api|command|query|schema|policy|guard|spec|test)/i;
+type CacheVersion = Pick<CodeContextCacheKey, 'repositoryId' | 'commitId'>;
 
 /**
- * Agente autónomo (acotado) que explora una rama de Azure Repos y devuelve un
- * "Contexto técnico" para complementar la generación de escenarios.
+ * Agente autónomo (acotado) que explora el código de la HU en Azure Repos y
+ * devuelve un "Contexto técnico" para complementar la generación de escenarios.
  *
- * El ciclo LLM ↔ herramientas corre en el navegador: cada paso es un request
- * corto a los proxies existentes (DeepSeek / GitHub Models) y al backend de
- * Azure Repos, así ninguna función de Vercel se acerca a su maxDuration.
+ * La lógica del agente vive en CodeAgentRunner (sin dependencias de Angular);
+ * este servicio conecta los proveedores de IA, el backend de Azure Repos y la
+ * caché. El ciclo LLM ↔ herramientas corre en el navegador: cada paso es un
+ * request corto, así ninguna función de Vercel se acerca a su maxDuration.
  */
 @Injectable({
   providedIn: 'root'
@@ -87,236 +55,104 @@ export class CodeExplorerAgentService {
       throw new Error('El agente de código requiere DeepSeek o GitHub Models como proveedor activo.');
     }
 
-    const { target } = input;
-    const ref = { project: target.project, repositoryId: target.repositoryId, branch: target.branch };
-    const cacheKey: CodeContextCacheKey = {
-      repositoryId: target.repositoryId,
-      commitId: target.commitId,
-      scopePath: target.scopePath || '/',
-      baseBranch: target.baseBranch || '',
+    // Los cambios de la HU se consultan una sola vez: sirven para la clave de caché y para el agente.
+    let workItemChanges: Promise<WorkItemChanges> | null = null;
+    const getWorkItemChanges = (workItemId: number) =>
+      workItemChanges ??= firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId));
+
+    const baseKey = {
+      scopePath: input.target?.scopePath || '/',
+      baseBranch: input.target?.baseBranch || '',
       mode: input.mode,
       description: input.description,
       acceptanceCriteria: input.acceptanceCriteria,
     };
 
-    if (useCache && target.commitId) {
-      emit({ type: 'progress', message: 'Buscando contexto en caché…' });
-      const cached = await firstValueFrom(this.azureRepos.getCachedContext(cacheKey)).catch(() => null);
-      if (cached?.cached?.context) {
-        emit({
-          type: 'cached',
-          message: 'Contexto reutilizado de caché (misma rama, mismo commit y misma HU).',
-          context: cached.cached.context,
-          filesReviewed: cached.cached.filesReviewed,
-        });
-        return;
-      }
-    }
-
-    emit({ type: 'progress', message: `Descargando árbol de ${target.repositoryName}@${target.branch}…` });
-    const tree = await firstValueFrom(this.azureRepos.getTree(ref, target.scopePath || '/'));
-    if (tree.files.length === 0) {
-      throw new Error('No se encontraron archivos de código legibles en la rama/ruta seleccionada.');
-    }
-    emit({ type: 'progress', message: `Árbol listo: ${tree.readableFiles} archivos de código (de ${tree.totalFiles}).` });
-
-    const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
-
-    // Cambios propios de la rama vs su base: es el fragmento de código puntual de la HU.
-    const branchDiff = await this.loadBranchDiff(ref, target.baseBranch, target.scopePath, emit);
-    const hasBranchDiff = !!branchDiff && branchDiff.changes.length > 0;
-    const changedPaths = new Set((branchDiff?.changes || []).map((change) => change.path));
-    const rankedChanged = this.rankFiles(Array.from(changedPaths), keywords);
-    const rankedFiles = [...rankedChanged, ...this.rankFiles(tree.files.filter((path) => !changedPaths.has(path)), keywords)];
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: CODE_AGENT_PROMPTS.SYSTEM(input.mode, BUDGET.maxSteps, hasBranchDiff) },
-      {
-        role: 'user',
-        content: CODE_AGENT_PROMPTS.USER(
-          input.description,
-          input.acceptanceCriteria,
-          input.userRequest,
-          `${target.repositoryName} (rama ${target.branch}${target.scopePath && target.scopePath !== '/' ? `, alcance ${target.scopePath}` : ''})`,
-          this.buildBranchChangesSummary(branchDiff, target.baseBranch, rankedChanged),
-          this.buildTreeSummary(rankedFiles, tree.truncated)
-        ),
-      },
-    ];
-
-    const filesReviewed = new Set<string>();
-    if (hasBranchDiff) {
-      emit({ type: 'progress', message: `Priorizando ${changedPaths.size} archivo(s) modificados por la rama.` });
-    }
-    let toolOutputChars = 0;
-    const startedAt = Date.now();
-
-    for (let step = 1; step <= BUDGET.maxSteps + 1; step++) {
-      if (isCancelled()) return;
-
-      const overBudget = step > BUDGET.maxSteps
-        || Date.now() - startedAt > BUDGET.maxDurationMs
-        || toolOutputChars > BUDGET.maxToolOutputChars
-        || filesReviewed.size >= BUDGET.maxFilesRead;
-
-      if (overBudget) {
-        messages.push({ role: 'user', content: CODE_AGENT_PROMPTS.FORCE_FINISH });
-      }
-
-      emit({ type: 'progress', message: overBudget ? 'Sintetizando contexto técnico…' : `Paso ${step}: analizando…` });
-      const reply = await this.callLlm(providerId, messages, overBudget);
-      const toolCalls = (reply.tool_calls || []).filter((call) => call?.function?.name);
-
-      // Sin herramientas: el modelo respondió en texto → se toma como contexto final.
-      if (toolCalls.length === 0) {
-        const text = (reply.content || '').trim();
-        if (!text) throw new Error('El agente no devolvió contexto técnico. Intenta de nuevo.');
-        await this.finalize(text, filesReviewed, cacheKey, target.branch, emit);
-        return;
-      }
-
-      messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
-
-      for (const call of toolCalls) {
-        const args = this.parseArgs(call.function.arguments);
-
-        if (call.function.name === 'finish') {
-          const context = String(args.technical_context || '').trim();
-          if (context) {
-            await this.finalize(context, filesReviewed, cacheKey, target.branch, emit);
-            return;
-          }
+    if (useCache) {
+      const version = await this.resolveCacheVersion(input, getWorkItemChanges);
+      if (version) {
+        emit({ type: 'progress', message: 'Buscando contexto en caché…' });
+        const cached = await firstValueFrom(this.azureRepos.getCachedContext({ ...baseKey, ...version })).catch(() => null);
+        if (cached?.cached?.context) {
+          emit({
+            type: 'cached',
+            message: 'Contexto reutilizado de caché (mismo código y misma HU).',
+            context: cached.cached.context,
+            filesReviewed: cached.cached.filesReviewed,
+          });
+          return;
         }
-
-        const result = overBudget
-          ? 'Presupuesto agotado. Llama a finish ahora.'
-          : await this.executeTool(call.function.name, args, ref, tree.files, rankedFiles, filesReviewed, emit, branchDiff);
-
-        const clipped = result.length > BUDGET.maxToolResultChars
-          ? `${result.slice(0, BUDGET.maxToolResultChars)}\n…[resultado truncado]`
-          : result;
-        toolOutputChars += clipped.length;
-        messages.push({ role: 'tool', tool_call_id: call.id, content: clipped });
       }
     }
 
-    throw new Error('El agente no logró completar la exploración dentro del presupuesto.');
+    const gateway: CodeAgentGateway = {
+      llm: (messages, options) => this.callLlm(providerId, messages, options.tools, options.forceFinish),
+      getWorkItemChanges,
+      getTree: (ref, scopePath) => firstValueFrom(this.azureRepos.getTree(ref, scopePath)),
+      readFiles: (ref, files) => firstValueFrom(this.azureRepos.readFiles(ref, files)),
+      search: (ref, terms, paths) => firstValueFrom(this.azureRepos.search(ref, terms, paths)),
+      getBranchDiff: (ref, baseBranch) => firstValueFrom(this.azureRepos.getBranchDiff(ref, baseBranch)),
+      getFileDiff: (ref, change, baseCommit, targetCommit) => firstValueFrom(this.azureRepos.getFileDiff(ref, change, baseCommit, targetCommit)),
+    };
+
+    const result = await new CodeAgentRunner(gateway).run(input, emit, isCancelled);
+    if (!result || isCancelled()) return;
+
+    const seconds = Math.round(result.stats.durationMs / 1000);
+    emit({
+      type: 'done',
+      message: `Contexto técnico listo (${result.filesReviewed.length} archivo(s) revisados, ${result.stats.llmCalls} paso(s) de IA, ${seconds}s).`,
+      context: result.context,
+      filesReviewed: result.filesReviewed,
+    });
+
+    if (result.versionKey) {
+      this.azureRepos.saveCachedContext({
+        ...baseKey,
+        ...this.cacheVersion(input, result.versionKey),
+        branch: input.target?.branch || '',
+        context: result.context,
+        filesReviewed: result.filesReviewed,
+      }).subscribe({ error: () => { /* la caché es opcional */ } });
+    }
   }
 
-  private async finalize(
-    context: string,
-    filesReviewed: Set<string>,
-    cacheKey: CodeContextCacheKey,
-    branch: string,
-    emit: (event: CodeAgentEvent) => void
-  ): Promise<void> {
-    const files = Array.from(filesReviewed);
-    if (cacheKey.commitId) {
-      // La caché es opcional: un fallo aquí no debe afectar al usuario.
-      await firstValueFrom(this.azureRepos.saveCachedContext({ ...cacheKey, branch, context, filesReviewed: files })).catch(() => null);
+  /** Commit(s) que identifican el código analizado; sin ellos no se usa caché. */
+  private async resolveCacheVersion(
+    input: CodeExplorationInput,
+    getWorkItemChanges: (workItemId: number) => Promise<WorkItemChanges>
+  ): Promise<CacheVersion | null> {
+    if (input.workItemId) {
+      const changes = await getWorkItemChanges(input.workItemId).catch(() => null);
+      if (changes?.groups.length) {
+        return this.cacheVersion(input, changes.groups.map((group) => group.lastCommit).join(','));
+      }
     }
-    emit({ type: 'done', message: `Exploración completada (${files.length} archivos revisados).`, context, filesReviewed: files });
+    return input.target?.commitId ? this.cacheVersion(input, input.target.commitId) : null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Herramientas
-  // ---------------------------------------------------------------------------
-
-  private async executeTool(
-    name: string,
-    args: any,
-    ref: { project: string; repositoryId: string; branch: string },
-    allFiles: string[],
-    rankedFiles: string[],
-    filesReviewed: Set<string>,
-    emit: (event: CodeAgentEvent) => void,
-    branchDiff: AzureBranchDiff | null
-  ): Promise<string> {
-    try {
-      switch (name) {
-        case 'diff_file': {
-          const requested = String(args.path || '').trim().toLowerCase();
-          const change = branchDiff?.changes.find((item) => item.path.toLowerCase() === ('/' + requested.replace(/^\/+/, '')));
-          if (!branchDiff?.commonCommit || !branchDiff.targetCommit) {
-            return 'No hay comparación con rama base; usa read_files.';
-          }
-          if (!change) {
-            return 'Ese archivo no está en los cambios de la rama. Usa read_files para leerlo completo.';
-          }
-          emit({ type: 'tool', message: `🧬 Diff de ${change.path.split('/').pop()} (${change.changeType})` });
-          const fileDiff = await firstValueFrom(this.azureRepos.getFileDiff(ref, change, branchDiff.commonCommit, branchDiff.targetCommit));
-          if (fileDiff.error) return `=== ${change.path} ===\nERROR: ${fileDiff.error}`;
-          filesReviewed.add(change.path);
-          return `=== ${change.path} (${change.changeType}; +${fileDiff.added} / -${fileDiff.removed} líneas) ===\n${fileDiff.diff}`;
-        }
-
-        case 'list_files': {
-          const prefix = this.normalizePrefix(args.path_prefix);
-          const contains = String(args.contains || '').toLowerCase();
-          const matches = allFiles.filter((path) =>
-            (!prefix || path.toLowerCase().startsWith(prefix)) && (!contains || path.toLowerCase().includes(contains)));
-          emit({ type: 'tool', message: `📂 Listando ${prefix || '/'}${contains ? ` (“${contains}”)` : ''}: ${matches.length} archivos` });
-          const shown = matches.slice(0, 200);
-          return shown.length
-            ? `${shown.join('\n')}${matches.length > shown.length ? `\n…y ${matches.length - shown.length} más (acota con path_prefix/contains)` : ''}`
-            : 'Sin coincidencias.';
-        }
-
-        case 'search_code': {
-          const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter(Boolean).slice(0, 8);
-          const prefix = this.normalizePrefix(args.path_prefix);
-          const pool = prefix ? rankedFiles.filter((path) => path.toLowerCase().startsWith(prefix)) : rankedFiles;
-          const candidates = this.rankFiles(pool, terms.map((term) => this.normalizeText(term))).slice(0, 30);
-          emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidates.length} archivos` });
-          if (candidates.length === 0) return 'No hay archivos candidatos para buscar.';
-          const result = await firstValueFrom(this.azureRepos.search(ref, terms, candidates));
-          return result.matches.length
-            ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
-            : `Sin coincidencias en ${result.searchedFiles} archivos revisados.`;
-        }
-
-        case 'read_files': {
-          const requested = (Array.isArray(args.files) ? args.files : [])
-            .slice(0, 6)
-            .map((file: any) => ({
-              path: String(file?.path || ''),
-              startLine: Number(file?.start_line) || undefined,
-              endLine: Number(file?.end_line) || undefined,
-            }))
-            .filter((file: { path: string }) => file.path);
-          if (requested.length === 0) return 'Debes indicar al menos un archivo en "files".';
-
-          emit({ type: 'tool', message: `📄 Leyendo ${requested.map((file: { path: string }) => file.path.split('/').pop()).join(', ')}` });
-          const files = await firstValueFrom(this.azureRepos.readFiles(ref, requested));
-          return files.map((file) => {
-            if (file.error) return `=== ${file.path} ===\nERROR: ${file.error}`;
-            filesReviewed.add(file.path);
-            const header = `=== ${file.path} (líneas ${file.startLine}-${file.endLine} de ${file.totalLines}${file.truncated ? ', truncado' : ''}) ===`;
-            return `${header}\n${file.content}`;
-          }).join('\n\n');
-        }
-
-        case 'finish':
-          return 'El argumento "technical_context" llegó vacío. Vuelve a llamar a finish con el contexto técnico completo.';
-
-        default:
-          return `Herramienta desconocida: ${name}`;
-      }
-    } catch (error: any) {
-      const message = error?.error?.message || error?.message || 'Error desconocido';
-      emit({ type: 'tool', message: `⚠️ ${name}: ${message}` });
-      return `ERROR al ejecutar ${name}: ${message}`;
-    }
+  /** Con PRs de la HU la clave es la HU + sus commits; con rama elegida, el repo + su commit. */
+  private cacheVersion(input: CodeExplorationInput, versionKey: string): CacheVersion {
+    const fromChangeset = !input.target || versionKey !== input.target.commitId;
+    return {
+      repositoryId: fromChangeset ? `hu:${input.workItemId}` : input.target!.repositoryId,
+      commitId: versionKey,
+    };
   }
 
   // ---------------------------------------------------------------------------
   // LLM (proveedores actuales con tool calling)
   // ---------------------------------------------------------------------------
 
-  private async callLlm(providerId: string | null, messages: ChatMessage[], forceFinish: boolean): Promise<ChatMessage> {
+  private async callLlm(
+    providerId: string | null,
+    messages: ChatMessage[],
+    tools: unknown[],
+    forceFinish: boolean
+  ): Promise<{ message: ChatMessage; usage?: LlmUsage }> {
     const common = {
       messages,
-      tools: CODE_AGENT_TOOLS,
+      tools,
       // Al agotar el presupuesto se obliga a llamar a finish.
       tool_choice: forceFinish ? { type: 'function', function: { name: 'finish' } } : 'auto',
       temperature: 0.2,
@@ -338,7 +174,7 @@ export class CodeExplorerAgentService {
 
         const message = response?.choices?.[0]?.message;
         if (!message) throw new Error('Respuesta vacía del proveedor de IA.');
-        return message as ChatMessage;
+        return { message: message as ChatMessage, usage: response?.usage };
       } catch (error: any) {
         const status = Number(error?.status || 0);
         const retryable = status === 429 || status >= 500;
@@ -364,124 +200,5 @@ export class CodeExplorerAgentService {
       throw new Error('Sesión inválida o expirada. Inicia sesión nuevamente.');
     }
     return new HttpHeaders({ Authorization: `Bearer ${session.access_token}` });
-  }
-
-  /** Archivos que la rama cambió respecto a su base. Un fallo aquí no detiene la exploración. */
-  private async loadBranchDiff(
-    ref: { project: string; repositoryId: string; branch: string },
-    baseBranch: string,
-    scopePath: string,
-    emit: (event: CodeAgentEvent) => void
-  ): Promise<AzureBranchDiff | null> {
-    if (!baseBranch || baseBranch === ref.branch) return null;
-
-    emit({ type: 'progress', message: `Comparando ${ref.branch} contra ${baseBranch}…` });
-    try {
-      const diff = await firstValueFrom(this.azureRepos.getBranchDiff(ref, baseBranch));
-      const prefix = this.normalizePrefix(scopePath);
-      if (prefix) {
-        diff.changes = diff.changes.filter((change) => change.path.toLowerCase().startsWith(prefix));
-      }
-      emit({
-        type: 'progress',
-        message: diff.changes.length
-          ? `La rama tiene ${diff.aheadCount} commit(s) propios y ${diff.changes.length} archivo(s) de código modificados vs ${baseBranch}.`
-          : `La rama no tiene cambios de código propios vs ${baseBranch}; se explorará el código existente.`
-      });
-      return diff;
-    } catch (error: any) {
-      emit({ type: 'tool', message: `⚠️ No se pudo comparar con ${baseBranch}: ${error?.error?.message || error?.message || 'error'}. Se explora la rama completa.` });
-      return null;
-    }
-  }
-
-  private buildBranchChangesSummary(diff: AzureBranchDiff | null, baseBranch: string, rankedChanged: string[]): string {
-    if (!diff) {
-      return 'CAMBIOS DE LA RAMA: sin comparación con rama base (se explora el código completo de la rama).';
-    }
-    if (diff.changes.length === 0) {
-      return `CAMBIOS DE LA RAMA: ninguno de código respecto a ${baseBranch} (la HU puede estar ya integrada o no iniciada). Explora el código existente.`;
-    }
-    const byPath = new Map(diff.changes.map((change) => [change.path, change]));
-    const shown = rankedChanged.slice(0, BUDGET.branchChangesListingLimit);
-    return [
-      `CAMBIOS DE LA RAMA vs ${baseBranch} (desde el ancestro común; ${diff.aheadCount} commit(s) propios, último commit ${diff.targetCommit?.slice(0, 8)}):`,
-      ...shown.map((path) => `- [${byPath.get(path)?.changeType}] ${path}`),
-      diff.changes.length > shown.length ? `…y ${diff.changes.length - shown.length} archivo(s) más.` : '',
-      diff.allChangesIncluded ? '' : 'Nota: la lista de cambios es parcial (rama muy grande).',
-    ].filter(Boolean).join('\n');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Pre-filtro determinista (sin IA)
-  // ---------------------------------------------------------------------------
-
-  private normalizeText(value: string): string {
-    return value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  }
-
-  private normalizePrefix(prefix: unknown): string {
-    const raw = String(prefix || '').trim();
-    if (!raw || raw === '/') return '';
-    return ('/' + raw.replace(/^\/+/, '')).toLowerCase();
-  }
-
-  private extractKeywords(text: string): string[] {
-    const counts = new Map<string, number>();
-    for (const word of this.normalizeText(text).split(/[^a-z0-9ñ]+/)) {
-      if (word.length < 4 || STOPWORDS.has(word) || /^\d+$/.test(word)) continue;
-      counts.set(word, (counts.get(word) || 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 25)
-      .map(([word]) => word);
-  }
-
-  /** Ordena rutas por coincidencia con palabras clave (raíz de 5 letras) y tipo de archivo. */
-  private rankFiles(files: string[], keywords: string[]): string[] {
-    const stems = keywords.map((keyword) => keyword.slice(0, 5)).filter((stem) => stem.length >= 3);
-    const scored = files.map((path, index) => {
-      const normalized = this.normalizeText(path);
-      let score = 0;
-      for (const stem of stems) {
-        if (normalized.includes(stem)) score += normalized.split('/').pop()!.includes(stem) ? 3 : 1;
-      }
-      if (SOURCE_HINTS.test(path)) score += 0.5;
-      return { path, score, index };
-    });
-    return scored
-      .sort((a, b) => b.score - a.score || a.index - b.index)
-      .map((item) => item.path);
-  }
-
-  private buildTreeSummary(rankedFiles: string[], truncated: boolean): string {
-    const shown = rankedFiles.slice(0, BUDGET.treeListingLimit);
-    const folders = new Map<string, number>();
-    for (const path of rankedFiles) {
-      const folder = path.split('/').slice(0, 4).join('/') || '/';
-      folders.set(folder, (folders.get(folder) || 0) + 1);
-    }
-    const folderSummary = Array.from(folders.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 40)
-      .map(([folder, count]) => `${folder}/ (${count})`)
-      .join('\n');
-
-    return [
-      `Carpetas principales (${rankedFiles.length} archivos${truncated ? ', árbol truncado' : ''}):`,
-      folderSummary,
-      '',
-      `Archivos más relevantes (${shown.length}${rankedFiles.length > shown.length ? ` de ${rankedFiles.length}; usa list_files para ver más` : ''}):`,
-      shown.join('\n'),
-    ].join('\n');
-  }
-
-  private parseArgs(raw: string): any {
-    try {
-      return JSON.parse(raw || '{}');
-    } catch {
-      return {};
-    }
   }
 }
