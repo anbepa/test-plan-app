@@ -74,11 +74,25 @@
               </select>
             </div>
             <div class="form-group">
+              <label for="tcCodeBaseBranch" title="Se analizan solo los cambios que la rama de la HU hizo desde que salió de esta rama.">Comparar contra:</label>
+              <select id="tcCodeBaseBranch" name="codeBaseBranch" class="form-control" [ngModel]="codeBaseBranch"
+                (ngModelChange)="onCodeBaseBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
+                <option value="">Sin comparación (rama completa)</option>
+                <option *ngFor="let branch of codeBranches" [value]="branch.name" [disabled]="branch.name === codeBranch">{{ branch.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label for="tcCodeScope">Carpeta (opcional):</label>
               <input id="tcCodeScope" name="codeScopePath" type="text" class="form-control" [(ngModel)]="codeScopePath"
                 (ngModelChange)="clearCodeContext()" placeholder="Ej: /src/modules/pagos" [disabled]="codeExploring">
             </div>
           </div>
+          <p *ngIf="usesCodeContext && isCodeTargetReady" class="code-source-hint">
+            <ng-container *ngIf="codeBaseBranch && codeBaseBranch !== codeBranch; else fullBranchHint">
+              Se analizarán solo los cambios que <strong>{{ codeBranch }}</strong> hizo desde que salió de <strong>{{ codeBaseBranch }}</strong>, hasta su último commit.
+            </ng-container>
+            <ng-template #fullBranchHint>Se explorará el código completo de <strong>{{ codeBranch }}</strong> (último commit), sin aislar los cambios de la HU.</ng-template>
+          </p>
           <div *ngIf="usesCodeContext && codeLinkedBranchHint" class="import-feedback import-success" role="status">
             {{ codeLinkedBranchHint }}
           </div>
@@ -210,8 +224,12 @@
           </div>
 
           <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
-            El agente explorará la rama seleccionada (solo lectura) y propondrá reglas técnicas, criterios derivados y discrepancias.
-            Puedes revisarlo y editarlo antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
+            <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
+              El agente contrastará cada criterio con el código de la rama (Implementado, Parcial, Diferente o Sin evidencia).
+              Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.
+            </ng-container>
+            <ng-template #codeOnlyHint>El agente reconstruirá las reglas observables desde el código de la rama.</ng-template>
+            Puedes revisar y editar el resultado antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
           </p>
 
           <ul *ngIf="codeAgentLog.length" class="code-agent-log">
@@ -228,6 +246,9 @@
               <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
               Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
             </p>
+            <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
+              <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+            </div>
             <textarea id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
               class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
               [disabled]="codeExploring"></textarea>

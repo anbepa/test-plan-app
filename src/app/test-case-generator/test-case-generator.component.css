@@ -1188,3 +1188,23 @@ textarea.form-control.auto-grow {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.82rem;
 }
+
+.code-coverage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.code-coverage-chip {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.code-coverage-chip.is-ok { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.code-coverage-chip.is-partial { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.code-coverage-chip.is-diff { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.code-coverage-chip.is-missing { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }

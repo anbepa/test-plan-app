@@ -72,6 +72,9 @@ const LIMITS = {
   maxSearchMatches: 60,
   searchConcurrency: 6,
   maxContextChars: 40000,
+  maxBranchChanges: 1000,
+  maxDiffCells: 4000000,
+  diffContextLines: 3,
   cacheTtlDays: 7,
 };
 
@@ -179,8 +182,14 @@ function redactSecrets(content) {
   return result;
 }
 
-function versionQuery(branch) {
-  return `versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=branch`;
+function versionQuery(version, versionType = 'branch') {
+  return `versionDescriptor.version=${encodeURIComponent(version)}&versionDescriptor.versionType=${versionType}`;
+}
+
+function requireCommit(value, fieldName) {
+  const commit = requireString(value, fieldName);
+  if (!/^[0-9a-f]{40}$/i.test(commit)) throw new CodeAgentError(400, `El campo "${fieldName}" no es un commit válido.`);
+  return commit;
 }
 
 function repoBase(organization, project, repositoryId) {
@@ -246,9 +255,9 @@ async function getTree(organization, pat, project, repositoryId, branch, scopePa
   };
 }
 
-async function fetchFileContent(organization, pat, project, repositoryId, branch, path) {
+async function fetchFileContent(organization, pat, project, repositoryId, version, path, versionType = 'branch') {
   const url = `${repoBase(organization, project, repositoryId)}/items?path=${encodeURIComponent(path)}`
-    + `&includeContent=true&${versionQuery(branch)}&api-version=${API_VERSION}`;
+    + `&includeContent=true&${versionQuery(version, versionType)}&api-version=${API_VERSION}`;
   const data = await azureRepoGet(url, pat);
   return typeof data.content === 'string' ? data.content : '';
 }
@@ -334,6 +343,160 @@ async function searchInFiles(organization, pat, project, repositoryId, branch, t
 }
 
 /**
+ * Cambios de la rama de la HU respecto a su rama base (merge-base / ancestro
+ * común): exactamente lo que los desarrolladores han subido en la rama,
+ * aunque hayan mezclado develop después.
+ */
+async function getBranchDiff(organization, pat, project, repositoryId, baseBranch, branch) {
+  const url = `${repoBase(organization, project, repositoryId)}/diffs/commits`
+    + `?baseVersion=${encodeURIComponent(baseBranch)}&baseVersionType=branch`
+    + `&targetVersion=${encodeURIComponent(branch)}&targetVersionType=branch`
+    + `&diffCommonCommit=true&$top=${LIMITS.maxBranchChanges}&api-version=${API_VERSION}`;
+  const data = await azureRepoGet(url, pat);
+
+  const fileChanges = (data.changes || [])
+    .filter((change) => change.item && !change.item.isFolder && change.item.gitObjectType !== 'tree');
+  const changes = fileChanges
+    .filter((change) => isReadableFile(change.item.path))
+    .map((change) => ({
+      path: change.item.path,
+      changeType: String(change.changeType || 'edit').toLowerCase(),
+      originalPath: change.originalPath || undefined,
+    }));
+
+  return {
+    baseBranch,
+    branch,
+    commonCommit: data.commonCommit || null,
+    targetCommit: data.targetCommit || null,
+    aheadCount: Number(data.aheadCount || 0),
+    behindCount: Number(data.behindCount || 0),
+    totalChangedFiles: fileChanges.length,
+    allChangesIncluded: data.allChangesIncluded !== false,
+    changes,
+  };
+}
+
+/**
+ * Diff por líneas (LCS) entre dos textos. Recorta prefijo/sufijo comunes y
+ * devuelve null si el bloque central es demasiado grande para calcularlo.
+ */
+function computeLineDiff(baseLines, targetLines) {
+  let start = 0;
+  while (start < baseLines.length && start < targetLines.length && baseLines[start] === targetLines[start]) start++;
+  let endBase = baseLines.length;
+  let endTarget = targetLines.length;
+  while (endBase > start && endTarget > start && baseLines[endBase - 1] === targetLines[endTarget - 1]) {
+    endBase--;
+    endTarget--;
+  }
+
+  const a = baseLines.slice(start, endBase);
+  const b = targetLines.slice(start, endTarget);
+  const n = a.length;
+  const m = b.length;
+  if ((n + 1) * (m + 1) > LIMITS.maxDiffCells) return null;
+
+  // lcs[i][j] = LCS de a[i..] y b[j..]
+  const width = m + 1;
+  const lcs = new Uint32Array((n + 1) * width);
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i * width + j] = a[i] === b[j]
+        ? lcs[(i + 1) * width + j + 1] + 1
+        : Math.max(lcs[(i + 1) * width + j], lcs[i * width + j + 1]);
+    }
+  }
+
+  // ops: { type: ' ' | '-' | '+', baseLine, targetLine, text } (líneas 1-based)
+  const ops = [];
+  for (let k = 0; k < start; k++) ops.push({ type: ' ', baseLine: k + 1, targetLine: k + 1, text: baseLines[k] });
+  let i = 0;
+  let j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      ops.push({ type: ' ', baseLine: start + i + 1, targetLine: start + j + 1, text: a[i] });
+      i++; j++;
+    } else if (i < n && (j >= m || lcs[(i + 1) * width + j] >= lcs[i * width + j + 1])) {
+      ops.push({ type: '-', baseLine: start + i + 1, text: a[i] });
+      i++;
+    } else {
+      ops.push({ type: '+', targetLine: start + j + 1, text: b[j] });
+      j++;
+    }
+  }
+  for (let k = 0; k < baseLines.length - endBase; k++) {
+    ops.push({ type: ' ', baseLine: endBase + k + 1, targetLine: endTarget + k + 1, text: baseLines[endBase + k] });
+  }
+  return ops;
+}
+
+/** Formatea el diff en bloques (hunks) con contexto, numerados con la línea de la rama. */
+function formatHunks(ops) {
+  const context = LIMITS.diffContextLines;
+  const changed = ops.map((op) => op.type !== ' ');
+  const keep = new Array(ops.length).fill(false);
+  changed.forEach((isChanged, index) => {
+    if (!isChanged) return;
+    for (let k = Math.max(0, index - context); k <= Math.min(ops.length - 1, index + context); k++) keep[k] = true;
+  });
+
+  let output = '';
+  let inHunk = false;
+  for (let index = 0; index < ops.length; index++) {
+    if (!keep[index]) {
+      inHunk = false;
+      continue;
+    }
+    const op = ops[index];
+    if (!inHunk) {
+      output += `@@ cerca de la línea ${op.targetLine || op.baseLine} @@\n`;
+      inHunk = true;
+    }
+    const lineNumber = op.type === '-' ? `base ${op.baseLine}` : String(op.targetLine);
+    output += `${op.type} ${lineNumber}| ${op.text}\n`;
+    if (output.length > LIMITS.maxCharsPerFile) {
+      output += '…[diff truncado: usa read_files con rango de líneas para ver más]\n';
+      break;
+    }
+  }
+  return output || 'Sin cambios de contenido (posible cambio de permisos, renombre o fin de línea).';
+}
+
+/** Diff de un archivo entre el ancestro común (base) y el último commit de la rama. */
+async function getFileDiff(organization, pat, project, repositoryId, body) {
+  const path = normalizeRepoPath(body.path);
+  if (!isReadableFile(path)) {
+    return { path, error: 'Archivo no permitido (binario, generado o potencialmente con secretos).' };
+  }
+  const baseCommit = requireCommit(body.baseCommit, 'baseCommit');
+  const targetCommit = requireCommit(body.targetCommit, 'targetCommit');
+  const changeType = String(body.changeType || 'edit').toLowerCase();
+  const originalPath = body.originalPath ? normalizeRepoPath(body.originalPath) : path;
+
+  const [baseRaw, targetRaw] = await Promise.all([
+    changeType.includes('add') ? Promise.resolve('') : fetchFileContent(organization, pat, project, repositoryId, baseCommit, originalPath, 'commit').catch(() => ''),
+    changeType.includes('delete') ? Promise.resolve('') : fetchFileContent(organization, pat, project, repositoryId, targetCommit, path, 'commit'),
+  ]);
+
+  const baseLines = baseRaw ? redactSecrets(baseRaw).split(/\r?\n/) : [];
+  const targetLines = targetRaw ? redactSecrets(targetRaw).split(/\r?\n/) : [];
+  const ops = computeLineDiff(baseLines, targetLines);
+
+  if (!ops) {
+    return {
+      path,
+      changeType,
+      error: 'El archivo cambió demasiado para calcular el diff; léelo con read_files (por rangos).',
+    };
+  }
+
+  const added = ops.filter((op) => op.type === '+').length;
+  const removed = ops.filter((op) => op.type === '-').length;
+  return { path, changeType, added, removed, diff: formatHunks(ops) };
+}
+
+/**
  * Ramas vinculadas a una HU (Development → Branch en Azure Boards).
  * Formato de la relación: vstfs:///Git/Ref/{projectId}%2F{repoId}%2FGB{rama}
  */
@@ -370,6 +533,7 @@ function buildCacheKey(body) {
     requireString(body.repositoryId, 'repositoryId'),
     requireString(body.commitId, 'commitId'),
     normalizeRepoPath(body.scopePath),
+    String(body.baseBranch || ''),
     String(body.mode || ''),
     String(body.description || '').trim(),
     String(body.acceptanceCriteria || '').trim(),
@@ -441,6 +605,8 @@ async function saveCachedContext(adminClient, userId, body) {
  *   POST tree        { project, repositoryId, branch, scopePath? }
  *   POST files       { project, repositoryId, branch, files: [{ path, startLine?, endLine? }] }
  *   POST search      { project, repositoryId, branch, terms: [], paths: [] }
+ *   POST branch-diff { project, repositoryId, baseBranch, branch }
+ *   POST file-diff   { project, repositoryId, path, changeType, originalPath?, baseCommit, targetCommit }
  *   POST cache/get   { repositoryId, commitId, scopePath, mode, description, acceptanceCriteria }
  *   POST cache/save  { ...cache/get, branch, context, filesReviewed }
  */
@@ -469,6 +635,10 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
         return getTree(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.scopePath);
       case 'files':
         return readFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.files);
+      case 'branch-diff':
+        return getBranchDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.baseBranch), normalizeBranch(b.branch));
+      case 'file-diff':
+        return getFileDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), b);
       case 'search':
         return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.branch), b.terms, b.paths);
       case 'cache/get':
@@ -491,4 +661,6 @@ module.exports = {
   isReadableFile,
   redactSecrets,
   normalizeRepoPath,
+  computeLineDiff,
+  formatHunks,
 };

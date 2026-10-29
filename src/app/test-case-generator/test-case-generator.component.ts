@@ -80,6 +80,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeProject: string = '';
   codeRepositoryId: string = '';
   codeBranch: string = '';
+  /** Rama base (develop/main) para comparar y aislar los cambios de la HU. '' = sin comparación. */
+  codeBaseBranch: string = '';
   codeScopePath: string = '';
   codeLoadingTarget: boolean = false;
   codeTargetError: string | null = null;
@@ -98,6 +100,25 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   get isCodeTargetReady(): boolean {
     return !!(this.codeProject && this.codeRepositoryId && this.codeBranch);
+  }
+
+  /** Conteo de estados por criterio a partir de la matriz de cobertura del contexto técnico. */
+  get codeCoverageSummary(): { label: string; count: number; css: string }[] {
+    if (!this.codeContextText || this.contextSource !== 'criteria-code') return [];
+    const statuses = [
+      { key: 'IMPLEMENTADO', label: 'Implementados', css: 'is-ok' },
+      { key: 'PARCIAL', label: 'Parciales', css: 'is-partial' },
+      { key: 'DIFERENTE', label: 'Diferentes', css: 'is-diff' },
+      { key: 'SIN EVIDENCIA', label: 'Sin evidencia', css: 'is-missing' }
+    ];
+    const lines = this.codeContextText.split('\n').filter((line) => /\[CA-\d+\]/.test(line));
+    return statuses
+      .map((status) => ({
+        label: status.label,
+        css: status.css,
+        count: lines.filter((line) => new RegExp(`→\\s*${status.key}\\b`, 'i').test(line)).length
+      }))
+      .filter((item) => item.count > 0);
   }
 
   /** Reemplaza el contexto actual con el tag seleccionado (borra lo previo). */
@@ -623,6 +644,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeRepositoryId = repositoryId;
     this.codeBranches = [];
     this.codeBranch = '';
+    this.codeBaseBranch = '';
     this.clearCodeContext();
     if (!repositoryId) return;
 
@@ -636,6 +658,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.codeBranches = branches;
           const wanted = [preferredBranch, repository?.defaultBranch].find((name) => name && branches.some((b) => b.name === name));
           this.codeBranch = wanted || '';
+          // Por defecto se compara contra la rama principal del repo (develop/main).
+          const defaultBase = repository?.defaultBranch && branches.some((b) => b.name === repository.defaultBranch)
+            ? repository.defaultBranch : '';
+          this.codeBaseBranch = defaultBase;
         },
         error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
       });
@@ -643,6 +669,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   onCodeBranchChange(branch: string): void {
     this.codeBranch = branch;
+    this.clearCodeContext();
+  }
+
+  onCodeBaseBranchChange(baseBranch: string): void {
+    this.codeBaseBranch = baseBranch;
     this.clearCodeContext();
   }
 
@@ -692,7 +723,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         repositoryName: repository?.name || this.codeRepositoryId,
         branch: this.codeBranch,
         commitId: branch?.commitId || '',
-        scopePath: this.codeScopePath.trim() || '/'
+        scopePath: this.codeScopePath.trim() || '/',
+        baseBranch: this.codeBaseBranch !== this.codeBranch ? this.codeBaseBranch : ''
       },
       mode: this.contextSource,
       description: this.currentDescription,

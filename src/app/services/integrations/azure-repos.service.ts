@@ -3,6 +3,9 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { from, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import {
+  AzureBranchChange,
+  AzureBranchDiff,
+  AzureFileDiff,
   AzureLinkedBranch,
   AzureRepoBranch,
   AzureRepoFile,
@@ -24,6 +27,7 @@ export interface CodeContextCacheKey {
   repositoryId: string;
   commitId: string;
   scopePath: string;
+  baseBranch: string;
   mode: ContextSource;
   description: string;
   acceptanceCriteria: string;
@@ -66,6 +70,22 @@ export class AzureReposService {
 
   readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Observable<AzureRepoFile[]> {
     return this.authorizedPost<AzureRepoFile[]>(`${this.baseUrl}/files`, { ...ref, files });
+  }
+
+  getBranchDiff(ref: RepoRef, baseBranch: string): Observable<AzureBranchDiff> {
+    return this.authorizedPost<AzureBranchDiff>(`${this.baseUrl}/branch-diff`, { ...ref, baseBranch });
+  }
+
+  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string): Observable<AzureFileDiff> {
+    return this.authorizedPost<AzureFileDiff>(`${this.baseUrl}/file-diff`, {
+      project: ref.project,
+      repositoryId: ref.repositoryId,
+      path: change.path,
+      changeType: change.changeType,
+      originalPath: change.originalPath,
+      baseCommit,
+      targetCommit
+    });
   }
 
   search(ref: RepoRef, terms: string[], paths: string[]): Observable<AzureRepoSearchResult> {

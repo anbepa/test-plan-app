@@ -5,7 +5,7 @@ import { AiProvidersService } from './ai-providers.service';
 import { AzureReposService, CodeContextCacheKey } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS } from '../../config/code-agent-prompts.config';
-import { CodeAgentEvent, CodeExplorationInput } from '../../models/code-agent.model';
+import { AzureBranchDiff, CodeAgentEvent, CodeExplorationInput } from '../../models/code-agent.model';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -28,6 +28,7 @@ const BUDGET = {
   maxToolResultChars: 30_000,
   maxDurationMs: 240_000,
   treeListingLimit: 350,
+  branchChangesListingLimit: 80,
 };
 
 const STOPWORDS = new Set([
@@ -92,6 +93,7 @@ export class CodeExplorerAgentService {
       repositoryId: target.repositoryId,
       commitId: target.commitId,
       scopePath: target.scopePath || '/',
+      baseBranch: target.baseBranch || '',
       mode: input.mode,
       description: input.description,
       acceptanceCriteria: input.acceptanceCriteria,
@@ -119,10 +121,16 @@ export class CodeExplorerAgentService {
     emit({ type: 'progress', message: `Árbol listo: ${tree.readableFiles} archivos de código (de ${tree.totalFiles}).` });
 
     const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
-    const rankedFiles = this.rankFiles(tree.files, keywords);
+
+    // Cambios propios de la rama vs su base: es el fragmento de código puntual de la HU.
+    const branchDiff = await this.loadBranchDiff(ref, target.baseBranch, target.scopePath, emit);
+    const hasBranchDiff = !!branchDiff && branchDiff.changes.length > 0;
+    const changedPaths = new Set((branchDiff?.changes || []).map((change) => change.path));
+    const rankedChanged = this.rankFiles(Array.from(changedPaths), keywords);
+    const rankedFiles = [...rankedChanged, ...this.rankFiles(tree.files.filter((path) => !changedPaths.has(path)), keywords)];
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: CODE_AGENT_PROMPTS.SYSTEM(input.mode, BUDGET.maxSteps) },
+      { role: 'system', content: CODE_AGENT_PROMPTS.SYSTEM(input.mode, BUDGET.maxSteps, hasBranchDiff) },
       {
         role: 'user',
         content: CODE_AGENT_PROMPTS.USER(
@@ -130,12 +138,16 @@ export class CodeExplorerAgentService {
           input.acceptanceCriteria,
           input.userRequest,
           `${target.repositoryName} (rama ${target.branch}${target.scopePath && target.scopePath !== '/' ? `, alcance ${target.scopePath}` : ''})`,
+          this.buildBranchChangesSummary(branchDiff, target.baseBranch, rankedChanged),
           this.buildTreeSummary(rankedFiles, tree.truncated)
         ),
       },
     ];
 
     const filesReviewed = new Set<string>();
+    if (hasBranchDiff) {
+      emit({ type: 'progress', message: `Priorizando ${changedPaths.size} archivo(s) modificados por la rama.` });
+    }
     let toolOutputChars = 0;
     const startedAt = Date.now();
 
@@ -178,7 +190,7 @@ export class CodeExplorerAgentService {
 
         const result = overBudget
           ? 'Presupuesto agotado. Llama a finish ahora.'
-          : await this.executeTool(call.function.name, args, ref, tree.files, rankedFiles, filesReviewed, emit);
+          : await this.executeTool(call.function.name, args, ref, tree.files, rankedFiles, filesReviewed, emit, branchDiff);
 
         const clipped = result.length > BUDGET.maxToolResultChars
           ? `${result.slice(0, BUDGET.maxToolResultChars)}\n…[resultado truncado]`
@@ -217,10 +229,27 @@ export class CodeExplorerAgentService {
     allFiles: string[],
     rankedFiles: string[],
     filesReviewed: Set<string>,
-    emit: (event: CodeAgentEvent) => void
+    emit: (event: CodeAgentEvent) => void,
+    branchDiff: AzureBranchDiff | null
   ): Promise<string> {
     try {
       switch (name) {
+        case 'diff_file': {
+          const requested = String(args.path || '').trim().toLowerCase();
+          const change = branchDiff?.changes.find((item) => item.path.toLowerCase() === ('/' + requested.replace(/^\/+/, '')));
+          if (!branchDiff?.commonCommit || !branchDiff.targetCommit) {
+            return 'No hay comparación con rama base; usa read_files.';
+          }
+          if (!change) {
+            return 'Ese archivo no está en los cambios de la rama. Usa read_files para leerlo completo.';
+          }
+          emit({ type: 'tool', message: `🧬 Diff de ${change.path.split('/').pop()} (${change.changeType})` });
+          const fileDiff = await firstValueFrom(this.azureRepos.getFileDiff(ref, change, branchDiff.commonCommit, branchDiff.targetCommit));
+          if (fileDiff.error) return `=== ${change.path} ===\nERROR: ${fileDiff.error}`;
+          filesReviewed.add(change.path);
+          return `=== ${change.path} (${change.changeType}; +${fileDiff.added} / -${fileDiff.removed} líneas) ===\n${fileDiff.diff}`;
+        }
+
         case 'list_files': {
           const prefix = this.normalizePrefix(args.path_prefix);
           const contains = String(args.contains || '').toLowerCase();
@@ -335,6 +364,52 @@ export class CodeExplorerAgentService {
       throw new Error('Sesión inválida o expirada. Inicia sesión nuevamente.');
     }
     return new HttpHeaders({ Authorization: `Bearer ${session.access_token}` });
+  }
+
+  /** Archivos que la rama cambió respecto a su base. Un fallo aquí no detiene la exploración. */
+  private async loadBranchDiff(
+    ref: { project: string; repositoryId: string; branch: string },
+    baseBranch: string,
+    scopePath: string,
+    emit: (event: CodeAgentEvent) => void
+  ): Promise<AzureBranchDiff | null> {
+    if (!baseBranch || baseBranch === ref.branch) return null;
+
+    emit({ type: 'progress', message: `Comparando ${ref.branch} contra ${baseBranch}…` });
+    try {
+      const diff = await firstValueFrom(this.azureRepos.getBranchDiff(ref, baseBranch));
+      const prefix = this.normalizePrefix(scopePath);
+      if (prefix) {
+        diff.changes = diff.changes.filter((change) => change.path.toLowerCase().startsWith(prefix));
+      }
+      emit({
+        type: 'progress',
+        message: diff.changes.length
+          ? `La rama tiene ${diff.aheadCount} commit(s) propios y ${diff.changes.length} archivo(s) de código modificados vs ${baseBranch}.`
+          : `La rama no tiene cambios de código propios vs ${baseBranch}; se explorará el código existente.`
+      });
+      return diff;
+    } catch (error: any) {
+      emit({ type: 'tool', message: `⚠️ No se pudo comparar con ${baseBranch}: ${error?.error?.message || error?.message || 'error'}. Se explora la rama completa.` });
+      return null;
+    }
+  }
+
+  private buildBranchChangesSummary(diff: AzureBranchDiff | null, baseBranch: string, rankedChanged: string[]): string {
+    if (!diff) {
+      return 'CAMBIOS DE LA RAMA: sin comparación con rama base (se explora el código completo de la rama).';
+    }
+    if (diff.changes.length === 0) {
+      return `CAMBIOS DE LA RAMA: ninguno de código respecto a ${baseBranch} (la HU puede estar ya integrada o no iniciada). Explora el código existente.`;
+    }
+    const byPath = new Map(diff.changes.map((change) => [change.path, change]));
+    const shown = rankedChanged.slice(0, BUDGET.branchChangesListingLimit);
+    return [
+      `CAMBIOS DE LA RAMA vs ${baseBranch} (desde el ancestro común; ${diff.aheadCount} commit(s) propios, último commit ${diff.targetCommit?.slice(0, 8)}):`,
+      ...shown.map((path) => `- [${byPath.get(path)?.changeType}] ${path}`),
+      diff.changes.length > shown.length ? `…y ${diff.changes.length - shown.length} archivo(s) más.` : '',
+      diff.allChangesIncluded ? '' : 'Nota: la lista de cambios es parcial (rama muy grande).',
+    ].filter(Boolean).join('\n');
   }
 
   // ---------------------------------------------------------------------------
