@@ -76,6 +76,10 @@ export const CODE_AGENT_BUDGET = {
   /** Diffs que se envían de entrada (sin gastar pasos del agente). */
   preloadDiffChars: 28_000,
   diffConcurrency: 4,
+  /** search_code: archivos por búsqueda (en lotes paralelos del tamaño que acepta el backend). */
+  maxSearchFiles: 150,
+  searchBatchSize: 30,
+  maxSearchMatches: 80,
 };
 
 const STOPWORDS = new Set([
@@ -412,13 +416,24 @@ export class CodeAgentRunner {
           const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter(Boolean).slice(0, 8);
           const prefix = this.normalizePrefix(args.path_prefix);
           const pool = prefix ? ctx.rankedFiles.filter((path) => path.toLowerCase().startsWith(prefix)) : ctx.rankedFiles;
-          const candidates = this.rankFiles(pool, terms.map((term) => this.normalizeText(term))).slice(0, 30);
+          const candidates = this.rankFiles(pool, terms.map((term) => this.normalizeText(term))).slice(0, CODE_AGENT_BUDGET.maxSearchFiles);
           emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidates.length} archivos` });
           if (candidates.length === 0) return 'No hay archivos candidatos para buscar.';
-          const result = await this.gateway.search(ctx.primaryRef, terms, candidates);
-          return result.matches.length
-            ? result.matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')
-            : `Sin coincidencias en ${result.searchedFiles} archivos revisados.`;
+          // El backend lee hasta 30 archivos por llamada: se reparte en lotes paralelos.
+          const batches: string[][] = [];
+          for (let i = 0; i < candidates.length; i += CODE_AGENT_BUDGET.searchBatchSize) {
+            batches.push(candidates.slice(i, i + CODE_AGENT_BUDGET.searchBatchSize));
+          }
+          const results = await Promise.all(batches.map((batch) => this.gateway.search(ctx.primaryRef, terms, batch)
+            .catch(() => ({ searchedFiles: 0, matches: [] }))));
+          const searched = results.reduce((sum, result) => sum + result.searchedFiles, 0);
+          const matches = results.flatMap((result) => result.matches).slice(0, CODE_AGENT_BUDGET.maxSearchMatches);
+          const coverage = searched < pool.length
+            ? `Búsqueda PARCIAL: ${searched} de ${pool.length} archivos (los más afines por nombre); que no aparezca no prueba que no exista.`
+            : `Búsqueda completa: ${searched} archivos.`;
+          return matches.length
+            ? `${coverage}\n${matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')}`
+            : `Sin coincidencias. ${coverage}`;
         }
 
         case 'read_files': {

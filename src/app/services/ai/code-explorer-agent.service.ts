@@ -155,7 +155,8 @@ export class CodeExplorerAgentService {
       tools,
       // Al agotar el presupuesto se obliga a llamar a finish.
       tool_choice: forceFinish ? { type: 'function', function: { name: 'finish' } } : 'auto',
-      temperature: 0.2,
+      // Determinista: el mismo código y la misma HU deben producir la misma matriz.
+      temperature: 0,
       max_tokens: 4000,
     };
 

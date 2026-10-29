@@ -67,7 +67,7 @@ ESTRATEGIA CRITERIOS + CÓDIGO — CALIDAD SOBRE CANTIDAD (amplía la jerarquía
 2. Usa la numeración CA-xx de la sección "Cobertura de criterios en el código" como normalización de reglas atómicas; no la renumeres.
 3. Según el estado de cada CA:
    - IMPLEMENTADO: diseña sus casos normalmente y enriquécelos con datos reales del código (límites, formatos, mensajes exactos, precondiciones). No crees casos extra solo por el detalle técnico.
-   - PARCIAL: el caso del criterio debe ejercitar explícitamente la parte que falta o está incompleta (no un caso adicional si el mismo caso puede hacerlo).
+   - PARCIAL: el caso del criterio debe ejercitar explícitamente la parte que falta o está incompleta (no un caso adicional si el mismo caso puede hacerlo). Su resultado esperado es el criterio completo, nunca el alcance limitado del código.
    - DIFERENTE: el caso prueba LO QUE DICE EL CRITERIO. Los datos de prueba se expresan en los términos del criterio (p. ej. "fecha de creación de la cuenta"), no en los de la implementación, porque el objetivo es exponer la diferencia. preconditions inicia con "⚠ Discrepancia código vs criterio: <qué hace el código>."
    - SIN EVIDENCIA: diseña IGUAL el caso según el criterio (cobertura obligatoria). preconditions inicia con "⚠ Sin evidencia en código: validar implementación; si falla, reportar defecto."
    - La advertencia ⚠ es OBLIGATORIA en todo caso de un CA PARCIAL, DIFERENTE o SIN EVIDENCIA; para PARCIAL usa "⚠ Implementación parcial: <qué falta>.". Va al inicio de preconditions, antes de los datos.
@@ -77,7 +77,7 @@ ESTRATEGIA CRITERIOS + CÓDIGO — CALIDAD SOBRE CANTIDAD (amplía la jerarquía
    - Límite: los casos propios de RT no superan un tercio de los casos de criterios (mínimo 1, máximo 3). Prioriza los de mayor riesgo de defecto en producción.
    - Un caso propio de RT no tiene criterio que lo respalde: preconditions inicia con "⚠ Riesgo de regresión sin criterio: confirmar con el funcional." y el resultado esperado es el comportamiento correcto para el negocio según la HU (si no se puede inferir, el del código).
    - Regístralos en "criteriaMap" solo si generan o comparten un caso, con su id RT-xx y "rule" iniciando con "[Código] ".
-5. Deduplicación obligatoria: agrupa por (condición probada + resultado esperado). Un único caso por grupo; si viene de un CA y un RT lista ambos en "coveredCriteria". No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
+5. Deduplicación obligatoria: un RT que expone el mismo hallazgo que un CA PARCIAL o DIFERENTE no genera caso propio; su verificación va dentro del caso de ese CA. Agrupa por (condición probada + resultado esperado). Un único caso por grupo; si viene de un CA y un RT lista ambos en "coveredCriteria". No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
 6. Advertencias: una sola frase de máximo 140 caracteres al inicio de preconditions, seguida de los datos a preparar.
 ${STEPS_FROM_REAL_FLOW}
 
@@ -85,6 +85,8 @@ AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 - Cada CA PARCIAL, DIFERENTE o SIN EVIDENCIA tiene su caso con ⚠ al inicio de preconditions.
 - Ningún caso de criterio DIFERENTE usa en sus datos los campos de la implementación en lugar de los del criterio.
 - Los casos propios de RT respetan el límite y ningún (EXISTENTE) tiene caso propio.
+- Ningún par de casos espera resultados opuestos sobre los mismos datos, y ningún caso usa "filas de control" para validar que el código hace MENOS de lo que pide el criterio.
+- Ningún resultado esperado describe el defecto como lo correcto (p. ej. "queda huérfano", "no se muestra"): siempre es el comportamiento correcto para el negocio.
 - Ningún paso es genérico ("ejecutar la consulta", "revisar el resultado", "verificar que funcione").
 `;
 }

@@ -30,10 +30,11 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 
 ## Cobertura de criterios en el código
 (UNA línea por regla atómica de los criterios, en el mismo orden; numeración CA-01, CA-02…)
-- [CA-01] "resumen breve del criterio" → IMPLEMENTADO | PARCIAL | DIFERENTE | SIN EVIDENCIA. Detalle (máx. 2 líneas): dato/límite/mensaje exacto o qué falta/difiere. Fuente: ruta/archivo:línea
+- [CA-01] "resumen breve del criterio" → IMPLEMENTADO | PARCIAL | DIFERENTE | SIN EVIDENCIA (exactamente uno, sin calificativos). Detalle (máx. 2 líneas): dato/límite/mensaje exacto o qué falta/difiere. Fuente: ruta/archivo:línea
 
 ## Comportamientos del código no cubiertos por los criterios
 (Solo lo OBSERVABLE y dentro del alcance de la HU; omite logs, refactors y detalles internos. Máx. 5.
+NO van aquí: consecuencias de un CA PARCIAL/DIFERENTE (van en su Detalle) ni mecánica de despliegue (idempotencia, re-ejecución, contextos).
 Marca cada uno: (CAMBIO HU) si lo introdujo o modificó esta HU según los diffs, o (EXISTENTE) si ya existía y solo condiciona los datos de prueba.)
 - [RT-01] (CAMBIO HU | EXISTENTE) Comportamiento concreto. Fuente: ruta/archivo:línea
 (o "Ninguno relevante")
@@ -83,7 +84,9 @@ ${mode === 'code'
 - IMPLEMENTADO: encontraste el código que la cumple tal cual.
 - PARCIAL: está implementada solo en parte (falta una condición, campo, mensaje o rama).
 - DIFERENTE: el código hace algo distinto a lo que dice el criterio (límite, mensaje, orden, regla).
-- SIN EVIDENCIA: no encontraste implementación tras buscar en los cambios de la rama y con search_code. No significa que no exista: significa que no hay evidencia.`}
+- SIN EVIDENCIA: no encontraste implementación tras buscar en los cambios de la rama y con search_code. No significa que no exista: significa que no hay evidencia.
+- PARCIAL y DIFERENTE exigen evidencia POSITIVA en el código leído. Lo que no puedes ver (datos ya cargados en la base, otros productos, otros repositorios) NO es motivo de PARCIAL: anótalo como "no verificable en el repositorio".
+- Compara el ALCANCE LITERAL del criterio con el del código: si el criterio dice "donde esté / todos / cualquier" y el código filtra por un subconjunto (WHERE, if, filtro), indícalo en el Detalle con el filtro exacto y la verificación global que lo expone (p. ej. "contar registros con el valor viejo en toda la tabla = 0").`}
 
 HERRAMIENTAS (solo lectura):
 - diff_file: muestra exactamente qué líneas cambió la rama en un archivo (vs su rama base). Es tu fuente MÁS precisa.
@@ -105,8 +108,9 @@ ${source === 'changeset'
 4. Usa search_code solo para criterios que no aparezcan en los cambios.`
       : `1. No hay cambios aislados de la HU: ubica los puntos de entrada relacionados (controladores, endpoints, componentes, handlers, jobs) por nombre de archivo y con search_code.
 2. Sigue el flujo hacia servicios, validadores, entidades/DTOs, consultas, reglas y constantes/mensajes.`}
-5. Las pruebas unitarias modificadas describen el comportamiento que el desarrollador esperaba: úsalas como evidencia.
-6. Tienes como máximo ${maxSteps} pasos. Llama a finish en cuanto tengas evidencia suficiente para cada criterio.
+5. Si la HU solo cambia scripts SQL/migraciones/parametrización: el disparo es el despliegue del script (changeset, contexto, pipeline); los datos a preparar son el estado ANTES (consultas concretas con sus filtros) y la salida observable son las consultas DESPUÉS. Busca con search_code el DDL de las tablas afectadas (restricciones, FK, vistas o funciones que las lean) para saber qué impacto observable tiene el cambio.
+6. Las pruebas unitarias modificadas describen el comportamiento que el desarrollador esperaba: úsalas como evidencia.
+7. Tienes como máximo ${maxSteps} pasos. Llama a finish en cuanto tengas evidencia suficiente para cada criterio.
 
 QUÉ EXTRAER (lo que el analista QA necesita para ejecutar pruebas reales):
 - Flujo real de ejecución: cómo se dispara (pantalla, endpoint, job/malla programada, evento), qué entradas recibe y qué produce (reporte, archivo, registro, mensaje).
@@ -120,9 +124,13 @@ REGLAS DE SEGURIDAD:
 
 REGLAS DE CALIDAD:
 - Toda afirmación sobre el código DEBE citar ruta/archivo:línea. Sin cita, no la afirmes.
+- Cada id, código, valor, nombre o restricción (FK, unique, check) que afirmes debe aparecer LITERALMENTE en las líneas citadas. Si no lo leíste, escribe "no verificable en el repositorio" en lugar de suponerlo.
+- Una búsqueda parcial (el resultado lo indica) no prueba que algo no exista: no lo afirmes como ausente.
 - No inventes comportamiento que no hayas leído.
 - Redacta en lenguaje funcional (qué ve o vive el usuario), no en jerga de implementación.
 - No repitas como comportamiento adicional algo que ya cubre un criterio: si el código solo PRECISA un criterio (mensaje exacto, límite), ponlo en el Detalle de ese criterio.
+- Si un riesgo es CONSECUENCIA de un criterio PARCIAL o DIFERENTE (p. ej. registros huérfanos por un filtro más estrecho), descríbelo en el Detalle de ese criterio con su impacto observable; no lo repitas como RT.
+- No reportes como RT mecánica de despliegue o infraestructura (idempotencia, re-ejecución, contextos del pipeline, logs) salvo que un criterio la mencione: no es comportamiento funcional.
 - Sé conciso: máximo ~50 líneas en total. No incluyas la sección de archivos revisados más allá de una línea por archivo.
 
 FORMATO DEL ARGUMENTO "technical_context" DE finish (texto plano con estas secciones exactas):
