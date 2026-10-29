@@ -5,13 +5,16 @@ import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as O
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
-import { Observable, of, forkJoin, Subscription } from 'rxjs';
+import { Observable, of, forkJoin, Subscription, firstValueFrom } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 import { CellsConfigService } from '../services/core/cells-config.service';
+import { AzureReposService } from '../services/integrations/azure-repos.service';
+import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource } from '../models/code-agent.model';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -63,6 +66,39 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     '+ Flujo alternativo',
     '+ Creación de ruta crítica'
   ];
+
+  // ---- Fuente de contexto: criterios y/o código fuente (Azure Repos) ----
+  readonly contextSourceOptions: { value: ContextSource; label: string; hint: string }[] = [
+    { value: 'criteria', label: 'Solo criterios', hint: 'Genera con la HU y los criterios de aceptación (flujo actual).' },
+    { value: 'criteria-code', label: 'Criterios + código', hint: 'Los criterios mandan; el agente explora la rama para complementar con reglas del código.' },
+    { value: 'code', label: 'Repositorio + rama', hint: 'El código es la fuente principal; los criterios son opcionales.' }
+  ];
+  contextSource: ContextSource = 'criteria';
+  codeProjects: AzureRepoProject[] = [];
+  codeRepositories: AzureRepository[] = [];
+  codeBranches: AzureRepoBranch[] = [];
+  codeProject: string = '';
+  codeRepositoryId: string = '';
+  codeBranch: string = '';
+  codeScopePath: string = '';
+  codeLoadingTarget: boolean = false;
+  codeTargetError: string | null = null;
+  codeLinkedBranchHint: string | null = null;
+  codeExploring: boolean = false;
+  codeAgentLog: string[] = [];
+  codeAgentError: string | null = null;
+  codeContextText: string = '';
+  codeFilesReviewed: string[] = [];
+  codeContextFromCache: boolean = false;
+  private codeAgentSub?: Subscription;
+
+  get usesCodeContext(): boolean {
+    return this.contextSource !== 'criteria';
+  }
+
+  get isCodeTargetReady(): boolean {
+    return !!(this.codeProject && this.codeRepositoryId && this.codeBranch);
+  }
 
   /** Reemplaza el contexto actual con el tag seleccionado (borra lo previo). */
   applyContextTag(tag: string): void {
@@ -130,7 +166,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private elRef: ElementRef,
     private toastService: ToastService,
     private azureDevOpsIntegrationService: AzureDevOpsIntegrationService,
-    private cellsConfigService: CellsConfigService
+    private cellsConfigService: CellsConfigService,
+    private azureReposService: AzureReposService,
+    private codeExplorerAgent: CodeExplorerAgentService
   ) { }
 
   ngOnInit(): void {
@@ -154,6 +192,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();
+    this.codeAgentSub?.unsubscribe();
   }
 
   get isAiBusy(): boolean {
@@ -277,6 +316,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.azureImportSuccessMessage = null;
     this.azureImportErrorMessage = null;
     this.azureNodeNameWarning = null;
+    this.cancelCodeExploration();
+    this.clearCodeContext();
+    this.codeLinkedBranchHint = null;
 
     this.huFormDirective?.resetForm();
     this.currentGenerationMode = keptMode;
@@ -343,6 +385,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
             this.azureNodeNameWarning = `No se encontró coincidencia para "${importedHu.nodeName}" en el selector de Nombre Célula. Selecciónala manualmente.`;
           }
 
+          this.clearCodeContext();
+          if (this.usesCodeContext) {
+            this.suggestLinkedBranch(importedHu.id);
+          }
+
           this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
           this.azureImportErrorMessage = null;
           this.toastService.success(`HU ${importedHu.id} importada correctamente desde Azure DevOps.`);
@@ -393,7 +440,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** Ajusta la altura de los textareas del formulario inicial (descripcion, criterios, contexto). */
   public autoGrowFormTextareas(): void {
-    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext'];
+    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext', 'tcCodeContext'];
     ids.forEach(id => {
       const ta = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
       if (ta) this.autoGrowTextarea(ta);
@@ -513,10 +560,199 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return [{ numero_paso: 1, accion: 'Paso no descrito' }];
   }
 
+  // ---------------------------------------------------------------------------
+  // Contexto desde código fuente (Azure Repos + agente de exploración)
+  // ---------------------------------------------------------------------------
+
+  onContextSourceChange(source: ContextSource): void {
+    this.contextSource = source;
+    this.codeAgentError = null;
+    if (this.usesCodeContext && this.codeProjects.length === 0 && !this.codeLoadingTarget) {
+      this.loadCodeProjects();
+    }
+    const huId = Number(this.currentHuId);
+    if (this.usesCodeContext && !this.isCodeTargetReady && Number.isInteger(huId) && huId > 0) {
+      this.suggestLinkedBranch(huId);
+    }
+  }
+
+  loadCodeProjects(): void {
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listProjects()
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (projects) => {
+          this.codeProjects = projects;
+          if (projects.length === 1 && !this.codeProject) {
+            this.onCodeProjectChange(projects[0].name);
+          }
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeProjectChange(project: string, preselect?: { repositoryId: string; branch: string }): void {
+    this.codeProject = project;
+    this.codeRepositories = [];
+    this.codeBranches = [];
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.clearCodeContext();
+    if (!project) return;
+
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listRepositories(project)
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (repositories) => {
+          this.codeRepositories = repositories;
+          const target = preselect && repositories.find((repo) => repo.id === preselect.repositoryId);
+          if (target) {
+            this.onCodeRepositoryChange(target.id, preselect!.branch);
+          } else if (repositories.length === 1) {
+            this.onCodeRepositoryChange(repositories[0].id);
+          }
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeRepositoryChange(repositoryId: string, preferredBranch?: string): void {
+    this.codeRepositoryId = repositoryId;
+    this.codeBranches = [];
+    this.codeBranch = '';
+    this.clearCodeContext();
+    if (!repositoryId) return;
+
+    const repository = this.codeRepositories.find((repo) => repo.id === repositoryId);
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listBranches(this.codeProject, repositoryId)
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (branches) => {
+          this.codeBranches = branches;
+          const wanted = [preferredBranch, repository?.defaultBranch].find((name) => name && branches.some((b) => b.name === name));
+          this.codeBranch = wanted || '';
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeBranchChange(branch: string): void {
+    this.codeBranch = branch;
+    this.clearCodeContext();
+  }
+
+  /** Autosugiere repo + rama a partir de las ramas vinculadas a la HU en Azure Boards. */
+  private suggestLinkedBranch(workItemId: number): void {
+    this.codeLinkedBranchHint = null;
+    this.azureReposService.getLinkedBranches(workItemId).subscribe({
+      next: async (links) => {
+        if (links.length === 0) return;
+        const link = links[0];
+        if (this.codeProjects.length === 0) {
+          this.codeProjects = await firstValueFrom(this.azureReposService.listProjects()).catch(() => []);
+        }
+        const project = this.codeProjects.find((p) => p.id === link.projectId);
+        if (!project) return;
+        this.onCodeProjectChange(project.name, { repositoryId: link.repositoryId, branch: link.branch });
+        this.codeLinkedBranchHint = links.length > 1
+          ? `La HU tiene ${links.length} ramas vinculadas; se preseleccionó "${link.branch}".`
+          : `Rama vinculada a la HU preseleccionada: "${link.branch}".`;
+        this.cdr.markForCheck();
+      },
+      // Sugerencia opcional: si falla, el usuario elige manualmente.
+      error: () => { }
+    });
+  }
+
+  exploreCode(onDone?: () => void, useCache: boolean = true): void {
+    if (!this.isCodeTargetReady || this.codeExploring) return;
+    if (!this.currentDescription.trim()) {
+      this.codeAgentError = 'Escribe la descripción de la HU antes de explorar el código.';
+      return;
+    }
+
+    const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
+    const branch = this.codeBranches.find((b) => b.name === this.codeBranch);
+
+    this.codeExploring = true;
+    this.codeAgentError = null;
+    this.codeAgentLog = [];
+    this.codeContextFromCache = false;
+    this.cdr.detectChanges();
+
+    this.codeAgentSub = this.codeExplorerAgent.explore({
+      target: {
+        project: this.codeProject,
+        repositoryId: this.codeRepositoryId,
+        repositoryName: repository?.name || this.codeRepositoryId,
+        branch: this.codeBranch,
+        commitId: branch?.commitId || '',
+        scopePath: this.codeScopePath.trim() || '/'
+      },
+      mode: this.contextSource,
+      description: this.currentDescription,
+      acceptanceCriteria: this.currentAcceptanceCriteria,
+      userRequest: this.currentGenerationContext
+    }, { useCache }).subscribe({
+      next: (event) => {
+        this.codeAgentLog = [...this.codeAgentLog, event.message].slice(-40);
+        if ((event.type === 'done' || event.type === 'cached') && event.context) {
+          this.codeContextText = event.context;
+          this.codeFilesReviewed = event.filesReviewed || [];
+          this.codeContextFromCache = event.type === 'cached';
+        }
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this.codeExploring = false;
+        this.codeAgentError = this.getCodeErrorMessage(error);
+        this.toastService.error(this.codeAgentError);
+        this.cdr.detectChanges();
+      },
+      complete: () => {
+        this.codeExploring = false;
+        this.cdr.detectChanges();
+        setTimeout(() => this.autoGrowFormTextareas(), 0);
+        if (this.codeContextText.trim() && onDone) onDone();
+      }
+    });
+  }
+
+  cancelCodeExploration(): void {
+    if (this.codeAgentSub) {
+      this.codeAgentSub.unsubscribe();
+      this.codeAgentSub = undefined;
+    }
+    if (this.codeExploring) {
+      this.codeExploring = false;
+      this.codeAgentLog = [...this.codeAgentLog, 'Exploración cancelada.'];
+    }
+  }
+
+  clearCodeContext(): void {
+    this.codeContextText = '';
+    this.codeFilesReviewed = [];
+    this.codeAgentLog = [];
+    this.codeAgentError = null;
+    this.codeContextFromCache = false;
+  }
+
+  private getCodeErrorMessage(error: any): string {
+    return error?.error?.message || error?.message || 'No fue posible consultar el código fuente.';
+  }
+
   isFormInvalidForGeneration(): boolean {
     if (!this.huFormDirective?.form || !this.currentGenerationMode) return true;
     const commonRequired = !this.currentSprint || !this.currentHuTitle;
-    return !this.currentHuId || !this.currentDescription || !this.currentAcceptanceCriteria || commonRequired;
+    // En modo "Repositorio + rama" los criterios son opcionales: el código es la fuente principal.
+    const criteriaMissing = this.contextSource !== 'code' && !this.currentAcceptanceCriteria;
+    const codeTargetMissing = this.usesCodeContext && !this.isCodeTargetReady;
+    return !this.currentHuId || !this.currentDescription || criteriaMissing || codeTargetMissing || commonRequired || this.codeExploring;
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
@@ -543,6 +779,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.formError = "Por favor, completa todos los campos requeridos.";
       this.huFormDirective?.form.markAllAsTouched(); return;
     }
+    // Con código como fuente: si aún no hay contexto técnico, el agente explora
+    // primero y al terminar continúa automáticamente con la generación.
+    if (this.usesCodeContext && !this.codeContextText.trim()) {
+      this.exploreCode(() => this.generateInitialHuAndCases());
+      return;
+    }
+    const codeContext = this.usesCodeContext ? this.codeContextText.trim() : '';
     const huData: UIHUData = {
       originalInput: {
         generationMode: this.currentGenerationMode,
@@ -550,6 +793,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         acceptanceCriteria: this.currentAcceptanceCriteria,
         selectedTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
         userRequest: this.currentGenerationContext,
+        codeContext: codeContext || undefined,
+        contextSource: codeContext ? this.contextSource : undefined,
       },
       id: this.currentHuId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
       generatedScope: '',
@@ -579,7 +824,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
-        this.currentGenerationContext
+        this.currentGenerationContext,
+        codeContext,
+        this.contextSource
       ).subscribe({
         next: (event: any) => {
           this.streamingReasoning = event.reasoning || '';

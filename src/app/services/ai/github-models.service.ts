@@ -1,3 +1,4 @@
+import type { ContextSource } from '../../models/code-agent.model';
 import { Injectable, NgZone } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { from, Observable, of } from 'rxjs';
@@ -227,9 +228,11 @@ export class GitHubModelsService {
         description: string,
         acceptanceCriteria: string,
         technique: string,
-        userRequest: string = ''
+        userRequest: string = '',
+        codeContext: string = '',
+        contextSource: ContextSource = 'criteria'
     ): Observable<StreamEvent> {
-        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest);
+        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
         return this.callChatStream({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.5,
@@ -246,7 +249,7 @@ export class GitHubModelsService {
     ): Observable<StreamEvent> {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
-        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
         return this.callChatStream({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.3,
@@ -434,7 +437,7 @@ export class GitHubModelsService {
     ): Observable<any> {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
-        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
 
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],

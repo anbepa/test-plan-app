@@ -33,6 +33,61 @@
     <div class="form-grid">
       <!-- Campos para modo 'text' -->
       <ng-container *ngIf="currentGenerationMode === 'text'">
+        <!-- FUENTE DE CONTEXTO (opcional): criterios y/o repositorio + rama -->
+        <div class="form-group full-width code-source-block">
+          <span class="code-source-label" id="tcContextSourceLabel">Fuente de contexto:</span>
+          <div class="code-source-options" role="radiogroup" aria-labelledby="tcContextSourceLabel">
+            <label *ngFor="let option of contextSourceOptions" class="code-source-option"
+              [class.is-active]="contextSource === option.value" [title]="option.hint">
+              <input type="radio" name="contextSource" [value]="option.value" [ngModel]="contextSource"
+                (ngModelChange)="onContextSourceChange($event)" [disabled]="codeExploring || loadingScenarios">
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+          <p class="code-source-hint">
+            <ng-container *ngFor="let option of contextSourceOptions"><span *ngIf="option.value === contextSource">{{ option.hint }}</span></ng-container>
+          </p>
+
+          <div *ngIf="usesCodeContext" class="code-target-grid">
+            <div class="form-group">
+              <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
+              <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
+                (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
+                <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
+                <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
+              <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
+                (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
+                <option value="">Seleccione un repositorio</option>
+                <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
+              <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
+                (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
+                <option value="">Seleccione una rama</option>
+                <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="tcCodeScope">Carpeta (opcional):</label>
+              <input id="tcCodeScope" name="codeScopePath" type="text" class="form-control" [(ngModel)]="codeScopePath"
+                (ngModelChange)="clearCodeContext()" placeholder="Ej: /src/modules/pagos" [disabled]="codeExploring">
+            </div>
+          </div>
+          <div *ngIf="usesCodeContext && codeLinkedBranchHint" class="import-feedback import-success" role="status">
+            {{ codeLinkedBranchHint }}
+          </div>
+          <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
+            {{ codeTargetError }}
+            <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+          </div>
+        </div>
+
         <div class="metadata-block full-width">
           <div class="metadata-grid">
             <div class="form-group">
@@ -113,10 +168,11 @@
           </div>
         </div>
         <div class="form-group full-width">
-          <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación:<span
-              class="required-indicator">*</span></label>
+          <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
+              *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
           <textarea id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
-            [(ngModel)]="currentAcceptanceCriteria" rows="4" required placeholder="Ej: - Dado que..."
+            [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
+            [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
             class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
           <div
             *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
@@ -139,6 +195,44 @@
             </button>
           </div>
         </div>
+
+        <!-- AGENTE DE EXPLORACIÓN DE CÓDIGO -->
+        <div *ngIf="usesCodeContext" class="form-group full-width code-agent-panel" aria-live="polite">
+          <div class="code-agent-header">
+            <label for="tcCodeContext">Contexto técnico del código:</label>
+            <div class="code-agent-actions">
+              <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode(undefined, !codeContextText)"
+                [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios">
+                {{ codeContextText ? '↻ Volver a explorar' : '🔎 Explorar código' }}
+              </button>
+              <button *ngIf="codeExploring" type="button" class="tc-tag" (click)="cancelCodeExploration()">Cancelar exploración</button>
+            </div>
+          </div>
+
+          <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
+            El agente explorará la rama seleccionada (solo lectura) y propondrá reglas técnicas, criterios derivados y discrepancias.
+            Puedes revisarlo y editarlo antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
+          </p>
+
+          <ul *ngIf="codeAgentLog.length" class="code-agent-log">
+            <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last && codeExploring">
+              <span *ngIf="last && codeExploring" class="spinner-inline"></span>{{ line }}
+            </li>
+          </ul>
+
+          <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
+
+          <ng-container *ngIf="codeContextText">
+            <p class="code-source-hint">
+              <span *ngIf="codeContextFromCache">♻️ Reutilizado de caché (mismo commit). </span>
+              <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
+              Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
+            </p>
+            <textarea id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
+              class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
+              [disabled]="codeExploring"></textarea>
+          </ng-container>
+        </div>
       </ng-container>
 
     </div>
@@ -147,7 +241,8 @@
       <button type="submit" class="button-primary compact-action"
         [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios">
         <span *ngIf="loadingScope || loadingScenarios" class="spinner"></span>
-        {{ (loadingScope || loadingScenarios) ? 'Generando...' : 'Generar Casos de Prueba' }}
+        <span *ngIf="codeExploring" class="spinner"></span>
+        {{ codeExploring ? 'Explorando código...' : (loadingScope || loadingScenarios) ? 'Generando...' : 'Generar Casos de Prueba' }}
       </button>
     </div>
     <div *ngIf="formError" class="error-message initial-form-error" role="alert">

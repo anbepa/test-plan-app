@@ -469,8 +469,11 @@ export async function exchangeCopilotToken(githubToken: string): Promise<string>
 }
 
 export interface GithubChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  // Tool calling (formato OpenAI): usado por el agente de exploración de código.
+  tool_calls?: unknown[];
+  tool_call_id?: string;
 }
 
 export interface GithubChatRequest {
@@ -479,6 +482,8 @@ export interface GithubChatRequest {
   temperature?: number;
   max_tokens?: number;
   response_format?: { type: 'json_object' | 'text' };
+  tools?: unknown[];
+  tool_choice?: unknown;
 }
 
 /**
@@ -517,6 +522,9 @@ export async function githubModelsChatCompletion(
         temperature: request.temperature ?? 0.5,
         max_tokens: request.max_tokens ?? 4000,
         ...(request.response_format ? { response_format: request.response_format } : {}),
+        ...(Array.isArray(request.tools) && request.tools.length > 0
+          ? { tools: request.tools, ...(request.tool_choice ? { tool_choice: request.tool_choice } : {}) }
+          : {}),
       }),
       signal: controller.signal as any,
     });

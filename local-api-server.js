@@ -736,6 +736,39 @@ app.post('/api/integrations/azure-devops/work-items/import', async (req, res) =>
     }
 });
 
+// Agente de exploración de código (Azure Repos). Mismo núcleo que la función de Vercel.
+const codeAgentCore = require('./api/integrations/code-agent/_azure-repos-core.js');
+
+app.all('/api/integrations/code-agent/*', async (req, res) => {
+    try {
+        const method = String(req.method || 'GET').toUpperCase();
+        if (method !== 'GET' && method !== 'POST') {
+            return res.status(405).json({ message: 'Método no permitido.' });
+        }
+
+        const user = await getAuthenticatedUser(req);
+        const connection = await getAzureConnectionWithSecret(user.id, null);
+        if (!connection || connection.status === 'disconnected') {
+            throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
+        }
+
+        const result = await codeAgentCore.handleCodeAgentRoute({
+            route: String(req.params[0] || '').split('/').filter(Boolean).join('/'),
+            method,
+            query: req.query,
+            body: req.body,
+            organization: connection.organization,
+            pat: connection.personal_access_token,
+            userId: user.id,
+            adminClient: getSupabaseClients().adminClient,
+        });
+
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendApiError(res, error);
+    }
+});
+
 async function handleGetWorkItem(req, res) {
     try {
         const user = await getAuthenticatedUser(req);

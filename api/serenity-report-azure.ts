@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { ApiError, getAuthenticatedUser, getSupabaseClients } from './integrations/azure-devops/_shared';
-import { AzureSerenityRuntimeConfig, resolveAzureSerenityRuntimeConfig } from './integrations/serenity/shared';
+import { AzureSerenityRuntimeConfig, resolveAzureSerenityRuntimeConfig } from './integrations/serenity/_shared';
 
 function azureGet(url: string, personalAccessToken: string): Promise<Response> {
   const basicToken = Buffer.from(`:${personalAccessToken}`).toString('base64');
