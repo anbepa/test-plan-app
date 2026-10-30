@@ -13,7 +13,6 @@
  * escribe en repositorios ni en work items.
  */
 const fetch = require('node-fetch');
-const crypto = require('crypto');
 
 const API_VERSION = '7.1';
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -71,13 +70,11 @@ const LIMITS = {
   maxSearchFiles: 30,
   maxSearchMatches: 60,
   searchConcurrency: 6,
-  maxContextChars: 40000,
   maxBranchChanges: 1000,
   maxAppSearchFiles: 12,
   maxAppSearchMatches: 30,
   maxDiffCells: 4000000,
   diffContextLines: 3,
-  cacheTtlDays: 7,
 };
 
 class CodeAgentError extends Error {
@@ -1002,71 +999,6 @@ async function getWorkItemLinkedBranches(organization, pat, workItemId) {
 }
 
 // ---------------------------------------------------------------------------
-// Caché de contexto técnico (Supabase, tabla opcional code_context_cache)
-// ---------------------------------------------------------------------------
-
-function buildCacheKey(body) {
-  const parts = [
-    requireString(body.repositoryId, 'repositoryId'),
-    requireString(body.commitId, 'commitId'),
-    normalizeRepoPath(body.scopePath),
-    String(body.baseBranch || ''),
-    String(body.mode || ''),
-    String(body.description || '').trim(),
-    String(body.acceptanceCriteria || '').trim(),
-  ];
-  return crypto.createHash('sha256').update(parts.join('\u0000')).digest('hex');
-}
-
-/** Si la tabla aún no existe, la caché se desactiva sin romper el flujo. */
-async function getCachedContext(adminClient, userId, body) {
-  if (!adminClient) return null;
-  const cacheKey = buildCacheKey(body);
-  const minDate = new Date(Date.now() - LIMITS.cacheTtlDays * 24 * 60 * 60 * 1000).toISOString();
-
-  const { data, error } = await adminClient
-    .from('code_context_cache')
-    .select('context, files_reviewed, created_at')
-    .eq('user_id', userId)
-    .eq('cache_key', cacheKey)
-    .gte('created_at', minDate)
-    .maybeSingle();
-
-  if (error) {
-    console.warn('[CODE_AGENT][CACHE][GET] caché no disponible:', error.message);
-    return null;
-  }
-  return data ? { context: data.context, filesReviewed: data.files_reviewed || [], createdAt: data.created_at } : null;
-}
-
-async function saveCachedContext(adminClient, userId, body) {
-  if (!adminClient) return { saved: false };
-  const context = String(body.context || '').slice(0, LIMITS.maxContextChars);
-  if (!context.trim()) throw new CodeAgentError(400, 'El contexto a guardar está vacío.');
-
-  const row = {
-    user_id: userId,
-    cache_key: buildCacheKey(body),
-    repository_id: String(body.repositoryId),
-    branch: String(body.branch || ''),
-    commit_id: String(body.commitId),
-    context,
-    files_reviewed: Array.isArray(body.filesReviewed) ? body.filesReviewed.slice(0, 100).map(String) : [],
-    created_at: new Date().toISOString(),
-  };
-
-  const { error } = await adminClient
-    .from('code_context_cache')
-    .upsert(row, { onConflict: 'user_id,cache_key' });
-
-  if (error) {
-    console.warn('[CODE_AGENT][CACHE][SAVE] caché no disponible:', error.message);
-    return { saved: false };
-  }
-  return { saved: true };
-}
-
-// ---------------------------------------------------------------------------
 // Router común
 // ---------------------------------------------------------------------------
 
@@ -1085,11 +1017,9 @@ async function saveCachedContext(adminClient, userId, body) {
  *   POST search      { project, repositoryId, branch | commit, terms: [], paths: [] }
  *   POST branch-diff { project, repositoryId, baseBranch, branch }
  *   POST file-diff   { project, repositoryId, path, changeType, originalPath?, baseCommit, targetCommit }
- *   POST cache/get   { repositoryId, commitId, scopePath, mode, description, acceptanceCriteria }
  *   POST app-search { projectId, repoPrefixes: [], terms: [] }  (Code Search en los repos del aplicativo)
- *   POST cache/save  { ...cache/get, branch, context, filesReviewed }
  */
-async function handleCodeAgentRoute({ route, method, query, body, organization, pat, userId, adminClient }) {
+async function handleCodeAgentRoute({ route, method, query, body, organization, pat }) {
   const q = query || {};
   const b = body || {};
 
@@ -1124,10 +1054,6 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
         return searchApplication(organization, pat, b);
       case 'search':
         return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
-      case 'cache/get':
-        return { cached: await getCachedContext(adminClient, userId, b) };
-      case 'cache/save':
-        return saveCachedContext(adminClient, userId, b);
       default:
         break;
     }

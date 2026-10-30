@@ -2,20 +2,19 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, firstValueFrom } from 'rxjs';
 import { AiProvidersService } from './ai-providers.service';
-import { AzureReposService, CodeContextCacheKey } from '../integrations/azure-repos.service';
+import { AzureReposService } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
+import { TRANSIENT_RETRY_DELAYS_MS, isTransientError } from '../core/transient-retry';
 import { CodeAgentEvent, CodeExplorationInput, WorkItemChanges, changeGroupKey } from '../../models/code-agent.model';
 import { ChatMessage, CodeAgentGateway, CodeAgentRunner, LlmUsage } from './code-agent-runner';
-
-type CacheVersion = Pick<CodeContextCacheKey, 'repositoryId' | 'commitId'>;
 
 /**
  * Agente autónomo (acotado) que explora el código de la HU en Azure Repos y
  * devuelve un "Contexto técnico" para complementar la generación de escenarios.
  *
  * La lógica del agente vive en CodeAgentRunner (sin dependencias de Angular);
- * este servicio conecta los proveedores de IA, el backend de Azure Repos y la
- * caché. El ciclo LLM ↔ herramientas corre en el navegador: cada paso es un
+ * este servicio conecta los proveedores de IA y el backend de Azure Repos.
+ * Cada exploración analiza el código actual: no se reutilizan contextos guardados. El ciclo LLM ↔ herramientas corre en el navegador: cada paso es un
  * request corto, así ninguna función de Vercel se acerca a su maxDuration.
  */
 @Injectable({
@@ -30,11 +29,11 @@ export class CodeExplorerAgentService {
     private supabaseClient: SupabaseClientService
   ) {}
 
-  explore(input: CodeExplorationInput, options: { useCache?: boolean } = {}): Observable<CodeAgentEvent> {
+  explore(input: CodeExplorationInput): Observable<CodeAgentEvent> {
     return new Observable<CodeAgentEvent>((observer) => {
       let cancelled = false;
 
-      this.run(input, options.useCache !== false, (event) => {
+      this.run(input, (event) => {
         if (!cancelled) observer.next(event);
       }, () => cancelled)
         .then(() => { if (!cancelled) observer.complete(); })
@@ -46,7 +45,6 @@ export class CodeExplorerAgentService {
 
   private async run(
     input: CodeExplorationInput,
-    useCache: boolean,
     emit: (event: CodeAgentEvent) => void,
     isCancelled: () => boolean
   ): Promise<void> {
@@ -55,38 +53,13 @@ export class CodeExplorerAgentService {
       throw new Error('El agente de código requiere DeepSeek o GitHub Models como proveedor activo.');
     }
 
-    // Los cambios de la HU se consultan una sola vez: sirven para la clave de caché y para el agente.
+    // Los cambios de la HU se consultan una sola vez.
     // Los repos que el usuario desmarcó no se analizan.
     const excluded = new Set(input.excludedGroups || []);
     let workItemChanges: Promise<WorkItemChanges> | null = null;
     const getWorkItemChanges = (workItemId: number) =>
       workItemChanges ??= firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId))
         .then((changes) => ({ ...changes, groups: changes.groups.filter((group) => !excluded.has(changeGroupKey(group))) }));
-
-    const baseKey = {
-      scopePath: input.target?.scopePath || '/',
-      baseBranch: input.target?.baseBranch || '',
-      mode: input.mode,
-      description: input.description,
-      acceptanceCriteria: input.acceptanceCriteria,
-    };
-
-    if (useCache) {
-      const version = await this.resolveCacheVersion(input, getWorkItemChanges);
-      if (version) {
-        emit({ type: 'progress', message: 'Buscando contexto en caché…' });
-        const cached = await firstValueFrom(this.azureRepos.getCachedContext({ ...baseKey, ...version })).catch(() => null);
-        if (cached?.cached?.context) {
-          emit({
-            type: 'cached',
-            message: 'Contexto reutilizado de caché (mismo código y misma HU).',
-            context: cached.cached.context,
-            filesReviewed: cached.cached.filesReviewed,
-          });
-          return;
-        }
-      }
-    }
 
     const gateway: CodeAgentGateway = {
       llm: (messages, options) => this.callLlm(providerId, messages, options.tools, options.forceFinish),
@@ -110,38 +83,6 @@ export class CodeExplorerAgentService {
       filesReviewed: result.filesReviewed,
     });
 
-    if (result.versionKey) {
-      this.azureRepos.saveCachedContext({
-        ...baseKey,
-        ...this.cacheVersion(input, result.versionKey),
-        branch: input.target?.branch || '',
-        context: result.context,
-        filesReviewed: result.filesReviewed,
-      }).subscribe({ error: () => { /* la caché es opcional */ } });
-    }
-  }
-
-  /** Commit(s) que identifican el código analizado; sin ellos no se usa caché. */
-  private async resolveCacheVersion(
-    input: CodeExplorationInput,
-    getWorkItemChanges: (workItemId: number) => Promise<WorkItemChanges>
-  ): Promise<CacheVersion | null> {
-    if (input.workItemId) {
-      const changes = await getWorkItemChanges(input.workItemId).catch(() => null);
-      if (changes?.groups.length) {
-        return this.cacheVersion(input, changes.groups.map((group) => group.lastCommit).join(','));
-      }
-    }
-    return input.target?.commitId ? this.cacheVersion(input, input.target.commitId) : null;
-  }
-
-  /** Con PRs de la HU la clave es la HU + sus commits; con rama elegida, el repo + su commit. */
-  private cacheVersion(input: CodeExplorationInput, versionKey: string): CacheVersion {
-    const fromChangeset = !input.target || versionKey !== input.target.commitId;
-    return {
-      repositoryId: fromChangeset ? `hu:${input.workItemId}` : input.target!.repositoryId,
-      commitId: versionKey,
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -176,7 +117,8 @@ export class CodeExplorerAgentService {
       max_tokens: 8000,
     };
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    const attempts = TRANSIENT_RETRY_DELAYS_MS.length + 1;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         let response: any;
         if (providerId === 'github-models') {
@@ -193,11 +135,13 @@ export class CodeExplorerAgentService {
         if (!message) throw new Error('Respuesta vacía del proveedor de IA.');
         return { message: message as ChatMessage, usage: response?.usage };
       } catch (error: any) {
-        const status = Number(error?.status || 0);
-        const retryable = status === 429 || status >= 500;
-        if (attempt < 2 && retryable) {
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+        // "Failed to fetch" (status 0) suele ser un corte momentáneo: se reintenta sin perder la exploración.
+        if (attempt < attempts && isTransientError(error)) {
+          await new Promise((resolve) => setTimeout(resolve, TRANSIENT_RETRY_DELAYS_MS[attempt - 1]));
           continue;
+        }
+        if (isTransientError(error) && Number(error?.status) === 0) {
+          throw new Error(`Se perdió la conexión con el proveedor de IA (${attempts} intentos). Revisa tu red o VPN y vuelve a explorar.`);
         }
         throw new Error(error?.error?.userMessage || error?.error?.message || error?.message || 'Error al consultar el proveedor de IA.');
       }

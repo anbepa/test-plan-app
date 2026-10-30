@@ -3,7 +3,6 @@ import {
   ApiError,
   getAuthenticatedUser,
   getAzureConnectionWithSecret,
-  getSupabaseClients,
   toErrorResponse,
 } from '../azure-devops/_shared';
 
@@ -44,8 +43,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       body: req.body,
       organization: connection.organization,
       pat: connection.personal_access_token,
-      userId: user.id,
-      adminClient: getSupabaseClients().adminClient,
     });
 
     res.status(200).json(result);

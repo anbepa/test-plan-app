@@ -1,7 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { from, Observable, switchMap } from 'rxjs';
+import { defer, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
+import { retryTransient } from '../core/transient-retry';
 import {
   AzureAppSearchResult,
   AzureBranchChange,
@@ -19,16 +20,6 @@ import {
   WorkItemChanges,
 } from '../../models/code-agent.model';
 import { RepoRef } from '../ai/code-agent-runner';
-
-export interface CodeContextCacheKey {
-  repositoryId: string;
-  commitId: string;
-  scopePath: string;
-  baseBranch: string;
-  mode: ContextSource;
-  description: string;
-  acceptanceCriteria: string;
-}
 
 /**
  * Cliente HTTP del backend de Azure Repos (solo lectura) usado por el agente
@@ -99,23 +90,18 @@ export class AzureReposService {
     return this.authorizedPost<AzureRepoSearchResult>(`${this.baseUrl}/search`, { ...ref, terms, paths });
   }
 
-  getCachedContext(key: CodeContextCacheKey): Observable<{ cached: { context: string; filesReviewed: string[] } | null }> {
-    return this.authorizedPost(`${this.baseUrl}/cache/get`, key);
-  }
-
-  saveCachedContext(key: CodeContextCacheKey & { branch: string; context: string; filesReviewed: string[] }): Observable<{ saved: boolean }> {
-    return this.authorizedPost(`${this.baseUrl}/cache/save`, key);
-  }
-
+  // Todas las rutas son de solo lectura: ante un corte de red o un 5xx se reintenta (incluida la sesión).
   private authorizedGet<T>(url: string, params?: Record<string, string>): Observable<T> {
-    return from(this.buildAuthHeaders()).pipe(
-      switchMap((headers) => this.http.get<T>(url, { headers, params: new HttpParams({ fromObject: params || {} }) }))
+    return defer(() => this.buildAuthHeaders()).pipe(
+      switchMap((headers) => this.http.get<T>(url, { headers, params: new HttpParams({ fromObject: params || {} }) })),
+      retryTransient()
     );
   }
 
   private authorizedPost<T>(url: string, body: unknown): Observable<T> {
-    return from(this.buildAuthHeaders()).pipe(
-      switchMap((headers) => this.http.post<T>(url, body, { headers }))
+    return defer(() => this.buildAuthHeaders()).pipe(
+      switchMap((headers) => this.http.post<T>(url, body, { headers })),
+      retryTransient()
     );
   }
 

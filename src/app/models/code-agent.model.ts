@@ -160,7 +160,7 @@ export interface CodeExplorationInput {
   userRequest: string;
 }
 
-export type CodeAgentEventType = 'progress' | 'tool' | 'done' | 'cached';
+export type CodeAgentEventType = 'progress' | 'tool' | 'done';
 
 /** Estado de cada criterio frente al código, según el agente. */
 export type CriterionCodeStatus = 'IMPLEMENTADO' | 'PARCIAL' | 'DIFERENTE' | 'SIN EVIDENCIA';
@@ -168,7 +168,7 @@ export type CriterionCodeStatus = 'IMPLEMENTADO' | 'PARCIAL' | 'DIFERENTE' | 'SI
 export interface CodeAgentEvent {
   type: CodeAgentEventType;
   message: string;
-  /** Solo en done/cached: contexto técnico final en texto. */
+  /** Solo en done: contexto técnico final en texto. */
   context?: string;
   filesReviewed?: string[];
 }

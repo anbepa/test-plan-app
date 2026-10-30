@@ -72,7 +72,7 @@ export interface CodeAgentResult {
   /** Hechos del agente (reglas con código literal) antes del juez. */
   facts?: string;
   filesReviewed: string[];
-  /** Commit(s) analizados: sirve como clave de caché. */
+  /** Commit(s) analizados. */
   versionKey: string;
   stats: { llmCalls: number; promptTokens: number; completionTokens: number; cachedTokens: number; durationMs: number };
 }

@@ -321,7 +321,7 @@
             <div class="code-agent-header">
               <span class="flow-field-label">Qué hace el agente</span>
               <div class="code-agent-actions">
-                <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode(undefined, !codeContextText)"
+                <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode()"
                   [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios">
                   {{ codeContextText ? '↻ Volver a explorar' : '🔎 Explorar código' }}
                 </button>
@@ -354,7 +354,6 @@
 
             <ng-container *ngIf="codeContextText">
               <p class="code-source-hint">
-                <span *ngIf="codeContextFromCache">♻️ Reutilizado de caché (mismo commit). </span>
                 <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
                 Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
               </p>

@@ -759,8 +759,6 @@ app.all('/api/integrations/code-agent/*', async (req, res) => {
             body: req.body,
             organization: connection.organization,
             pat: connection.personal_access_token,
-            userId: user.id,
-            adminClient: getSupabaseClients().adminClient,
         });
 
         return res.status(200).json(result);

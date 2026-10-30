@@ -110,7 +110,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeAgentError: string | null = null;
   codeContextText: string = '';
   codeFilesReviewed: string[] = [];
-  codeContextFromCache: boolean = false;
   /** Vista markdown (false) o edición en texto (true). */
   criteriaEditing: boolean = true;
   codeContextEditing: boolean = false;
@@ -1034,7 +1033,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     });
   }
 
-  exploreCode(onDone?: () => void, useCache: boolean = true): void {
+  exploreCode(onDone?: () => void): void {
     if (!this.isCodeTargetReady || this.codeExploring) return;
     if (!this.currentDescription.trim()) {
       this.codeAgentError = 'Escribe la descripción de la HU antes de explorar el código.';
@@ -1042,7 +1041,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
     // El juez evalúa la misma lista numerada que luego cubre la generación.
     if (this.needsCriteriaNormalization) {
-      this.refreshNormalizedCriteria().then(() => this.exploreCode(onDone, useCache));
+      this.refreshNormalizedCriteria().then(() => this.exploreCode(onDone));
       return;
     }
 
@@ -1052,7 +1051,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeExploring = true;
     this.codeAgentError = null;
     this.codeAgentLog = [];
-    this.codeContextFromCache = false;
     this.cdr.detectChanges();
 
     const workItemId = Number(this.currentHuId);
@@ -1072,13 +1070,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       description: this.currentDescription,
       acceptanceCriteria: this.effectiveCriteria,
       userRequest: ''
-    }, { useCache }).subscribe({
+    }).subscribe({
       next: (event) => {
         this.codeAgentLog = [...this.codeAgentLog, event.message].slice(-40);
-        if ((event.type === 'done' || event.type === 'cached') && event.context) {
+        if (event.type === 'done' && event.context) {
           this.codeContextText = event.context;
           this.codeFilesReviewed = event.filesReviewed || [];
-          this.codeContextFromCache = event.type === 'cached';
           this.codeContextBasis = this.currentCodeContextBasis;
           this.codeContextEditing = false;
         }
@@ -1120,7 +1117,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeFilesReviewed = [];
     this.codeAgentLog = [];
     this.codeAgentError = null;
-    this.codeContextFromCache = false;
   }
 
   private getCodeErrorMessage(error: any): string {
