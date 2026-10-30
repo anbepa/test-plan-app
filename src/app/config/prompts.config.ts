@@ -12,12 +12,14 @@ import type { ContextSource } from '../models/code-agent.model';
  */
 /**
  * Quita del contexto técnico lo que solo sirve al analista (lista de archivos
- * revisados y citas archivo:línea) para no gastar tokens en la generación.
+ * revisados, "Fuente:" y citas archivo:línea en línea) para no gastar tokens en la generación.
  */
 export function compactCodeContextForGeneration(codeContext: string): string {
   return (codeContext || '')
     .replace(/\n##\s*Archivos revisados[\s\S]*?(?=\n##\s|$)/i, '\n')
     .replace(/\s*\(?\bFuentes?:\s*[^\n]*?(?=\n|$)/g, '')
+    // Citas en línea entre paréntesis: (`archivo.ts:10-20`, `otro.html:5`).
+    .replace(/\s*\((?:`?[\w./\-…]+\.[a-z]{2,10}(?::[\d,\-–]+)?`?[;,]?\s*)+\)/gi, '')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

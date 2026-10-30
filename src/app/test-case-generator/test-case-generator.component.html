@@ -187,7 +187,16 @@
         <div class="form-group full-width">
           <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
               *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
-          <textarea id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
+          <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
+            <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
+              <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
+              <button type="button" [class.is-active]="criteriaEditing" (click)="criteriaEditing = true">Editar</button>
+            </div>
+          </div>
+          <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()" class="form-control md-preview"
+            [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="criteriaEditing = true"
+            title="Doble clic para editar"></div>
+          <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
             [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
             [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
             class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
@@ -195,21 +204,6 @@
             *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
             class="validation-error" role="alert">
             Criterios de Aceptación son requeridos.
-          </div>
-        </div>
-
-        <div class="form-group full-width">
-          <label for="tcCurrentGenerationContext">Contexto adicional (opcional):</label>
-          <textarea id="tcCurrentGenerationContext" name="currentGenerationContext"
-            [(ngModel)]="currentGenerationContext" rows="3"
-            placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
-            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
-          <div class="tc-quick-tags">
-            <button *ngFor="let tag of contextQuickTags" type="button"
-              class="tc-tag" (click)="applyContextTag(tag)"
-              [disabled]="loadingScope || loadingScenarios">
-              {{ tag }}
-            </button>
           </div>
         </div>
 
@@ -235,11 +229,17 @@
             Puedes revisar y editar el resultado antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
           </p>
 
-          <ul *ngIf="codeAgentLog.length" class="code-agent-log">
-            <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last && codeExploring">
-              <span *ngIf="last && codeExploring" class="spinner-inline"></span>{{ line }}
+          <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
+            <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last">
+              <span *ngIf="last" class="spinner-inline"></span>{{ line }}
             </li>
           </ul>
+          <details *ngIf="codeAgentLog.length && !codeExploring" class="code-agent-log-details">
+            <summary>Ver pasos del agente ({{ codeAgentLog.length }})</summary>
+            <ul class="code-agent-log">
+              <li *ngFor="let line of codeAgentLog">{{ line }}</li>
+            </ul>
+          </details>
 
           <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
 
@@ -249,14 +249,39 @@
               <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
               Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
             </p>
-            <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
-              <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+            <div class="md-box-header">
+              <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
+                <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+              </div>
+              <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
+                <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
+                <button type="button" [class.is-active]="codeContextEditing" (click)="codeContextEditing = true">Editar</button>
+              </div>
             </div>
-            <textarea id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
+            <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
+              [innerHTML]="codeContextText | markdownLite" (dblclick)="codeContextEditing = true"
+              title="Doble clic para editar"></div>
+            <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
               class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
               [disabled]="codeExploring"></textarea>
           </ng-container>
         </div>
+
+        <div class="form-group full-width">
+          <label for="tcCurrentGenerationContext">Contexto adicional (opcional):</label>
+          <textarea id="tcCurrentGenerationContext" name="currentGenerationContext"
+            [(ngModel)]="currentGenerationContext" rows="3"
+            placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
+            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
+          <div class="tc-quick-tags">
+            <button *ngFor="let tag of contextQuickTags" type="button"
+              class="tc-tag" (click)="applyContextTag(tag)"
+              [disabled]="loadingScope || loadingScenarios">
+              {{ tag }}
+            </button>
+          </div>
+        </div>
+
       </ng-container>
 
     </div>

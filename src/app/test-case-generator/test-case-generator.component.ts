@@ -15,6 +15,7 @@ import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, WorkItemChanges } from '../models/code-agent.model';
+import { MarkdownLitePipe } from '../shared/pipes/markdown-lite.pipe';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -29,7 +30,7 @@ type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinem
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -94,6 +95,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeContextText: string = '';
   codeFilesReviewed: string[] = [];
   codeContextFromCache: boolean = false;
+  /** Vista markdown (false) o edición en texto (true). */
+  criteriaEditing: boolean = true;
+  codeContextEditing: boolean = false;
   private codeAgentSub?: Subscription;
 
   get usesCodeContext(): boolean {
@@ -347,6 +351,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.currentHuTitle = '';
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
+    this.criteriaEditing = true;
     this.currentGenerationContext = '';
     this.generatedHUData = null;
     this.userRefinementContext = '';
@@ -419,6 +424,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.currentSprint = importedHu.sprint || '';
           this.currentDescription = importedHu.description || '';
           this.currentAcceptanceCriteria = importedHu.acceptanceCriteria || '';
+          this.criteriaEditing = false;
 
           const matchedCell = this.resolveCellFromAzureNodeName(importedHu.nodeName);
           if (matchedCell) {
@@ -796,6 +802,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.codeContextText = event.context;
           this.codeFilesReviewed = event.filesReviewed || [];
           this.codeContextFromCache = event.type === 'cached';
+          this.codeContextEditing = false;
         }
         this.cdr.detectChanges();
       },
