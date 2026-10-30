@@ -36,6 +36,23 @@ interface UIHUData extends OriginalHUData {
 
 type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinement' | 'submitting';
 
+/** Pasos del flujo de generación, en el orden en que se alimentan entre sí. */
+type FlowStepId = 'hu' | 'criteria' | 'code' | 'context' | 'generate';
+type FlowStepStatus = 'pending' | 'running' | 'done' | 'stale' | 'optional';
+
+interface FlowStep {
+  id: FlowStepId;
+  num: number;
+  title: string;
+  status: FlowStepStatus;
+  statusLabel: string;
+  summary: string;
+}
+
+const FLOW_STATUS_LABELS: Record<FlowStepStatus, string> = {
+  pending: 'Pendiente', running: 'En curso', done: 'Listo', stale: 'Desactualizado', optional: 'Opcional'
+};
+
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
@@ -63,7 +80,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   currentSprint: string = '';
   currentDescription: string = '';
   currentAcceptanceCriteria: string = '';
-  currentGenerationContext: string = '';
 
   // ---- Fuente de contexto: criterios y/o código fuente (Azure Repos) ----
   readonly contextSourceOptions: { value: ContextSource; label: string; hint: string }[] = [
@@ -108,6 +124,101 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   normalizedCriteriaEditing: boolean = false;
   /** CA-xx que quedaron sin escenario en la última generación. */
   criteriaCoverageGap: string[] = [];
+  /** Criterios y descripción con los que se exploró el código: si cambian, el contexto queda desactualizado. */
+  private codeContextBasis: string = '';
+  /** Por qué un paso se limpió o rehízo solo (p. ej. al importar otra HU): se muestra en el paso. */
+  flowNotices: Partial<Record<FlowStepId, string>> = {};
+
+  // ---- Flujo de trabajo: HU → criterios → código → contexto técnico → generación ----
+
+  get flowSteps(): FlowStep[] {
+    const ids: FlowStepId[] = this.usesCodeContext ? ['hu', 'criteria', 'code', 'context', 'generate'] : ['hu', 'criteria', 'generate'];
+    return ids.map((id, index) => {
+      const { title, status, summary } = this.describeFlowStep(id);
+      return { id, num: index + 1, title, status, statusLabel: FLOW_STATUS_LABELS[status], summary };
+    });
+  }
+
+  flowStep(id: FlowStepId): FlowStep {
+    return this.flowSteps.find((step) => step.id === id)!;
+  }
+
+  private describeFlowStep(id: FlowStepId): { title: string; status: FlowStepStatus; summary: string } {
+    switch (id) {
+      case 'hu': {
+        const ready = !!(this.currentHuId.trim() && this.currentHuTitle.trim() && this.currentDescription.trim() && this.cellName && this.currentSprint.trim());
+        return {
+          title: 'Historia de usuario',
+          status: this.azureImportLoading ? 'running' : ready ? 'done' : 'pending',
+          summary: this.azureImportLoading ? 'Importando desde Azure…' : this.currentHuId.trim() ? `HU ${this.currentHuId.trim()}` : 'Importa o escribe la HU'
+        };
+      }
+      case 'criteria': {
+        const raw = this.currentAcceptanceCriteria.trim();
+        if (this.normalizingCriteria) return { title: 'Criterios', status: 'running', summary: 'Interpretando criterios…' };
+        if (!raw) return { title: 'Criterios', status: this.contextSource === 'code' ? 'optional' : 'pending', summary: this.contextSource === 'code' ? 'El código define las reglas' : 'Sin criterios' };
+        if (this.needsCriteriaNormalization) return { title: 'Criterios', status: this.normalizedCriteria ? 'stale' : 'pending', summary: 'Se interpretan al salir del campo' };
+        return { title: 'Criterios', status: 'done', summary: this.normalizedCriteriaCount ? `${this.normalizedCriteriaCount} criterios (CA)` : 'Se usan tal cual' };
+      }
+      case 'code': {
+        const loading = this.codeLoadingHuChanges || this.codeLoadingTarget;
+        let summary = 'Elige el código a analizar';
+        if (this.usesHuChangeset) {
+          const groups = this.codeHuChangeGroups.filter((group) => this.isChangeGroupSelected(group));
+          summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`;
+        } else if (this.isManualCodeTargetReady) {
+          summary = this.codeBranch;
+        }
+        return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? 'Buscando PRs y commits…' : summary };
+      }
+      case 'context': {
+        if (this.codeExploring) return { title: 'Contexto técnico', status: 'running', summary: 'El agente está explorando…' };
+        if (!this.codeContextText.trim()) return { title: 'Contexto técnico', status: 'pending', summary: 'Se explora al generar si no lo haces antes' };
+        if (this.isCodeContextStale) return { title: 'Contexto técnico', status: 'stale', summary: 'Los criterios cambiaron' };
+        return { title: 'Contexto técnico', status: 'done', summary: this.codeCoverageRows.length ? `${this.codeCoverageRows.length} criterios evaluados` : 'Listo para generar' };
+      }
+      case 'generate':
+        return {
+          title: 'Generar matriz',
+          status: this.loadingScope || this.loadingScenarios ? 'running' : 'pending',
+          summary: this.loadingScope || this.loadingScenarios ? 'Generando escenarios…' : 'Revisa y genera'
+        };
+    }
+  }
+
+  /** El contexto técnico se exploró con otros criterios o descripción. */
+  get isCodeContextStale(): boolean {
+    return !!this.codeContextText.trim() && !!this.codeContextBasis && this.codeContextBasis !== this.currentCodeContextBasis;
+  }
+
+  private get currentCodeContextBasis(): string {
+    return `${this.currentDescription.trim()}\n${this.effectiveCriteria.trim()}`;
+  }
+
+  /** Texto del botón principal: indica qué paso del flujo se ejecutará o está en curso. */
+  get generateButtonLabel(): string {
+    if (this.normalizingCriteria) return 'Interpretando criterios…';
+    if (this.codeExploring) return 'Explorando código…';
+    if (this.loadingScope || this.loadingScenarios) return 'Generando…';
+    if (this.usesCodeContext && !this.codeContextText.trim()) return 'Explorar código y generar casos';
+    return 'Generar casos de prueba';
+  }
+
+  scrollToFlowStep(id: FlowStepId): void {
+    this.elRef.nativeElement.querySelector(`#flow-step-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  flowNotice(id: FlowStepId): string | undefined {
+    return this.flowNotices[id];
+  }
+
+  dismissFlowNotice(id: FlowStepId): void {
+    delete this.flowNotices[id];
+  }
+
+  private setFlowNotice(id: FlowStepId, message: string): void {
+    this.flowNotices = { ...this.flowNotices, [id]: message };
+  }
 
   /** Criterios que reciben el agente y la generación: la lista numerada si existe. */
   get effectiveCriteria(): string {
@@ -128,6 +239,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   async refreshNormalizedCriteria(): Promise<void> {
     if (!this.needsCriteriaNormalization || this.normalizingCriteria) return;
     const raw = this.currentAcceptanceCriteria.trim();
+    if (this.normalizedCriteria.trim()) {
+      this.setFlowNotice('criteria', 'Cambiaron los criterios originales: la lista de criterios a cubrir se volvió a interpretar y reemplaza la anterior (incluidas tus ediciones).');
+    }
     this.normalizingCriteria = true;
     this.normalizedCriteriaEditing = false;
     this.cdr.markForCheck();
@@ -185,7 +299,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     const key = changeGroupKey(group);
     if (this.codeExcludedGroups.has(key)) this.codeExcludedGroups.delete(key);
     else this.codeExcludedGroups.add(key);
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste los repositorios a analizar');
   }
 
   get isCodeTargetReady(): boolean {
@@ -490,7 +604,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.normalizedCriteria = '';
     this.normalizedCriteriaFor = '';
     this.criteriaCoverageGap = [];
-    this.currentGenerationContext = '';
+    this.flowNotices = {};
     this.generatedHUData = null;
     this.userRefinementContext = '';
     this.refinementTechnique = this.AUTO_TECHNIQUE;
@@ -518,8 +632,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           currentHuId: '',
           currentHuTitle: '',
           currentDescription: '',
-          currentAcceptanceCriteria: '',
-          currentGenerationContext: ''
+          currentAcceptanceCriteria: ''
         });
         this.huFormDirective.form.updateValueAndValidity();
       }
@@ -564,12 +677,16 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (importedHu: AzureDevOpsImportedUserStory) => {
+          const previousCriteria = this.currentAcceptanceCriteria.trim();
           this.currentHuId = String(importedHu.id);
           this.currentHuTitle = importedHu.title || '';
           this.currentSprint = importedHu.sprint || '';
           this.currentDescription = importedHu.description || '';
           this.currentAcceptanceCriteria = importedHu.acceptanceCriteria || '';
-          this.criteriaEditing = false;
+          if (previousCriteria && previousCriteria !== this.currentAcceptanceCriteria.trim()) {
+            this.setFlowNotice('criteria', `Se reemplazaron los criterios por los de la HU ${importedHu.id} importada desde Azure.`);
+          }
+          this.criteriaEditing = !this.currentAcceptanceCriteria.trim();
           this.refreshNormalizedCriteria();
 
           const matchedCell = this.resolveCellFromAzureNodeName(importedHu.nodeName);
@@ -630,7 +747,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** Ajusta la altura de los textareas del formulario inicial (descripcion, criterios, contexto). */
   public autoGrowFormTextareas(): void {
-    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext', 'tcCodeContext'];
+    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCodeContext'];
     ids.forEach(id => {
       const ta = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
       if (ta) this.autoGrowTextarea(ta);
@@ -756,7 +873,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** Al cambiar de HU, la rama y los cambios de la HU anterior no deben quedar seleccionados. */
   private resetCodeTargetForNewHu(): void {
-    this.clearCodeContext();
+    if (this.codeHuChanges || this.isManualCodeTargetReady) {
+      this.setFlowNotice('code', 'Cambiaste de HU: se descartó el código de la HU anterior y se buscan los PRs y commits de la nueva.');
+    }
+    this.clearCodeContext('cambiaste de HU');
     this.codeHuChanges = null;
     this.codeExcludedGroups = new Set<string>();
     this.codeManualOverride = false;
@@ -769,7 +889,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** Elegir otra rama aunque la HU tenga PRs: arranca con el repo/rama de la HU. */
   useManualCodeTarget(): void {
     this.codeManualOverride = true;
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste el origen del código');
     const primary = this.codeHuChangeGroups[0];
     if (primary && !this.isManualCodeTargetReady) {
       this.preselectCodeTarget(primary.projectId, primary.repositoryId, primary.sourceBranches[0] || primary.targetBranch);
@@ -778,7 +898,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   useHuChangeset(): void {
     this.codeManualOverride = false;
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste el origen del código');
   }
 
   private async preselectCodeTarget(projectId: string, repositoryId: string, branch: string): Promise<void> {
@@ -825,7 +945,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeBranches = [];
     this.codeRepositoryId = '';
     this.codeBranch = '';
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste el proyecto');
     if (!project) return;
 
     this.codeLoadingTarget = true;
@@ -850,7 +970,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeRepositoryId = repositoryId;
     this.codeBranches = [];
     this.codeBranch = '';
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste el repositorio');
     if (!repositoryId) return;
 
     const repository = this.codeRepositories.find((repo) => repo.id === repositoryId);
@@ -870,7 +990,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   onCodeBranchChange(branch: string): void {
     this.codeBranch = branch;
-    this.clearCodeContext();
+    this.clearCodeContext('cambiaste la rama');
   }
 
   /**
@@ -928,6 +1048,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
     const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
 
+    this.dismissFlowNotice('context');
     this.codeExploring = true;
     this.codeAgentError = null;
     this.codeAgentLog = [];
@@ -950,7 +1071,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       mode: this.contextSource,
       description: this.currentDescription,
       acceptanceCriteria: this.effectiveCriteria,
-      userRequest: this.currentGenerationContext
+      userRequest: ''
     }, { useCache }).subscribe({
       next: (event) => {
         this.codeAgentLog = [...this.codeAgentLog, event.message].slice(-40);
@@ -958,6 +1079,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.codeContextText = event.context;
           this.codeFilesReviewed = event.filesReviewed || [];
           this.codeContextFromCache = event.type === 'cached';
+          this.codeContextBasis = this.currentCodeContextBasis;
           this.codeContextEditing = false;
         }
         this.cdr.detectChanges();
@@ -988,7 +1110,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
   }
 
-  clearCodeContext(): void {
+  /** reason: por qué se descarta, para explicarlo en el paso "Contexto técnico". */
+  clearCodeContext(reason?: string): void {
+    if (reason && this.codeContextText.trim()) {
+      this.setFlowNotice('context', `Se descartó el contexto técnico porque ${reason}. Vuelve a explorar o se explorará al generar.`);
+    }
+    this.codeContextBasis = '';
     this.codeContextText = '';
     this.codeFilesReviewed = [];
     this.codeAgentLog = [];
@@ -1051,7 +1178,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         description: this.currentDescription,
         acceptanceCriteria: this.effectiveCriteria,
         selectedTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
-        userRequest: this.currentGenerationContext,
+        userRequest: '',
         codeContext: codeContext || undefined,
         contextSource: codeContext ? this.contextSource : undefined,
       },
@@ -1083,7 +1210,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
-        this.currentGenerationContext,
+        '',
         codeContext,
         this.contextSource
       ).subscribe({

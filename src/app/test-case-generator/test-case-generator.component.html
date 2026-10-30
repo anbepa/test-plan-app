@@ -28,336 +28,407 @@
     </div>
   </div>
 
-  <!-- FORMULARIO INICIAL -->
-  <form (ngSubmit)="generateInitialHuAndCases()" #huForm="ngForm" *ngIf="componentState === 'initialForm'">
-    <div class="form-grid">
-      <!-- Campos para modo 'text' -->
-      <ng-container *ngIf="currentGenerationMode === 'text'">
-        <!-- FUENTE DE CONTEXTO (opcional): criterios y/o repositorio + rama -->
-        <div class="form-group full-width code-source-block">
-          <span class="code-source-label" id="tcContextSourceLabel">Fuente de contexto:</span>
-          <div class="code-source-options" role="radiogroup" aria-labelledby="tcContextSourceLabel">
-            <label *ngFor="let option of contextSourceOptions" class="code-source-option"
-              [class.is-active]="contextSource === option.value" [title]="option.hint">
-              <input type="radio" name="contextSource" [value]="option.value" [ngModel]="contextSource"
-                (ngModelChange)="onContextSourceChange($event)" [disabled]="codeExploring || loadingScenarios">
-              <span>{{ option.label }}</span>
-            </label>
-          </div>
-          <p class="code-source-hint">
-            <ng-container *ngFor="let option of contextSourceOptions"><span *ngIf="option.value === contextSource">{{ option.hint }}</span></ng-container>
-          </p>
-
-          <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
-            <!-- Consultando PRs/commits de la HU -->
-            <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
-              <span class="spinner-inline"></span>
-              Buscando el código de la HU {{ currentHuId }} (PRs y commits vinculados)…
-            </div>
-
-            <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
-            <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
-              <div class="code-target-card-header">
-                <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
-                <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring">Usar otra rama</button>
-              </div>
-              <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
-              <ul class="code-change-list">
-                <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
-                  <label class="code-change-toggle">
-                    <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
-                    <span class="code-change-repo">{{ group.repositoryName }}</span>
-                  </label>
-                  <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
-                  <span class="code-change-meta">
-                    último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
-                    · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
-                    <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
-                  </span>
-                </li>
-              </ul>
-              <p *ngIf="!usesHuChangeset" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
-              <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
-                <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
-                <ul>
-                  <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
-                  <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
-                </ul>
-              </details>
-            </div>
-
-            <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
-            <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
-              <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
-              <div class="code-target-grid">
-                <div class="form-group">
-                  <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
-                  <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
-                    (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
-                    <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
-                    <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
-                  <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
-                    (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
-                    <option value="">{{ codeLoadingTarget && codeProject && !codeRepositories.length ? 'Cargando...' : 'Seleccione un repositorio' }}</option>
-                    <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
-                  <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
-                    (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
-                    <option value="">{{ codeLoadingTarget && codeRepositoryId && !codeBranches.length ? 'Cargando...' : 'Seleccione una rama' }}</option>
-                    <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
-                  </select>
-                </div>
-              </div>
-              <p *ngIf="isManualCodeTargetReady" class="code-source-hint">
-                Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="codeEffectiveBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ codeEffectiveBaseBranch }}</strong></ng-container>.
-              </p>
-              <div *ngIf="!hasHuChangeset && codeLinkedBranchHint" class="code-source-hint">{{ codeLinkedBranchHint }}</div>
-              <button *ngIf="hasHuChangeset" type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
-                ← Volver a los cambios de la HU
-              </button>
-            </ng-container>
-          </div>
-          <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
-            {{ codeTargetError }}
-            <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
-          </div>
+  <!-- FORMULARIO INICIAL: flujo de trabajo por pasos -->
+  <form (ngSubmit)="generateInitialHuAndCases()" #huForm="ngForm" *ngIf="componentState === 'initialForm'" class="flow-form">
+    <ng-container *ngIf="currentGenerationMode === 'text'">
+      <!-- Tipo de generación: define qué pasos tiene el flujo -->
+      <div class="flow-mode" role="radiogroup" aria-labelledby="tcContextSourceLabel">
+        <span class="flow-mode-label" id="tcContextSourceLabel">¿Con qué generas los casos?</span>
+        <div class="code-source-options">
+          <label *ngFor="let option of contextSourceOptions" class="code-source-option"
+            [class.is-active]="contextSource === option.value" [title]="option.hint">
+            <input type="radio" name="contextSource" [value]="option.value" [ngModel]="contextSource"
+              (ngModelChange)="onContextSourceChange($event)" [disabled]="codeExploring || loadingScenarios">
+            <span>{{ option.label }}</span>
+          </label>
         </div>
+        <p class="code-source-hint">
+          <ng-container *ngFor="let option of contextSourceOptions"><span *ngIf="option.value === contextSource">{{ option.hint }}</span></ng-container>
+        </p>
+      </div>
 
-        <div class="metadata-block full-width">
-          <div class="metadata-grid">
-            <div class="form-group">
-              <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
-              <div class="id-hybrid-field" [class.is-loading]="azureImportLoading">
-                <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
-                  placeholder="Escribe o importa desde Azure (Ej: 7632264)" class="form-control id-hybrid-input"
-                  [disabled]="azureImportLoading">
-                <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
-                  [disabled]="azureImportLoading"
-                  [attr.aria-label]="azureImportLoading ? 'Importando desde Azure DevOps' : 'Importar desde Azure DevOps'"
-                  title="Importar desde Azure DevOps">
-                  <span *ngIf="azureImportLoading" class="spinner spinner-dark"></span>
-                  <svg *ngIf="!azureImportLoading" class="id-hybrid-import-icon" xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-                  </svg>
-                  <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar' }}</span>
-                </button>
-              </div>
-              <div
-                *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
-                class="validation-error" role="alert">
-                ID de la HU es requerido.
-              </div>
-              <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
-                {{ azureImportErrorMessage }}
-              </div>
-              <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
-                {{ azureNodeNameWarning }}
-              </div>
-            </div>
-            <div class="form-group metadata-title-group">
-              <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
-              <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
-                placeholder="Ej: Como usuario, quiero..." class="form-control">
-              <div
-                *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
-                class="validation-error" role="alert">
-                Título de la HU es requerido.
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
-              <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
-                required class="form-control">
-                <option value="" disabled selected>Seleccione una célula</option>
-                <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
-              </select>
-              <div
-                *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
-                class="validation-error" role="alert">
-                Nombre de Célula es requerido.
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
-              <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
-                placeholder="Ej: Sprint 1" class="form-control">
-              <div
-                *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
-                class="validation-error" role="alert">
-                Sprint es requerido.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-group full-width">
-          <label for="tcCurrentDescription">Descripción de la HU:<span class="required-indicator">*</span></label>
-          <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="3"
-            required placeholder="Ej: La HU describe la funcionalidad..." class="form-control auto-grow"
-            (input)="autoGrowTextarea($event.target)"></textarea>
-          <div
-            *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)"
-            class="validation-error" role="alert">
-            Descripción de la HU es requerida.
-          </div>
-        </div>
-        <div class="form-group full-width">
-          <label for="tcCurrentAcceptanceCriteria">Criterios de Aceptación<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
-              *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
-          <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
-            <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
-              <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
-              <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
-            </div>
-          </div>
-          <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()" class="form-control md-preview"
-            [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
-            title="Doble clic para editar"></div>
-          <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
-            [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
-            [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
-            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)" (blur)="refreshNormalizedCriteria()"></textarea>
-          <div
-            *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
-            class="validation-error" role="alert">
-            Criterios de Aceptación son requeridos.
-          </div>
-
-          <div *ngIf="currentAcceptanceCriteria.trim() && (normalizingCriteria || normalizedCriteria)" class="criteria-normalized" aria-live="polite">
-            <div class="md-box-header criteria-normalized-header">
-              <span class="criteria-normalized-title">
-                Criterios a cubrir<span *ngIf="normalizedCriteriaCount"> ({{ normalizedCriteriaCount }})</span>
-                <span *ngIf="normalizingCriteria" class="criteria-normalized-status">· interpretando…</span>
+      <!-- Mapa del flujo: cada paso alimenta al siguiente -->
+      <nav class="flow-stepper" aria-label="Pasos para generar la matriz">
+        <ol>
+          <li *ngFor="let step of flowSteps; let last = last" [ngClass]="'is-' + step.status">
+            <button type="button" class="flow-stepper-item" (click)="scrollToFlowStep(step.id)"
+              [attr.aria-label]="'Paso ' + step.num + ': ' + step.title + ' — ' + step.statusLabel">
+              <span class="flow-step-num" aria-hidden="true">
+                <span *ngIf="step.status === 'running'" class="spinner-inline"></span>
+                <ng-container *ngIf="step.status === 'done'">✓</ng-container>
+                <ng-container *ngIf="step.status === 'stale'">!</ng-container>
+                <ng-container *ngIf="step.status !== 'running' && step.status !== 'done' && step.status !== 'stale'">{{ step.num }}</ng-container>
               </span>
-              <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios a cubrir" *ngIf="normalizedCriteria && !normalizingCriteria">
-                <button type="button" [class.is-active]="!normalizedCriteriaEditing" (click)="normalizedCriteriaEditing = false">Vista</button>
-                <button type="button" [class.is-active]="normalizedCriteriaEditing" (click)="editNormalizedCriteria()">Editar</button>
+              <span class="flow-stepper-text">
+                <span class="flow-stepper-title">{{ step.title }}</span>
+                <span class="flow-stepper-summary">{{ step.summary }}</span>
+              </span>
+            </button>
+            <span *ngIf="!last" class="flow-stepper-line" aria-hidden="true"></span>
+          </li>
+        </ol>
+      </nav>
+
+      <ng-template #stepHeader let-step let-help="help">
+        <header class="flow-step-header">
+          <span class="flow-step-num" aria-hidden="true">{{ step.num }}</span>
+          <div class="flow-step-heading">
+            <h3>{{ step.title }}</h3>
+            <p>{{ help }}</p>
+          </div>
+          <span class="flow-status-chip" [ngClass]="'is-' + step.status">
+            <span *ngIf="step.status === 'running'" class="spinner-inline"></span>{{ step.statusLabel }}
+          </span>
+        </header>
+        <div *ngIf="flowNotice(step.id) as notice" class="flow-notice" role="status">
+          <span class="flow-notice-icon" aria-hidden="true">ℹ</span>
+          <span>{{ notice }}</span>
+          <button type="button" class="flow-notice-close" (click)="dismissFlowNotice(step.id)" aria-label="Cerrar aviso">×</button>
+        </div>
+      </ng-template>
+
+      <!-- PASO: HISTORIA DE USUARIO -->
+      <section class="flow-step" id="flow-step-hu" [ngClass]="'is-' + flowStep('hu').status">
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('hu'), help: 'Escribe el ID y pulsa Importar: se traen título, sprint, descripción y criterios desde Azure DevOps' + (usesCodeContext ? ', y se buscan los PRs y commits de la HU.' : '.') }"></ng-container>
+        <div class="flow-step-body">
+          <div class="metadata-block full-width">
+            <div class="metadata-grid">
+              <div class="form-group">
+                <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
+                <div class="id-hybrid-field" [class.is-loading]="azureImportLoading">
+                  <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
+                    placeholder="Escribe o importa desde Azure (Ej: 7632264)" class="form-control id-hybrid-input"
+                    [disabled]="azureImportLoading">
+                  <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
+                    [disabled]="azureImportLoading"
+                    [attr.aria-label]="azureImportLoading ? 'Importando desde Azure DevOps' : 'Importar desde Azure DevOps'"
+                    title="Importar desde Azure DevOps">
+                    <span *ngIf="azureImportLoading" class="spinner spinner-dark"></span>
+                    <svg *ngIf="!azureImportLoading" class="id-hybrid-import-icon" xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+                    </svg>
+                    <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar' }}</span>
+                  </button>
+                </div>
+                <div
+                  *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
+                  class="validation-error" role="alert">
+                  ID de la HU es requerido.
+                </div>
+                <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
+                  {{ azureImportErrorMessage }}
+                </div>
+                <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
+                  {{ azureNodeNameWarning }}
+                </div>
+              </div>
+              <div class="form-group metadata-title-group">
+                <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
+                <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
+                  placeholder="Ej: Como usuario, quiero..." class="form-control">
+                <div
+                  *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
+                  class="validation-error" role="alert">
+                  Título de la HU es requerido.
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
+                <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
+                  required class="form-control">
+                  <option value="" disabled selected>Seleccione una célula</option>
+                  <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
+                </select>
+                <div
+                  *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
+                  class="validation-error" role="alert">
+                  Nombre de Célula es requerido.
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
+                <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
+                  placeholder="Ej: Sprint 1" class="form-control">
+                <div
+                  *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
+                  class="validation-error" role="alert">
+                  Sprint es requerido.
+                </div>
               </div>
             </div>
-            <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">Cada CA tendrá al menos un escenario propio. Corrígelo solo si la interpretación no es la correcta.</p>
-            <div *ngIf="normalizedCriteria && !normalizedCriteriaEditing" class="form-control md-preview"
-              [innerHTML]="normalizedCriteria | markdownLite" (dblclick)="editNormalizedCriteria()" title="Doble clic para editar"></div>
-            <textarea *ngIf="normalizedCriteriaEditing" id="tcNormalizedCriteria" name="normalizedCriteria"
-              [(ngModel)]="normalizedCriteria" class="form-control code-context-textarea"
+          </div>
+
+          <div class="form-group full-width">
+            <label for="tcCurrentDescription">Descripción de la HU:<span class="required-indicator">*</span></label>
+            <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="3"
+              required placeholder="Ej: La HU describe la funcionalidad..." class="form-control auto-grow"
               (input)="autoGrowTextarea($event.target)"></textarea>
+            <div
+              *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)"
+              class="validation-error" role="alert">
+              Descripción de la HU es requerida.
+            </div>
           </div>
         </div>
+      </section>
 
-        <!-- AGENTE DE EXPLORACIÓN DE CÓDIGO -->
-        <div *ngIf="usesCodeContext" class="form-group full-width code-agent-panel" aria-live="polite">
-          <div class="code-agent-header">
-            <label for="tcCodeContext">Contexto técnico del código:</label>
-            <div class="code-agent-actions">
-              <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode(undefined, !codeContextText)"
-                [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios">
-                {{ codeContextText ? '↻ Volver a explorar' : '🔎 Explorar código' }}
-              </button>
-              <button *ngIf="codeExploring" type="button" class="tc-tag" (click)="cancelCodeExploration()">Cancelar exploración</button>
-            </div>
-          </div>
-
-          <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
-            <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
-              El agente contrastará cada criterio con el código de la rama (Implementado, Parcial, Diferente o Sin evidencia).
-              Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.
-            </ng-container>
-            <ng-template #codeOnlyHint>El agente reconstruirá las reglas observables desde el código de la rama.</ng-template>
-            Puedes revisar y editar el resultado antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
-          </p>
-
-          <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
-            <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last">
-              <span *ngIf="last" class="spinner-inline"></span>{{ line }}
-            </li>
-          </ul>
-          <details *ngIf="codeAgentLog.length && !codeExploring" class="code-agent-log-details">
-            <summary>Ver pasos del agente ({{ codeAgentLog.length }})</summary>
-            <ul class="code-agent-log">
-              <li *ngFor="let line of codeAgentLog">{{ line }}</li>
-            </ul>
-          </details>
-
-          <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
-
-          <ng-container *ngIf="codeContextText">
-            <p class="code-source-hint">
-              <span *ngIf="codeContextFromCache">♻️ Reutilizado de caché (mismo commit). </span>
-              <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
-              Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
-            </p>
-            <div class="md-box-header">
-              <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
-                <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
-              </div>
-              <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
-                <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
-                <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
+      <!-- PASO: CRITERIOS -->
+      <section class="flow-step" id="flow-step-criteria" [ngClass]="'is-' + flowStep('criteria').status">
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Los criterios de la HU se interpretan como una lista CA-01, CA-02… Esa lista es la que se cubre en la matriz.' }"></ng-container>
+        <div class="flow-step-body">
+          <div class="form-group full-width">
+            <label for="tcCurrentAcceptanceCriteria">Criterios de aceptación de la HU<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
+                *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
+            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
+              <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
+                <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
+                <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
               </div>
             </div>
-            <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
-              <div class="coverage-editor-title">Cobertura de criterios en el código
-                <span class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</span>
-              </div>
-              <div class="md-table-wrap">
-                <table class="md-table coverage-table">
-                  <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
-                  <tbody>
-                    <tr *ngFor="let row of codeCoverageRows; trackBy: trackCoverageRow">
-                      <td class="md-id">{{ row.id }}</td>
-                      <td>{{ row.criterion }}</td>
-                      <td>
-                        <select class="coverage-status-select" [ngClass]="coverageStatusCss(row.status)" [ngModel]="row.status"
-                          [ngModelOptions]="{ standalone: true }" (ngModelChange)="setCoverageStatus(row.id, $event)"
-                          [attr.aria-label]="'Estado de ' + row.id" [disabled]="codeExploring || loadingScenarios">
-                          <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
-                        </select>
-                      </td>
-                      <td class="coverage-detail">{{ row.detail }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
-              [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
+            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()" class="form-control md-preview"
+              [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
               title="Doble clic para editar"></div>
-            <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
-              class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
-              [disabled]="codeExploring"></textarea>
-          </ng-container>
-        </div>
+            <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
+              [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
+              [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
+              class="form-control auto-grow" (input)="autoGrowTextarea($event.target)" (blur)="refreshNormalizedCriteria()"></textarea>
+            <div
+              *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
+              class="validation-error" role="alert">
+              Criterios de Aceptación son requeridos.
+            </div>
 
-        <div class="form-group full-width">
-          <label for="tcCurrentGenerationContext">Contexto adicional (opcional):</label>
-          <textarea id="tcCurrentGenerationContext" name="currentGenerationContext"
-            [(ngModel)]="currentGenerationContext" rows="3"
-            placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
-            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
-        </div>
+            <div *ngIf="currentAcceptanceCriteria.trim() && (normalizingCriteria || normalizedCriteria)" class="criteria-normalized" aria-live="polite">
+              <div class="md-box-header criteria-normalized-header">
+                <span class="criteria-normalized-title">
+                  Criterios a cubrir<span *ngIf="normalizedCriteriaCount"> ({{ normalizedCriteriaCount }})</span>
+                  <span *ngIf="normalizingCriteria" class="criteria-normalized-status">· interpretando…</span>
+                </span>
+                <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios a cubrir" *ngIf="normalizedCriteria && !normalizingCriteria">
+                  <button type="button" [class.is-active]="!normalizedCriteriaEditing" (click)="normalizedCriteriaEditing = false">Vista</button>
+                  <button type="button" [class.is-active]="normalizedCriteriaEditing" (click)="editNormalizedCriteria()">Editar</button>
+                </div>
+              </div>
+              <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">La IA separa los criterios originales en una lista numerada: cada CA tendrá al menos un escenario propio{{ usesCodeContext ? ' y el agente lo contrastará con el código' : '' }}. Corrígela solo si la interpretación no es la correcta.</p>
+              <p class="criteria-normalized-hint flow-inline-warning" *ngIf="flowStep('criteria').status === 'stale'">Editaste los criterios originales: al salir del campo se volverá a interpretar esta lista.</p>
+              <div *ngIf="normalizedCriteria && !normalizedCriteriaEditing" class="form-control md-preview"
+                [innerHTML]="normalizedCriteria | markdownLite" (dblclick)="editNormalizedCriteria()" title="Doble clic para editar"></div>
+              <textarea *ngIf="normalizedCriteriaEditing" id="tcNormalizedCriteria" name="normalizedCriteria"
+                [(ngModel)]="normalizedCriteria" class="form-control code-context-textarea"
+                (input)="autoGrowTextarea($event.target)"></textarea>
+            </div>
+          </div>
 
+        </div>
+      </section>
+
+      <ng-container *ngIf="usesCodeContext">
+        <!-- PASO: CÓDIGO DE LA HU -->
+        <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status">
+          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas donde se desarrolló la HU, tomados de sus PRs y commits vinculados.' }"></ng-container>
+          <div class="flow-step-body">
+            <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
+              <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
+                <!-- Consultando PRs/commits de la HU -->
+                <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
+                  <span class="spinner-inline"></span>
+                  Buscando el código de la HU {{ currentHuId }} (PRs y commits vinculados)…
+                </div>
+
+                <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
+                <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
+                  <div class="code-target-card-header">
+                    <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
+                    <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring">Usar otra rama</button>
+                  </div>
+                  <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
+                  <ul class="code-change-list">
+                    <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
+                      <label class="code-change-toggle">
+                        <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
+                        <span class="code-change-repo">{{ group.repositoryName }}</span>
+                      </label>
+                      <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
+                      <span class="code-change-meta">
+                        último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
+                        · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                        <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
+                      </span>
+                    </li>
+                  </ul>
+                  <p *ngIf="!usesHuChangeset" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
+                  <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
+                    <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
+                    <ul>
+                      <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
+                      <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
+                    </ul>
+                  </details>
+                </div>
+
+                <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
+                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
+                  <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
+                  <div class="code-target-grid">
+                    <div class="form-group">
+                      <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
+                      <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
+                        (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
+                        <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
+                        <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
+                      <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
+                        (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
+                        <option value="">{{ codeLoadingTarget && codeProject && !codeRepositories.length ? 'Cargando...' : 'Seleccione un repositorio' }}</option>
+                        <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
+                      <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
+                        (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
+                        <option value="">{{ codeLoadingTarget && codeRepositoryId && !codeBranches.length ? 'Cargando...' : 'Seleccione una rama' }}</option>
+                        <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
+                      </select>
+                    </div>
+                  </div>
+                  <p *ngIf="isManualCodeTargetReady" class="code-source-hint">
+                    Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="codeEffectiveBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ codeEffectiveBaseBranch }}</strong></ng-container>.
+                  </p>
+                  <div *ngIf="!hasHuChangeset && codeLinkedBranchHint" class="code-source-hint">{{ codeLinkedBranchHint }}</div>
+                  <button *ngIf="hasHuChangeset" type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
+                    ← Volver a los cambios de la HU
+                  </button>
+                </ng-container>
+              </div>
+              <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
+                {{ codeTargetError }}
+                <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+              </div>
+          </div>
+        </section>
+
+        <!-- PASO: CONTEXTO TÉCNICO -->
+        <section class="flow-step" id="flow-step-context" [ngClass]="'is-' + flowStep('context').status" aria-live="polite">
+          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('context'), help: 'Un agente lee el código del paso ' + flowStep('code').num + ' y explica cómo se ejecuta cada criterio: pantallas, datos y procesos que la HU no cuenta.' }"></ng-container>
+          <div class="flow-step-body">
+            <p *ngIf="isCodeContextStale" class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
+            <p *ngIf="!isCodeTargetReady && !codeContextText" class="flow-lock-hint">Completa el paso {{ flowStep('code').num }} para poder explorar el código.</p>
+            <div class="code-agent-header">
+              <span class="flow-field-label">Qué hace el agente</span>
+              <div class="code-agent-actions">
+                <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode(undefined, !codeContextText)"
+                  [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios">
+                  {{ codeContextText ? '↻ Volver a explorar' : '🔎 Explorar código' }}
+                </button>
+                <button *ngIf="codeExploring" type="button" class="tc-tag" (click)="cancelCodeExploration()">Cancelar exploración</button>
+              </div>
+            </div>
+
+            <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
+              <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
+                El agente contrastará cada criterio con el código de la rama (Implementado, Parcial, Diferente o Sin evidencia).
+                Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.
+              </ng-container>
+              <ng-template #codeOnlyHint>El agente reconstruirá las reglas observables desde el código de la rama.</ng-template>
+              Puedes revisar y editar el resultado antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
+            </p>
+
+            <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
+              <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last">
+                <span *ngIf="last" class="spinner-inline"></span>{{ line }}
+              </li>
+            </ul>
+            <details *ngIf="codeAgentLog.length && !codeExploring" class="code-agent-log-details">
+              <summary>Ver pasos del agente ({{ codeAgentLog.length }})</summary>
+              <ul class="code-agent-log">
+                <li *ngFor="let line of codeAgentLog">{{ line }}</li>
+              </ul>
+            </details>
+
+            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
+
+            <ng-container *ngIf="codeContextText">
+              <p class="code-source-hint">
+                <span *ngIf="codeContextFromCache">♻️ Reutilizado de caché (mismo commit). </span>
+                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
+                Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
+              </p>
+              <div class="md-box-header">
+                <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
+                  <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+                </div>
+                <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
+                  <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
+                  <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
+                </div>
+              </div>
+              <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
+                <div class="coverage-editor-title">Cobertura de criterios en el código
+                  <span class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</span>
+                </div>
+                <div class="md-table-wrap">
+                  <table class="md-table coverage-table">
+                    <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                      <tr *ngFor="let row of codeCoverageRows; trackBy: trackCoverageRow">
+                        <td class="md-id">{{ row.id }}</td>
+                        <td>{{ row.criterion }}</td>
+                        <td>
+                          <select class="coverage-status-select" [ngClass]="coverageStatusCss(row.status)" [ngModel]="row.status"
+                            [ngModelOptions]="{ standalone: true }" (ngModelChange)="setCoverageStatus(row.id, $event)"
+                            [attr.aria-label]="'Estado de ' + row.id" [disabled]="codeExploring || loadingScenarios">
+                            <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
+                          </select>
+                        </td>
+                        <td class="coverage-detail">{{ row.detail }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
+                [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
+                title="Doble clic para editar"></div>
+              <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
+                class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
+                [disabled]="codeExploring"></textarea>
+            </ng-container>
+          </div>
+        </section>
       </ng-container>
 
-    </div>
-
-    <div class="form-actions main-form-actions">
-      <button type="submit" class="button-primary compact-action"
-        [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios">
-        <span *ngIf="loadingScope || loadingScenarios" class="spinner"></span>
-        <span *ngIf="codeExploring" class="spinner"></span>
-        {{ codeExploring ? 'Explorando código...' : (loadingScope || loadingScenarios) ? 'Generando...' : 'Generar Casos de Prueba' }}
-      </button>
-    </div>
-    <div *ngIf="formError" class="error-message initial-form-error" role="alert">
-      <p>{{formError}}</p>
-    </div>
+      <!-- PASO: GENERAR -->
+      <section class="flow-step" id="flow-step-generate" [ngClass]="'is-' + flowStep('generate').status">
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('generate'), help: 'Se envía a la IA todo lo anterior para crear los escenarios de prueba.' }"></ng-container>
+        <div class="flow-step-body">
+          <ul class="flow-checklist" aria-label="Qué se enviará a la generación">
+            <li *ngFor="let step of flowSteps | slice:0:-1" [ngClass]="'is-' + step.status">
+              <span class="flow-checklist-mark" aria-hidden="true">{{ step.status === 'done' ? '✓' : step.status === 'optional' ? '–' : step.status === 'stale' ? '!' : '○' }}</span>
+              <span><strong>{{ step.title }}:</strong> {{ step.summary }}</span>
+              <button *ngIf="step.status !== 'done' && step.status !== 'optional'" type="button" class="code-link-btn" (click)="scrollToFlowStep(step.id)">Ir al paso {{ step.num }}</button>
+            </li>
+          </ul>
+          <div class="form-actions main-form-actions">
+            <button type="submit" class="button-primary compact-action"
+              [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios || normalizingCriteria">
+              <span *ngIf="loadingScope || loadingScenarios || codeExploring || normalizingCriteria" class="spinner"></span>
+              {{ generateButtonLabel }}
+            </button>
+          </div>
+          <p *ngIf="usesCodeContext && !codeContextText.trim() && !codeExploring" class="code-source-hint flow-generate-hint">
+            Aún no hay contexto técnico: al generar, primero se explorará el código (1-3 min) y luego se crearán los casos.
+          </p>
+          <div *ngIf="formError" class="error-message initial-form-error" role="alert">
+            <p>{{formError}}</p>
+          </div>
+        </div>
+      </section>
+    </ng-container>
   </form>
 
   <!-- SECCIÓN DE PREVISUALIZACIÓN Y/O EDICIÓN/REFINAMIENTO -->
