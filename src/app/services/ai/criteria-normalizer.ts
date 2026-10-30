@@ -15,13 +15,13 @@ UNIDADES:
 - Criterio: un resultado verificable propio (verbo: debe mostrar, no debe, permite, valida, calcula, envía…). Cada viñeta con su propio resultado esperado es un criterio aparte, aunque esté anidada bajo otra.
 - Opción: viñeta que solo nombra un valor, tipo o pantalla sin resultado propio (p. ej. "Descuento por pronto pago"). Va en "options" del criterio al que pertenece.
 - Resumen: frase que repite lo que ya exigen otros criterios sin agregar condición ni resultado nuevo. Va en "summaries" con los ids que resume. También lo son las frases sobre qué verificar para certificar ("para la certificación se debe verificar que…") cuando lo que piden ya está en otros criterios.
-- Definición: texto que explica qué significa un término, tipo o estado, o cómo y quién lo origina en el negocio (p. ej. "Bloqueo por mora: cuando el cliente presenta mora mayor a 5 días el sistema lo bloquea"), sin pedir un resultado al sistema de esta HU. No es un criterio: va en "definitions" y sirve para preparar los datos de prueba. Si la definición contiene además un resultado que esta HU debe producir, ese resultado sí es criterio.
+- Definición: texto que explica qué significa un término, tipo o estado, o cómo y quién lo origina en el negocio (p. ej. "Cliente inactivo: el que no registra movimientos en 90 días"), sin pedir un resultado al sistema de esta HU. No es un criterio: va en "definitions" y sirve para preparar los datos de prueba. Si la definición contiene además un resultado que esta HU debe producir, ese resultado sí es criterio.
 
 REGLAS:
 - Una frase con dos resultados independientes (p. ej. "muestra solo USD y no muestra las comisiones") son dos criterios.
 - Un encabezado con resultado propio es criterio solo si sus viñetas no cubren ese resultado.
 - Frases que describen el mismo resultado con otras palabras (p. ej. "no se puede consolidar ni cruzar" y "se debe dividir en dos procesos independientes") son UN criterio.
-- Una frase que solo explica CÓMO se cumple otro criterio (por qué tipo, ruta o módulo se gestiona cada parte) no es un criterio aparte: va en "options" de ese criterio, con el formato "parte → opción" (p. ej. "COP → Descuento por pronto pago, Error de pago").
+- Una frase que solo explica CÓMO se cumple otro criterio (por qué tipo, ruta o módulo se gestiona cada parte) no es un criterio aparte: va en "options" de ese criterio, con el formato "parte → opción" (p. ej. "persona natural → Solicitud web, Oficina").
 - Una frase general que repite lo que ya exigen criterios más específicos (p. ej. "cada módulo muestra solo la moneda que le corresponde" cuando ya hay un criterio por módulo) es un resumen, no un criterio.
 - Las frases de contexto ("Actualmente el pop-up se ve así") y los marcadores de imagen no son criterios; si un criterio depende de una imagen, dilo en "note".
 - Una tabla (filas × columnas con marcas) es UN criterio por tabla o caso de negocio: sus celdas van en "options" con el formato "fila → columnas marcadas", y las filas sin marca como "fila → ninguna (no aplica)". Las celdas vacías también son requisito: lo que no aplica no debe ocurrir.

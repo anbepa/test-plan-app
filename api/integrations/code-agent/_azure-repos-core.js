@@ -377,7 +377,7 @@ async function searchApplication(organization, pat, body) {
       if (found >= 3 || !lowered.some((term) => line.toLowerCase().includes(term))) return;
       found++;
       const context = lines.slice(Math.max(0, index - 1), index + 2).map((text) => text.trim().slice(0, 200)).join(' ⏎ ');
-      matches.push({ repositoryName: item.repository.name, path: item.path, line: index + 1, text: context });
+      matches.push({ repositoryName: item.repository.name, branch: branch || 'trunk', path: item.path, line: index + 1, text: context });
     });
   }));
   // Código productivo primero; las pruebas solo confirman.

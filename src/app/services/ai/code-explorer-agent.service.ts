@@ -62,7 +62,7 @@ export class CodeExplorerAgentService {
         .then((changes) => ({ ...changes, groups: changes.groups.filter((group) => !excluded.has(changeGroupKey(group))) }));
 
     const gateway: CodeAgentGateway = {
-      llm: (messages, options) => this.callLlm(providerId, messages, options.tools, options.forceFinish),
+      llm: (messages, options) => this.callLlm(providerId, messages, options.tools, options.forceFinish, options.finishTool),
       getWorkItemChanges,
       getTree: (ref, scopePath) => firstValueFrom(this.azureRepos.getTree(ref, scopePath)),
       readFiles: (ref, files) => firstValueFrom(this.azureRepos.readFiles(ref, files)),
@@ -101,7 +101,8 @@ export class CodeExplorerAgentService {
     providerId: string | null,
     messages: ChatMessage[],
     tools: unknown[],
-    forceFinish: boolean
+    forceFinish: boolean,
+    finishTool: string = 'finish'
   ): Promise<{ message: ChatMessage; usage?: LlmUsage }> {
     const common = {
       messages,
@@ -109,7 +110,7 @@ export class CodeExplorerAgentService {
       ...(tools.length ? {
         tools,
         // Al agotar el presupuesto se obliga a llamar a finish.
-        tool_choice: forceFinish ? { type: 'function', function: { name: 'finish' } } : 'auto',
+        tool_choice: forceFinish ? { type: 'function', function: { name: finishTool } } : 'auto',
       } : {}),
       // Determinista: el mismo código y la misma HU deben producir la misma matriz.
       temperature: 0,

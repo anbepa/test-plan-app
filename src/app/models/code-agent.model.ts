@@ -127,7 +127,7 @@ export function changeGroupKey(group: Pick<WorkItemChangeGroup, 'repositoryId' |
 /** Coincidencias de la búsqueda en todos los repos del aplicativo (Azure Code Search). */
 export interface AzureAppSearchResult {
   totalCount: number;
-  matches: { repositoryName: string; path: string; line: number; text: string }[];
+  matches: { repositoryName: string; branch?: string; path: string; line: number; text: string }[];
 }
 
 export interface AzureRepoSearchResult {

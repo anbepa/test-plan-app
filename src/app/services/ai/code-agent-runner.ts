@@ -1,4 +1,4 @@
-import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS, CodeEvidenceSource } from '../../config/code-agent-prompts.config';
+import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS, CodeEvidenceSource, DATA_RECIPE_PROMPTS, DATA_RECIPE_TOOLS } from '../../config/code-agent-prompts.config';
 import type {
   AzureAppSearchResult,
   AzureBranchChange,
@@ -50,7 +50,8 @@ export interface RepoRef {
 }
 
 export interface CodeAgentGateway {
-  llm(messages: ChatMessage[], options: { tools: unknown[]; forceFinish: boolean }): Promise<{ message: ChatMessage; usage?: LlmUsage }>;
+  /** finishTool: herramienta que se fuerza al agotar el presupuesto (por defecto "finish"). */
+  llm(messages: ChatMessage[], options: { tools: unknown[]; forceFinish: boolean; finishTool?: string }): Promise<{ message: ChatMessage; usage?: LlmUsage }>;
   getWorkItemChanges(workItemId: number): Promise<WorkItemChanges>;
   getTree(ref: RepoRef, scopePath: string): Promise<AzureRepoTree>;
   readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Promise<AzureRepoFile[]>;
@@ -61,7 +62,7 @@ export interface CodeAgentGateway {
   searchApp?(projectId: string, repoPrefixes: string[], terms: string[]): Promise<AzureAppSearchResult>;
 }
 
-/** Repos del mismo aplicativo: comparten el prefijo del nombre (p. ej. "NU0139001_"). */
+/** Repos del mismo aplicativo: comparten el prefijo del nombre (p. ej. "APP001_" en APP001_ms_pagos, APP001_Front). */
 interface AppScope {
   projectId: string;
   repoPrefixes: string[];
@@ -95,6 +96,10 @@ export const CODE_AGENT_BUDGET = {
   maxSearchMatches: 80,
   /** Jueces en paralelo (criterios ↔ código): el estado de cada criterio se decide por mayoría. */
   judgeVotes: 3,
+  /** Receta de datos: pasos del sub-agente que busca cómo se crea cada dato (corre junto al juez). */
+  recipeSteps: 5,
+  /** search_app del agente principal: lo que no aparece en 4 búsquedas rara vez aparece en la 9.ª (cada paso reenvía todo el historial). */
+  maxAppSearches: 4,
 };
 
 const STOPWORDS = new Set([
@@ -122,6 +127,8 @@ export class CodeAgentRunner {
   /** Diffs vistos en la corrida (precargados o pedidos con diff_file), por ruta. */
   private seenDiffs = new Map<string, string>();
   private changedPaths: string[] = [];
+  private appScope: AppScope | null = null;
+  private appSearches = 0;
 
   constructor(private gateway: CodeAgentGateway) {}
 
@@ -195,6 +202,8 @@ export class CodeAgentRunner {
     ];
 
     const appScope = resolveAppScope(primaryRef, workspaces.map((ws) => ws.name).concat(input.target?.repositoryName || []));
+    this.appScope = appScope;
+    this.appSearches = 0;
     const filesReviewed = new Set<string>(workspaces.flatMap((ws) => ws.files.map((file) => file.path)).filter((path) => changesBlock.includes(`=== ${path}`)));
     let toolOutputChars = 0;
 
@@ -271,10 +280,11 @@ export class CodeAgentRunner {
     stats: CodeAgentResult['stats'],
     startedAt: number
   ): Promise<CodeAgentResult | null> {
-    let context = this.changedPaths.length
+    let context = validateEquivalences(this.changedPaths.length
       ? reconcileChangeLabels(agentContext, this.changedPaths, this.seenDiffs)
-      : agentContext;
+      : agentContext);
     const judgeFactsSource = context;
+    const recipeTask = this.buildDataRecipe(context, input, emit, isCancelled, stats).catch(() => '');
 
     if (input.mode === 'criteria-code' && input.acceptanceCriteria?.trim()) {
       emit({ type: 'progress', message: 'Contrastando criterios con el código…' });
@@ -295,8 +305,11 @@ export class CodeAgentRunner {
       }
       if (isCancelled()) return null;
       if (!outputs.length) throw new Error('No fue posible contrastar los criterios con el código. Intenta de nuevo.');
-      context = buildCriteriaContext(context, mergeJudgeVotes(outputs));
+      context = buildCriteriaContext(replaceSection(context, 'Receta de datos', await recipeTask), mergeJudgeVotes(outputs));
+    } else {
+      context = replaceSection(context, 'Receta de datos', await recipeTask);
     }
+    if (isCancelled()) return null;
 
     stats.durationMs = Date.now() - startedAt;
     return { context, facts: judgeFactsSource, filesReviewed: Array.from(filesReviewed), versionKey, stats };
@@ -437,6 +450,104 @@ export class CodeAgentRunner {
   // Herramientas
   // ---------------------------------------------------------------------------
 
+  /**
+   * Sub-agente corto que completa la "Receta de datos": parte solo del flujo y
+   * del borrador (no del historial de exploración), así cuesta pocos tokens.
+   * Devuelve las líneas de la receta, o '' si no aporta nada nuevo.
+   */
+  private async buildDataRecipe(
+    context: string,
+    input: CodeExplorationInput,
+    emit: (event: CodeAgentEvent) => void,
+    isCancelled: () => boolean,
+    stats: CodeAgentResult['stats']
+  ): Promise<string> {
+    const scope = this.appScope;
+    if (!scope || !this.gateway.searchApp) return '';
+    const sections = splitSections(context);
+    const flow = section(sections, /flujo de ejecución/i);
+    const draft = section(sections, /receta de datos/i);
+    if (!flow && !draft) return '';
+
+    emit({ type: 'progress', message: '🧪 Armando la receta de datos de prueba…' });
+    const maxSteps = CODE_AGENT_BUDGET.recipeSteps;
+    const messages: ChatMessage[] = [
+      { role: 'system', content: DATA_RECIPE_PROMPTS.SYSTEM(maxSteps) },
+      { role: 'user', content: DATA_RECIPE_PROMPTS.USER(input.description, flow, draft) },
+    ];
+    // Rama principal de cada repo, según lo que devolvió search_app (para read_app_file).
+    const branches = new Map<string, string>();
+    const searched = new Set<string>();
+
+    for (let step = 1; step <= maxSteps + 1; step++) {
+      if (isCancelled()) return '';
+      const overBudget = step > maxSteps;
+      if (overBudget) messages.push({ role: 'user', content: DATA_RECIPE_PROMPTS.FORCE_FINISH });
+      const { message: reply, usage } = await this.gateway.llm(messages, { tools: DATA_RECIPE_TOOLS, forceFinish: overBudget, finishTool: 'finish_recipe' });
+      stats.llmCalls++;
+      stats.promptTokens += usage?.prompt_tokens || 0;
+      stats.completionTokens += usage?.completion_tokens || 0;
+      stats.cachedTokens += usage?.prompt_cache_hit_tokens || 0;
+
+      const toolCalls = (reply.tool_calls || []).filter((call) => call?.function?.name);
+      if (!toolCalls.length) return recipeLines(reply.content || '');
+      messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
+
+      for (const call of toolCalls) {
+        const args = this.parseArgs(call.function.arguments);
+        if (call.function.name === 'finish_recipe') {
+          const recipe = recipeLines(String(args.recipe || ''));
+          if (recipe) return recipe;
+        }
+        let result: string;
+        try {
+          if (overBudget) {
+            result = 'Presupuesto agotado. Llama a finish_recipe ahora.';
+          } else if (call.function.name === 'search_app') {
+            const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String)
+              .filter((term: string) => term.trim().length >= 3 && !searched.has(term.toLowerCase())).slice(0, 4);
+            terms.forEach((term) => searched.add(term.toLowerCase()));
+            if (!terms.length) {
+              result = 'Esos términos ya se buscaron o son muy cortos: usa otros o llama a finish_recipe.';
+            } else {
+              emit({ type: 'tool', message: `🧪 Buscando “${terms.join(', ')}”` });
+              const found = await this.gateway.searchApp(scope.projectId, scope.repoPrefixes, terms);
+              found.matches.forEach((match) => match.branch && branches.set(match.repositoryName, match.branch));
+              result = found.matches.length
+                ? found.matches.map((match) => `${match.repositoryName}:${match.path}:${match.line}: ${match.text}`).join('\n')
+                : 'Sin coincidencias en los repos del aplicativo.';
+            }
+          } else if (call.function.name === 'read_app_file') {
+            const repo = String(args.repo || '');
+            const path = String(args.path || '');
+            if (!repo || !path) {
+              result = 'Indica repo y path tal como los mostró search_app.';
+            } else {
+              emit({ type: 'tool', message: `🧪 Leyendo ${path.split('/').pop()}` });
+              const start = Number(args.start_line) || 1;
+              const end = Number(args.end_line) || start + 120;
+              const [file] = await this.gateway.readFiles(
+                { project: scope.projectId, repositoryId: repo, branch: branches.get(repo) || 'trunk' },
+                [{ path, startLine: start, endLine: Math.min(end, start + 200) }]
+              );
+              result = file?.error ? `ERROR: ${file.error}` : `=== ${repo}:${path} (líneas ${file?.startLine}-${file?.endLine}) ===\n${file?.content || ''}`;
+            }
+          } else {
+            result = `Herramienta desconocida: ${call.function.name}`;
+          }
+        } catch (error: any) {
+          result = `ERROR al ejecutar ${call.function.name}: ${error?.error?.message || error?.message || 'Error desconocido'}`;
+        }
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: result.length > CODE_AGENT_BUDGET.maxToolResultChars ? `${result.slice(0, CODE_AGENT_BUDGET.maxToolResultChars)}\n…[resultado truncado]` : result,
+        });
+      }
+    }
+    return '';
+  }
+
   private async executeTool(
     name: string,
     args: any,
@@ -544,6 +655,9 @@ export class CodeAgentRunner {
           const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter((term: string) => term.trim().length >= 3).slice(0, 4);
           if (!ctx.appScope || !this.gateway.searchApp) return 'La búsqueda en el aplicativo no está disponible; usa search_code.';
           if (!terms.length) return 'Indica al menos un término de 3 o más caracteres.';
+          if (++this.appSearches > CODE_AGENT_BUDGET.maxAppSearches) {
+            return 'Límite de búsquedas en el aplicativo alcanzado. Lo que no encontraste márcalo "no verificable en el repositorio" y llama a finish.';
+          }
           emit({ type: 'tool', message: `🌐 Buscando “${terms.join(', ')}” en los repos ${ctx.appScope.repoPrefixes.join(', ')}*` });
           const result = await this.gateway.searchApp(ctx.appScope.projectId, ctx.appScope.repoPrefixes, terms);
           return result.matches.length
@@ -731,6 +845,65 @@ function collectChangedLines(diff: string): Set<number> {
 const RULE_LINE = /^\s*[-*]\s*\[(RT-\d+)\]\s*\((CAMBIO HU|EXISTENTE)\)\s*(.*)$/;
 
 /** Secciones "## Título" del contexto, en orden. */
+const EQUIVALENCE_LINE = /^(\s*[-*]\s*)(.+?)\s*=\s*(.+?)\s*Evidencias?:\s*(.*)$/i;
+const CODE_TOKEN = /\b[A-Z][A-Z0-9_]+\b|\b\d+\b/g;
+
+/**
+ * Una equivalencia solo vale si su evidencia literal contiene el código y cada
+ * número o código del significado (p. ej. "Modalidad 7 = DFFIS" exige un 7 junto
+ * a DFFIS en la cita). Si no, el modelo la dedujo por posición o parecido y se
+ * marca "no confirmada" para que la generación no la use.
+ */
+export function validateEquivalences(context: string): string {
+  const sections = splitSections(context);
+  const target = sections.find((item) => /equivalencias de códigos/i.test(item.title));
+  if (!target?.body) return context;
+
+  const body = target.body.split('\n').flatMap(splitCompoundEquivalence).map((line) => {
+    const match = line.match(EQUIVALENCE_LINE);
+    if (!match || /no confirmad/i.test(match[3])) return line;
+    const evidence = (match[4].match(/`[^`]+`/g) || []).join(' ');
+    // Del código se exige todo; del significado, números y códigos (no siglas cortas como "ME").
+    const meaningTokens = (match[3].match(CODE_TOKEN) || []).filter((token) => /\d/.test(token) || token.length >= 4);
+    const missing = [...new Set([...(match[2].match(CODE_TOKEN) || []), ...meaningTokens])]
+      .filter((token) => !new RegExp(`(^|[^A-Za-z0-9_])${token}([^A-Za-z0-9_]|$)`).test(evidence));
+    if (evidence && !missing.length) return line;
+    const reason = evidence ? `la evidencia citada no contiene ${missing.join(', ')}` : 'sin evidencia literal';
+    return `${match[1]}${match[2].trim()} = no confirmada (${reason}).`;
+  }).join('\n');
+
+  return context.replace(target.body, body);
+}
+
+/**
+ * "- Tipos: 1 = ABC, 2 = no confirmada. Evidencia: …" → una línea por par,
+ * cada una con la misma evidencia, para validar cada equivalencia por separado.
+ */
+function splitCompoundEquivalence(line: string): string[] {
+  const match = line.match(/^(\s*[-*]\s*)(?:([^:=]+):\s*)?(.+?)\s*(Evidencias?:.*)?$/i);
+  if (!match || (match[3].match(/=/g) || []).length < 2) return [line];
+  const label = (match[2] || '').trim().replace(/es$|s$/i, '');
+  return match[3].split(/[,;]\s*(?=[^,;=]+=)/).map((pair) => {
+    const [key, value] = pair.split('=').map((part) => part.trim().replace(/\.$/, ''));
+    return `${match[1]}${label ? `${label} ` : ''}${key} = ${value}.${match[4] ? ` ${match[4]}` : ''}`;
+  });
+}
+
+/** Solo las líneas con forma de receta ("- Dato: … | …"). */
+export function recipeLines(text: string): string {
+  return text.split('\n').map((line) => line.trim()).filter((line) => /^[-*]\s*Dato:.*\|/i.test(line)).join('\n');
+}
+
+/** Reemplaza el cuerpo de una sección (o la agrega tras el flujo); sin cuerpo nuevo, no cambia nada. */
+export function replaceSection(context: string, title: string, body: string): string {
+  if (!body.trim()) return context;
+  const sections = splitSections(context);
+  const index = sections.findIndex((item) => item.title.toLowerCase() === title.toLowerCase());
+  if (index >= 0) sections[index] = { title: sections[index].title, body };
+  else sections.splice(Math.max(sections.findIndex((item) => /flujo de ejecución/i.test(item.title)) + 1, 0), 0, { title, body });
+  return sections.map((item) => item.title ? `## ${item.title}\n${item.body}` : item.body).join('\n\n');
+}
+
 export function splitSections(text: string): { title: string; body: string }[] {
   return text.split(/\n(?=##\s)/).map((chunk) => {
     const match = chunk.match(/^##\s*([^\n]*)\n?([\s\S]*)$/);
@@ -795,6 +968,7 @@ export function buildCriteriaContext(agentContext: string, judgeOutput: string):
   return [
     keep(/resumen técnico/i, 'Resumen técnico'),
     keep(/flujo de ejecución/i, 'Flujo de ejecución real'),
+    keep(/receta de datos/i, 'Receta de datos'),
     keep(/equivalencias de códigos/i, 'Equivalencias de códigos'),
     `## Cobertura de criterios en el código\n${coverage.join('\n')}`,
     `## Comportamientos del código no cubiertos por los criterios\n${uncovered.length ? uncovered.join('\n') : 'Ninguno relevante'}`,
