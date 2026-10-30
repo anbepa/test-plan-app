@@ -314,6 +314,10 @@ export class CodeAgentRunner {
         const list = changes.omitted.map((pr) => `PR ${pr.prId} (${pr.reason})`).join(', ');
         emit({ type: 'progress', message: `Se omiten ${changes.omitted.length} PR(s) que no son trabajo de la HU: ${list}.` });
       }
+      if (changes.emptyBranches?.length) {
+        const list = changes.emptyBranches.map((branch) => `${branch.repositoryName}:${branch.branch} (${branch.reason})`).join(', ');
+        emit({ type: 'progress', message: `Ramas de la HU sin código para analizar: ${list}.` });
+      }
       for (const ws of workspaces) {
         const prs = ws.group.prs.map((pr) => `PR ${pr.id}`).join(', ') || `${ws.group.commits.length} commit(s)`;
         const also = ws.group.alsoMergedInto.length ? ` (también en ${ws.group.alsoMergedInto.join(', ')})` : '';

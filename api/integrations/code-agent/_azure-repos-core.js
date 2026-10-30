@@ -517,16 +517,20 @@ async function getFileDiff(organization, pat, project, repositoryId, body) {
 }
 
 /**
- * Cambios de código vinculados a la HU (Development en Azure Boards):
- * PRs (completados o activos) y commits "Fixed in Commit".
+ * Cambios de código de la HU, repartidos por repositorio (microservicio).
  *
- * Es la forma más precisa de aislar lo que se construyó para la HU: las ramas
- * de feature suelen ser de larga vida y un diff contra trunk/develop trae
- * cientos de archivos ajenos.
+ * Fuente principal: PRs y commits vinculados a la HU (Development en Azure
+ * Boards); el merge de un PR trae TODOS sus commits. Se complementa con las
+ * ramas de la HU (vinculadas o con el ID en el nombre) para detectar trabajo
+ * sin PR o subido después del último PR.
  *
- * Agrupa por repositorio + rama destino. Por archivo toma como base el padre
- * del primer cambio y como destino el último cambio del grupo, de modo que un
- * diff muestra el efecto acumulado de todos los PRs de la HU sobre ese archivo.
+ * Reglas para no analizar código ajeno (verificadas con HUs reales):
+ *  - PRs abandonados, promociones entre ramas de integración, PRs cuya rama
+ *    nombra otra HU y PRs vinculados a muchas HUs (lotes de integración).
+ *  - Un mismo cambio integrado en varias ramas (release/current, current,
+ *    trunk, ramas "-on-trunk") se analiza una sola vez, en la rama de
+ *    desarrollo preferida; las demás se informan como "también en".
+ *  - Las ramas sin commits propios se informan, no se analizan.
  */
 async function getWorkItemChanges(organization, pat, workItemId) {
   const id = Number(workItemId);
@@ -534,74 +538,82 @@ async function getWorkItemChanges(organization, pat, workItemId) {
 
   const base = buildBaseUrl(organization);
   const workItem = await azureRepoGet(`${base}/_apis/wit/workitems/${id}?$expand=relations&api-version=${API_VERSION}`, pat);
+  const links = parseDevelopmentLinks(workItem.relations);
 
-  const prRefs = [];
-  const commitRefs = [];
-  for (const relation of workItem.relations || []) {
-    const url = decodeURIComponent(String(relation.url || ''));
-    if (relation.rel !== 'ArtifactLink') continue;
-    if (url.startsWith('vstfs:///Git/PullRequestId/')) {
-      const [projectId, repositoryId, prId] = url.slice('vstfs:///Git/PullRequestId/'.length).split('/');
-      if (projectId && repositoryId && prId) prRefs.push({ projectId, repositoryId, prId });
-    } else if (url.startsWith('vstfs:///Git/Commit/')) {
-      const [projectId, repositoryId, sha] = url.slice('vstfs:///Git/Commit/'.length).split('/');
-      if (projectId && repositoryId && /^[0-9a-f]{40}$/i.test(sha || '')) commitRefs.push({ projectId, repositoryId, sha });
+  const repoApi = (ref, path) => `${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}${path ? `/${path}` : ''}`
+    + `${path.includes('?') ? '&' : '?'}api-version=${API_VERSION}`;
+  const listRepos = (projectId) => azureRepoGet(`${base}/${projectId}/_apis/git/repositories?api-version=${API_VERSION}`, pat)
+    .then((data) => data.value || []).catch(() => []);
+  const get = (ref, path) => azureRepoGet(repoApi(ref, path), pat);
+  const getCommit = (ref, sha) => get(ref, `commits/${sha}?changeCount=500`);
+  const diffCommits = (ref, baseVersion, baseType, targetVersion, targetType) => get(ref, 'diffs/commits'
+    + `?baseVersion=${encodeURIComponent(baseVersion)}&baseVersionType=${baseType}`
+    + `&targetVersion=${encodeURIComponent(targetVersion)}&targetVersionType=${targetType}`
+    + `&diffCommonCommit=true&$top=${LIMITS.maxBranchChanges}`);
+
+  const repoNames = new Map();
+  const repoName = async (ref) => {
+    if (!repoNames.has(ref.repositoryId)) {
+      repoNames.set(ref.repositoryId, get(ref, '').then((repo) => repo.name || ref.repositoryId).catch(() => ref.repositoryId));
     }
-  }
+    return repoNames.get(ref.repositoryId);
+  };
 
-  const getCommit = (ref, sha) => azureRepoGet(
-    `${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/commits/${sha}?changeCount=500&api-version=${API_VERSION}`, pat);
-  const fileChangesOf = (changes) => (changes || [])
-    .filter((change) => change.item && !change.item.isFolder && change.item.gitObjectType !== 'tree')
-    .map((change) => ({ path: change.item.path, changeType: String(change.changeType || 'edit').toLowerCase() }));
-
-  // Cada "segmento" es un cambio atómico (PR o commit) con su base y su destino.
   const segments = [];
+  const omitted = [];
   const coveredCommits = new Set();
 
-  await Promise.all(prRefs.map(async (ref) => {
+  // 1) PRs vinculados: se descartan los ajenos antes de pedir sus cambios.
+  await mapLimit(links.prs, 6, async (ref) => {
     try {
-      const pr = await azureRepoGet(`${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/pullrequests/${ref.prId}?api-version=${API_VERSION}`, pat);
+      const pr = await get(ref, `pullrequests/${ref.prId}`);
+      if (pr.lastMergeCommit && pr.lastMergeCommit.commitId) coveredCommits.add(pr.lastMergeCommit.commitId);
       const info = {
         id: Number(ref.prId),
         title: String(pr.title || '').slice(0, 160),
         status: pr.status,
-        sourceBranch: String(pr.sourceRefName || '').replace(/^refs\/heads\//, ''),
-        targetBranch: String(pr.targetRefName || '').replace(/^refs\/heads\//, ''),
+        sourceBranch: stripHeads(pr.sourceRefName),
+        targetBranch: stripHeads(pr.targetRefName),
       };
+      const name = (pr.repository && pr.repository.name) || await repoName(ref);
+      repoNames.set(ref.repositoryId, Promise.resolve(name));
 
-      if (pr.status === 'completed' && pr.lastMergeCommit && pr.lastMergeCommit.commitId) {
-        const mergeSha = pr.lastMergeCommit.commitId;
-        const commit = await getCommit(ref, mergeSha);
-        coveredCommits.add(mergeSha);
+      const linkedWorkItems = await get(ref, `pullRequests/${ref.prId}/workitems`)
+        .then((data) => (data.value || []).length).catch(() => 1);
+      const reason = foreignPrReason(info, linkedWorkItems, id);
+      if (reason) {
+        omitted.push({ repositoryName: name, prId: info.id, title: info.title, reason });
+        return;
+      }
+
+      const common = { ...ref, repositoryName: name, pr: info, kind: 'pr', targetBranch: info.targetBranch, sourceTip: pr.lastMergeSourceCommit && pr.lastMergeSourceCommit.commitId };
+      const rebased = (pr.completionOptions && pr.completionOptions.mergeStrategy) === 'rebase';
+      if (pr.status === 'completed' && pr.lastMergeCommit && !rebased) {
+        // Merge/squash: el commit de merge contra su primer padre = todo lo que aportó el PR.
+        const commit = await getCommit(ref, pr.lastMergeCommit.commitId);
         segments.push({
-          ...ref, repositoryName: pr.repository && pr.repository.name, pr: info, targetBranch: info.targetBranch,
-          date: pr.closedDate || (commit.committer && commit.committer.date), baseCommit: (commit.parents || [])[0], targetCommit: mergeSha,
-          files: fileChangesOf(commit.changes),
+          ...common, date: pr.closedDate || (commit.committer && commit.committer.date),
+          baseCommit: (commit.parents || [])[0], targetCommit: pr.lastMergeCommit.commitId, files: fileChangesOf(commit.changes),
         });
-      } else if (pr.status === 'active' && pr.lastMergeSourceCommit && pr.lastMergeTargetCommit) {
-        const source = pr.lastMergeSourceCommit.commitId;
-        const diff = await azureRepoGet(
-          `${base}/${ref.projectId}/_apis/git/repositories/${ref.repositoryId}/diffs/commits`
-          + `?baseVersion=${pr.lastMergeTargetCommit.commitId}&baseVersionType=commit&targetVersion=${source}&targetVersionType=commit`
-          + `&diffCommonCommit=true&$top=${LIMITS.maxBranchChanges}&api-version=${API_VERSION}`, pat);
+      } else if ((pr.status === 'active' || pr.status === 'completed') && pr.lastMergeSourceCommit && pr.lastMergeTargetCommit) {
+        // Activo o completado con rebase: todos los commits de la rama origen desde el ancestro común.
+        const diff = await diffCommits(ref, pr.lastMergeTargetCommit.commitId, 'commit', pr.lastMergeSourceCommit.commitId, 'commit');
         segments.push({
-          ...ref, repositoryName: pr.repository && pr.repository.name, pr: info, targetBranch: info.targetBranch,
-          date: pr.creationDate, baseCommit: diff.commonCommit, targetCommit: source,
-          files: fileChangesOf(diff.changes),
+          ...common, date: pr.closedDate || pr.creationDate,
+          baseCommit: diff.commonCommit, targetCommit: pr.lastMergeSourceCommit.commitId, files: fileChangesOf(diff.changes),
         });
       }
-      // PRs abandonados no aportan código.
     } catch (error) {
       console.warn('[CODE_AGENT][WORK_ITEM_CHANGES] PR omitido:', ref.prId, error && error.message);
     }
-  }));
+  });
 
-  await Promise.all(commitRefs.filter((ref) => !coveredCommits.has(ref.sha)).map(async (ref) => {
+  // 2) Commits vinculados que no son el merge de un PR ya revisado (aceptado o descartado).
+  await mapLimit(links.commits.filter((ref) => !coveredCommits.has(ref.sha)), 6, async (ref) => {
     try {
       const commit = await getCommit(ref, ref.sha);
       segments.push({
-        ...ref, repositoryName: null, pr: null, targetBranch: '(commits vinculados)',
+        ...ref, repositoryName: await repoName(ref), pr: null, kind: 'commits', targetBranch: '(commits vinculados)',
         date: commit.committer && commit.committer.date, baseCommit: (commit.parents || [])[0], targetCommit: ref.sha,
         comment: String(commit.comment || '').split('\n')[0].slice(0, 160),
         files: fileChangesOf(commit.changes),
@@ -609,12 +621,194 @@ async function getWorkItemChanges(organization, pat, workItemId) {
     } catch (error) {
       console.warn('[CODE_AGENT][WORK_ITEM_CHANGES] commit omitido:', ref.sha, error && error.message);
     }
-  }));
+  });
 
-  // Agrupar por repo + rama destino.
-  const { kept, omitted } = dropForeignSegments(segments.filter((item) => item.baseCommit && item.targetCommit), id);
+  // 3) Ramas de la HU: vinculadas, con el ID en el nombre y origen de los PRs aceptados.
+  const emptyBranches = [];
+  const branches = await collectHuBranches(links.branches, segments, id, get, repoName, listRepos);
+  await mapLimit(branches, 6, async (branch) => {
+    try {
+      const segment = await branchSegment(branch, segments, get, diffCommits);
+      if (segment.empty) {
+        if (branch.reportIfEmpty) emptyBranches.push({ repositoryName: await repoName(branch), branch: branch.branch, reason: segment.empty });
+        return;
+      }
+      if (segment.files) segments.push({ ...branch, ...segment, repositoryName: await repoName(branch) });
+    } catch (error) {
+      console.warn('[CODE_AGENT][WORK_ITEM_CHANGES] rama omitida:', branch.branch, error && error.message);
+    }
+  });
+
+  return {
+    workItemId: id,
+    groups: selectGroups(buildGroups(segments.filter((item) => item.baseCommit && item.targetCommit))),
+    omitted,
+    emptyBranches,
+  };
+}
+
+const INTEGRATION_BRANCH = /^(releases?\/.+|current|current-qa|trunk|main|master|develop|dev|qa|staging)$/i;
+/** Ramas de trabajo replicadas sobre otra rama destino (p. ej. "...-on-trunk"). */
+const PORT_BRANCH = /-on-[a-z0-9._-]+$/i;
+/** Rama base para medir los commits propios de una rama sin PR, en orden de preferencia. */
+const BASE_BRANCH_CANDIDATES = ['release/current', 'current', 'develop', 'trunk', 'main', 'master'];
+/** Preferencia de rama destino cuando el mismo cambio llegó a varias: menor = preferida. */
+const TARGET_PRIORITY = [/^releases?\/current$/i, /^current$/i, /^releases?\//i, /^(develop|dev)$/i, /^(current-qa|qa|staging)$/i, /^(trunk|main|master)$/i];
+/** Un PR vinculado a más HUs que esto es un lote de integración, salvo que su rama nombre la HU. */
+const MAX_WORK_ITEMS_PER_PR = 3;
+const BUILD_CONFIG_FILE = /(\.gradle(\.kts)?|(^|\/)pom\.xml|(^|\/)package\.json|\.csproj|(^|\/)gradle\.properties)$/i;
+
+function stripHeads(refName) {
+  return String(refName || '').replace(/^refs\/heads\//, '');
+}
+
+/** IDs de work item en el nombre de una rama: 6–8 dígitos sueltos (HU7794123, HA7932235, HU_7837004), sin fechas. */
+function workItemIdsInBranch(branch) {
+  const ids = [];
+  for (const match of String(branch || '').matchAll(/(?:^|\D)(\d{6,8})(?!\d)/g)) {
+    if (/^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(match[1])) continue;
+    ids.push(Number(match[1]));
+  }
+  return ids;
+}
+
+/** Motivo para no analizar un PR vinculado a la HU, o null si es trabajo de la HU. */
+function foreignPrReason(pr, linkedWorkItems, workItemId) {
+  if (pr.status === 'abandoned') return 'PR abandonado';
+  if (INTEGRATION_BRANCH.test(pr.sourceBranch)) return 'promoción entre ramas de integración';
+  const ids = workItemIdsInBranch(pr.sourceBranch);
+  if (ids.includes(workItemId)) return null;
+  if (ids.length) return `rama de la HU ${ids[0]}`;
+  if (linkedWorkItems > MAX_WORK_ITEMS_PER_PR) return `PR vinculado a ${linkedWorkItems} HUs (lote de integración)`;
+  return null;
+}
+
+function parseDevelopmentLinks(relations) {
+  const prs = [];
+  const commits = [];
+  const branches = new Map();
+  for (const relation of relations || []) {
+    if (relation.rel !== 'ArtifactLink') continue;
+    const url = decodeURIComponent(String(relation.url || ''));
+    if (url.startsWith('vstfs:///Git/PullRequestId/')) {
+      const [projectId, repositoryId, prId] = url.slice('vstfs:///Git/PullRequestId/'.length).split('/');
+      if (projectId && repositoryId && prId) prs.push({ projectId, repositoryId, prId });
+    } else if (url.startsWith('vstfs:///Git/Commit/')) {
+      const [projectId, repositoryId, sha] = url.slice('vstfs:///Git/Commit/'.length).split('/');
+      if (projectId && repositoryId && /^[0-9a-f]{40}$/i.test(sha || '')) commits.push({ projectId, repositoryId, sha });
+    } else if (url.startsWith('vstfs:///Git/Ref/')) {
+      const [projectId, repositoryId, ...rest] = url.slice('vstfs:///Git/Ref/'.length).split('/');
+      const refName = rest.join('/');
+      if (projectId && repositoryId && refName.startsWith('GB')) {
+        const branch = refName.slice(2);
+        branches.set(`${repositoryId}|${branch}`, { projectId, repositoryId, branch });
+      }
+    }
+  }
+  return { prs, commits, branches: Array.from(branches.values()) };
+}
+
+function fileChangesOf(changes) {
+  return (changes || [])
+    .filter((change) => change.item && !change.item.isFolder && change.item.gitObjectType !== 'tree')
+    .map((change) => ({ path: change.item.path, changeType: String(change.changeType || 'edit').toLowerCase() }));
+}
+
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let index = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const current = index++;
+      results[current] = await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Ramas a revisar: las vinculadas, las que llevan el ID de la HU en repos del
+ * mismo aplicativo (prefijo del nombre del repo, p. ej. "NU0139001_") y las de
+ * origen de los PRs aceptados (para trabajo subido después del PR).
+ */
+async function collectHuBranches(linkedBranches, segments, workItemId, get, repoName, listRepos) {
+  const branches = new Map();
+  const add = (ref, branch, reportIfEmpty) => {
+    const key = `${ref.repositoryId}|${branch}`;
+    const existing = branches.get(key);
+    if (existing) existing.reportIfEmpty = existing.reportIfEmpty || reportIfEmpty;
+    else branches.set(key, { projectId: ref.projectId, repositoryId: ref.repositoryId, branch, reportIfEmpty });
+  };
+  linkedBranches.forEach((ref) => add(ref, ref.branch, true));
+  segments.filter((item) => item.pr).forEach((item) => add(item, item.pr.sourceBranch, false));
+
+  // Búsqueda por nombre, acotada a los repos del aplicativo de la HU.
+  const knownRefs = [...linkedBranches, ...segments];
+  const prefixes = new Set((await Promise.all(knownRefs.map((ref) => repoName(ref))))
+    .map((name) => (String(name).match(/^([A-Za-z0-9]+)_/) || [])[1]).filter(Boolean));
+  const projectIds = Array.from(new Set(knownRefs.map((ref) => ref.projectId)));
+  if (prefixes.size) {
+    for (const projectId of projectIds) {
+      const repos = await listRepos(projectId);
+      const candidates = repos.filter((repo) => !repo.isDisabled && Array.from(prefixes).some((prefix) => repo.name.startsWith(`${prefix}_`)));
+      await mapLimit(candidates, 8, async (repo) => {
+        const ref = { projectId, repositoryId: repo.id };
+        const refs = await get(ref, `refs?filter=heads/&filterContains=${workItemId}`).catch(() => ({ value: [] }));
+        for (const item of refs.value || []) {
+          const branch = stripHeads(item.name);
+          if (workItemIdsInBranch(branch).includes(workItemId)) add(ref, branch, true);
+        }
+      });
+    }
+  }
+  return Array.from(branches.values());
+}
+
+/**
+ * Cambios de una rama de la HU que no llegaron por un PR aceptado.
+ * Devuelve { empty: motivo } si no aporta nada, o un segmento con sus archivos.
+ */
+async function branchSegment(branch, segments, get, diffCommits) {
+  const encoded = encodeURIComponent(branch.branch);
+  const tip = await get(branch, `stats/branches?name=${encoded}`).then((stats) => stats.commit && stats.commit.commitId).catch(() => null);
+  if (!tip) return { empty: 'la rama ya no existe' };
+
+  const ownPrs = segments.filter((item) => item.pr && item.repositoryId === branch.repositoryId && item.pr.sourceBranch === branch.branch);
+  let baseBranch;
+  if (ownPrs.length) {
+    // Si la rama se reutilizó luego para otra HU, lo posterior no es de esta HU.
+    const all = await get(branch, `pullrequests?searchCriteria.sourceRefName=refs/heads/${encoded}&searchCriteria.status=all&$top=100`)
+      .then((data) => (data.value || []).filter((pr) => pr.status !== 'abandoned')).catch(() => []);
+    all.sort((a, b) => String(b.creationDate).localeCompare(String(a.creationDate)));
+    const latest = all[0];
+    if (latest && !ownPrs.some((item) => item.pr.id === latest.pullRequestId)) return { empty: 'rama reutilizada después por otra HU' };
+    const latestSource = latest ? latest.lastMergeSourceCommit && latest.lastMergeSourceCommit.commitId : null;
+    if (!latest || tip === latestSource) return { empty: 'sin commits después del último PR' };
+    baseBranch = stripHeads(latest.targetRefName);
+  }
+
+  // Commits propios de la rama frente a su rama base (desde el ancestro común).
+  for (const candidate of baseBranch ? [baseBranch] : BASE_BRANCH_CANDIDATES) {
+    if (candidate === branch.branch) continue;
+    const diff = await diffCommits(branch, candidate, 'branch', tip, 'commit').catch(() => null);
+    if (!diff) continue;
+    if (!Number(diff.aheadCount)) return { empty: `sin commits propios frente a ${candidate}` };
+    const files = fileChangesOf(diff.changes);
+    if (!files.length) return { empty: `sin cambios de archivos frente a ${candidate}` };
+    return {
+      pr: null, kind: 'branch', targetBranch: `rama ${branch.branch}`, sourceBranch: branch.branch, baseBranch: candidate,
+      date: new Date().toISOString(), baseCommit: diff.commonCommit, targetCommit: tip, files,
+      comment: `${diff.aheadCount} commit(s) sin PR frente a ${candidate}`,
+    };
+  }
+  return { empty: 'no se encontró rama base para comparar' };
+}
+
+/** Agrupa por repo + rama destino; por archivo, base del primer cambio y destino del último. */
+function buildGroups(segments) {
   const groupsByKey = new Map();
-  for (const segment of kept) {
+  for (const segment of segments) {
     const key = `${segment.repositoryId}|${segment.targetBranch}`;
     if (!groupsByKey.has(key)) groupsByKey.set(key, []);
     groupsByKey.get(key).push(segment);
@@ -624,6 +818,7 @@ async function getWorkItemChanges(organization, pat, workItemId) {
   for (const groupSegments of groupsByKey.values()) {
     groupSegments.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
     const first = groupSegments[0];
+    const last = groupSegments[groupSegments.length - 1];
     const files = new Map();
     for (const segment of groupSegments) {
       for (const file of segment.files) {
@@ -640,62 +835,55 @@ async function getWorkItemChanges(organization, pat, workItemId) {
     if (files.size === 0) continue;
 
     groups.push({
+      kind: first.kind,
       projectId: first.projectId,
       repositoryId: first.repositoryId,
       repositoryName: groupSegments.map((item) => item.repositoryName).find(Boolean) || first.repositoryId,
       targetBranch: first.targetBranch,
-      sourceBranches: Array.from(new Set(groupSegments.map((item) => item.pr && item.pr.sourceBranch).filter(Boolean))),
+      sourceBranches: Array.from(new Set(groupSegments.map((item) => (item.pr ? item.pr.sourceBranch : item.sourceBranch)).filter(Boolean))),
       prs: groupSegments.map((item) => item.pr).filter(Boolean),
       commits: groupSegments.filter((item) => !item.pr).map((item) => ({ sha: item.targetCommit, comment: item.comment })),
-      lastDate: groupSegments[groupSegments.length - 1].date || null,
-      lastCommit: groupSegments[groupSegments.length - 1].targetCommit,
+      lastDate: last.date || null,
+      lastCommit: last.targetCommit,
       files: Array.from(files.values()),
       alsoMergedInto: [],
     });
   }
+  return groups;
+}
 
-  // Si un repo tiene el mismo cambio integrado en varias ramas (release + trunk),
-  // se conserva el grupo más reciente y los demás se informan como "también en".
-  groups.sort((a, b) => String(b.lastDate || '').localeCompare(String(a.lastDate || '')));
+function groupPriority(group) {
+  const kind = group.kind === 'pr' ? 0 : group.kind === 'commits' ? 1 : 2;
+  const target = TARGET_PRIORITY.findIndex((pattern) => pattern.test(group.targetBranch));
+  const port = group.sourceBranches.length > 0 && group.sourceBranches.every((branch) => PORT_BRANCH.test(branch)) ? 1 : 0;
+  return [kind, port, target < 0 ? TARGET_PRIORITY.length : target];
+}
+
+/**
+ * Una versión por cambio: si los archivos de código de un grupo ya están en
+ * otro preferido del mismo repo (mismo trabajo integrado en otra rama), se
+ * informa como "también en" en lugar de analizarse dos veces.
+ */
+function selectGroups(groups) {
+  const ordered = groups.slice().sort((a, b) => {
+    const pa = groupPriority(a);
+    const pb = groupPriority(b);
+    for (let i = 0; i < pa.length; i++) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+    return String(b.lastDate || '').localeCompare(String(a.lastDate || ''));
+  });
+
   const result = [];
-  for (const group of groups) {
+  for (const group of ordered) {
+    const codeFiles = group.files.filter((file) => !BUILD_CONFIG_FILE.test(file.path));
     const keeper = result.find((kept) => kept.repositoryId === group.repositoryId
-      && group.files.every((file) => kept.files.some((keptFile) => keptFile.path === file.path)));
+      && codeFiles.every((file) => kept.files.some((keptFile) => keptFile.path === file.path)));
     if (keeper) {
       keeper.alsoMergedInto.push(group.targetBranch);
       continue;
     }
     result.push(group);
   }
-
-  return { workItemId: id, groups: result, omitted };
-}
-
-const INTEGRATION_BRANCH = /^(releases?\/.+|current|current-qa|trunk|main|master|develop|dev|qa|staging)$/i;
-const HU_IN_BRANCH = /(?:^|[^a-z0-9])(?:hu|us|wi)[_-]?(\d{5,})/i;
-
-/**
- * Descarta PRs que no son trabajo de la HU: promociones entre ramas de integración
- * (current → release, release → trunk: traen cambios de muchas HUs) y PRs cuya
- * rama nombra otra HU (vinculados por error). Si no queda nada, conserva todo.
- */
-function dropForeignSegments(segments, workItemId) {
-  const reasonOf = (segment) => {
-    if (!segment.pr) return null;
-    if (INTEGRATION_BRANCH.test(segment.pr.sourceBranch)) return 'promoción entre ramas de integración';
-    const hu = segment.pr.sourceBranch.match(HU_IN_BRANCH);
-    if (hu && Number(hu[1]) !== workItemId) return `rama de la HU ${hu[1]}`;
-    return null;
-  };
-  const kept = segments.filter((segment) => !reasonOf(segment));
-  if (kept.length === 0) return { kept: segments, omitted: [] };
-  const omitted = segments.filter(reasonOf).map((segment) => ({
-    repositoryName: segment.repositoryName || segment.repositoryId,
-    prId: segment.pr.id,
-    title: segment.pr.title,
-    reason: reasonOf(segment),
-  }));
-  return { kept, omitted };
+  return result;
 }
 
 /**
@@ -868,4 +1056,8 @@ module.exports = {
   normalizeRepoPath,
   computeLineDiff,
   formatHunks,
+  workItemIdsInBranch,
+  foreignPrReason,
+  buildGroups,
+  selectGroups,
 };

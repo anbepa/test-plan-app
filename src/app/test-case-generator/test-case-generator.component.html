@@ -56,25 +56,38 @@
             </div>
 
             <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
-            <div *ngIf="!codeLoadingHuChanges && usesHuChangeset" class="code-target-card is-ok">
+            <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
               <div class="code-target-card-header">
                 <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
                 <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring">Usar otra rama</button>
               </div>
+              <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
               <ul class="code-change-list">
-                <li *ngFor="let group of codeHuChangeGroups">
-                  <span class="code-change-repo">{{ group.repositoryName }}</span>
+                <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
+                  <label class="code-change-toggle">
+                    <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
+                    <span class="code-change-repo">{{ group.repositoryName }}</span>
+                  </label>
                   <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
                   <span class="code-change-meta">
                     último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
-                    · {{ group.prs.length ? group.prs.length + ' PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                    · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                    <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
                   </span>
                 </li>
               </ul>
+              <p *ngIf="!usesHuChangeset" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
+              <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
+                <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
+                <ul>
+                  <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
+                  <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
+                </ul>
+              </details>
             </div>
 
             <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
-            <ng-container *ngIf="!codeLoadingHuChanges && !usesHuChangeset">
+            <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
               <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
               <div class="code-target-grid">
                 <div class="form-group">

@@ -93,8 +93,10 @@ export interface WorkItemChangedFile {
   targetCommit: string;
 }
 
-/** Cambios de la HU en un repositorio + rama destino (PRs/commits vinculados). */
+/** Cambios de la HU en un repositorio + rama destino (PRs/commits vinculados o rama sin PR). */
 export interface WorkItemChangeGroup {
+  /** pr: PRs de la HU · commits: commits vinculados · branch: commits de una rama de la HU sin PR. */
+  kind?: 'pr' | 'commits' | 'branch';
   projectId: string;
   repositoryId: string;
   repositoryName: string;
@@ -113,6 +115,13 @@ export interface WorkItemChanges {
   groups: WorkItemChangeGroup[];
   /** PRs vinculados que no se analizan (promociones entre ramas o de otra HU). */
   omitted?: { repositoryName: string; prId: number; title: string; reason: string }[];
+  /** Ramas de la HU que no aportan código (vacías, eliminadas o reutilizadas por otra HU). */
+  emptyBranches?: { repositoryName: string; branch: string; reason: string }[];
+}
+
+/** Clave estable de un grupo de cambios (para incluirlo o excluirlo del análisis). */
+export function changeGroupKey(group: Pick<WorkItemChangeGroup, 'repositoryId' | 'targetBranch'>): string {
+  return `${group.repositoryId}|${group.targetBranch}`;
 }
 
 export interface AzureRepoSearchResult {
@@ -137,6 +146,8 @@ export interface CodeExplorationInput {
   target: CodeExplorationTarget | null;
   /** ID de la HU en Azure Boards: permite usar sus PRs/commits vinculados. */
   workItemId?: number;
+  /** Grupos de cambios de la HU que el usuario excluyó del análisis (changeGroupKey). */
+  excludedGroups?: string[];
   mode: ContextSource;
   description: string;
   acceptanceCriteria: string;

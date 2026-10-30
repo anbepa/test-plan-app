@@ -4,7 +4,7 @@ import { Observable, firstValueFrom } from 'rxjs';
 import { AiProvidersService } from './ai-providers.service';
 import { AzureReposService, CodeContextCacheKey } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
-import { CodeAgentEvent, CodeExplorationInput, WorkItemChanges } from '../../models/code-agent.model';
+import { CodeAgentEvent, CodeExplorationInput, WorkItemChanges, changeGroupKey } from '../../models/code-agent.model';
 import { ChatMessage, CodeAgentGateway, CodeAgentRunner, LlmUsage } from './code-agent-runner';
 
 type CacheVersion = Pick<CodeContextCacheKey, 'repositoryId' | 'commitId'>;
@@ -56,9 +56,12 @@ export class CodeExplorerAgentService {
     }
 
     // Los cambios de la HU se consultan una sola vez: sirven para la clave de caché y para el agente.
+    // Los repos que el usuario desmarcó no se analizan.
+    const excluded = new Set(input.excludedGroups || []);
     let workItemChanges: Promise<WorkItemChanges> | null = null;
     const getWorkItemChanges = (workItemId: number) =>
-      workItemChanges ??= firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId));
+      workItemChanges ??= firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId))
+        .then((changes) => ({ ...changes, groups: changes.groups.filter((group) => !excluded.has(changeGroupKey(group))) }));
 
     const baseKey = {
       scopePath: input.target?.scopePath || '/',

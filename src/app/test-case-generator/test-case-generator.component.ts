@@ -16,7 +16,7 @@ import { AzureReposService } from '../services/integrations/azure-repos.service'
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
 import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChanges } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
 
 interface CoverageRow {
   id: string;
@@ -87,6 +87,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeLinkedBranchHint: string | null = null;
   /** PRs/commits vinculados a la HU: si existen, el agente analiza exactamente esos cambios. */
   codeHuChanges: WorkItemChanges | null = null;
+  /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
+  codeExcludedGroups = new Set<string>();
   codeExploring: boolean = false;
   codeAgentLog: string[] = [];
   codeAgentError: string | null = null;
@@ -161,9 +163,29 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       && !!this.codeHuChanges?.groups.some((group) => group.files.length > 0);
   }
 
-  /** Se analizan los PRs/commits de la HU (no la rama elegida a mano). */
+  /** Se analizan los PRs/commits de la HU (no la rama elegida a mano) y hay al menos un repo marcado. */
   get usesHuChangeset(): boolean {
+    return this.hasHuChangeset && !this.codeManualOverride && this.codeHuChangeGroups.some((group) => this.isChangeGroupSelected(group));
+  }
+
+  /** Vista previa activa: la HU tiene cambios y no se eligió rama a mano (aunque se desmarquen todos). */
+  get showsHuChangeset(): boolean {
     return this.hasHuChangeset && !this.codeManualOverride;
+  }
+
+  isChangeGroupSelected(group: WorkItemChangeGroup): boolean {
+    return !this.codeExcludedGroups.has(changeGroupKey(group));
+  }
+
+  changeGroupPrs(group: WorkItemChangeGroup): string {
+    return `PR ${group.prs.map((pr) => pr.id).join(', ')}`;
+  }
+
+  toggleChangeGroup(group: WorkItemChangeGroup): void {
+    const key = changeGroupKey(group);
+    if (this.codeExcludedGroups.has(key)) this.codeExcludedGroups.delete(key);
+    else this.codeExcludedGroups.add(key);
+    this.clearCodeContext();
   }
 
   get isCodeTargetReady(): boolean {
@@ -736,6 +758,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   private resetCodeTargetForNewHu(): void {
     this.clearCodeContext();
     this.codeHuChanges = null;
+    this.codeExcludedGroups = new Set<string>();
     this.codeManualOverride = false;
     this.codeLinkedBranchHint = null;
     this.codeRepositoryId = '';
@@ -914,6 +937,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     const workItemId = Number(this.currentHuId);
     this.codeAgentSub = this.codeExplorerAgent.explore({
       workItemId: this.usesHuChangeset && Number.isInteger(workItemId) ? workItemId : undefined,
+      excludedGroups: this.usesHuChangeset ? Array.from(this.codeExcludedGroups) : undefined,
       target: this.usesHuChangeset || !this.isManualCodeTargetReady ? null : {
         project: this.codeProject,
         repositoryId: this.codeRepositoryId,
