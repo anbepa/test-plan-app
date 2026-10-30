@@ -5,13 +5,26 @@ import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as O
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { catchError, finalize, tap } from 'rxjs/operators';
-import { Observable, of, forkJoin, Subscription } from 'rxjs';
+import { Observable, of, forkJoin, Subscription, firstValueFrom } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { AzureDevOpsIntegrationService } from '../services/integrations/azure-devops-integration.service';
 import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 import { CellsConfigService } from '../services/core/cells-config.service';
+import { AzureReposService } from '../services/integrations/azure-repos.service';
+import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
+import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
+import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
+
+interface CoverageRow {
+  id: string;
+  criterion: string;
+  status: CriterionCodeStatus;
+  detail: string;
+}
+import { MarkdownLitePipe } from '../shared/pipes/markdown-lite.pipe';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -23,10 +36,27 @@ interface UIHUData extends OriginalHUData {
 
 type ComponentState = 'initialForm' | 'previewingGenerated' | 'editingForRefinement' | 'submitting';
 
+/** Pasos del flujo de generación, en el orden en que se alimentan entre sí. */
+type FlowStepId = 'hu' | 'criteria' | 'code' | 'context' | 'generate';
+type FlowStepStatus = 'pending' | 'running' | 'done' | 'stale' | 'optional';
+
+interface FlowStep {
+  id: FlowStepId;
+  num: number;
+  title: string;
+  status: FlowStepStatus;
+  statusLabel: string;
+  summary: string;
+}
+
+const FLOW_STATUS_LABELS: Record<FlowStepStatus, string> = {
+  pending: 'Pendiente', running: 'En curso', done: 'Listo', stale: 'Desactualizado', optional: 'Opcional'
+};
+
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent],
+  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -50,23 +80,323 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   currentSprint: string = '';
   currentDescription: string = '';
   currentAcceptanceCriteria: string = '';
-  currentGenerationContext: string = '';
 
-  // Tags rápidos para el campo de "Contexto adicional". Al pulsarlos se
-  // reemplaza por completo el contenido actual del textarea.
-  readonly contextQuickTags: string[] = [
-    '+ Solo happy path',
-    '+ Casos negativos',
-    '+ Validaciones de frontera',
-    '+ Datos inválidos',
-    '+ Solo 5 escenarios',
-    '+ Flujo alternativo',
-    '+ Creación de ruta crítica'
+  // ---- Fuente de contexto: criterios y/o código fuente (Azure Repos) ----
+  readonly contextSourceOptions: { value: ContextSource; label: string; hint: string }[] = [
+    { value: 'criteria', label: 'Solo criterios', hint: 'Genera con la HU y los criterios de aceptación (flujo actual).' },
+    { value: 'criteria-code', label: 'Criterios + código', hint: 'Los criterios mandan; el agente explora la rama para complementar con reglas del código.' },
+    { value: 'code', label: 'Repositorio + rama', hint: 'El código es la fuente principal; los criterios son opcionales.' }
   ];
+  contextSource: ContextSource = 'criteria';
+  codeProjects: AzureRepoProject[] = [];
+  codeRepositories: AzureRepository[] = [];
+  codeBranches: AzureRepoBranch[] = [];
+  codeProject: string = '';
+  codeRepositoryId: string = '';
+  codeBranch: string = '';
+  codeLoadingTarget: boolean = false;
+  /** Consultando los PRs/commits vinculados a la HU. */
+  codeLoadingHuChanges: boolean = false;
+  /** El usuario prefiere elegir otra rama aunque la HU tenga PRs/commits vinculados. */
+  codeManualOverride: boolean = false;
+  codeTargetError: string | null = null;
+  codeLinkedBranchHint: string | null = null;
+  /** PRs/commits vinculados a la HU: si existen, el agente analiza exactamente esos cambios. */
+  codeHuChanges: WorkItemChanges | null = null;
+  /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
+  codeExcludedGroups = new Set<string>();
+  codeExploring: boolean = false;
+  codeAgentLog: string[] = [];
+  codeAgentError: string | null = null;
+  codeContextText: string = '';
+  codeFilesReviewed: string[] = [];
+  /** Vista markdown (false) o edición en texto (true). */
+  criteriaEditing: boolean = true;
+  codeContextEditing: boolean = false;
+  private codeAgentSub?: Subscription;
 
-  /** Reemplaza el contexto actual con el tag seleccionado (borra lo previo). */
-  applyContextTag(tag: string): void {
-    this.currentGenerationContext = tag.replace(/^\+\s*/, '');
+  /** Criterios interpretados como lista numerada (CA-xx): cada uno tendrá un escenario propio. */
+  normalizedCriteria: string = '';
+  /** Criterios originales a los que corresponde normalizedCriteria. */
+  private normalizedCriteriaFor: string = '';
+  normalizingCriteria: boolean = false;
+  normalizedCriteriaEditing: boolean = false;
+  /** CA-xx que quedaron sin escenario en la última generación. */
+  criteriaCoverageGap: string[] = [];
+  /** Criterios y descripción con los que se exploró el código: si cambian, el contexto queda desactualizado. */
+  private codeContextBasis: string = '';
+  /** Por qué un paso se limpió o rehízo solo (p. ej. al importar otra HU): se muestra en el paso. */
+  flowNotices: Partial<Record<FlowStepId, string>> = {};
+
+  // ---- Flujo de trabajo: HU → criterios → código → contexto técnico → generación ----
+
+  get flowSteps(): FlowStep[] {
+    const ids: FlowStepId[] = this.usesCodeContext ? ['hu', 'criteria', 'code', 'context', 'generate'] : ['hu', 'criteria', 'generate'];
+    return ids.map((id, index) => {
+      const { title, status, summary } = this.describeFlowStep(id);
+      return { id, num: index + 1, title, status, statusLabel: FLOW_STATUS_LABELS[status], summary };
+    });
+  }
+
+  flowStep(id: FlowStepId): FlowStep {
+    return this.flowSteps.find((step) => step.id === id)!;
+  }
+
+  private describeFlowStep(id: FlowStepId): { title: string; status: FlowStepStatus; summary: string } {
+    switch (id) {
+      case 'hu': {
+        const ready = !!(this.currentHuId.trim() && this.currentHuTitle.trim() && this.currentDescription.trim() && this.cellName && this.currentSprint.trim());
+        return {
+          title: 'Historia de usuario',
+          status: this.azureImportLoading ? 'running' : ready ? 'done' : 'pending',
+          summary: this.azureImportLoading ? 'Importando desde Azure…' : this.currentHuId.trim() ? `HU ${this.currentHuId.trim()}` : 'Importa o escribe la HU'
+        };
+      }
+      case 'criteria': {
+        const raw = this.currentAcceptanceCriteria.trim();
+        if (this.normalizingCriteria) return { title: 'Criterios', status: 'running', summary: 'Interpretando criterios…' };
+        if (!raw) return { title: 'Criterios', status: this.contextSource === 'code' ? 'optional' : 'pending', summary: this.contextSource === 'code' ? 'El código define las reglas' : 'Sin criterios' };
+        if (this.needsCriteriaNormalization) return { title: 'Criterios', status: this.normalizedCriteria ? 'stale' : 'pending', summary: 'Se interpretan al salir del campo' };
+        return { title: 'Criterios', status: 'done', summary: this.normalizedCriteriaCount ? `${this.normalizedCriteriaCount} criterios (CA)` : 'Se usan tal cual' };
+      }
+      case 'code': {
+        const loading = this.codeLoadingHuChanges || this.codeLoadingTarget;
+        let summary = 'Elige el código a analizar';
+        if (this.usesHuChangeset) {
+          const groups = this.codeHuChangeGroups.filter((group) => this.isChangeGroupSelected(group));
+          summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`;
+        } else if (this.isManualCodeTargetReady) {
+          summary = this.codeBranch;
+        }
+        return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? 'Buscando PRs y commits…' : summary };
+      }
+      case 'context': {
+        if (this.codeExploring) return { title: 'Contexto técnico', status: 'running', summary: 'El agente está explorando…' };
+        if (!this.codeContextText.trim()) return { title: 'Contexto técnico', status: 'pending', summary: 'Se explora al generar si no lo haces antes' };
+        if (this.isCodeContextStale) return { title: 'Contexto técnico', status: 'stale', summary: 'Los criterios cambiaron' };
+        return { title: 'Contexto técnico', status: 'done', summary: this.codeCoverageRows.length ? `${this.codeCoverageRows.length} criterios evaluados` : 'Listo para generar' };
+      }
+      case 'generate':
+        return {
+          title: 'Generar matriz',
+          status: this.loadingScope || this.loadingScenarios ? 'running' : 'pending',
+          summary: this.loadingScope || this.loadingScenarios ? 'Generando escenarios…' : 'Revisa y genera'
+        };
+    }
+  }
+
+  /** El contexto técnico se exploró con otros criterios o descripción. */
+  get isCodeContextStale(): boolean {
+    return !!this.codeContextText.trim() && !!this.codeContextBasis && this.codeContextBasis !== this.currentCodeContextBasis;
+  }
+
+  private get currentCodeContextBasis(): string {
+    return `${this.currentDescription.trim()}\n${this.effectiveCriteria.trim()}`;
+  }
+
+  /** Texto del botón principal: indica qué paso del flujo se ejecutará o está en curso. */
+  get generateButtonLabel(): string {
+    if (this.normalizingCriteria) return 'Interpretando criterios…';
+    if (this.codeExploring) return 'Explorando código…';
+    if (this.loadingScope || this.loadingScenarios) return 'Generando…';
+    if (this.usesCodeContext && !this.codeContextText.trim()) return 'Explorar código y generar casos';
+    return 'Generar casos de prueba';
+  }
+
+  scrollToFlowStep(id: FlowStepId): void {
+    this.elRef.nativeElement.querySelector(`#flow-step-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  flowNotice(id: FlowStepId): string | undefined {
+    return this.flowNotices[id];
+  }
+
+  dismissFlowNotice(id: FlowStepId): void {
+    delete this.flowNotices[id];
+  }
+
+  private setFlowNotice(id: FlowStepId, message: string): void {
+    this.flowNotices = { ...this.flowNotices, [id]: message };
+  }
+
+  /** Criterios que reciben el agente y la generación: la lista numerada si existe. */
+  get effectiveCriteria(): string {
+    const raw = this.currentAcceptanceCriteria.trim();
+    return raw && this.normalizedCriteriaFor === raw && this.normalizedCriteria.trim() ? this.normalizedCriteria.trim() : this.currentAcceptanceCriteria;
+  }
+
+  get normalizedCriteriaCount(): number {
+    return criteriaIds(this.normalizedCriteria).length;
+  }
+
+  private get needsCriteriaNormalization(): boolean {
+    const raw = this.currentAcceptanceCriteria.trim();
+    return !!raw && this.normalizedCriteriaFor !== raw;
+  }
+
+  /** Interpreta los criterios del funcional; si falla, se usan tal cual. */
+  async refreshNormalizedCriteria(): Promise<void> {
+    if (!this.needsCriteriaNormalization || this.normalizingCriteria) return;
+    const raw = this.currentAcceptanceCriteria.trim();
+    if (this.normalizedCriteria.trim()) {
+      this.setFlowNotice('criteria', 'Cambiaron los criterios originales: la lista de criterios a cubrir se volvió a interpretar y reemplaza la anterior (incluidas tus ediciones).');
+    }
+    this.normalizingCriteria = true;
+    this.normalizedCriteriaEditing = false;
+    this.cdr.markForCheck();
+    let text = '';
+    try {
+      text = await this.criteriaNormalizer.normalize(this.currentDescription, raw);
+    } catch (error) {
+      console.warn('[CRITERIA] No se pudieron interpretar los criterios; se usan tal cual.', error);
+    }
+    this.normalizingCriteria = false;
+    if (raw === this.currentAcceptanceCriteria.trim()) {
+      this.normalizedCriteria = text;
+      this.normalizedCriteriaFor = raw;
+    }
+    this.cdr.markForCheck();
+  }
+
+  editNormalizedCriteria(): void {
+    this.normalizedCriteriaEditing = true;
+    this.growAndFocus('tcNormalizedCriteria');
+  }
+
+  get usesCodeContext(): boolean {
+    return this.contextSource !== 'criteria';
+  }
+
+  get isManualCodeTargetReady(): boolean {
+    return !!(this.codeProject && this.codeRepositoryId && this.codeBranch);
+  }
+
+  get hasHuChangeset(): boolean {
+    return String(this.codeHuChanges?.workItemId) === String(this.currentHuId).trim()
+      && !!this.codeHuChanges?.groups.some((group) => group.files.length > 0);
+  }
+
+  /** Se analizan los PRs/commits de la HU (no la rama elegida a mano) y hay al menos un repo marcado. */
+  get usesHuChangeset(): boolean {
+    return this.hasHuChangeset && !this.codeManualOverride && this.codeHuChangeGroups.some((group) => this.isChangeGroupSelected(group));
+  }
+
+  /** Vista previa activa: la HU tiene cambios y no se eligió rama a mano (aunque se desmarquen todos). */
+  get showsHuChangeset(): boolean {
+    return this.hasHuChangeset && !this.codeManualOverride;
+  }
+
+  isChangeGroupSelected(group: WorkItemChangeGroup): boolean {
+    return !this.codeExcludedGroups.has(changeGroupKey(group));
+  }
+
+  changeGroupPrs(group: WorkItemChangeGroup): string {
+    return `PR ${group.prs.map((pr) => pr.id).join(', ')}`;
+  }
+
+  toggleChangeGroup(group: WorkItemChangeGroup): void {
+    const key = changeGroupKey(group);
+    if (this.codeExcludedGroups.has(key)) this.codeExcludedGroups.delete(key);
+    else this.codeExcludedGroups.add(key);
+    this.clearCodeContext('cambiaste los repositorios a analizar');
+  }
+
+  get isCodeTargetReady(): boolean {
+    return this.usesHuChangeset || this.isManualCodeTargetReady;
+  }
+
+  /** La HU se consultó y no tiene PRs/commits con archivos. */
+  get huHasNoChangeset(): boolean {
+    return String(this.codeHuChanges?.workItemId) === String(this.currentHuId).trim() && !this.hasHuChangeset;
+  }
+
+  get codeHuChangeGroups() {
+    return (this.codeHuChanges?.groups || []).filter((group) => group.files.length > 0);
+  }
+
+  /** Último commit de la rama elegida a mano. */
+  get codeSelectedCommit(): string {
+    return this.codeBranches.find((branch) => branch.name === this.codeBranch)?.commitId || '';
+  }
+
+  /**
+   * Rama contra la que se aíslan los cambios cuando se elige la rama a mano:
+   * la rama principal del repositorio (develop/main/trunk), salvo que sea la misma.
+   */
+  get codeEffectiveBaseBranch(): string {
+    const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
+    const base = repository?.defaultBranch || '';
+    return base && base !== this.codeBranch && this.codeBranches.some((branch) => branch.name === base) ? base : '';
+  }
+
+  /** Conteo de estados por criterio a partir de la matriz de cobertura del contexto técnico. */
+  get codeCoverageSummary(): { label: string; count: number; css: string }[] {
+    if (!this.codeContextText || this.contextSource !== 'criteria-code') return [];
+    const statuses = [
+      { key: 'IMPLEMENTADO', label: 'Implementados', css: 'is-ok' },
+      { key: 'PARCIAL', label: 'Parciales', css: 'is-partial' },
+      { key: 'DIFERENTE', label: 'Diferentes', css: 'is-diff' },
+      { key: 'SIN EVIDENCIA', label: 'Sin evidencia', css: 'is-missing' }
+    ];
+    const lines = this.codeContextText.split('\n').filter((line) => /\[CA-\d+\]/.test(line));
+    return statuses
+      .map((status) => ({
+        label: status.label,
+        css: status.css,
+        count: lines.filter((line) => new RegExp(`→\\s*${status.key}\\b`, 'i').test(line)).length
+      }))
+      .filter((item) => item.count > 0);
+  }
+
+  readonly coverageStatuses: CriterionCodeStatus[] = ['IMPLEMENTADO', 'PARCIAL', 'DIFERENTE', 'SIN EVIDENCIA'];
+  private coverageCache: { text: string; rows: CoverageRow[] } = { text: '', rows: [] };
+
+  /** Matriz CA del contexto técnico (memoizada: el selector no se re-renderiza en cada ciclo). */
+  get codeCoverageRows(): CoverageRow[] {
+    if (this.coverageCache.text !== this.codeContextText) {
+      const rows = this.codeContextText.split('\n').map((line) => {
+        const match = line.match(/^\s*[-*]\s*\[(CA-\d+)\]\s*"?(.*?)"?\s*→\s*(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)\b\.?\s*(.*)$/i);
+        if (!match) return null;
+        const detail = match[4].replace(/^Detalle:\s*/i, '').replace(/\s*\(?\bFuentes?:.*$/i, '').trim();
+        return { id: match[1], criterion: match[2], status: match[3].toUpperCase() as CriterionCodeStatus, detail };
+      }).filter((row): row is CoverageRow => !!row);
+      this.coverageCache = { text: this.codeContextText, rows };
+    }
+    return this.coverageCache.rows;
+  }
+
+  /** Corrige el estado de un criterio: el cambio va al texto que se envía a la generación. */
+  setCoverageStatus(id: string, status: CriterionCodeStatus): void {
+    const pattern = new RegExp(`(\\[${id}\\][^\\n]*?→\\s*)(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)`, 'i');
+    this.codeContextText = this.codeContextText.replace(pattern, `$1${status}`);
+  }
+
+  trackCoverageRow(_: number, row: CoverageRow): string {
+    return row.id;
+  }
+
+  coverageStatusCss(status: CriterionCodeStatus): string {
+    return { 'IMPLEMENTADO': 'md-status-ok', 'PARCIAL': 'md-status-partial', 'DIFERENTE': 'md-status-diff', 'SIN EVIDENCIA': 'md-status-none' }[status];
+  }
+
+  /** Pasa a edición y ajusta la altura del textarea cuando ya es visible. */
+  editCriteria(): void {
+    this.criteriaEditing = true;
+    this.growAndFocus('tcCurrentAcceptanceCriteria');
+  }
+
+  editCodeContext(): void {
+    this.codeContextEditing = true;
+    this.growAndFocus('tcCodeContext');
+  }
+
+  private growAndFocus(id: string): void {
+    setTimeout(() => {
+      const textarea = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
+      if (!textarea) return;
+      this.autoGrowTextarea(textarea);
+      textarea.focus();
+    }, 0);
   }
   currentSelectedTechnique: string = this.AUTO_TECHNIQUE;
   refinementTechnique: string = this.AUTO_TECHNIQUE;
@@ -130,7 +460,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private elRef: ElementRef,
     private toastService: ToastService,
     private azureDevOpsIntegrationService: AzureDevOpsIntegrationService,
-    private cellsConfigService: CellsConfigService
+    private cellsConfigService: CellsConfigService,
+    private azureReposService: AzureReposService,
+    private codeExplorerAgent: CodeExplorerAgentService,
+    private criteriaNormalizer: CriteriaNormalizerService
   ) { }
 
   ngOnInit(): void {
@@ -154,6 +487,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();
+    this.codeAgentSub?.unsubscribe();
   }
 
   get isAiBusy(): boolean {
@@ -265,7 +599,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.currentHuTitle = '';
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
-    this.currentGenerationContext = '';
+    this.criteriaEditing = true;
+    this.normalizedCriteria = '';
+    this.normalizedCriteriaFor = '';
+    this.criteriaCoverageGap = [];
+    this.flowNotices = {};
     this.generatedHUData = null;
     this.userRefinementContext = '';
     this.refinementTechnique = this.AUTO_TECHNIQUE;
@@ -277,6 +615,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.azureImportSuccessMessage = null;
     this.azureImportErrorMessage = null;
     this.azureNodeNameWarning = null;
+    this.cancelCodeExploration();
+    this.clearCodeContext();
+    this.codeLinkedBranchHint = null;
 
     this.huFormDirective?.resetForm();
     this.currentGenerationMode = keptMode;
@@ -290,8 +631,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           currentHuId: '',
           currentHuTitle: '',
           currentDescription: '',
-          currentAcceptanceCriteria: '',
-          currentGenerationContext: ''
+          currentAcceptanceCriteria: ''
         });
         this.huFormDirective.form.updateValueAndValidity();
       }
@@ -320,6 +660,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
     this.azureImportLoading = true;
 
+    // Cambios de código de la HU en paralelo con la importación: no se espera a la HU.
+    this.resetCodeTargetForNewHu();
+    this.currentHuId = String(numericId);
+    if (this.usesCodeContext) {
+      this.loadHuCodeChanges(numericId);
+    }
+
     this.azureDevOpsIntegrationService.importUserStory(numericId)
       .pipe(
         finalize(() => {
@@ -329,11 +676,17 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (importedHu: AzureDevOpsImportedUserStory) => {
+          const previousCriteria = this.currentAcceptanceCriteria.trim();
           this.currentHuId = String(importedHu.id);
           this.currentHuTitle = importedHu.title || '';
           this.currentSprint = importedHu.sprint || '';
           this.currentDescription = importedHu.description || '';
           this.currentAcceptanceCriteria = importedHu.acceptanceCriteria || '';
+          if (previousCriteria && previousCriteria !== this.currentAcceptanceCriteria.trim()) {
+            this.setFlowNotice('criteria', `Se reemplazaron los criterios por los de la HU ${importedHu.id} importada desde Azure.`);
+          }
+          this.criteriaEditing = !this.currentAcceptanceCriteria.trim();
+          this.refreshNormalizedCriteria();
 
           const matchedCell = this.resolveCellFromAzureNodeName(importedHu.nodeName);
           if (matchedCell) {
@@ -393,7 +746,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** Ajusta la altura de los textareas del formulario inicial (descripcion, criterios, contexto). */
   public autoGrowFormTextareas(): void {
-    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCurrentGenerationContext'];
+    const ids = ['tcCurrentDescription', 'tcCurrentAcceptanceCriteria', 'tcCodeContext'];
     ids.forEach(id => {
       const ta = this.elRef.nativeElement.querySelector(`#${id}`) as HTMLTextAreaElement | null;
       if (ta) this.autoGrowTextarea(ta);
@@ -513,10 +866,270 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return [{ numero_paso: 1, accion: 'Paso no descrito' }];
   }
 
+  // ---------------------------------------------------------------------------
+  // Contexto desde código fuente (Azure Repos + agente de exploración)
+  // ---------------------------------------------------------------------------
+
+  /** Al cambiar de HU, la rama y los cambios de la HU anterior no deben quedar seleccionados. */
+  private resetCodeTargetForNewHu(): void {
+    if (this.codeHuChanges || this.isManualCodeTargetReady) {
+      this.setFlowNotice('code', 'Cambiaste de HU: se descartó el código de la HU anterior y se buscan los PRs y commits de la nueva.');
+    }
+    this.clearCodeContext('cambiaste de HU');
+    this.codeHuChanges = null;
+    this.codeExcludedGroups = new Set<string>();
+    this.codeManualOverride = false;
+    this.codeLinkedBranchHint = null;
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.codeBranches = [];
+  }
+
+  /** Elegir otra rama aunque la HU tenga PRs: arranca con el repo/rama de la HU. */
+  useManualCodeTarget(): void {
+    this.codeManualOverride = true;
+    this.clearCodeContext('cambiaste el origen del código');
+    const primary = this.codeHuChangeGroups[0];
+    if (primary && !this.isManualCodeTargetReady) {
+      this.preselectCodeTarget(primary.projectId, primary.repositoryId, primary.sourceBranches[0] || primary.targetBranch);
+    }
+  }
+
+  useHuChangeset(): void {
+    this.codeManualOverride = false;
+    this.clearCodeContext('cambiaste el origen del código');
+  }
+
+  private async preselectCodeTarget(projectId: string, repositoryId: string, branch: string): Promise<void> {
+    if (this.codeProjects.length === 0) {
+      this.codeProjects = await firstValueFrom(this.azureReposService.listProjects()).catch(() => []);
+    }
+    const project = this.codeProjects.find((p) => p.id === projectId);
+    if (project) {
+      this.onCodeProjectChange(project.name, { repositoryId, branch });
+    }
+  }
+
+  onContextSourceChange(source: ContextSource): void {
+    this.contextSource = source;
+    this.codeAgentError = null;
+    if (this.usesCodeContext && this.codeProjects.length === 0 && !this.codeLoadingTarget) {
+      this.loadCodeProjects();
+    }
+    const huId = Number(this.currentHuId);
+    if (this.usesCodeContext && !this.isCodeTargetReady && Number.isInteger(huId) && huId > 0) {
+      this.loadHuCodeChanges(huId);
+    }
+  }
+
+  loadCodeProjects(): void {
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listProjects()
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (projects) => {
+          this.codeProjects = projects;
+          if (projects.length === 1 && !this.codeProject) {
+            this.onCodeProjectChange(projects[0].name);
+          }
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeProjectChange(project: string, preselect?: { repositoryId: string; branch: string }): void {
+    this.codeProject = project;
+    this.codeRepositories = [];
+    this.codeBranches = [];
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.clearCodeContext('cambiaste el proyecto');
+    if (!project) return;
+
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listRepositories(project)
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (repositories) => {
+          this.codeRepositories = repositories;
+          const target = preselect && repositories.find((repo) => repo.id === preselect.repositoryId);
+          if (target) {
+            this.onCodeRepositoryChange(target.id, preselect!.branch);
+          } else if (repositories.length === 1) {
+            this.onCodeRepositoryChange(repositories[0].id);
+          }
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeRepositoryChange(repositoryId: string, preferredBranch?: string): void {
+    this.codeRepositoryId = repositoryId;
+    this.codeBranches = [];
+    this.codeBranch = '';
+    this.clearCodeContext('cambiaste el repositorio');
+    if (!repositoryId) return;
+
+    const repository = this.codeRepositories.find((repo) => repo.id === repositoryId);
+    this.codeLoadingTarget = true;
+    this.codeTargetError = null;
+    this.azureReposService.listBranches(this.codeProject, repositoryId)
+      .pipe(finalize(() => { this.codeLoadingTarget = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (branches) => {
+          this.codeBranches = branches;
+          const wanted = [preferredBranch, repository?.defaultBranch].find((name) => name && branches.some((b) => b.name === name));
+          this.codeBranch = wanted || '';
+        },
+        error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
+      });
+  }
+
+  onCodeBranchChange(branch: string): void {
+    this.codeBranch = branch;
+    this.clearCodeContext('cambiaste la rama');
+  }
+
+  /**
+   * Consulta los PRs/commits vinculados a la HU. Si hay cambios, el agente los
+   * usa directamente (no hace falta elegir rama); si no, sugiere la rama vinculada.
+   */
+  private loadHuCodeChanges(workItemId: number): void {
+    this.codeLinkedBranchHint = null;
+    this.codeLoadingHuChanges = true;
+    const isCurrent = () => String(workItemId) === String(this.currentHuId).trim();
+    this.azureReposService.getWorkItemChanges(workItemId)
+      .pipe(finalize(() => { if (isCurrent()) this.codeLoadingHuChanges = false; this.cdr.markForCheck(); }))
+      .subscribe({
+        next: (changes) => {
+          if (!isCurrent()) return;
+          this.codeHuChanges = changes;
+          // Con PRs/commits no hace falta cargar repositorios ni ramas: se analizan esos cambios.
+          if (!changes.groups.some((group) => group.files.length > 0)) {
+            this.suggestLinkedBranch(workItemId);
+          }
+        },
+        error: () => { if (isCurrent()) this.suggestLinkedBranch(workItemId); }
+      });
+  }
+
+  /** Autosugiere repo + rama a partir de las ramas vinculadas a la HU en Azure Boards. */
+  private suggestLinkedBranch(workItemId: number): void {
+    this.codeLinkedBranchHint = null;
+    this.azureReposService.getLinkedBranches(workItemId).subscribe({
+      next: async (links) => {
+        if (links.length === 0 || String(workItemId) !== String(this.currentHuId).trim()) return;
+        const link = links[0];
+        await this.preselectCodeTarget(link.projectId, link.repositoryId, link.branch);
+        this.codeLinkedBranchHint = links.length > 1
+          ? `La HU tiene ${links.length} ramas vinculadas; se preseleccionó "${link.branch}".`
+          : `Rama vinculada a la HU preseleccionada: "${link.branch}".`;
+        this.cdr.markForCheck();
+      },
+      // Sugerencia opcional: si falla, el usuario elige manualmente.
+      error: () => { }
+    });
+  }
+
+  exploreCode(onDone?: () => void): void {
+    if (!this.isCodeTargetReady || this.codeExploring) return;
+    if (!this.currentDescription.trim()) {
+      this.codeAgentError = 'Escribe la descripción de la HU antes de explorar el código.';
+      return;
+    }
+    // El juez evalúa la misma lista numerada que luego cubre la generación.
+    if (this.needsCriteriaNormalization) {
+      this.refreshNormalizedCriteria().then(() => this.exploreCode(onDone));
+      return;
+    }
+
+    const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
+
+    this.dismissFlowNotice('context');
+    this.codeExploring = true;
+    this.codeAgentError = null;
+    this.codeAgentLog = [];
+    this.cdr.detectChanges();
+
+    const workItemId = Number(this.currentHuId);
+    this.codeAgentSub = this.codeExplorerAgent.explore({
+      workItemId: this.usesHuChangeset && Number.isInteger(workItemId) ? workItemId : undefined,
+      excludedGroups: this.usesHuChangeset ? Array.from(this.codeExcludedGroups) : undefined,
+      target: this.usesHuChangeset || !this.isManualCodeTargetReady ? null : {
+        project: this.codeProject,
+        repositoryId: this.codeRepositoryId,
+        repositoryName: repository?.name || this.codeRepositoryId,
+        branch: this.codeBranch,
+        commitId: this.codeSelectedCommit,
+        scopePath: '/',
+        baseBranch: this.codeEffectiveBaseBranch
+      },
+      mode: this.contextSource,
+      description: this.currentDescription,
+      acceptanceCriteria: this.effectiveCriteria,
+      userRequest: ''
+    }).subscribe({
+      next: (event) => {
+        this.codeAgentLog = [...this.codeAgentLog, event.message].slice(-40);
+        if (event.type === 'done' && event.context) {
+          this.codeContextText = event.context;
+          this.codeFilesReviewed = event.filesReviewed || [];
+          this.codeContextBasis = this.currentCodeContextBasis;
+          this.codeContextEditing = false;
+        }
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this.codeExploring = false;
+        this.codeAgentError = this.getCodeErrorMessage(error);
+        this.toastService.error(this.codeAgentError);
+        this.cdr.detectChanges();
+      },
+      complete: () => {
+        this.codeExploring = false;
+        this.cdr.detectChanges();
+        setTimeout(() => this.autoGrowFormTextareas(), 0);
+        if (this.codeContextText.trim() && onDone) onDone();
+      }
+    });
+  }
+
+  cancelCodeExploration(): void {
+    if (this.codeAgentSub) {
+      this.codeAgentSub.unsubscribe();
+      this.codeAgentSub = undefined;
+    }
+    if (this.codeExploring) {
+      this.codeExploring = false;
+      this.codeAgentLog = [...this.codeAgentLog, 'Exploración cancelada.'];
+    }
+  }
+
+  /** reason: por qué se descarta, para explicarlo en el paso "Contexto técnico". */
+  clearCodeContext(reason?: string): void {
+    if (reason && this.codeContextText.trim()) {
+      this.setFlowNotice('context', `Se descartó el contexto técnico porque ${reason}. Vuelve a explorar o se explorará al generar.`);
+    }
+    this.codeContextBasis = '';
+    this.codeContextText = '';
+    this.codeFilesReviewed = [];
+    this.codeAgentLog = [];
+    this.codeAgentError = null;
+  }
+
+  private getCodeErrorMessage(error: any): string {
+    return error?.error?.message || error?.message || 'No fue posible consultar el código fuente.';
+  }
+
   isFormInvalidForGeneration(): boolean {
     if (!this.huFormDirective?.form || !this.currentGenerationMode) return true;
     const commonRequired = !this.currentSprint || !this.currentHuTitle;
-    return !this.currentHuId || !this.currentDescription || !this.currentAcceptanceCriteria || commonRequired;
+    // En modo "Repositorio + rama" los criterios son opcionales: el código es la fuente principal.
+    const criteriaMissing = this.contextSource !== 'code' && !this.currentAcceptanceCriteria;
+    const codeTargetMissing = this.usesCodeContext && !this.isCodeTargetReady;
+    return !this.currentHuId || !this.currentDescription || criteriaMissing || codeTargetMissing || commonRequired || this.codeExploring;
   }
 
   private parseFileNameForSorting(fileName: string): { main: number, sub: number } {
@@ -543,13 +1156,27 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.formError = "Por favor, completa todos los campos requeridos.";
       this.huFormDirective?.form.markAllAsTouched(); return;
     }
+    // Con código como fuente: si aún no hay contexto técnico, el agente explora
+    // primero y al terminar continúa automáticamente con la generación.
+    if (this.needsCriteriaNormalization) {
+      this.refreshNormalizedCriteria().then(() => this.generateInitialHuAndCases());
+      return;
+    }
+    if (this.usesCodeContext && !this.codeContextText.trim()) {
+      this.exploreCode(() => this.generateInitialHuAndCases());
+      return;
+    }
+    this.criteriaCoverageGap = [];
+    const codeContext = this.usesCodeContext ? this.codeContextText.trim() : '';
     const huData: UIHUData = {
       originalInput: {
         generationMode: this.currentGenerationMode,
         description: this.currentDescription,
-        acceptanceCriteria: this.currentAcceptanceCriteria,
+        acceptanceCriteria: this.effectiveCriteria,
         selectedTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
-        userRequest: this.currentGenerationContext,
+        userRequest: '',
+        codeContext: codeContext || undefined,
+        contextSource: codeContext ? this.contextSource : undefined,
       },
       id: this.currentHuId.trim(), title: this.currentHuTitle.trim(), sprint: this.currentSprint.trim(),
       generatedScope: '',
@@ -579,7 +1206,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
         this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
-        this.currentGenerationContext
+        '',
+        codeContext,
+        this.contextSource
       ).subscribe({
         next: (event: any) => {
           this.streamingReasoning = event.reasoning || '';
@@ -608,6 +1237,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
               this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
                 rawTestCases.map((tc: any) => tc.title)
               );
+              this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases, codeContext);
             } else {
               console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
               this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';

@@ -1,3 +1,4 @@
+import type { ContextSource } from './code-agent.model';
 // src/app/models/hu-data.model.ts
 
 // Definiciones para Casos de Prueba Detallados
@@ -124,6 +125,9 @@ export interface HUData {
     acceptanceCriteria: string;
     selectedTechnique?: string;
     userRequest?: string;
+    /** Contexto técnico del agente de código (Azure Repos). Opcional. */
+    codeContext?: string;
+    contextSource?: ContextSource;
   };
   generatedScope?: string;
   generatedTestCaseTitles?: string;

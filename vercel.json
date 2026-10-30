@@ -26,6 +26,10 @@
       "destination": "/api/integrations/azure-devops/work-items/[...path]"
     },
     {
+      "source": "/api/integrations/code-agent/:path*",
+      "destination": "/api/integrations/code-agent/[...path]"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

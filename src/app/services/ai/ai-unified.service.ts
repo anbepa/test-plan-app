@@ -1,3 +1,4 @@
+import type { ContextSource } from '../../models/code-agent.model';
 import { Injectable } from '@angular/core';
 import { Observable, catchError, of, map } from 'rxjs';
 import { GeminiService } from './gemini.service';
@@ -201,7 +202,9 @@ export class AiUnifiedService {
         description: string,
         acceptanceCriteria: string,
         technique: string,
-        userRequest: string = ''
+        userRequest: string = '',
+        codeContext: string = '',
+        contextSource: ContextSource = 'criteria'
     ): Observable<StreamEvent> {
         // GitHub Models (Copilot) ahora soporta streaming real (SSE), igual que
         // DeepSeek. NO se hace fallback a DeepSeek: el error del proveedor activo
@@ -209,10 +212,10 @@ export class AiUnifiedService {
         if (this.isGitHubModelsActive()) {
             console.log('[AI Unified Stream] GitHub Models activo — generación con streaming (SSE)');
             return this.githubModelsService
-                .generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
+                .generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
         }
         console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
-        return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest);
+        return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
     }
 
     /**

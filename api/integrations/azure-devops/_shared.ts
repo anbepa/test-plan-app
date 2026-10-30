@@ -305,17 +305,37 @@ export async function disconnectAzureConnection(userId: string, organization: st
   }
 }
 
+/**
+ * Convierte el HTML de Azure Boards a texto legible conservando la estructura:
+ * listas anidadas (con sangría), tablas (como tabla markdown) e imágenes
+ * (como marcador, para que la IA sepa que hay información no visible).
+ */
 export function cleanHtmlContent(inputHtml: string): string {
   if (!inputHtml || !inputHtml.trim()) {
     return '';
   }
 
-  const normalizedHtml = inputHtml
+  const withTables = inputHtml.replace(/<\s*table\b[^>]*>([\s\S]*?)<\s*\/\s*table\s*>/gi, (_, table: string) => `\n${htmlTableToMarkdown(table)}\n`);
+
+  const listStack: { ordered: boolean; index: number }[] = [];
+  const normalizedHtml = withTables
+    .replace(/<\s*img\b[^>]*>/gi, '\n[Imagen en la HU]\n')
     .replace(/<\s*br\s*\/?\s*>/gi, '\n')
-    .replace(/<\s*\/\s*p\s*>/gi, '\n')
-    .replace(/<\s*\/\s*div\s*>/gi, '\n')
-    .replace(/<\s*li\b[^>]*>/gi, '\n- ')
-    .replace(/<\s*\/\s*li\s*>/gi, '\n');
+    .replace(/<\s*\/\s*(p|div|h[1-6])\s*>/gi, '\n')
+    .replace(/<\s*(\/)?\s*(ul|ol|li)\b[^>]*>/gi, (_, closing: string, tag: string) => {
+      const name = tag.toLowerCase();
+      if (name === 'li') {
+        if (closing) return '\n';
+        const list = listStack[listStack.length - 1];
+        const indent = '  '.repeat(Math.max(0, listStack.length - 1));
+        if (!list) return '\n- ';
+        list.index += 1;
+        return `\n${indent}${list.ordered ? `${list.index}.` : '-'} `;
+      }
+      if (closing) listStack.pop();
+      else listStack.push({ ordered: name === 'ol', index: 0 });
+      return '\n';
+    });
 
   const withoutTags = normalizedHtml.replace(/<[^>]*>/g, ' ');
   const decoded = decodeHtmlEntities(withoutTags);
@@ -323,9 +343,35 @@ export function cleanHtmlContent(inputHtml: string): string {
   return decoded
     .replace(/\u00A0/g, ' ')
     .replace(/\t/g, ' ')
-    .replace(/[ ]{2,}/g, ' ')
+    .split('\n')
+    // Conserva la sangría inicial (listas anidadas) y colapsa el resto de espacios.
+    .map((line) => {
+      const indent = line.match(/^ */)?.[0] || '';
+      const text = line.trim().replace(/[ ]{2,}/g, ' ');
+      return text ? (/^(-|\d+\.) /.test(text) ? indent + text : text) : '';
+    })
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
+    // Ítems de lista consecutivos, sin línea en blanco entre ellos.
+    .replace(/(^|\n)( *(?:-|\d+\.) [^\n]*)\n\n(?= *(?:-|\d+\.) )/g, '$1$2\n')
+    .replace(/(^|\n)( *(?:-|\d+\.) [^\n]*)\n\n(?= *(?:-|\d+\.) )/g, '$1$2\n')
     .trim();
+}
+
+function htmlTableToMarkdown(tableHtml: string): string {
+  const rows = [...tableHtml.matchAll(/<\s*tr\b[^>]*>([\s\S]*?)<\s*\/\s*tr\s*>/gi)]
+    .map(([, row]) => [...row.matchAll(/<\s*t[hd]\b[^>]*>([\s\S]*?)<\s*\/\s*t[hd]\s*>/gi)]
+      .map(([, cell]) => decodeHtmlEntities(cell.replace(/<\s*br\s*\/?\s*>/gi, ' ').replace(/<[^>]*>/g, ' '))
+        .replace(/\u00A0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\|/g, '/')
+        .trim()))
+    .filter((cells) => cells.some(Boolean));
+
+  if (!rows.length) return '';
+  const width = Math.max(...rows.map((cells) => cells.length));
+  const line = (cells: string[]) => `| ${Array.from({ length: width }, (_, i) => cells[i] || '').join(' | ')} |`;
+  return [line(rows[0]), line(Array(width).fill('---')), ...rows.slice(1).map(line)].join('\n');
 }
 
 function decodeHtmlEntities(value: string): string {

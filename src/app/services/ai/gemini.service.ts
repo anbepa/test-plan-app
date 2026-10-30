@@ -231,7 +231,7 @@ export class GeminiService {
     console.log('[Gemini Direct Refine] 📋 técnica:', newTechnique);
     console.log('[Gemini Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
-    const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+    const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }

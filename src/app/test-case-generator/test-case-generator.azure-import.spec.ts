@@ -28,6 +28,11 @@ describe('TestCaseGeneratorComponent Azure import', () => {
     info: () => ''
   } as any;
 
+  const cellsConfigStub = {} as any;
+  const azureReposStub = {} as any;
+  const codeAgentStub = {} as any;
+  const criteriaNormalizerStub = { normalize: () => Promise.resolve('') } as any;
+
   it('debe completar campos al importar HU y seleccionar célula por coincidencia', () => {
     const azureServiceStub = {
       importUserStory: () => of({
@@ -46,7 +51,11 @@ describe('TestCaseGeneratorComponent Azure import', () => {
       cdrStub,
       elementRefStub,
       toastStub,
-      azureServiceStub
+      azureServiceStub,
+      cellsConfigStub,
+      azureReposStub,
+      codeAgentStub,
+      criteriaNormalizerStub
     );
 
     component.azureUserStoryIdInput = '7632264';
@@ -73,7 +82,11 @@ describe('TestCaseGeneratorComponent Azure import', () => {
       cdrStub,
       elementRefStub,
       toastStub,
-      azureServiceStub
+      azureServiceStub,
+      cellsConfigStub,
+      azureReposStub,
+      codeAgentStub,
+      criteriaNormalizerStub
     );
 
     component.currentHuTitle = 'Dato manual';

@@ -281,6 +281,8 @@ async function handleChat(req: VercelRequest, res: VercelResponse): Promise<void
     temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
     max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
     response_format: body.response_format,
+    tools: Array.isArray(body.tools) ? body.tools : undefined,
+    tool_choice: body.tool_choice,
   });
 
   res.status(200).json(completion);

@@ -1,3 +1,4 @@
+import type { ContextSource } from '../../models/code-agent.model';
 import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
@@ -377,7 +378,7 @@ export class DeepSeekService {
         console.log('[DeepSeek Direct Refine] 📋 técnica:', newTechnique);
         console.log('[DeepSeek Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
-        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
         const payload: DeepSeekRequest = {
             model: this.MODEL,
             messages: [{ role: 'user', content: promptText }],
@@ -422,13 +423,16 @@ export class DeepSeekService {
         description: string,
         acceptanceCriteria: string,
         technique: string,
-        userRequest: string = ''
+        userRequest: string = '',
+        codeContext: string = '',
+        contextSource: ContextSource = 'criteria'
     ): Observable<StreamEvent> {
-        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest);
+        const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
         const payload: DeepSeekRequest = {
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
+            // Con contexto de código la matriz debe ser estable entre corridas.
+            temperature: codeContext.trim() ? 0.2 : 0.5,
             max_tokens: this.STREAM_MAX_TOKENS,
             stream: true,
             thinking: { type: 'disabled' }
@@ -450,7 +454,7 @@ export class DeepSeekService {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
 
-        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique);
+        const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
         const payload: DeepSeekRequest = {
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
