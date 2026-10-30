@@ -20,6 +20,8 @@ export function compactCodeContextForGeneration(codeContext: string): string {
     .replace(/\s*\(?\bFuentes?:\s*[^\n]*?(?=\n|$)/g, '')
     // Citas en línea entre paréntesis: (`archivo.ts:10-20`, `otro.html:5`).
     .replace(/\s*\((?:`?[\w./\-…]+\.[a-z]{2,10}(?::[\d,\-–]+)?`?[;,]?\s*)+\)/gi, '')
+    // Los comportamientos (EXISTENTE) no son de la HU: sin id no pueden generar casos propios.
+    .replace(/^(\s*[-*]\s*)\[RT-\d+\]\s*\(EXISTENTE\)\s*/gm, '$1(Existente, solo para preparar datos) ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -28,8 +30,10 @@ export function compactCodeContextForGeneration(codeContext: string): string {
 /** Reglas de pasos cuando hay código: los pasos siguen el flujo real, no acciones genéricas. */
 const STEPS_FROM_REAL_FLOW = `PASOS EJECUTABLES SEGÚN EL FLUJO DE EJECUCIÓN REAL (prevalece sobre la redacción genérica; QA debe poder ejecutar el caso sin conocer el código):
 - preconditions: solo entorno y dependencias a simular (mock) del "Flujo de ejecución real", en una frase. Los datos del caso NO van aquí: van una sola vez en el paso Preparar.
-- Orden de pasos: 1) Preparar: insertar/ajustar los registros en esquema.tabla con columna=valor (o configurar el mock), incluyendo los registros base que el flujo exige para procesar un dato (relaciones y tablas obligatorias de "Datos a preparar"), no solo el que activa la regla; si no, el caso falla por otra causa. 2) Disparar: el punto de ejecución real con método, ruta y parámetros concretos (si es un job, la forma de forzarlo). 3) Obtener: dónde se observa el resultado (archivo con su nombre, pantalla, respuesta, registro). 4) Verificar: campo/columna/fila exacta y valor esperado, apoyado en la "Consulta de control" cuando exista.
+- Orden de pasos: 1) Preparar: insertar/ajustar los registros en esquema.tabla con columna=valor (o configurar el mock), incluyendo los registros base que el flujo exige para procesar un dato (relaciones y tablas obligatorias de "Datos a preparar"), no solo el que activa la regla; si no, el caso falla por otra causa. 2) Disparar: el punto de ejecución real con método, ruta y parámetros concretos (si es un job, la forma de forzarlo). 3) Obtener: dónde se observa el resultado (archivo con su nombre, pantalla, respuesta, registro). 4) Verificar: campo/columna/fila exacta y valor esperado, apoyado en la "Consulta de control" cuando exista. Identifica cada registro en la salida por las columnas que lo distinguen según "Salida observable" (p. ej. NIT + fecha + valor), nunca por un id que la salida no muestra.
 - Fechas y parámetros concretos y coherentes entre casos: fija un único periodo de referencia (fechas reales, no "<fecha>") y respeta el efecto de cada parámetro descrito en el Disparo.
+- Datos alcanzables por los procesos reales del sistema: un histórico/foto con fecha anterior a la creación del registro es imposible, y los acumulados (p. ej. valor pagado) deben cuadrar con sus movimientos (pagos aplicados). Datos imposibles hacen fallar el caso sin defecto real.
+- Si "Fuentes de la salida" describe varias fuentes, el caso de duplicados prepara un registro que cumpla las condiciones de todas ellas a la vez.
 - Usa solo tablas y columnas que aparecen en el contexto técnico; si la regla no tiene evidencia, describe los datos en términos funcionales sin inventar dónde se guardan.
 - Puedes usar endpoints, archivos, tablas y columnas; NO uses nombres de clases ni métodos internos.
 - Si el flujo real no se conoce (SIN EVIDENCIA), describe el disparo de forma funcional sin inventar rutas.
@@ -66,12 +70,12 @@ CONTEXTO TÉCNICO DEL CÓDIGO FUENTE — FUENTE COMPLEMENTARIA:
 ${context}
 
 ESTRATEGIA CRITERIOS + CÓDIGO — CALIDAD SOBRE CANTIDAD (amplía la jerarquía de instrucciones):
-1. Los criterios definen el conjunto base de casos y SIEMPRE definen el resultado esperado. El código nunca cambia lo que se espera; solo aporta precisión y riesgos.
+1. Los criterios definen el conjunto base de casos y SIEMPRE definen el resultado esperado. El código nunca cambia lo que se espera; solo aporta precisión y riesgos. Los valores esperados (montos, saldos, conteos, fechas) se calculan aplicando los CRITERIOS a los datos preparados, nunca con las fórmulas o cálculos descritos en el contexto técnico.
 2. Usa la numeración CA-xx de la sección "Cobertura de criterios en el código" como normalización de reglas atómicas; no la renumeres.
 3. Según el estado de cada CA:
    - IMPLEMENTADO: diseña sus casos normalmente y enriquécelos con datos reales del código (límites, formatos, mensajes exactos, precondiciones). No crees casos extra solo por el detalle técnico.
-   - PARCIAL: el caso del criterio debe ejercitar explícitamente la parte que falta o está incompleta (no un caso adicional si el mismo caso puede hacerlo). Su resultado esperado es el criterio completo, nunca el alcance limitado del código.
-   - DIFERENTE: el caso prueba LO QUE DICE EL CRITERIO. Los datos de prueba se expresan en los términos del criterio (p. ej. "fecha de creación de la cuenta"), no en los de la implementación, porque el objetivo es exponer la diferencia. preconditions inicia con "⚠ Discrepancia código vs criterio: <qué hace el código>."
+   - PARCIAL: el caso del criterio debe ejercitar explícitamente la parte que falta o está incompleta (no un caso adicional si el mismo caso puede hacerlo). Su resultado esperado es el criterio completo, nunca el alcance limitado del código. Del "Contraejemplo" del Detalle usa solo los datos, nunca su resultado calculado.
+   - DIFERENTE: el caso prueba LO QUE DICE EL CRITERIO. Los datos de prueba se expresan en los términos del criterio (p. ej. "fecha de creación de la cuenta"), no en los de la implementación, porque el objetivo es exponer la diferencia. preconditions inicia con "⚠ Discrepancia código vs criterio: <qué hace el código>." Del "Contraejemplo" usa solo los datos.
    - SIN EVIDENCIA: diseña IGUAL el caso según el criterio (cobertura obligatoria). preconditions inicia con "⚠ Sin evidencia en código: validar implementación; si falla, reportar defecto."
    - La advertencia ⚠ es OBLIGATORIA en todo caso de un CA PARCIAL, DIFERENTE o SIN EVIDENCIA; para PARCIAL usa "⚠ Implementación parcial: <qué falta>.". Va al inicio de preconditions, antes de los datos.
 4. Comportamientos adicionales [RT-xx]:
@@ -80,15 +84,17 @@ ESTRATEGIA CRITERIOS + CÓDIGO — CALIDAD SOBRE CANTIDAD (amplía la jerarquía
    - Límite: los casos propios de RT no superan un tercio de los casos de criterios (mínimo 1, máximo 3). Prioriza los de mayor riesgo de defecto en producción.
    - Un caso propio de RT no tiene criterio que lo respalde: preconditions inicia con "⚠ Riesgo de regresión sin criterio: confirmar con el funcional." y el resultado esperado es el comportamiento correcto para el negocio según la HU (si no se puede inferir, el del código).
    - Regístralos en "criteriaMap" solo si generan o comparten un caso, con su id RT-xx y "rule" iniciando con "[Código] ".
-5. Deduplicación obligatoria: un RT que expone el mismo hallazgo que un CA PARCIAL o DIFERENTE no genera caso propio; su verificación va dentro del caso de ese CA. Agrupa por (condición probada + resultado esperado). Un único caso por grupo; si viene de un CA y un RT lista ambos en "coveredCriteria". No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
-6. Advertencias: una sola frase de máximo 140 caracteres al inicio de preconditions, seguida de los datos a preparar.
+5. Agrupación por disparo: en reportes, procesos batch o consultas (un disparo procesa muchos registros) los registros de distintas reglas son compatibles. Integra en un mismo caso las reglas IMPLEMENTADO de la misma familia (p. ej. inclusión/exclusión por corte) preparando registros etiquetados (A, B, C; máximo 4), cada uno con su resultado esperado. No mezcles en un caso un CA con ⚠ con CAs IMPLEMENTADO: el posible defecto debe fallar en su propio caso.
+6. Deduplicación obligatoria: un RT que expone el mismo hallazgo que un CA PARCIAL o DIFERENTE no genera caso propio; su verificación va dentro del caso de ese CA. Agrupa por (condición probada + resultado esperado). Un único caso por grupo; si viene de un CA y un RT lista ambos en "coveredCriteria". No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
+7. Advertencias: una sola frase de máximo 140 caracteres al inicio de preconditions, seguida de los datos a preparar.
 ${STEPS_FROM_REAL_FLOW}
 
 AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 - Cada CA PARCIAL, DIFERENTE o SIN EVIDENCIA tiene su caso con ⚠ al inicio de preconditions.
 - Ningún caso de criterio DIFERENTE usa en sus datos los campos de la implementación en lugar de los del criterio.
 - Los casos propios de RT respetan el límite y ningún (EXISTENTE) tiene caso propio.
-- Ningún par de casos espera resultados opuestos sobre los mismos datos, y ningún caso usa "filas de control" para validar que el código hace MENOS de lo que pide el criterio.
+- Cada monto, saldo o conteo esperado se obtiene aplicando los criterios a los datos del caso, no las fórmulas del código.
+- El resultado esperado de cada caso respeta TODOS los criterios (si un criterio excluye un dato, p. ej. pagos desde el día 1, ningún caso espera que se aplique). Ningún par de casos espera resultados opuestos sobre los mismos datos, y ningún caso usa "filas de control" para validar que el código hace MENOS de lo que pide el criterio.
 - Ningún resultado esperado describe el defecto como lo correcto (p. ej. "queda huérfano", "no se muestra"): siempre es el comportamiento correcto para el negocio.
 - Ningún paso es genérico ("ejecutar la consulta", "revisar el resultado", "verificar que funcione").
 - Los datos con columna=valor aparecen solo en el paso Preparar, no repetidos en preconditions.

@@ -27,17 +27,18 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 - Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
 - Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
-- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, y columnas o campos a revisar.
+- Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
+- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
 
 ## Cobertura de criterios en el código
-(UNA línea por regla atómica de los criterios, en el mismo orden; numeración CA-01, CA-02…)
+(UNA línea por regla atómica de los criterios de aceptación, en el mismo orden; numeración CA-01, CA-02…. La descripción de la HU —el "requiero… para que…"— es el objetivo, no un criterio: no la numeres como CA.)
 - [CA-01] "resumen breve del criterio" → IMPLEMENTADO | PARCIAL | DIFERENTE | SIN EVIDENCIA (exactamente uno, sin calificativos). Detalle (máx. 2 líneas): dato/límite/mensaje exacto o qué falta/difiere. Fuente: ruta/archivo:línea
 
 ## Comportamientos del código no cubiertos por los criterios
 (Solo lo OBSERVABLE y dentro del alcance de la HU; omite logs, refactors y detalles internos. Máx. 5.
 NO van aquí: consecuencias de un CA PARCIAL/DIFERENTE (van en su Detalle) ni mecánica de despliegue (idempotencia, re-ejecución, contextos).
-Marca cada uno: (CAMBIO HU) si lo introdujo o modificó esta HU según los diffs, o (EXISTENTE) si ya existía y solo condiciona los datos de prueba.)
+Marca cada uno: (CAMBIO HU) SOLO si sus líneas citadas aparecen como agregadas (+) o eliminadas (-) en los diffs; si no, (EXISTENTE): ya existía y solo condiciona los datos de prueba.)
 - [RT-01] (CAMBIO HU | EXISTENTE) Comportamiento concreto. Fuente: ruta/archivo:línea
 (o "Ninguno relevante")
 
@@ -58,7 +59,8 @@ const CONTEXT_FORMAT_CODE_ONLY = `
 - Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
 - Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
-- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, y columnas o campos a revisar.
+- Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
+- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
 
 ## Comportamientos implementados
@@ -90,6 +92,10 @@ ${mode === 'code'
 - DIFERENTE: el código hace algo distinto a lo que dice el criterio (límite, mensaje, orden, regla).
 - SIN EVIDENCIA: no encontraste implementación tras buscar en los cambios de la rama y con search_code. No significa que no exista: significa que no hay evidencia.
 - PARCIAL y DIFERENTE exigen evidencia POSITIVA en el código leído. Lo que no puedes ver (datos ya cargados en la base, otros productos, otros repositorios) NO es motivo de PARCIAL: anótalo como "no verificable en el repositorio".
+- Juzga por el RESULTADO OBSERVABLE con datos realistas y coherentes, no por el mecanismo: si el código llega al mismo resultado por otra vía (p. ej. una foto/histórico al cierre en lugar de filtrar por fecha de creación), es IMPLEMENTADO y el mecanismo va en el Detalle.
+- PARCIAL y DIFERENTE exigen un CONTRAEJEMPLO: datos coherentes (con valores concretos) con los que la salida no cumple el criterio; escríbelo en el Detalle como "Contraejemplo: …". El contraejemplo debe ser alcanzable por los procesos reales del sistema: descarta situaciones imposibles (pagos posteriores al momento de ejecución, una foto/histórico al cierre con registros creados después de esa fecha).
+- Si el criterio depende de un cálculo, comprueba el contraejemplo sustituyendo sus números en la fórmula EXACTA del código y escríbelo en una línea del Detalle (p. ej. "saldo = 150.000 − (150.000 − 150.000) = 150.000"). Si el resultado cumple el criterio, no hay contraejemplo: es IMPLEMENTADO.
+- Si el código usa el campo que contiene el dato del criterio (p. ej. el valor vigente ya actualizado), eso es evidencia: no es SIN EVIDENCIA. Si depende de cómo otro proceso guarda el dato, márcalo IMPLEMENTADO con esa condición en el Detalle.
 - Compara el ALCANCE LITERAL del criterio con el del código: si el criterio dice "donde esté / todos / cualquier" y el código filtra por un subconjunto (WHERE, if, filtro), indícalo en el Detalle con el filtro exacto y la verificación global que lo expone (p. ej. "contar registros con el valor viejo en toda la tabla = 0").`}
 
 HERRAMIENTAS (solo lectura):

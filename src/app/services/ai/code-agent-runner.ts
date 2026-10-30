@@ -24,6 +24,8 @@ export interface ChatMessage {
   content: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  /** Razonamiento del modelo (DeepSeek con thinking): debe reenviarse durante el ciclo de herramientas. */
+  reasoning_content?: string;
 }
 
 export interface ToolCall {
@@ -104,6 +106,10 @@ interface Workspace {
 }
 
 export class CodeAgentRunner {
+  /** Diffs vistos en la corrida (precargados o pedidos con diff_file), por ruta. */
+  private seenDiffs = new Map<string, string>();
+  private changedPaths: string[] = [];
+
   constructor(private gateway: CodeAgentGateway) {}
 
   async run(
@@ -112,6 +118,7 @@ export class CodeAgentRunner {
     isCancelled: () => boolean = () => false
   ): Promise<CodeAgentResult | null> {
     const startedAt = Date.now();
+    this.seenDiffs.clear();
     const stats = { llmCalls: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, durationMs: 0 };
     const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
 
@@ -153,6 +160,7 @@ export class CodeAgentRunner {
       ...workspaces.flatMap((ws) => ws.files.map((file) => file.path)),
       ...(branchDiff?.changes || []).map((change) => change.path),
     ]);
+    this.changedPaths = Array.from(changedPaths);
     const rankedFiles = [
       ...this.rankFiles(tree.files.filter((path) => changedPaths.has(path)), keywords),
       ...this.rankFiles(tree.files.filter((path) => !changedPaths.has(path)), keywords),
@@ -204,7 +212,12 @@ export class CodeAgentRunner {
         return this.result(text, filesReviewed, versionKey, stats, startedAt);
       }
 
-      messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
+      messages.push({
+        role: 'assistant',
+        content: reply.content || '',
+        tool_calls: toolCalls,
+        ...(reply.reasoning_content ? { reasoning_content: reply.reasoning_content } : {}),
+      });
 
       for (const call of toolCalls) {
         const args = this.parseArgs(call.function.arguments);
@@ -231,6 +244,7 @@ export class CodeAgentRunner {
 
   private result(context: string, filesReviewed: Set<string>, versionKey: string, stats: CodeAgentResult['stats'], startedAt: number): CodeAgentResult {
     stats.durationMs = Date.now() - startedAt;
+    if (this.changedPaths.length) context = reconcileChangeLabels(context, this.changedPaths, this.seenDiffs);
     return { context, filesReviewed: Array.from(filesReviewed), versionKey, stats };
   }
 
@@ -286,6 +300,7 @@ export class CodeAgentRunner {
       const label = multiRepo ? `${ws.name}:${file.path}` : file.path;
       const diff = diffs[index];
       const kind = priority(file.path) === 2 ? 'build/config' : priority(file.path) === 1 ? 'prueba' : 'código';
+      if (diff?.diff) this.seenDiffs.set(file.path, diff.diff);
       if (diff && diff.diff && used + diff.diff.length <= CODE_AGENT_BUDGET.preloadDiffChars) {
         used += diff.diff.length;
         inlined.push(`=== ${file.path} [${file.changeType}, ${kind}${multiRepo ? `, repo ${ws.name}` : ''}; +${diff.added}/-${diff.removed}] ===\n${diff.diff}`);
@@ -387,6 +402,7 @@ export class CodeAgentRunner {
             const fileDiff = await this.gateway.getFileDiff(ref, { path: wsFile.path, changeType: wsFile.changeType }, wsFile.baseCommit, wsFile.targetCommit);
             if (fileDiff.error) return `=== ${wsFile.path} ===\nERROR: ${fileDiff.error}`;
             filesReviewed.add(wsFile.path);
+            if (fileDiff.diff) this.seenDiffs.set(wsFile.path, fileDiff.diff);
             return `=== ${wsFile.path} (+${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
           }
           const change = ctx.branchDiff?.changes.find((item) => item.path.toLowerCase() === requested);
@@ -397,6 +413,7 @@ export class CodeAgentRunner {
           const fileDiff = await this.gateway.getFileDiff(ref, change, ctx.branchDiff.commonCommit, ctx.branchDiff.targetCommit);
           if (fileDiff.error) return `=== ${change.path} ===\nERROR: ${fileDiff.error}`;
           filesReviewed.add(change.path);
+          if (fileDiff.diff) this.seenDiffs.set(change.path, fileDiff.diff);
           return `=== ${change.path} (${change.changeType}; +${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
         }
 
@@ -567,4 +584,65 @@ export class CodeAgentRunner {
       return {};
     }
   }
+}
+
+/**
+ * Corrige de forma determinista la etiqueta (CAMBIO HU) de los comportamientos
+ * RT: si ninguna de sus citas archivo:línea cae en líneas cambiadas por la HU
+ * (o el archivo no está en los cambios), pasa a (EXISTENTE). Solo degrada: un
+ * RT mal marcado como cambio genera casos redundantes; uno existente no.
+ */
+export function reconcileChangeLabels(context: string, changedPaths: string[], diffs: Map<string, string>): string {
+  const changedLinesCache = new Map<string, Set<number>>();
+  const changedLines = (path: string): Set<number> | null => {
+    const diff = diffs.get(path);
+    if (!diff) return null;
+    if (!changedLinesCache.has(path)) changedLinesCache.set(path, collectChangedLines(diff));
+    return changedLinesCache.get(path)!;
+  };
+  const findChanged = (cited: string): string | undefined => {
+    const name = cited.toLowerCase();
+    return changedPaths.find((path) => path.toLowerCase().endsWith(name.startsWith('/') ? name : `/${name}`) || path.toLowerCase() === name);
+  };
+
+  return context.split('\n').map((line) => {
+    if (!/^\s*[-*]\s*\[RT-\d+\]\s*\(CAMBIO HU\)/.test(line)) return line;
+    const source = line.match(/\bFuentes?:\s*(.*)$/i)?.[1] || '';
+    const refs = [...source.matchAll(/([\w./…-]+\.[a-z]{2,10}):([\d,\s–-]+)/gi)];
+    if (!refs.length) return line;
+
+    let lastFile = '';
+    const touchesChange = refs.some(([, file, ranges]) => {
+      lastFile = file.replace(/^…|\.{3}/g, '').split('/').pop() || file;
+      const path = findChanged(lastFile);
+      if (!path) return false;
+      const lines = changedLines(path);
+      if (!lines) return true; // archivo cambiado sin diff visto: no se puede descartar
+      return ranges.split(',').some((range) => {
+        const [from, to = from] = range.trim().split(/[–-]/).map((n) => Number(n));
+        if (!from) return false;
+        for (let n = from; n <= (to || from); n++) if (lines.has(n)) return true;
+        return false;
+      });
+    });
+    return touchesChange ? line : line.replace('(CAMBIO HU)', '(EXISTENTE)');
+  }).join('\n');
+}
+
+/** Números de línea (versión final) agregados o junto a líneas eliminadas, ±1. */
+function collectChangedLines(diff: string): Set<number> {
+  const changed = new Set<number>();
+  let pendingRemoval = false;
+  let previous = 0;
+  for (const raw of diff.split('\n')) {
+    const removed = /^-\s*base\s+\d+\|/.test(raw);
+    if (removed) { pendingRemoval = true; continue; }
+    const match = raw.match(/^([+ ])\s*(\d+)\|/);
+    if (!match) continue;
+    const lineNumber = Number(match[2]);
+    if (match[1] === '+') [lineNumber - 1, lineNumber, lineNumber + 1].forEach((n) => changed.add(n));
+    if (pendingRemoval) { [previous, lineNumber].forEach((n) => n && changed.add(n)); pendingRemoval = false; }
+    previous = lineNumber;
+  }
+  return changed;
 }
