@@ -1,4 +1,4 @@
-import { buildCriteriaContext, judgeFacts, mergeJudgeVotes, reconcileChangeLabels } from './code-agent-runner';
+import { buildCriteriaContext, judgeFacts, mergeJudgeVotes, reconcileChangeLabels, recipeLines, replaceSection, validateEquivalences } from './code-agent-runner';
 
 describe('reconcileChangeLabels', () => {
   const changedPaths = ['/domain/usecase/ReportUseCase.java'];
@@ -111,5 +111,61 @@ describe('mergeJudgeVotes', () => {
     const merged = mergeJudgeVotes([vote('IMPLEMENTADO', 'PARCIAL'), odd, vote('IMPLEMENTADO', 'PARCIAL')]);
     expect(merged).toContain('[CA-01] "A" → IMPLEMENTADO.');
     expect(merged).toContain('[CA-02]');
+  });
+});
+
+describe('validateEquivalences', () => {
+  const wrap = (lines: string) => `## Flujo de ejecución real\n- Disparo: pantalla\n\n## Equivalencias de códigos\n${lines}\n\n## Reglas del código\n- [RT-01] (CAMBIO HU) regla`;
+
+  it('conserva la equivalencia cuya evidencia contiene el código y su valor', () => {
+    const line = '- AMM3 = bloqueo por mora mayor a 3 días. Evidencia: `.blockTypeCode("AMM3") .description("Por días de mora mayor a 3 días")` Fuente: ms_report:Test.java:227';
+    expect(validateEquivalences(wrap(line))).toContain(line);
+  });
+
+  it('marca no confirmada la deducida por posición (el número no está en la cita)', () => {
+    const line = '- Modalidad 7 = DFFIS (Factoring de Exportación FCI sin recurso). Evidencia: `MODALITIES_WITHOUT_RECOURSE(Map.of(2, "CSR", 1, "PSR", 5, "DFFIS", 8, "DFFCS"))` Fuente: ProductModalities.java:14';
+    const result = validateEquivalences(wrap(line));
+    expect(result).toContain('- Modalidad 7 = no confirmada (la evidencia citada no contiene 7).');
+    expect(result).toContain('## Reglas del código');
+  });
+
+  it('valida por separado cada par de una línea compuesta', () => {
+    const line = '- Modalidades: 6 = DFUS1, 7 = DFFIS, 8 = no confirmada. Evidencia: `Map.of(0, "CCR", 6, "DFUS1")` y `Map.of(5, "DFFIS")` Fuente: ProductModalities.java:14';
+    const result = validateEquivalences(wrap(line));
+    expect(result).toContain('- Modalidad 6 = DFUS1. Evidencia:');
+    expect(result).toContain('- Modalidad 7 = no confirmada (la evidencia citada no contiene 7).');
+    expect(result).toContain('- Modalidad 8 = no confirmada.');
+  });
+
+  it('no exige siglas cortas del significado', () => {
+    const line = '- DV02ME = Devoluciones ME. Evidencia: `DV02ME("Devoluciones moneda extranjera")` Fuente: MaintenanceType.java:30';
+    expect(validateEquivalences(wrap(line))).toContain(line);
+  });
+
+  it('marca no confirmada la que no cita evidencia literal y respeta las ya no confirmadas', () => {
+    const result = validateEquivalences(wrap('- BINA = inactividad. Evidencia: ninguna\n- MDSR = no confirmada (sin descripción literal).'));
+    expect(result).toContain('- BINA = no confirmada (sin evidencia literal).');
+    expect(result).toContain('- MDSR = no confirmada (sin descripción literal).');
+  });
+});
+
+describe('receta de datos', () => {
+  const context = '## Resumen técnico\nResumen\n\n## Flujo de ejecución real\n- Disparo: pantalla\n\n## Receta de datos\n- Dato: borrador | Origen: no verificable\n\n## Reglas del código\n- [RT-01] regla';
+
+  it('toma solo las líneas con forma de receta', () => {
+    expect(recipeLines('Listo:\n- Dato: CxP en COP | Origen: proceso | Cómo crearlo: aplicar pago mayor al saldo\ntexto suelto')).toBe('- Dato: CxP en COP | Origen: proceso | Cómo crearlo: aplicar pago mayor al saldo');
+  });
+
+  it('reemplaza la receta sin tocar las demás secciones', () => {
+    const result = replaceSection(context, 'Receta de datos', '- Dato: CxP | Origen: proceso');
+    expect(result).toContain('## Receta de datos\n- Dato: CxP | Origen: proceso');
+    expect(result).not.toContain('borrador');
+    expect(result).toContain('## Reglas del código\n- [RT-01] regla');
+  });
+
+  it('agrega la receta tras el flujo si no existía y no cambia nada si llega vacía', () => {
+    const withoutRecipe = '## Flujo de ejecución real\n- Disparo: x\n\n## Reglas del código\n- [RT-01] r';
+    expect(replaceSection(withoutRecipe, 'Receta de datos', '- Dato: a | b')).toBe('## Flujo de ejecución real\n- Disparo: x\n\n## Receta de datos\n- Dato: a | b\n\n## Reglas del código\n- [RT-01] r');
+    expect(replaceSection(context, 'Receta de datos', '')).toBe(context);
   });
 });
