@@ -48,56 +48,68 @@
             <ng-container *ngFor="let option of contextSourceOptions"><span *ngIf="option.value === contextSource">{{ option.hint }}</span></ng-container>
           </p>
 
-          <div *ngIf="usesCodeContext" class="code-target-grid">
-            <div class="form-group">
-              <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
-              <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
-                (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
-                <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
-                <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
-              </select>
+          <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
+            <!-- Consultando PRs/commits de la HU -->
+            <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
+              <span class="spinner-inline"></span>
+              Buscando el código de la HU {{ currentHuId }} (PRs y commits vinculados)…
             </div>
-            <div class="form-group">
-              <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
-              <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
-                (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
-                <option value="">Seleccione un repositorio</option>
-                <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
-              </select>
+
+            <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
+            <div *ngIf="!codeLoadingHuChanges && usesHuChangeset" class="code-target-card is-ok">
+              <div class="code-target-card-header">
+                <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
+                <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring">Usar otra rama</button>
+              </div>
+              <ul class="code-change-list">
+                <li *ngFor="let group of codeHuChangeGroups">
+                  <span class="code-change-repo">{{ group.repositoryName }}</span>
+                  <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
+                  <span class="code-change-meta">
+                    último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
+                    · {{ group.prs.length ? group.prs.length + ' PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                  </span>
+                </li>
+              </ul>
             </div>
-            <div class="form-group">
-              <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
-              <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
-                (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
-                <option value="">Seleccione una rama</option>
-                <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="tcCodeBaseBranch" title="Se analizan solo los cambios que la rama de la HU hizo desde que salió de esta rama.">Comparar contra:</label>
-              <select id="tcCodeBaseBranch" name="codeBaseBranch" class="form-control" [ngModel]="codeBaseBranch"
-                (ngModelChange)="onCodeBaseBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
-                <option value="">Sin comparación (rama completa)</option>
-                <option *ngFor="let branch of codeBranches" [value]="branch.name" [disabled]="branch.name === codeBranch">{{ branch.name }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="tcCodeScope">Carpeta (opcional):</label>
-              <input id="tcCodeScope" name="codeScopePath" type="text" class="form-control" [(ngModel)]="codeScopePath"
-                (ngModelChange)="clearCodeContext()" placeholder="Ej: /src/modules/pagos" [disabled]="codeExploring">
-            </div>
-          </div>
-          <div *ngIf="usesCodeContext && hasHuChangeset" class="import-feedback import-success" role="status">
-            Se analizarán los cambios de la HU: {{ codeHuChangesSummary }}. Repositorio y rama solo se usan si la HU no tiene PRs.
-          </div>
-          <p *ngIf="usesCodeContext && !hasHuChangeset && isManualCodeTargetReady" class="code-source-hint">
-            <ng-container *ngIf="codeBaseBranch && codeBaseBranch !== codeBranch; else fullBranchHint">
-              Se analizarán solo los cambios que <strong>{{ codeBranch }}</strong> hizo desde que salió de <strong>{{ codeBaseBranch }}</strong>, hasta su último commit.
+
+            <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
+            <ng-container *ngIf="!codeLoadingHuChanges && !usesHuChangeset">
+              <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
+              <div class="code-target-grid">
+                <div class="form-group">
+                  <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
+                  <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
+                    (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
+                    <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
+                    <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
+                  <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
+                    (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
+                    <option value="">{{ codeLoadingTarget && codeProject && !codeRepositories.length ? 'Cargando...' : 'Seleccione un repositorio' }}</option>
+                    <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
+                  <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
+                    (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
+                    <option value="">{{ codeLoadingTarget && codeRepositoryId && !codeBranches.length ? 'Cargando...' : 'Seleccione una rama' }}</option>
+                    <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
+                  </select>
+                </div>
+              </div>
+              <p *ngIf="isManualCodeTargetReady" class="code-source-hint">
+                Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="codeEffectiveBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ codeEffectiveBaseBranch }}</strong></ng-container>.
+              </p>
+              <div *ngIf="!hasHuChangeset && codeLinkedBranchHint" class="code-source-hint">{{ codeLinkedBranchHint }}</div>
+              <button *ngIf="hasHuChangeset" type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
+                ← Volver a los cambios de la HU
+              </button>
             </ng-container>
-            <ng-template #fullBranchHint>Se explorará el código completo de <strong>{{ codeBranch }}</strong> (último commit), sin aislar los cambios de la HU.</ng-template>
-          </p>
-          <div *ngIf="usesCodeContext && !hasHuChangeset && codeLinkedBranchHint" class="import-feedback import-success" role="status">
-            {{ codeLinkedBranchHint }}
           </div>
           <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
             {{ codeTargetError }}
@@ -190,11 +202,11 @@
           <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
             <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
               <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
-              <button type="button" [class.is-active]="criteriaEditing" (click)="criteriaEditing = true">Editar</button>
+              <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
             </div>
           </div>
           <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()" class="form-control md-preview"
-            [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="criteriaEditing = true"
+            [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
             title="Doble clic para editar"></div>
           <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
             [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
@@ -255,11 +267,11 @@
               </div>
               <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
                 <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
-                <button type="button" [class.is-active]="codeContextEditing" (click)="codeContextEditing = true">Editar</button>
+                <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
               </div>
             </div>
             <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
-              [innerHTML]="codeContextText | markdownLite" (dblclick)="codeContextEditing = true"
+              [innerHTML]="codeContextText | markdownLite" (dblclick)="editCodeContext()"
               title="Doble clic para editar"></div>
             <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
               class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
@@ -273,13 +285,6 @@
             [(ngModel)]="currentGenerationContext" rows="3"
             placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."
             class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
-          <div class="tc-quick-tags">
-            <button *ngFor="let tag of contextQuickTags" type="button"
-              class="tc-tag" (click)="applyContextTag(tag)"
-              [disabled]="loadingScope || loadingScenarios">
-              {{ tag }}
-            </button>
-          </div>
         </div>
 
       </ng-container>

@@ -1034,13 +1034,6 @@ textarea.form-control.auto-grow {
 
 
 /* ── Tags rápidos de "Contexto adicional" ── */
-.tc-quick-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-
 .tc-tag {
   display: inline-flex;
   align-items: center;
@@ -1184,6 +1177,8 @@ textarea.form-control.auto-grow {
 }
 
 .code-context-textarea {
+  min-height: 320px;
+  line-height: 1.45;
   margin-top: 0.5rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.82rem;
@@ -1209,3 +1204,89 @@ textarea.form-control.auto-grow {
 .code-coverage-chip.is-diff { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
 .code-coverage-chip.is-missing { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
 
+
+/* Código de la HU: tarjeta con repo, rama y último commit */
+.code-target-panel {
+  margin-top: 0.75rem;
+}
+
+.code-target-card {
+  padding: 0.7rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.code-target-card.is-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+}
+
+.code-target-card.is-ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.code-target-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.code-target-card-title {
+  font-weight: 600;
+  color: #166534;
+}
+
+.code-change-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.code-change-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.6rem;
+  padding: 0.3rem 0;
+  border-top: 1px dashed #d1fae5;
+}
+
+.code-change-list li:first-child {
+  border-top: 0;
+}
+
+.code-change-repo {
+  font-weight: 600;
+}
+
+.code-change-branch {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: #1e3a8a;
+}
+
+.code-change-meta {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.code-target-card code,
+.code-source-hint code {
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-size: 0.78rem;
+}
+
+.code-link-back {
+  margin: 0.5rem 0 0;
+}
