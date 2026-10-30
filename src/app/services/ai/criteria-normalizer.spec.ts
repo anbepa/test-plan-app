@@ -1,4 +1,4 @@
-import { criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, uncoveredCriteria } from './criteria-normalizer';
+import { criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, uncoveredChangeBehaviorIds, uncoveredCriteria } from './criteria-normalizer';
 
 describe('criteria-normalizer', () => {
   const raw = '```json\n' + JSON.stringify({
@@ -46,5 +46,19 @@ describe('criteria-normalizer', () => {
   it('detecta criterios sin escenario', () => {
     const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
     expect(uncoveredCriteria(text, [{ coveredCriteria: ['CA-01', 'CA-03'] }, { coveredCriteria: ['RT-01'] }])).toEqual(['CA-02']);
+  });
+
+  it('los comportamientos (CAMBIO HU) no cubiertos también requieren escenario', () => {
+    const context = [
+      '## Cobertura de criterios en el código', '- [CA-01] "A" → IMPLEMENTADO. Detalle: x',
+      '## Comportamientos del código no cubiertos por los criterios',
+      '- [RT-03] (CAMBIO HU) Se elimina el filtro por estado. Fuente: Repo.java:10',
+      '- [RT-07] (EXISTENTE) Filtro LIFE. Fuente: UseCase.java:5',
+      '- [RT-08] (CAMBIO HU) Valor pagado nulo. Fuente: UseCase.java:9',
+      '', '## Datos de prueba sugeridos', '- [RT-09] (CAMBIO HU) no es de esta sección',
+    ].join('\n');
+    expect(uncoveredChangeBehaviorIds(context)).toEqual(['RT-03', 'RT-08']);
+    const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
+    expect(uncoveredCriteria(text, [{ coveredCriteria: ['CA-01', 'CA-02', 'CA-03', 'RT-03'] }], context)).toEqual(['RT-08']);
   });
 });

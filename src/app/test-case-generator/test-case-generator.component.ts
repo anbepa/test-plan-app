@@ -1090,7 +1090,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
               this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
                 rawTestCases.map((tc: any) => tc.title)
               );
-              this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases);
+              this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases, codeContext);
             } else {
               console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
               this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';

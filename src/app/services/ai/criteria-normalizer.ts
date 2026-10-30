@@ -102,8 +102,14 @@ export function formatNormalizedCriteria(groups: NormalizedGroup[]): string {
   ].filter(Boolean).join('\n')).join('\n\n');
 }
 
-/** Criterios sin ningún escenario que los cubra. */
-export function uncoveredCriteria(criteriaText: string, testCases: { coveredCriteria?: string[] }[]): string[] {
+/** Comportamientos (CAMBIO HU) que el código agrega y ningún criterio cubre: también requieren cobertura. */
+export function uncoveredChangeBehaviorIds(codeContext: string): string[] {
+  const section = (codeContext || '').split(/^##\s*Comportamientos del código no cubiertos[^\n]*$/m)[1]?.split(/^##\s/m)[0] || '';
+  return section.split('\n').map((line) => line.match(/^\s*[-*]\s*\[(RT-\d+)\]\s*\(CAMBIO HU\)/)?.[1]).filter((id): id is string => !!id);
+}
+
+/** Criterios (o comportamientos) sin ningún escenario que los cubra. */
+export function uncoveredCriteria(criteriaText: string, testCases: { coveredCriteria?: string[] }[], codeContext: string = ''): string[] {
   const covered = new Set(testCases.flatMap((testCase) => testCase.coveredCriteria || []));
-  return criteriaIds(criteriaText).filter((id) => !covered.has(id));
+  return [...criteriaIds(criteriaText), ...uncoveredChangeBehaviorIds(codeContext)].filter((id) => !covered.has(id));
 }
