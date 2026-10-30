@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { from, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import {
+  AzureAppSearchResult,
   AzureBranchChange,
   AzureBranchDiff,
   AzureFileDiff,
@@ -71,6 +72,11 @@ export class AzureReposService {
 
   readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Observable<AzureRepoFile[]> {
     return this.authorizedPost<AzureRepoFile[]>(`${this.baseUrl}/files`, { ...ref, files });
+  }
+
+  /** Búsqueda en todos los repos del aplicativo (los que empiezan por alguno de los prefijos). */
+  searchApplication(projectId: string, repoPrefixes: string[], terms: string[]): Observable<AzureAppSearchResult> {
+    return this.authorizedPost<AzureAppSearchResult>(`${this.baseUrl}/app-search`, { projectId, repoPrefixes, terms });
   }
 
   getBranchDiff(ref: RepoRef, baseBranch: string): Observable<AzureBranchDiff> {

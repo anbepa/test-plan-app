@@ -26,12 +26,18 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 ## Flujo de ejecución real
 (Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
 - Disparo: pantalla (ruta de menú, selecciones y botón, tal como la recorre un usuario) y el endpoint que llama / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Roles y datos de entrada: por cada opción o tipo (p. ej. modalidad, producto), qué rol de negocio corresponde a cada dato de entrada que el flujo valida (p. ej. "modalidad 6: pagador = cliente de la solicitud (clientId); el proveedor (counterpartId) no se valida"). Solo lo que leíste; omite la línea si no aplica.
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
+- Cómo se generan los datos en el sistema: por cada dato que activa una regla, el camino real que lo crea, como lo haría un usuario funcional: pantalla y acción (p. ej. "Gestión de clientes > Bloqueos > Crear bloqueo administrativo") o proceso automático (qué lo dispara, condición y si es asíncrono, p. ej. "job de mora bloquea con AMM3 cuando la obligación supera 3 días de mora"). Usa search_app para encontrarlo; si no hay evidencia, escribe "no verificable en el repositorio".
 - Opciones de la pantalla: si la pantalla tiene varias opciones (tipo de mantenimiento, pestaña, módulo) que consultan fuentes distintas, una línea por opción: opción → endpoint o fuente → filtro clave (o "Ninguna").
 - Dependencias a simular: solo sistemas fuera del producto (terceros, otros dominios); los microservicios y BD propios del flujo son el sistema bajo prueba y NO se simulan. Servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
 - Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
 - Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
+
+## Equivalencias de códigos
+(Solo si las reglas usan códigos, abreviaturas o ids cuyo significado de negocio importa para los criterios: una línea por código. El significado SOLO sale de evidencia literal (constante con nombre, configuración, enum, script SQL, mensaje, prueba): nunca de su posición en una lista ni de su parecido con el nombre. Sin evidencia: "no confirmada".)
+- CÓDIGO = significado de negocio. Evidencia: \`fragmento literal\` Fuente: repo:ruta/archivo:línea
 
 ## Reglas del código
 (Hechos, no juicios: el estado de cada criterio lo decide otro paso con estas reglas. Una línea por regla observable relacionada con la HU o sus criterios, incluidas las que solo cumplen un criterio en parte o lo contradicen. Primero las (CAMBIO HU). Máx. 10.
@@ -59,7 +65,9 @@ const CONTEXT_FORMAT_CODE_ONLY = `
 ## Flujo de ejecución real
 (Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
 - Disparo: pantalla (ruta de menú, selecciones y botón, tal como la recorre un usuario) y el endpoint que llama / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Roles y datos de entrada: por cada opción o tipo (p. ej. modalidad, producto), qué rol de negocio corresponde a cada dato de entrada que el flujo valida (p. ej. "modalidad 6: pagador = cliente de la solicitud (clientId); el proveedor (counterpartId) no se valida"). Solo lo que leíste; omite la línea si no aplica.
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
+- Cómo se generan los datos en el sistema: por cada dato que activa una regla, el camino real que lo crea, como lo haría un usuario funcional: pantalla y acción (p. ej. "Gestión de clientes > Bloqueos > Crear bloqueo administrativo") o proceso automático (qué lo dispara, condición y si es asíncrono, p. ej. "job de mora bloquea con AMM3 cuando la obligación supera 3 días de mora"). Usa search_app para encontrarlo; si no hay evidencia, escribe "no verificable en el repositorio".
 - Opciones de la pantalla: si la pantalla tiene varias opciones (tipo de mantenimiento, pestaña, módulo) que consultan fuentes distintas, una línea por opción: opción → endpoint o fuente → filtro clave (o "Ninguna").
 - Dependencias a simular: solo sistemas fuera del producto (terceros, otros dominios); los microservicios y BD propios del flujo son el sistema bajo prueba y NO se simulan. Servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
 - Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
@@ -102,6 +110,7 @@ HERRAMIENTAS (solo lectura):
 - read_files: lee hasta 6 archivos (o rangos de líneas) de la rama, con número de línea.
 - search_code: busca términos dentro de archivos candidatos (grep).
 - list_files: lista rutas del árbol de la rama.
+- search_app: busca términos en TODOS los repos del aplicativo (microservicios, front, SQL), en su rama principal. Úsalo para lo que no está en los cambios: el significado de un código o parámetro (configuración, constantes, scripts), la pantalla del front que llama un endpoint (busca la ruta del endpoint) y el proceso que genera un dato.
 - finish: entrega el contexto técnico final.
 
 ESTRATEGIA:
@@ -119,12 +128,17 @@ ${source === 'changeset'
 2. Sigue el flujo hacia servicios, validadores, entidades/DTOs, consultas, reglas y constantes/mensajes.`}
 5. Si la HU solo cambia scripts SQL/migraciones/parametrización: el disparo es el despliegue del script (changeset, contexto, pipeline); los datos a preparar son el estado ANTES (consultas concretas con sus filtros) y la salida observable son las consultas DESPUÉS. Busca con search_code el DDL de las tablas afectadas (restricciones, FK, vistas o funciones que las lean) para saber qué impacto observable tiene el cambio.
 6. Las pruebas unitarias modificadas describen el comportamiento que el desarrollador esperaba: úsalas como evidencia.
+6b. OBLIGATORIO antes de finish (reserva al menos 3 pasos para esto): completa con search_app (hasta 4 términos por búsqueda) lo que QA necesita y el diff no muestra:
+   - Significado de cada código o abreviatura que decide un criterio (p. ej. tipos de bloqueo, estados): busca el código literal.
+   - Pantalla que dispara el flujo: busca el segmento literal de la ruta del endpoint (p. ej. "financing-request") para hallar el servicio del front (repo con "Front" o "web" en el nombre) y luego el nombre del componente o la ruta del menú que lo usa; anota el menú y la opción tal como los ve el usuario.
+   - Origen de los datos que activan las reglas: para datos que crea un usuario, la pantalla; para datos automáticos, el proceso (job, scheduler, evento), su condición exacta (umbral, fecha, estado) y cómo se dispara o cada cuánto corre.
 7. Tienes como máximo ${maxSteps} pasos. Llama a finish en cuanto tengas evidencia suficiente para cada criterio.
 
 QUÉ EXTRAER (lo que el analista QA necesita para ejecutar pruebas reales):
 - Flujo real de ejecución: cómo se dispara (pantalla, endpoint, job/malla programada, evento), qué entradas recibe y qué produce (reporte, archivo, registro, mensaje).
 - Reglas exactas: filtros, fechas de corte, estados incluidos/excluidos, tipos/categorías, cálculos, agrupaciones y deduplicación.
 - Datos de prueba concretos que activan cada rama del código (valores de estados, tipos, fechas límite).
+- Si una "Definición" del funcional da un umbral o condición distinta a la del código (p. ej. "mora mayor a 5 días" y el código bloquea con más de 3), anótalo en "Datos de prueba sugeridos" como "Diferencia con la definición: …" con la evidencia.
 - Qué cambió respecto al comportamiento anterior (antes → ahora): es el foco de regresión.
 
 REGLAS DE SEGURIDAD:
@@ -135,6 +149,7 @@ REGLAS DE CALIDAD:
 - Toda afirmación sobre el código DEBE citar ruta/archivo:línea. Sin cita, no la afirmes.
 - Cada id, código, valor, nombre o restricción (FK, unique, check) que afirmes debe aparecer LITERALMENTE en las líneas citadas. Si no lo leíste, escribe "no verificable en el repositorio" en lugar de suponerlo.
 - Una búsqueda parcial (el resultado lo indica) no prueba que algo no exista: no lo afirmes como ausente.
+- Nunca deduzcas qué significa un código o abreviatura (p. ej. "AMM3") por su posición en una lista, por cuántos elementos tiene o por su parecido con un nombre: búscalo con search_app y cita la evidencia literal; si no aparece, márcalo "no confirmada" en "Equivalencias de códigos".
 - No inventes comportamiento que no hayas leído.
 - Redacta en lenguaje funcional (qué ve o vive el usuario), no en jerga de implementación.
 - Una regla por comportamiento: no repitas la misma condición en dos reglas.
@@ -194,12 +209,21 @@ REGLAS:
 - Compara el alcance literal del criterio ("todos", "donde esté") con el del código (filtros WHERE/if): si el código cubre un subconjunto, indícalo con el filtro exacto.
 - La descripción de la HU (el "requiero… para que…") es el objetivo, no un criterio: no la numeres.
 - Un criterio con varias reglas atómicas distintas se divide en varios CA; consecutivos.
+- Si el contraste depende de qué significa un código (p. ej. qué tipo de bloqueo es "AMM3"), usa solo "Equivalencias de códigos". Con una equivalencia "no confirmada" o ausente no declares PARCIAL ni DIFERENTE por ese código: marca IMPLEMENTADO si el resto coincide e indica en el Detalle "equivalencia de <código> por confirmar".
+- Un criterio general (p. ej. "validar todas las partes") que otros criterios precisan por opción (p. ej. tablas que dicen qué parte se valida en cada modalidad) se evalúa con el alcance que fijan esos criterios específicos: un dato que los específicos excluyen no es contraejemplo del general.
+- Si tu propio análisis concluye que la salida cumple el criterio ("coincide", "se cumple"), el estado es IMPLEMENTADO: un mecanismo distinto al imaginado (p. ej. el rol se identifica por el campo del cliente y no por un rol explícito) no es PARCIAL.
+- Antes de declarar PARCIAL por un elemento que falta en una lista del código, revisa si con las equivalencias confirmadas la lista coincide con el criterio; un supuesto propio sobre el significado no es evidencia.
 - "Reglas:" lista las reglas RT que sustentan el estado (o "ninguna"). Las consecuencias de un PARCIAL/DIFERENTE van en su Detalle.
 
-CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen" e "Interpretación" no se evalúan.
+CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen", "Interpretación" y "Definiciones" no se evalúan.
 
-FORMATO (solo esto, una línea por criterio, en el orden de los criterios):
+FORMATO (solo estas dos secciones, en el orden de los criterios):
+## Análisis
+(Primero razona, después decides. Una línea por criterio, sin viñeta ni corchetes:)
+CA-01 | exige: (lo que pide, con el alcance que le fijan los criterios específicos) | el código: (lo que hace según el "Código:" literal y las equivalencias confirmadas) | dato que lo viola: (un dato alcanzable cuyo resultado en el código contradice lo que exige, o "ninguno") ⇒ ESTADO
+
 ## Cobertura de criterios en el código
+(El ESTADO de cada línea es el mismo que concluyó su análisis: "dato que lo viola: ninguno" ⇒ IMPLEMENTADO, salvo SIN EVIDENCIA cuando ninguna regla lo trata.)
 - [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Reglas: RT-01, RT-03`,
 
   JUDGE_USER: (description: string, acceptanceCriteria: string, facts: string): string => `
@@ -269,6 +293,20 @@ export const CODE_AGENT_TOOLS = [
         properties: {
           terms: { type: 'array', items: { type: 'string' }, description: 'Términos a buscar (identificadores, mensajes, nombres de campos). Máx. 8.' },
           path_prefix: { type: 'string', description: 'Restringe la búsqueda a esta carpeta. Opcional.' },
+        },
+        required: ['terms'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_app',
+      description: 'Busca términos en todos los repos del aplicativo (rama principal): significado de códigos, pantalla del front que llama un endpoint, proceso que genera un dato. Devuelve repo:ruta:línea con contexto.',
+      parameters: {
+        type: 'object',
+        properties: {
+          terms: { type: 'array', items: { type: 'string' }, description: 'Hasta 4 términos literales (códigos, rutas de endpoint, nombres de tabla o parámetro). Mín. 3 caracteres.' },
         },
         required: ['terms'],
       },

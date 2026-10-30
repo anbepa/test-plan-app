@@ -96,6 +96,7 @@ export class CodeExplorerAgentService {
       search: (ref, terms, paths) => firstValueFrom(this.azureRepos.search(ref, terms, paths)),
       getBranchDiff: (ref, baseBranch) => firstValueFrom(this.azureRepos.getBranchDiff(ref, baseBranch)),
       getFileDiff: (ref, change, baseCommit, targetCommit) => firstValueFrom(this.azureRepos.getFileDiff(ref, change, baseCommit, targetCommit)),
+      searchApp: (projectId, repoPrefixes, terms) => firstValueFrom(this.azureRepos.searchApplication(projectId, repoPrefixes, terms)),
     };
 
     const result = await new CodeAgentRunner(gateway).run(input, emit, isCancelled);
@@ -171,7 +172,8 @@ export class CodeExplorerAgentService {
       } : {}),
       // Determinista: el mismo código y la misma HU deben producir la misma matriz.
       temperature: 0,
-      max_tokens: 4000,
+      // El contexto final (finish) ronda 3-4k tokens: con 4000 se truncaba y el agente repetía la síntesis.
+      max_tokens: 8000,
     };
 
     for (let attempt = 1; attempt <= 2; attempt++) {

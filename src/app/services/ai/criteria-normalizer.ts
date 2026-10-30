@@ -14,7 +14,8 @@ UNIDADES:
 - Grupo: encabezado que introduce una lista (p. ej. "Al ingresar al menú X, el sistema deberá:"). No es un criterio: da contexto a los criterios que contiene.
 - Criterio: un resultado verificable propio (verbo: debe mostrar, no debe, permite, valida, calcula, envía…). Cada viñeta con su propio resultado esperado es un criterio aparte, aunque esté anidada bajo otra.
 - Opción: viñeta que solo nombra un valor, tipo o pantalla sin resultado propio (p. ej. "Descuento por pronto pago"). Va en "options" del criterio al que pertenece.
-- Resumen: frase que repite lo que ya exigen otros criterios sin agregar condición ni resultado nuevo. Va en "summaries" con los ids que resume.
+- Resumen: frase que repite lo que ya exigen otros criterios sin agregar condición ni resultado nuevo. Va en "summaries" con los ids que resume. También lo son las frases sobre qué verificar para certificar ("para la certificación se debe verificar que…") cuando lo que piden ya está en otros criterios.
+- Definición: texto que explica qué significa un término, tipo o estado, o cómo y quién lo origina en el negocio (p. ej. "Bloqueo por mora: cuando el cliente presenta mora mayor a 5 días el sistema lo bloquea"), sin pedir un resultado al sistema de esta HU. No es un criterio: va en "definitions" y sirve para preparar los datos de prueba. Si la definición contiene además un resultado que esta HU debe producir, ese resultado sí es criterio.
 
 REGLAS:
 - Una frase con dos resultados independientes (p. ej. "muestra solo USD y no muestra las comisiones") son dos criterios.
@@ -23,6 +24,7 @@ REGLAS:
 - Una frase que solo explica CÓMO se cumple otro criterio (por qué tipo, ruta o módulo se gestiona cada parte) no es un criterio aparte: va en "options" de ese criterio, con el formato "parte → opción" (p. ej. "COP → Descuento por pronto pago, Error de pago").
 - Una frase general que repite lo que ya exigen criterios más específicos (p. ej. "cada módulo muestra solo la moneda que le corresponde" cuando ya hay un criterio por módulo) es un resumen, no un criterio.
 - Las frases de contexto ("Actualmente el pop-up se ve así") y los marcadores de imagen no son criterios; si un criterio depende de una imagen, dilo en "note".
+- Una tabla (filas × columnas con marcas) es UN criterio por tabla o caso de negocio: sus celdas van en "options" con el formato "fila → columnas marcadas", y las filas sin marca como "fila → ninguna (no aplica)". Las celdas vacías también son requisito: lo que no aplica no debe ocurrir.
 - Si dudas entre criterio y opción, elige criterio (más cobertura) y explica la duda en "note". Sin duda, "note" va vacío.
 - El texto de cada criterio debe entenderse solo: empieza siempre por su sujeto (pantalla, módulo, tipo o campo), tomado de la viñeta o del grupo (p. ej. "Devoluciones ME: mostrar solo registros en USD de productos de ME").
 - Numera los criterios CA-01, CA-02… en el orden del texto, de forma continua entre grupos.
@@ -32,7 +34,7 @@ PRUEBA FINAL (aplícala antes de responder): cada criterio tendrá un escenario 
 - Para cada criterio general: si los escenarios de otros criterios ya lo verifican por completo, pásalo a "summaries".
 
 FORMATO:
-{"groups":[{"title":"encabezado o vacío","criteria":[{"id":"CA-01","text":"…","options":["…"],"note":""}],"summaries":[{"text":"…","covers":["CA-01"]}]}]}`;
+{"groups":[{"title":"encabezado o vacío","criteria":[{"id":"CA-01","text":"…","options":["…"],"note":""}],"summaries":[{"text":"…","covers":["CA-01"]}]}],"definitions":[{"term":"…","text":"…"}]}`;
 
 export const CRITERIA_NORMALIZATION_USER = (description: string, acceptanceCriteria: string): string => `
 HISTORIA DE USUARIO (contexto, no es criterio):
@@ -45,7 +47,15 @@ interface RawCriterion { id?: string; text?: string; options?: string[]; note?: 
 interface RawGroup { title?: string; criteria?: RawCriterion[]; summaries?: { text?: string; covers?: string[] }[] }
 
 export interface NormalizedCriterion { id: string; text: string; options: string[]; note: string }
-export interface NormalizedGroup { title: string; criteria: NormalizedCriterion[]; summaries: { text: string; covers: string[] }[] }
+export interface NormalizedGroup {
+  title: string;
+  criteria: NormalizedCriterion[];
+  summaries: { text: string; covers: string[] }[];
+  /** Glosario del funcional (qué es y cómo se origina cada término): guía para preparar datos, no son criterios. */
+  definitions?: { term: string; text: string }[];
+}
+
+export const DEFINITIONS_TITLE = 'Definiciones (para preparar datos de prueba; no son criterios)';
 
 const CRITERION_LINE = /^\s*-\s*\*\*(CA-\d{2,})\*\*\s/;
 
@@ -61,7 +71,7 @@ export function criteriaIds(text: string): string[] {
 
 /** Lee la respuesta del modelo; renumera de forma continua para que los ids sean estables. */
 export function parseNormalizedCriteria(raw: string): NormalizedGroup[] {
-  let data: { groups?: RawGroup[] };
+  let data: { groups?: RawGroup[]; definitions?: { term?: string; text?: string }[] };
   try {
     data = JSON.parse(String(raw || '').replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, ''));
   } catch {
@@ -86,7 +96,12 @@ export function parseNormalizedCriteria(raw: string): NormalizedGroup[] {
       covers: (summary.covers || []).map((id) => renumber.get(id) || id),
     })),
   }));
-  return groups.filter((group) => group.criteria.length || group.summaries.length);
+  const definitions = (data.definitions || [])
+    .map((item) => ({ term: String(item.term || '').trim(), text: String(item.text || '').trim() }))
+    .filter((item) => item.text);
+  const result: NormalizedGroup[] = groups.filter((group) => group.criteria.length || group.summaries.length);
+  if (definitions.length) result.push({ title: DEFINITIONS_TITLE, criteria: [], summaries: [], definitions });
+  return result;
 }
 
 /** Lista numerada en markdown: un CA-xx por criterio verificable. */
@@ -99,6 +114,7 @@ export function formatNormalizedCriteria(groups: NormalizedGroup[]): string {
       criterion.note ? `  - ⚠ Interpretación: ${criterion.note}` : '',
     ]),
     ...group.summaries.map((summary) => `- Resumen${summary.covers.length ? ` (se verifica en ${summary.covers.join(', ')})` : ''}: ${summary.text}`),
+    ...(group.definitions || []).map((item) => `- Definición${item.term ? ` — ${item.term}` : ''}: ${item.text}`),
   ].filter(Boolean).join('\n')).join('\n\n');
 }
 

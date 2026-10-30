@@ -1,5 +1,6 @@
 import { CODE_AGENT_PROMPTS, CODE_AGENT_TOOLS, CodeEvidenceSource } from '../../config/code-agent-prompts.config';
 import type {
+  AzureAppSearchResult,
   AzureBranchChange,
   AzureBranchDiff,
   AzureFileDiff,
@@ -56,6 +57,14 @@ export interface CodeAgentGateway {
   search(ref: RepoRef, terms: string[], paths: string[]): Promise<AzureRepoSearchResult>;
   getBranchDiff(ref: RepoRef, baseBranch: string): Promise<AzureBranchDiff>;
   getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string): Promise<AzureFileDiff>;
+  /** Búsqueda en todos los repos del aplicativo (opcional: sin ella, search_app no está disponible). */
+  searchApp?(projectId: string, repoPrefixes: string[], terms: string[]): Promise<AzureAppSearchResult>;
+}
+
+/** Repos del mismo aplicativo: comparten el prefijo del nombre (p. ej. "NU0139001_"). */
+interface AppScope {
+  projectId: string;
+  repoPrefixes: string[];
 }
 
 export interface CodeAgentResult {
@@ -70,7 +79,7 @@ export interface CodeAgentResult {
 
 /** Presupuesto del agente: mantiene tiempo y tokens acotados. */
 export const CODE_AGENT_BUDGET = {
-  maxSteps: 8,
+  maxSteps: 10,
   maxFilesRead: 24,
   maxToolOutputChars: 90_000,
   maxToolResultChars: 24_000,
@@ -185,6 +194,7 @@ export class CodeAgentRunner {
       },
     ];
 
+    const appScope = resolveAppScope(primaryRef, workspaces.map((ws) => ws.name).concat(input.target?.repositoryName || []));
     const filesReviewed = new Set<string>(workspaces.flatMap((ws) => ws.files.map((file) => file.path)).filter((path) => changesBlock.includes(`=== ${path}`)));
     let toolOutputChars = 0;
 
@@ -233,7 +243,7 @@ export class CodeAgentRunner {
 
         const result = overBudget
           ? 'Presupuesto agotado. Llama a finish ahora.'
-          : await this.executeTool(call.function.name, args, { primaryRef, workspaces, branchDiff, treeFiles: tree.files, rankedFiles, filesReviewed, emit });
+          : await this.executeTool(call.function.name, args, { primaryRef, workspaces, branchDiff, treeFiles: tree.files, rankedFiles, filesReviewed, emit, appScope });
 
         const clipped = result.length > CODE_AGENT_BUDGET.maxToolResultChars
           ? `${result.slice(0, CODE_AGENT_BUDGET.maxToolResultChars)}\n…[resultado truncado]`
@@ -438,6 +448,7 @@ export class CodeAgentRunner {
       rankedFiles: string[];
       filesReviewed: Set<string>;
       emit: (event: CodeAgentEvent) => void;
+      appScope: AppScope | null;
     }
   ): Promise<string> {
     const { emit, filesReviewed } = ctx;
@@ -528,6 +539,18 @@ export class CodeAgentRunner {
 
         case 'finish':
           return 'El argumento "technical_context" llegó vacío. Vuelve a llamar a finish con el contexto técnico completo.';
+
+        case 'search_app': {
+          const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter((term: string) => term.trim().length >= 3).slice(0, 4);
+          if (!ctx.appScope || !this.gateway.searchApp) return 'La búsqueda en el aplicativo no está disponible; usa search_code.';
+          if (!terms.length) return 'Indica al menos un término de 3 o más caracteres.';
+          emit({ type: 'tool', message: `🌐 Buscando “${terms.join(', ')}” en los repos ${ctx.appScope.repoPrefixes.join(', ')}*` });
+          const result = await this.gateway.searchApp(ctx.appScope.projectId, ctx.appScope.repoPrefixes, terms);
+          return result.matches.length
+            ? `${result.totalCount} coincidencia(s) en el aplicativo (rama principal de cada repo); se muestran ${result.matches.length}:\n`
+              + result.matches.map((match) => `${match.repositoryName}:${match.path}:${match.line}: ${match.text}`).join('\n')
+            : 'Sin coincidencias en los repos del aplicativo.';
+        }
 
         default:
           return `Herramienta desconocida: ${name}`;
@@ -722,7 +745,7 @@ const section = (sections: { title: string; body: string }[], name: RegExp) =>
 export function judgeFacts(agentContext: string): string {
   const sections = splitSections(agentContext);
   return sections
-    .filter((item) => /flujo de ejecución|reglas del código|búsquedas sin resultado/i.test(item.title))
+    .filter((item) => /flujo de ejecución|equivalencias de códigos|reglas del código|búsquedas sin resultado/i.test(item.title))
     .map((item) => `## ${item.title}\n${item.body}`)
     .join('\n\n');
 }
@@ -772,6 +795,7 @@ export function buildCriteriaContext(agentContext: string, judgeOutput: string):
   return [
     keep(/resumen técnico/i, 'Resumen técnico'),
     keep(/flujo de ejecución/i, 'Flujo de ejecución real'),
+    keep(/equivalencias de códigos/i, 'Equivalencias de códigos'),
     `## Cobertura de criterios en el código\n${coverage.join('\n')}`,
     `## Comportamientos del código no cubiertos por los criterios\n${uncovered.length ? uncovered.join('\n') : 'Ninguno relevante'}`,
     keep(/datos de prueba/i, 'Datos de prueba sugeridos'),
@@ -814,4 +838,11 @@ export function mergeJudgeVotes(outputs: string[]): string {
     const id = line.match(CA_STATUS)![2];
     return line.replace(CA_STATUS, `$1${majority.get(id)}`);
   })].join('\n');
+}
+
+/** Proyecto y prefijos de los repos del aplicativo a partir de los repos analizados. */
+function resolveAppScope(primaryRef: RepoRef, repoNames: string[]): AppScope | null {
+  const prefixes = Array.from(new Set(repoNames.map((name) => name.match(/^([A-Za-z0-9]+)_/)?.[1]).filter((prefix): prefix is string => !!prefix)))
+    .map((prefix) => `${prefix}_`);
+  return primaryRef.project && prefixes.length ? { projectId: primaryRef.project, repoPrefixes: prefixes } : null;
 }

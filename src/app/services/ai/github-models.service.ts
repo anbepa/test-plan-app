@@ -235,7 +235,8 @@ export class GitHubModelsService {
         const promptText = PROMPTS.DIRECT_GENERATION_PROMPT(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
         return this.callChatStream({
             messages: [{ role: 'user', content: promptText }],
-            temperature: 0.5,
+            // Con contexto de código la matriz debe ser estable entre corridas.
+            temperature: codeContext.trim() ? 0.2 : 0.5,
             max_tokens: this.MAX_GEN_TOKENS
         });
     }

@@ -124,6 +124,12 @@ export function changeGroupKey(group: Pick<WorkItemChangeGroup, 'repositoryId' |
   return `${group.repositoryId}|${group.targetBranch}`;
 }
 
+/** Coincidencias de la búsqueda en todos los repos del aplicativo (Azure Code Search). */
+export interface AzureAppSearchResult {
+  totalCount: number;
+  matches: { repositoryName: string; path: string; line: number; text: string }[];
+}
+
 export interface AzureRepoSearchResult {
   searchedFiles: number;
   matches: { path: string; line: number; text: string }[];

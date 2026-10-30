@@ -73,6 +73,8 @@ const LIMITS = {
   searchConcurrency: 6,
   maxContextChars: 40000,
   maxBranchChanges: 1000,
+  maxAppSearchFiles: 12,
+  maxAppSearchMatches: 30,
   maxDiffCells: 4000000,
   diffContextLines: 3,
   cacheTtlDays: 7,
@@ -90,7 +92,16 @@ function buildBaseUrl(organization) {
   return `https://dev.azure.com/${encodeURIComponent(organization)}`;
 }
 
-async function azureRepoGet(url, pat) {
+function azureRepoGet(url, pat) {
+  return azureRepoRequest(url, pat);
+}
+
+/** POST de solo lectura (p. ej. Code Search). */
+function azureRepoPost(url, pat, body) {
+  return azureRepoRequest(url, pat, body);
+}
+
+async function azureRepoRequest(url, pat, body) {
   const timeoutMs = Number(process.env.AZURE_DEVOPS_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -98,8 +109,13 @@ async function azureRepoGet(url, pat) {
   try {
     const basicToken = Buffer.from(`:${pat}`).toString('base64');
     const response = await fetch(url, {
-      method: 'GET',
-      headers: { Authorization: `Basic ${basicToken}`, Accept: 'application/json' },
+      method: body ? 'POST' : 'GET',
+      headers: {
+        Authorization: `Basic ${basicToken}`,
+        Accept: 'application/json',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
 
@@ -313,6 +329,65 @@ async function readFiles(organization, pat, project, repositoryId, ver, requests
       return { path, error: error && error.message ? error.message : 'No se pudo leer el archivo.' };
     }
   }));
+}
+
+/**
+ * Búsqueda en todo el aplicativo (Azure Code Search, rama por defecto de cada
+ * repo): los repos cuyo nombre empieza por alguno de los prefijos. Sirve para
+ * lo que no está en los cambios de la HU: qué significa un código o
+ * parámetro, qué pantalla llama un endpoint, qué proceso genera un dato.
+ * Devuelve las líneas que contienen los términos, con 1 línea de contexto.
+ */
+async function searchApplication(organization, pat, body) {
+  const projectId = requireString(body.projectId, 'projectId');
+  const prefixes = (Array.isArray(body.repoPrefixes) ? body.repoPrefixes : []).map(String).filter(Boolean).slice(0, 5);
+  const terms = (Array.isArray(body.terms) ? body.terms : []).map((term) => String(term).trim()).filter((term) => term.length >= 3).slice(0, 4);
+  if (!prefixes.length || !terms.length) throw new CodeAgentError(400, 'Indica prefijos de repositorio y términos (mín. 3 caracteres).');
+
+  const base = buildBaseUrl(organization);
+  const [project, repos] = await Promise.all([
+    azureRepoGet(`${base}/_apis/projects/${encodeURIComponent(projectId)}?api-version=${API_VERSION}`, pat),
+    azureRepoGet(`${base}/${encodeURIComponent(projectId)}/_apis/git/repositories?api-version=${API_VERSION}`, pat),
+  ]);
+  const repoNames = (repos.value || []).filter((repo) => !repo.isDisabled && prefixes.some((prefix) => repo.name.startsWith(prefix))).map((repo) => repo.name);
+  if (!repoNames.length) return { totalCount: 0, matches: [] };
+
+  const searchUrl = `https://almsearch.dev.azure.com/${encodeURIComponent(organization)}/_apis/search/codesearchresults?api-version=${API_VERSION}`;
+  const results = await Promise.all(terms.map((term) => azureRepoPost(searchUrl, pat, {
+    searchText: term.includes(' ') ? `"${term}"` : term,
+    $top: LIMITS.maxAppSearchFiles,
+    filters: { Project: [project.name], Repository: repoNames },
+  }).catch(() => ({ results: [] }))));
+
+  const files = new Map();
+  let totalCount = 0;
+  results.forEach((data) => {
+    totalCount += Number(data.count || 0);
+    for (const item of data.results || []) {
+      const key = `${item.repository && item.repository.id}|${item.path}`;
+      if (!files.has(key) && isReadableFile(item.path)) files.set(key, item);
+    }
+  });
+
+  const lowered = terms.map((term) => term.toLowerCase());
+  const matches = [];
+  await Promise.all(Array.from(files.values()).slice(0, LIMITS.maxAppSearchFiles).map(async (item) => {
+    const branch = stripHeads((item.versions && item.versions[0] && item.versions[0].branchName) || '');
+    const content = await fetchFileContent(organization, pat, item.project.id, item.repository.id, branch || 'trunk', item.path, 'branch').catch(() => '');
+    const lines = redactSecrets(content).split(/\r?\n/);
+    let found = 0;
+    lines.forEach((line, index) => {
+      if (found >= 3 || !lowered.some((term) => line.toLowerCase().includes(term))) return;
+      found++;
+      const context = lines.slice(Math.max(0, index - 1), index + 2).map((text) => text.trim().slice(0, 200)).join(' ⏎ ');
+      matches.push({ repositoryName: item.repository.name, path: item.path, line: index + 1, text: context });
+    });
+  }));
+  // Código productivo primero; las pruebas solo confirman.
+  const isTest = (path) => /(^|\/)(test|tests|__tests__)(\/|$)|\.(spec|test)\.|Test\.java$/i.test(path);
+  matches.sort((a, b) => Number(isTest(a.path)) - Number(isTest(b.path))
+    || a.repositoryName.localeCompare(b.repositoryName) || a.path.localeCompare(b.path) || a.line - b.line);
+  return { totalCount, matches: matches.slice(0, LIMITS.maxAppSearchMatches) };
 }
 
 /** Búsqueda de texto (grep) sobre un conjunto acotado de archivos candidatos. */
@@ -648,6 +723,8 @@ async function getWorkItemChanges(organization, pat, workItemId) {
 }
 
 const INTEGRATION_BRANCH = /^(releases?\/.+|current|current-qa|trunk|main|master|develop|dev|qa|staging)$/i;
+/** Ramas de paso a producción o nivelación: llevan trabajo ya hecho (a veces de varias HUs), no el desarrollo de la HU. */
+const PROMOTION_BRANCH = /(^|[/_-])(paso[-_]?(a[-_]?)?(pdn|prod|produccion|producción)|pdn|nivelar|nivelacion|nivelación|actualizar[-_]?current|sync)([/_-]|$)/i;
 /** Ramas de trabajo replicadas sobre otra rama destino (p. ej. "...-on-trunk"). */
 const PORT_BRANCH = /-on-[a-z0-9._-]+$/i;
 /** Rama base para medir los commits propios de una rama sin PR, en orden de preferencia. */
@@ -662,20 +739,29 @@ function stripHeads(refName) {
   return String(refName || '').replace(/^refs\/heads\//, '');
 }
 
+const DATE_YYYYMMDD = /^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/;
+const DATE_DDMMYYYY = /^(0[1-9]|[12]\d|3[01])(0[1-9]|1[0-2])20\d{2}$/;
+
 /** IDs de work item en el nombre de una rama: 6–8 dígitos sueltos (HU7794123, HA7932235, HU_7837004), sin fechas. */
 function workItemIdsInBranch(branch) {
   const ids = [];
   for (const match of String(branch || '').matchAll(/(?:^|\D)(\d{6,8})(?!\d)/g)) {
-    if (/^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(match[1])) continue;
+    if (DATE_YYYYMMDD.test(match[1]) || DATE_DDMMYYYY.test(match[1])) continue;
     ids.push(Number(match[1]));
   }
   return ids;
+}
+
+/** Rama de paso a producción, nivelación o que agrupa varias HUs: no es el desarrollo de una HU. */
+function isPromotionBranch(branch) {
+  return INTEGRATION_BRANCH.test(branch) || PROMOTION_BRANCH.test(branch) || workItemIdsInBranch(branch).length > 1;
 }
 
 /** Motivo para no analizar un PR vinculado a la HU, o null si es trabajo de la HU. */
 function foreignPrReason(pr, linkedWorkItems, workItemId) {
   if (pr.status === 'abandoned') return 'PR abandonado';
   if (INTEGRATION_BRANCH.test(pr.sourceBranch)) return 'promoción entre ramas de integración';
+  if (isPromotionBranch(pr.sourceBranch)) return 'paso a producción o nivelación (no es el desarrollo de la HU)';
   const ids = workItemIdsInBranch(pr.sourceBranch);
   if (ids.includes(workItemId)) return null;
   if (ids.length) return `rama de la HU ${ids[0]}`;
@@ -735,6 +821,7 @@ async function mapLimit(items, limit, fn) {
 async function collectHuBranches(linkedBranches, segments, workItemId, get, repoName, listRepos) {
   const branches = new Map();
   const add = (ref, branch, reportIfEmpty) => {
+    if (isPromotionBranch(branch)) return;
     const key = `${ref.repositoryId}|${branch}`;
     const existing = branches.get(key);
     if (existing) existing.reportIfEmpty = existing.reportIfEmpty || reportIfEmpty;
@@ -999,6 +1086,7 @@ async function saveCachedContext(adminClient, userId, body) {
  *   POST branch-diff { project, repositoryId, baseBranch, branch }
  *   POST file-diff   { project, repositoryId, path, changeType, originalPath?, baseCommit, targetCommit }
  *   POST cache/get   { repositoryId, commitId, scopePath, mode, description, acceptanceCriteria }
+ *   POST app-search { projectId, repoPrefixes: [], terms: [] }  (Code Search en los repos del aplicativo)
  *   POST cache/save  { ...cache/get, branch, context, filesReviewed }
  */
 async function handleCodeAgentRoute({ route, method, query, body, organization, pat, userId, adminClient }) {
@@ -1032,6 +1120,8 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
         return getBranchDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.baseBranch), normalizeBranch(b.branch));
       case 'file-diff':
         return getFileDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), b);
+      case 'app-search':
+        return searchApplication(organization, pat, b);
       case 'search':
         return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
       case 'cache/get':
@@ -1057,6 +1147,7 @@ module.exports = {
   computeLineDiff,
   formatHunks,
   workItemIdsInBranch,
+  isPromotionBranch,
   foreignPrReason,
   buildGroups,
   selectGroups,
