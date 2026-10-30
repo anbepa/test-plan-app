@@ -209,9 +209,9 @@ REGLAS:
 - Si el valor visible se calcula en varias etapas (\`etapa 1\` ⇒ \`etapa 2\`), compón las fórmulas sustituyendo números en orden antes de concluir.
 - Un campo acumulado de la tabla (p. ej. un total pagado) ya incluye todos sus movimientos: restarle los movimientos de una ventana de fechas REVIERTE esos movimientos (deja el valor como estaba antes de la ventana).
 - Cada criterio se evalúa con las reglas de SU opción o pantalla (según "Opciones de la pantalla"); una regla de otra opción no es contraejemplo.
-- Un valor por defecto también filtra: si falta el parámetro y el default es el valor que exige el criterio (p. ej. moneda COP), los registros de otro valor quedan excluidos; eso cumple el criterio, no es contraejemplo.
+- Un valor por defecto también filtra: si falta el parámetro y el default es el valor que exige el criterio (p. ej. canal='WEB'), los registros de otro valor quedan excluidos; eso cumple el criterio, no es contraejemplo.
 - Antes de escribir un contraejemplo, sustituye su dato en el "Código:" literal de la regla que aplica y confirma que el resultado viola el criterio; si no lo viola, no hay contraejemplo.
-- Si el criterio usa un término de negocio y el código filtra por su equivalente técnico en el dominio (p. ej. "productos de moneda local" ⇔ moneda COP), cuenta como implementado; un contraejemplo que exige un dato que el negocio no produce (p. ej. un producto en moneda extranjera pagado en COP) no es alcanzable, salvo que la HU o el código muestren que existe.
+- Si el criterio usa un término de negocio y el código filtra por su equivalente técnico en el dominio (p. ej. "clientes corporativos" ⇔ segmento='CORP'), cuenta como implementado; un contraejemplo que exige un dato que el negocio no produce (p. ej. un cliente corporativo registrado con segmento de persona natural) no es alcanzable, salvo que la HU o el código muestren que existe.
 - PARCIAL y DIFERENTE exigen un "Contraejemplo:" con datos concretos y ALCANZABLES por los procesos reales (nada de pagos posteriores al momento de ejecución ni fotos al cierre con registros creados después; un rango que termina en el momento de ejecución ya cubre todo lo existente), y su verificación numérica sustituyendo esos datos en la fórmula literal (p. ej. "saldo = 500.000 − (100.000 − 100.000) = 500.000"). Si el cálculo cumple el criterio, no hay contraejemplo: es IMPLEMENTADO.
 - Compara el alcance literal del criterio ("todos", "donde esté") con el del código (filtros WHERE/if): si el código cubre un subconjunto, indícalo con el filtro exacto.
 - La descripción de la HU (el "requiero… para que…") es el objetivo, no un criterio: no la numeres.
@@ -263,7 +263,7 @@ HERRAMIENTAS (solo lectura):
 - finish_recipe: entrega la receta final.
 
 ESTRATEGIA (máximo ${maxSteps} pasos):
-1. Para cada dato, busca su tabla o entidad (nombre sin esquema, p. ej. "tbl_account_payable", y el nombre de la clase de datos) para hallar el código PRODUCTIVO que la escribe (insert, save, builder); ignora pruebas y consultas de solo lectura.
+1. Para cada dato, busca su tabla o entidad (nombre sin esquema, p. ej. "tbl_orders", y el nombre de la clase de datos) para hallar el código PRODUCTIVO que la escribe (insert, save, builder); ignora pruebas y consultas de solo lectura.
 2. Lee ese código y sube hasta lo que lo dispara: endpoint (busca su ruta en el front para hallar la pantalla), consumidor de un evento, job o scheduler ("@Scheduled", "cron") o script.
 3. Lee la condición exacta (umbral, estado, fecha) y, si viene de configuración, busca la clave (p. ej. en application.yaml).
 4. Busca varios datos en la misma llamada (hasta 4 términos) y no repitas búsquedas.

@@ -62,7 +62,7 @@ export interface CodeAgentGateway {
   searchApp?(projectId: string, repoPrefixes: string[], terms: string[]): Promise<AzureAppSearchResult>;
 }
 
-/** Repos del mismo aplicativo: comparten el prefijo del nombre (p. ej. "NU0139001_"). */
+/** Repos del mismo aplicativo: comparten el prefijo del nombre (p. ej. "APP001_" en APP001_ms_pagos, APP001_Front). */
 interface AppScope {
   projectId: string;
   repoPrefixes: string[];
@@ -876,7 +876,7 @@ export function validateEquivalences(context: string): string {
 }
 
 /**
- * "- Modalidades: 6 = DFUS1, 7 = no confirmada. Evidencia: …" → una línea por par,
+ * "- Tipos: 1 = ABC, 2 = no confirmada. Evidencia: …" → una línea por par,
  * cada una con la misma evidencia, para validar cada equivalencia por separado.
  */
 function splitCompoundEquivalence(line: string): string[] {
