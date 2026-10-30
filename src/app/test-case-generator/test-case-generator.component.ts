@@ -14,7 +14,14 @@ import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, WorkItemChanges } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChanges } from '../models/code-agent.model';
+
+interface CoverageRow {
+  id: string;
+  criterion: string;
+  status: CriterionCodeStatus;
+  detail: string;
+}
 import { MarkdownLitePipe } from '../shared/pipes/markdown-lite.pipe';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
@@ -152,6 +159,37 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         count: lines.filter((line) => new RegExp(`→\\s*${status.key}\\b`, 'i').test(line)).length
       }))
       .filter((item) => item.count > 0);
+  }
+
+  readonly coverageStatuses: CriterionCodeStatus[] = ['IMPLEMENTADO', 'PARCIAL', 'DIFERENTE', 'SIN EVIDENCIA'];
+  private coverageCache: { text: string; rows: CoverageRow[] } = { text: '', rows: [] };
+
+  /** Matriz CA del contexto técnico (memoizada: el selector no se re-renderiza en cada ciclo). */
+  get codeCoverageRows(): CoverageRow[] {
+    if (this.coverageCache.text !== this.codeContextText) {
+      const rows = this.codeContextText.split('\n').map((line) => {
+        const match = line.match(/^\s*[-*]\s*\[(CA-\d+)\]\s*"?(.*?)"?\s*→\s*(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)\b\.?\s*(.*)$/i);
+        if (!match) return null;
+        const detail = match[4].replace(/^Detalle:\s*/i, '').replace(/\s*\(?\bFuentes?:.*$/i, '').trim();
+        return { id: match[1], criterion: match[2], status: match[3].toUpperCase() as CriterionCodeStatus, detail };
+      }).filter((row): row is CoverageRow => !!row);
+      this.coverageCache = { text: this.codeContextText, rows };
+    }
+    return this.coverageCache.rows;
+  }
+
+  /** Corrige el estado de un criterio: el cambio va al texto que se envía a la generación. */
+  setCoverageStatus(id: string, status: CriterionCodeStatus): void {
+    const pattern = new RegExp(`(\\[${id}\\][^\\n]*?→\\s*)(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)`, 'i');
+    this.codeContextText = this.codeContextText.replace(pattern, `$1${status}`);
+  }
+
+  trackCoverageRow(_: number, row: CoverageRow): string {
+    return row.id;
+  }
+
+  coverageStatusCss(status: CriterionCodeStatus): string {
+    return { 'IMPLEMENTADO': 'md-status-ok', 'PARCIAL': 'md-status-partial', 'DIFERENTE': 'md-status-diff', 'SIN EVIDENCIA': 'md-status-none' }[status];
   }
 
   /** Pasa a edición y ajusta la altura del textarea cuando ya es visible. */

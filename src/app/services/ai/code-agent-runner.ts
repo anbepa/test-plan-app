@@ -60,6 +60,8 @@ export interface CodeAgentGateway {
 
 export interface CodeAgentResult {
   context: string;
+  /** Hechos del agente (reglas con código literal) antes del juez. */
+  facts?: string;
   filesReviewed: string[];
   /** Commit(s) analizados: sirve como clave de caché. */
   versionKey: string;
@@ -82,6 +84,8 @@ export const CODE_AGENT_BUDGET = {
   maxSearchFiles: 150,
   searchBatchSize: 30,
   maxSearchMatches: 80,
+  /** Jueces en paralelo (criterios ↔ código): el estado de cada criterio se decide por mayoría. */
+  judgeVotes: 3,
 };
 
 const STOPWORDS = new Set([
@@ -209,7 +213,7 @@ export class CodeAgentRunner {
       if (toolCalls.length === 0) {
         const text = (reply.content || '').trim();
         if (!text) throw new Error('El agente no devolvió contexto técnico. Intenta de nuevo.');
-        return this.result(text, filesReviewed, versionKey, stats, startedAt);
+        return this.finalize(text, input, emit, isCancelled, filesReviewed, versionKey, stats, startedAt);
       }
 
       messages.push({
@@ -224,7 +228,7 @@ export class CodeAgentRunner {
 
         if (call.function.name === 'finish') {
           const context = String(args.technical_context || '').trim();
-          if (context) return this.result(context, filesReviewed, versionKey, stats, startedAt);
+          if (context) return this.finalize(context, input, emit, isCancelled, filesReviewed, versionKey, stats, startedAt);
         }
 
         const result = overBudget
@@ -242,10 +246,50 @@ export class CodeAgentRunner {
     throw new Error('El agente no logró completar la exploración dentro del presupuesto.');
   }
 
-  private result(context: string, filesReviewed: Set<string>, versionKey: string, stats: CodeAgentResult['stats'], startedAt: number): CodeAgentResult {
+  /**
+   * Cierra la corrida: corrige (CAMBIO HU)/(EXISTENTE) con los diffs y, con
+   * criterios, un juez contrasta criterios ↔ reglas literales en una llamada
+   * corta (sin el historial de exploración) y se arma la matriz final.
+   */
+  private async finalize(
+    agentContext: string,
+    input: CodeExplorationInput,
+    emit: (event: CodeAgentEvent) => void,
+    isCancelled: () => boolean,
+    filesReviewed: Set<string>,
+    versionKey: string,
+    stats: CodeAgentResult['stats'],
+    startedAt: number
+  ): Promise<CodeAgentResult | null> {
+    let context = this.changedPaths.length
+      ? reconcileChangeLabels(agentContext, this.changedPaths, this.seenDiffs)
+      : agentContext;
+    const judgeFactsSource = context;
+
+    if (input.mode === 'criteria-code' && input.acceptanceCriteria?.trim()) {
+      emit({ type: 'progress', message: 'Contrastando criterios con el código…' });
+      const judgeMessages: ChatMessage[] = [
+        { role: 'system', content: CODE_AGENT_PROMPTS.JUDGE_SYSTEM },
+        { role: 'user', content: CODE_AGENT_PROMPTS.JUDGE_USER(input.description, input.acceptanceCriteria, judgeFacts(context)) },
+      ];
+      const verdicts = await Promise.all(Array.from({ length: CODE_AGENT_BUDGET.judgeVotes }, () =>
+        this.gateway.llm(judgeMessages, { tools: [], forceFinish: false }).catch(() => null)));
+      const outputs: string[] = [];
+      for (const verdict of verdicts) {
+        if (!verdict) continue;
+        stats.llmCalls++;
+        stats.promptTokens += verdict.usage?.prompt_tokens || 0;
+        stats.completionTokens += verdict.usage?.completion_tokens || 0;
+        stats.cachedTokens += verdict.usage?.prompt_cache_hit_tokens || 0;
+        outputs.push(verdict.message.content || '');
+      }
+      if (isCancelled()) return null;
+      if (!outputs.length) throw new Error('No fue posible contrastar los criterios con el código. Intenta de nuevo.');
+      context = buildCriteriaContext(context, mergeJudgeVotes(outputs));
+    }
+
     stats.durationMs = Date.now() - startedAt;
-    if (this.changedPaths.length) context = reconcileChangeLabels(context, this.changedPaths, this.seenDiffs);
-    return { context, filesReviewed: Array.from(filesReviewed), versionKey, stats };
+    return { context, facts: judgeFactsSource, filesReviewed: Array.from(filesReviewed), versionKey, stats };
   }
 
   // ---------------------------------------------------------------------------
@@ -630,14 +674,15 @@ export function reconcileChangeLabels(context: string, changedPaths: string[], d
   }).join('\n');
 }
 
-/** Números de línea (versión final) agregados o junto a líneas eliminadas, ±1. */
+/** Números de línea agregados (±1), junto a eliminadas, y los de las eliminadas en el archivo base. */
 function collectChangedLines(diff: string): Set<number> {
   const changed = new Set<number>();
   let pendingRemoval = false;
   let previous = 0;
   for (const raw of diff.split('\n')) {
-    const removed = /^-\s*base\s+\d+\|/.test(raw);
-    if (removed) { pendingRemoval = true; continue; }
+    // Las citas de líneas eliminadas suelen usar la numeración del archivo base.
+    const removed = raw.match(/^-\s*base\s+(\d+)\|/);
+    if (removed) { changed.add(Number(removed[1])); pendingRemoval = true; continue; }
     const match = raw.match(/^([+ ])\s*(\d+)\|/);
     if (!match) continue;
     const lineNumber = Number(match[2]);
@@ -646,4 +691,119 @@ function collectChangedLines(diff: string): Set<number> {
     previous = lineNumber;
   }
   return changed;
+}
+
+// ---------------------------------------------------------------------------
+// Matriz criterios ↔ código (juez)
+// ---------------------------------------------------------------------------
+
+const RULE_LINE = /^\s*[-*]\s*\[(RT-\d+)\]\s*\((CAMBIO HU|EXISTENTE)\)\s*(.*)$/;
+
+/** Secciones "## Título" del contexto, en orden. */
+export function splitSections(text: string): { title: string; body: string }[] {
+  return text.split(/\n(?=##\s)/).map((chunk) => {
+    const match = chunk.match(/^##\s*([^\n]*)\n?([\s\S]*)$/);
+    return match ? { title: match[1].trim(), body: match[2].trim() } : { title: '', body: chunk.trim() };
+  }).filter((section) => section.title || section.body);
+}
+
+const section = (sections: { title: string; body: string }[], name: RegExp) =>
+  sections.find((item) => name.test(item.title))?.body || '';
+
+/** Lo que necesita el juez: flujo, reglas con código literal y búsquedas sin resultado. */
+export function judgeFacts(agentContext: string): string {
+  const sections = splitSections(agentContext);
+  return sections
+    .filter((item) => /flujo de ejecución|reglas del código|búsquedas sin resultado/i.test(item.title))
+    .map((item) => `## ${item.title}\n${item.body}`)
+    .join('\n\n');
+}
+
+/**
+ * Matriz final: la cobertura del juez (con sus reglas resueltas a archivo:línea)
+ * y, de forma determinista, los comportamientos (RT) que ningún criterio usa.
+ */
+export function buildCriteriaContext(agentContext: string, judgeOutput: string): string {
+  const sections = splitSections(agentContext);
+  const rules = new Map<string, { tag: string; text: string; source: string }>();
+  section(sections, /reglas del código/i).split('\n').forEach((line) => {
+    const match = line.match(RULE_LINE);
+    if (!match) return;
+    const source = match[3].match(/\bFuentes?:\s*(.*)$/i)?.[1]?.trim() || '';
+    const text = match[3]
+      .replace(/\s*\bFuentes?:.*$/i, '')
+      .replace(/\s*C[oó]digo:\s*`[^`]*`\.?/i, '')
+      .trim();
+    rules.set(match[1], { tag: match[2], text, source });
+  });
+
+  const used = new Set<string>();
+  const coverage = judgeOutput.split('\n')
+    .filter((line) => /^\s*[-*]\s*\[CA-\d+\]/.test(line))
+    .map((line) => {
+      const refs = line.match(/\bReglas?:\s*([^\n]*)$/i)?.[1] || '';
+      const ids = refs.match(/RT-\d+/g) || [];
+      ids.forEach((id) => used.add(id));
+      const sources = [...new Set(ids.map((id) => rules.get(id)?.source).filter(Boolean))];
+      const base = line.replace(/\s*\bReglas?:\s*[^\n]*$/i, '').trim();
+      return sources.length ? `${base} Fuente: ${sources.join('; ')}` : base;
+    });
+
+  if (!coverage.length) return agentContext;
+
+  const uncovered = [...rules.entries()]
+    .filter(([id]) => !used.has(id))
+    .sort(([, a], [, b]) => (a.tag === b.tag ? 0 : a.tag === 'CAMBIO HU' ? -1 : 1))
+    .map(([id, rule]) => `- [${id}] (${rule.tag}) ${rule.text}${rule.source ? ` Fuente: ${rule.source}` : ''}`);
+
+  const keep = (name: RegExp, title: string) => {
+    const body = section(sections, name);
+    return body ? `## ${title}\n${body}` : '';
+  };
+
+  return [
+    keep(/resumen técnico/i, 'Resumen técnico'),
+    keep(/flujo de ejecución/i, 'Flujo de ejecución real'),
+    `## Cobertura de criterios en el código\n${coverage.join('\n')}`,
+    `## Comportamientos del código no cubiertos por los criterios\n${uncovered.length ? uncovered.join('\n') : 'Ninguno relevante'}`,
+    keep(/datos de prueba/i, 'Datos de prueba sugeridos'),
+    keep(/archivos revisados/i, 'Archivos revisados'),
+  ].filter(Boolean).join('\n\n');
+}
+
+const STATUS_SEVERITY = ['PARCIAL', 'DIFERENTE', 'SIN EVIDENCIA', 'IMPLEMENTADO'];
+const CA_STATUS = /^(\s*[-*]\s*\[(CA-\d+)\][^\n]*?→\s*)(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)\b/;
+
+/**
+ * Combina varios veredictos del juez: el estado de cada CA es el de la mayoría
+ * (empate → el más prudente: un ⚠ de más cuesta menos que un defecto sin
+ * detectar) y el texto sale del veredicto que más coincide con la mayoría.
+ */
+export function mergeJudgeVotes(outputs: string[]): string {
+  const parsed = outputs.map((output) => {
+    const lines = output.split('\n').filter((line) => CA_STATUS.test(line));
+    return { lines, statuses: new Map(lines.map((line) => { const m = line.match(CA_STATUS)!; return [m[2], m[3]] as [string, string]; })) };
+  }).filter((vote) => vote.lines.length);
+  if (!parsed.length) return outputs[0] || '';
+
+  // Solo votan los veredictos con el número de criterios más frecuente.
+  const counts = new Map<number, number>();
+  parsed.forEach((vote) => counts.set(vote.lines.length, (counts.get(vote.lines.length) || 0) + 1));
+  const modal = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  const voters = parsed.filter((vote) => vote.lines.length === modal);
+
+  const majority = new Map<string, string>();
+  for (const id of voters[0].statuses.keys()) {
+    const tally = new Map<string, number>();
+    voters.forEach((vote) => { const status = vote.statuses.get(id); if (status) tally.set(status, (tally.get(status) || 0) + 1); });
+    const best = [...tally.entries()].sort((a, b) => b[1] - a[1] || STATUS_SEVERITY.indexOf(a[0]) - STATUS_SEVERITY.indexOf(b[0]))[0];
+    majority.set(id, best[0]);
+  }
+
+  const agreement = (vote: typeof voters[number]) => [...majority].filter(([id, status]) => vote.statuses.get(id) === status).length;
+  const base = voters.reduce((best, vote) => (agreement(vote) > agreement(best) ? vote : best));
+  return ['## Cobertura de criterios en el código', ...base.lines.map((line) => {
+    const id = line.match(CA_STATUS)![2];
+    return line.replace(CA_STATUS, `$1${majority.get(id)}`);
+  })].join('\n');
 }

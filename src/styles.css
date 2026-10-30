@@ -900,36 +900,36 @@ textarea::placeholder {
 .md-preview .md-depth-3,
 .md-preview .md-depth-4 { margin-left: 3.6rem; }
 
-.md-preview .md-table-wrap {
+:is(.md-preview, .coverage-editor) .md-table-wrap {
   margin: 0.4rem 0 0.6rem;
   overflow-x: auto;
 }
 
-.md-preview .md-table {
+:is(.md-preview, .coverage-editor) .md-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
 }
 
-.md-preview .md-table :is(th, td) {
+:is(.md-preview, .coverage-editor) .md-table :is(th, td) {
   padding: 0.35rem 0.5rem;
   border: 1px solid #e2e8f0;
   text-align: left;
   vertical-align: top;
 }
 
-.md-preview .md-table th {
+:is(.md-preview, .coverage-editor) .md-table th {
   background: #eff6ff;
   color: #1e3a8a;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.md-preview .md-table tbody tr:nth-child(even) {
+:is(.md-preview, .coverage-editor) .md-table tbody tr:nth-child(even) {
   background: #f8fafc;
 }
 
-.md-preview .md-id {
+:is(.md-preview, .coverage-editor) .md-id {
   font-weight: 600;
   white-space: nowrap;
 }

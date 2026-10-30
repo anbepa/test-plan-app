@@ -13,8 +13,9 @@ import { Pipe, PipeTransform } from '@angular/core';
   standalone: true,
 })
 export class MarkdownLitePipe implements PipeTransform {
-  transform(value: string | null | undefined): string {
-    return renderMarkdownLite(value || '');
+  /** 'no-coverage': omite la matriz CA (la pantalla la muestra con estados editables). */
+  transform(value: string | null | undefined, mode?: 'no-coverage'): string {
+    return renderMarkdownLite(value || '', { skipCoverage: mode === 'no-coverage' });
   }
 }
 
@@ -29,7 +30,7 @@ const CA_LINE = /^\s*[-*]\s*\[(CA-\d+)\]\s*(.*?)\s*→\s*(IMPLEMENTADO|PARCIAL|D
 const RT_LINE = /^\s*[-*]\s*\[(RT-\d+)\]\s*(?:\((CAMBIO HU|EXISTENTE)\))?\s*(.*)$/;
 const LIST_LINE = /^(\s*)(?:[-*]|(\d+)\.)\s+(.*)$/;
 
-export function renderMarkdownLite(source: string): string {
+export function renderMarkdownLite(source: string, options: { skipCoverage?: boolean } = {}): string {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const html: string[] = [];
   let paragraph: string[] = [];
@@ -45,6 +46,8 @@ export function renderMarkdownLite(source: string): string {
     if (!line.trim()) { flushParagraph(); continue; }
 
     const heading = line.match(/^\s*(#{1,6})\s+(.*)$/);
+    if (options.skipCoverage && heading && /cobertura de criterios/i.test(heading[2])) continue;
+    if (options.skipCoverage && CA_LINE.test(line)) continue;
     if (heading) {
       flushParagraph();
       const level = Math.min(heading[1].length + 2, 6);

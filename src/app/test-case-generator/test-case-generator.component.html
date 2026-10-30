@@ -270,8 +270,32 @@
                 <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
               </div>
             </div>
+            <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
+              <div class="coverage-editor-title">Cobertura de criterios en el código
+                <span class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</span>
+              </div>
+              <div class="md-table-wrap">
+                <table class="md-table coverage-table">
+                  <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
+                  <tbody>
+                    <tr *ngFor="let row of codeCoverageRows; trackBy: trackCoverageRow">
+                      <td class="md-id">{{ row.id }}</td>
+                      <td>{{ row.criterion }}</td>
+                      <td>
+                        <select class="coverage-status-select" [ngClass]="coverageStatusCss(row.status)" [ngModel]="row.status"
+                          [ngModelOptions]="{ standalone: true }" (ngModelChange)="setCoverageStatus(row.id, $event)"
+                          [attr.aria-label]="'Estado de ' + row.id" [disabled]="codeExploring || loadingScenarios">
+                          <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
+                        </select>
+                      </td>
+                      <td class="coverage-detail">{{ row.detail }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
             <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
-              [innerHTML]="codeContextText | markdownLite" (dblclick)="editCodeContext()"
+              [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
               title="Doble clic para editar"></div>
             <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
               class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"

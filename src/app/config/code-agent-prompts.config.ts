@@ -13,11 +13,12 @@ export type CodeEvidenceSource = 'changeset' | 'branch-diff' | 'full';
  * Separados de prompts.config.ts para no alterar los prompts de generación.
  *
  * Idea central: los criterios dicen CÓMO DEBE funcionar (negocio) y el código
- * dice CÓMO SE CONSTRUYÓ. El agente no reemplaza criterios: produce una matriz
+ * dice CÓMO SE CONSTRUYÓ. El agente extrae reglas con su código literal y un
+ * juez (llamada corta, sin herramientas) las contrasta con los criterios: produce una matriz
  * de cobertura criterio ↔ código para que la generación decida con evidencia.
  */
 
-/** Formato cuando hay criterios: matriz de cobertura por criterio. */
+/** Formato cuando hay criterios: hechos con código literal (el juez arma la matriz). */
 const CONTEXT_FORMAT_WITH_CRITERIA = `
 ## Resumen técnico
 (2-5 líneas: qué cambió para esta HU, antes → ahora, capas involucradas)
@@ -31,16 +32,16 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 - Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
 
-## Cobertura de criterios en el código
-(UNA línea por regla atómica de los criterios de aceptación, en el mismo orden; numeración CA-01, CA-02…. La descripción de la HU —el "requiero… para que…"— es el objetivo, no un criterio: no la numeres como CA.)
-- [CA-01] "resumen breve del criterio" → IMPLEMENTADO | PARCIAL | DIFERENTE | SIN EVIDENCIA (exactamente uno, sin calificativos). Detalle (máx. 2 líneas): dato/límite/mensaje exacto o qué falta/difiere. Fuente: ruta/archivo:línea
+## Reglas del código
+(Hechos, no juicios: el estado de cada criterio lo decide otro paso con estas reglas. Una línea por regla observable relacionada con la HU o sus criterios, incluidas las que solo cumplen un criterio en parte o lo contradicen. Primero las (CAMBIO HU). Máx. 10.
+Marca cada una: (CAMBIO HU) SOLO si sus líneas citadas aparecen como agregadas (+) o eliminadas (-) en los diffs; si no, (EXISTENTE).
+"Código:" es el fragmento LITERAL que define la regla (condición del WHERE/if, fórmula, constante, mensaje), copiado tal cual, máx. 3 líneas en una: nunca lo parafrasees.
+Si un valor visible en la salida se calcula en varias etapas (p. ej. la consulta SQL y luego el código), pon la cadena completa en UNA regla, en orden: \`etapa 1\` ⇒ \`etapa 2\`.)
+- [RT-01] (CAMBIO HU | EXISTENTE) Regla en lenguaje funcional (condición → resultado). Código: \`fragmento literal\` Fuente: ruta/archivo:línea
 
-## Comportamientos del código no cubiertos por los criterios
-(Solo lo OBSERVABLE y dentro del alcance de la HU; omite logs, refactors y detalles internos. Máx. 5.
-NO van aquí: consecuencias de un CA PARCIAL/DIFERENTE (van en su Detalle) ni mecánica de despliegue (idempotencia, re-ejecución, contextos).
-Marca cada uno: (CAMBIO HU) SOLO si sus líneas citadas aparecen como agregadas (+) o eliminadas (-) en los diffs; si no, (EXISTENTE): ya existía y solo condiciona los datos de prueba.)
-- [RT-01] (CAMBIO HU | EXISTENTE) Comportamiento concreto. Fuente: ruta/archivo:línea
-(o "Ninguno relevante")
+## Búsquedas sin resultado
+(Solo criterios cuyo código no encontraste en ninguna parte. No anotes mecanismos ausentes —DISTINCT, una condición "excluir"— de un criterio cuyo flujo sí encontraste: eso lo deduce el juez desde las reglas.)
+- "concepto de un criterio": qué buscaste y dónde (o "Ninguna")
 
 ## Datos de prueba sugeridos
 - Valores válidos, inválidos y de borde extraídos del código (rangos, regex, enums, longitudes, mensajes exactos)
@@ -65,8 +66,9 @@ const CONTEXT_FORMAT_CODE_ONLY = `
 
 ## Comportamientos implementados
 (Reglas observables, una por línea, agrupando lo que pertenece a la misma regla. Máx. 8: primero los (CAMBIO HU);
-los (EXISTENTE) solo si condicionan los datos de prueba de un cambio.)
-- [RT-01] (CAMBIO HU | EXISTENTE) Comportamiento concreto (condición → resultado; validación; límite; mensaje exacto; estado). Fuente: ruta/archivo:línea
+los (EXISTENTE) solo si condicionan los datos de prueba de un cambio.
+"Código:" es el fragmento LITERAL que define la regla, copiado tal cual, máx. 3 líneas en una: nunca lo parafrasees.)
+- [RT-01] (CAMBIO HU | EXISTENTE) Comportamiento concreto (condición → resultado; validación; límite; mensaje exacto; estado). Código: \`fragmento literal\` Fuente: ruta/archivo:línea
 
 ## Datos de prueba sugeridos
 - Valores válidos, inválidos y de borde extraídos del código (rangos, regex, enums, longitudes, mensajes exactos)
@@ -86,17 +88,12 @@ PRINCIPIO:
 
 ${mode === 'code'
     ? 'MODO: el código es la FUENTE PRINCIPAL (no hay criterios o son pobres). Reconstruye las reglas observables desde el código.'
-    : `MODO: criterios + código. Para CADA regla atómica de los criterios determina su estado:
-- IMPLEMENTADO: encontraste el código que la cumple tal cual.
-- PARCIAL: está implementada solo en parte (falta una condición, campo, mensaje o rama).
-- DIFERENTE: el código hace algo distinto a lo que dice el criterio (límite, mensaje, orden, regla).
-- SIN EVIDENCIA: no encontraste implementación tras buscar en los cambios de la rama y con search_code. No significa que no exista: significa que no hay evidencia.
-- PARCIAL y DIFERENTE exigen evidencia POSITIVA en el código leído. Lo que no puedes ver (datos ya cargados en la base, otros productos, otros repositorios) NO es motivo de PARCIAL: anótalo como "no verificable en el repositorio".
-- Juzga por el RESULTADO OBSERVABLE con datos realistas y coherentes, no por el mecanismo: si el código llega al mismo resultado por otra vía (p. ej. una foto/histórico al cierre en lugar de filtrar por fecha de creación), es IMPLEMENTADO y el mecanismo va en el Detalle.
-- PARCIAL y DIFERENTE exigen un CONTRAEJEMPLO: datos coherentes (con valores concretos) con los que la salida no cumple el criterio; escríbelo en el Detalle como "Contraejemplo: …". El contraejemplo debe ser alcanzable por los procesos reales del sistema: descarta situaciones imposibles (pagos posteriores al momento de ejecución, una foto/histórico al cierre con registros creados después de esa fecha).
-- Si el criterio depende de un cálculo, comprueba el contraejemplo sustituyendo sus números en la fórmula EXACTA del código y escríbelo en una línea del Detalle (p. ej. "saldo = 150.000 − (150.000 − 150.000) = 150.000"). Si el resultado cumple el criterio, no hay contraejemplo: es IMPLEMENTADO.
-- Si el código usa el campo que contiene el dato del criterio (p. ej. el valor vigente ya actualizado), eso es evidencia: no es SIN EVIDENCIA. Si depende de cómo otro proceso guarda el dato, márcalo IMPLEMENTADO con esa condición en el Detalle.
-- Compara el ALCANCE LITERAL del criterio con el del código: si el criterio dice "donde esté / todos / cualquier" y el código filtra por un subconjunto (WHERE, if, filtro), indícalo en el Detalle con el filtro exacto y la verificación global que lo expone (p. ej. "contar registros con el valor viejo en toda la tabla = 0").`}
+    : `MODO: criterios + código. Tu trabajo es EXTRAER HECHOS, no juzgar: otro paso compara tus reglas con los criterios y decide su estado.
+- Para CADA criterio de aceptación, busca el código que lo implementa (o lo contradice) y regístralo como regla con su fragmento literal.
+- Si un criterio no aparece en los cambios, búscalo con search_code; si no lo encuentras, anótalo en "Búsquedas sin resultado". Una búsqueda parcial no prueba ausencia.
+- Copia las condiciones y fórmulas tal cual están en el código: el error más costoso es describir una fórmula con otras palabras y cambiar su sentido.
+- Sigue cada valor visible de la salida hasta su cálculo final: si la consulta devuelve un campo que luego otro código transforma, registra ambas fórmulas juntas.
+- Registra también lo que limita el alcance de un criterio (filtros, rangos de fechas, estados, tipos) aunque parezca un detalle.`}
 
 HERRAMIENTAS (solo lectura):
 - diff_file: muestra exactamente qué líneas cambió la rama en un archivo (vs su rama base). Es tu fuente MÁS precisa.
@@ -110,7 +107,7 @@ ${source === 'changeset'
     ? `1. Ya recibiste los DIFFS de los PRs/commits vinculados a la HU: son exactamente lo que se construyó para ella y tu fuente principal. Analízalos primero, sin herramientas.
 2. Usa read_files SOLO si necesitas contexto que el diff no muestra y que cambia el análisis (p. ej. de dónde sale un parámetro, quién invoca el método, qué hace una constante, el job/malla que lo ejecuta). Usa diff_file para archivos "no precargados" relevantes.
 3. Usa search_code solo para criterios que no aparezcan en los cambios (pueden estar en código existente o en otro componente).
-4. Si con los diffs ya puedes clasificar todos los criterios, llama a finish DE INMEDIATO: cada paso extra cuesta tiempo y tokens.`
+4. Si con los diffs ya tienes el código de todos los criterios, llama a finish DE INMEDIATO: cada paso extra cuesta tiempo y tokens.`
     : source === 'branch-diff'
       ? `1. La rama tiene cambios propios respecto a su base: ESOS cambios son la implementación de la HU. Empieza revisándolos con diff_file (prioriza controladores, servicios, casos de uso, adaptadores, consultas y DTOs; luego pruebas unitarias).
 2. Si la lista es enorme, la rama incluye trabajo ajeno: prioriza archivos cuyo nombre coincide con el vocabulario de la HU.
@@ -138,8 +135,7 @@ REGLAS DE CALIDAD:
 - Una búsqueda parcial (el resultado lo indica) no prueba que algo no exista: no lo afirmes como ausente.
 - No inventes comportamiento que no hayas leído.
 - Redacta en lenguaje funcional (qué ve o vive el usuario), no en jerga de implementación.
-- No repitas como comportamiento adicional algo que ya cubre un criterio: si el código solo PRECISA un criterio (mensaje exacto, límite), ponlo en el Detalle de ese criterio.
-- Si un riesgo es CONSECUENCIA de un criterio PARCIAL o DIFERENTE (p. ej. registros huérfanos por un filtro más estrecho), descríbelo en el Detalle de ese criterio con su impacto observable; no lo repitas como RT.
+- Una regla por comportamiento: no repitas la misma condición en dos reglas.
 - No reportes como RT mecánica de despliegue o infraestructura (idempotencia, re-ejecución, contextos del pipeline, logs) salvo que un criterio la mencione: no es comportamiento funcional.
 - Sé conciso: máximo ~50 líneas en total. No incluyas la sección de archivos revisados más allá de una línea por archivo.
 
@@ -172,8 +168,44 @@ ${treeSummary}
 
 Empieza a explorar.`,
 
+  JUDGE_SYSTEM: `
+Eres un analista QA Senior que contrasta los criterios de aceptación de una HU con las reglas extraídas de su código (cada regla trae su fragmento de código LITERAL). Respondes en español y solo con la sección pedida.
+
+ESTADOS (exactamente uno por criterio, sin calificativos):
+- IMPLEMENTADO: con datos realistas y coherentes, la salida cumple el criterio, aunque el mecanismo sea otro (p. ej. una foto/histórico al cierre en lugar de filtrar por fecha de creación). Si depende de cómo otro proceso guarda el dato, indícalo en el Detalle.
+- PARCIAL: cumple solo una parte (falta una condición, rama, campo o alcance).
+- DIFERENTE: hace algo distinto a lo que pide el criterio.
+- SIN EVIDENCIA: ninguna regla trata lo que pide el criterio (revisa "Búsquedas sin resultado"). Lo que no está en el repositorio no es PARCIAL.
+- Que no exista un mecanismo explícito (DISTINCT, una condición "excluir"…) no es SIN EVIDENCIA si el resultado observable se deduce de las reglas: deduce el resultado con datos concretos.
+- Criterios de "sin duplicados": revisa "Fuentes de la salida"; si un mismo registro puede cumplir las condiciones de dos fuentes y se unen sin deduplicar, es PARCIAL con el contraejemplo de un registro que cumpla ambas.
+- Si las reglas muestran que el código hace algo que impide cumplir el criterio (p. ej. une dos listas sin deduplicar, o excluye un caso que el criterio incluye), eso ES evidencia: PARCIAL o DIFERENTE con contraejemplo, nunca SIN EVIDENCIA.
+
+REGLAS:
+- Razona SOLO con el código literal de las reglas, nunca con su descripción: si no coinciden, manda el código.
+- Si el valor visible se calcula en varias etapas (\`etapa 1\` ⇒ \`etapa 2\`), compón las fórmulas sustituyendo números en orden antes de concluir.
+- Un campo acumulado de la tabla (p. ej. un total pagado) ya incluye todos sus movimientos: restarle los movimientos de una ventana de fechas REVIERTE esos movimientos (deja el valor como estaba antes de la ventana).
+- PARCIAL y DIFERENTE exigen un "Contraejemplo:" con datos concretos y ALCANZABLES por los procesos reales (nada de pagos posteriores al momento de ejecución ni fotos al cierre con registros creados después; un rango que termina en el momento de ejecución ya cubre todo lo existente), y su verificación numérica sustituyendo esos datos en la fórmula literal (p. ej. "saldo = 500.000 − (100.000 − 100.000) = 500.000"). Si el cálculo cumple el criterio, no hay contraejemplo: es IMPLEMENTADO.
+- Compara el alcance literal del criterio ("todos", "donde esté") con el del código (filtros WHERE/if): si el código cubre un subconjunto, indícalo con el filtro exacto.
+- La descripción de la HU (el "requiero… para que…") es el objetivo, no un criterio: no la numeres.
+- Un criterio con varias reglas atómicas distintas se divide en varios CA; consecutivos.
+- "Reglas:" lista las reglas RT que sustentan el estado (o "ninguna"). Las consecuencias de un PARCIAL/DIFERENTE van en su Detalle.
+
+FORMATO (solo esto, una línea por criterio, en el orden de los criterios):
+## Cobertura de criterios en el código
+- [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Reglas: RT-01, RT-03`,
+
+  JUDGE_USER: (description: string, acceptanceCriteria: string, facts: string): string => `
+HISTORIA DE USUARIO (objetivo, no es criterio):
+${description?.trim() || 'No proporcionada.'}
+
+CRITERIOS DE ACEPTACIÓN:
+${acceptanceCriteria.trim()}
+
+HECHOS EXTRAÍDOS DEL CÓDIGO:
+${facts}`,
+
   FORCE_FINISH: `
-Se agotó el presupuesto de exploración. Llama AHORA a finish con el contexto técnico usando solo la evidencia ya leída. Los criterios que no alcanzaste a verificar márcalos como SIN EVIDENCIA. No llames otras herramientas.`,
+Se agotó el presupuesto de exploración. Llama AHORA a finish con el contexto técnico usando solo la evidencia ya leída. Lo que no alcanzaste a verificar anótalo en "Búsquedas sin resultado" (o como no verificable). No llames otras herramientas.`,
 };
 
 /** Definición de herramientas (formato OpenAI / DeepSeek / GitHub Models). */

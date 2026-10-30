@@ -152,9 +152,12 @@ export class CodeExplorerAgentService {
   ): Promise<{ message: ChatMessage; usage?: LlmUsage }> {
     const common = {
       messages,
-      tools,
-      // Al agotar el presupuesto se obliga a llamar a finish.
-      tool_choice: forceFinish ? { type: 'function', function: { name: 'finish' } } : 'auto',
+      // Sin herramientas (juez): respuesta en texto.
+      ...(tools.length ? {
+        tools,
+        // Al agotar el presupuesto se obliga a llamar a finish.
+        tool_choice: forceFinish ? { type: 'function', function: { name: 'finish' } } : 'auto',
+      } : {}),
       // Determinista: el mismo código y la misma HU deben producir la misma matriz.
       temperature: 0,
       max_tokens: 4000,
