@@ -23,10 +23,12 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 (2-5 líneas: qué cambió para esta HU, antes → ahora, capas involucradas)
 
 ## Flujo de ejecución real
-(Base de los pasos de prueba. Una línea por punto, con valores concretos:)
-- Disparo: pantalla/endpoint (método, ruta y parámetros)/job o malla, y cómo invocarlo.
-- Datos a preparar: tablas/entidades y campos que activan cada regla (estados, tipos, categorías, fechas).
-- Salida observable: pantalla/archivo/registro/mensaje, nombre exacto y columnas o campos a revisar.
+(Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
+- Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
+- Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
+- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, y columnas o campos a revisar.
+- Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
 
 ## Cobertura de criterios en el código
 (UNA línea por regla atómica de los criterios, en el mismo orden; numeración CA-01, CA-02…)
@@ -52,10 +54,12 @@ const CONTEXT_FORMAT_CODE_ONLY = `
 (2-5 líneas: qué cambió para esta HU, antes → ahora, capas involucradas)
 
 ## Flujo de ejecución real
-(Base de los pasos de prueba. Una línea por punto, con valores concretos:)
-- Disparo: pantalla/endpoint (método, ruta y parámetros)/job o malla, y cómo invocarlo.
-- Datos a preparar: tablas/entidades y campos que activan cada regla (estados, tipos, categorías, fechas).
-- Salida observable: pantalla/archivo/registro/mensaje, nombre exacto y columnas o campos a revisar.
+(Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
+- Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
+- Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
+- Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, y columnas o campos a revisar.
+- Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
 
 ## Comportamientos implementados
 (Reglas observables, una por línea, agrupando lo que pertenece a la misma regla. Máx. 8: primero los (CAMBIO HU);
