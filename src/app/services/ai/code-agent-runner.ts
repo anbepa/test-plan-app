@@ -600,9 +600,10 @@ export function reconcileChangeLabels(context: string, changedPaths: string[], d
     if (!changedLinesCache.has(path)) changedLinesCache.set(path, collectChangedLines(diff));
     return changedLinesCache.get(path)!;
   };
+  // Admite nombres abreviados ("UseCase.java" → ".../ReceivableAndSpecialUseCase.java").
   const findChanged = (cited: string): string | undefined => {
     const name = cited.toLowerCase();
-    return changedPaths.find((path) => path.toLowerCase().endsWith(name.startsWith('/') ? name : `/${name}`) || path.toLowerCase() === name);
+    return changedPaths.find((path) => (path.toLowerCase().split('/').pop() || '').endsWith(name));
   };
 
   return context.split('\n').map((line) => {

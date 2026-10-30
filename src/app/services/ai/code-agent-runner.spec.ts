@@ -18,6 +18,11 @@ describe('reconcileChangeLabels', () => {
     expect(reconcileChangeLabels(line, changedPaths, diffs)).toBe(line);
   });
 
+  it('reconoce nombres de archivo abreviados', () => {
+    const line = '- [RT-06] (CAMBIO HU) Ventana hasta ahora. Fuente: UseCase.java:112';
+    expect(reconcileChangeLabels(line, changedPaths, diffs)).toBe(line);
+  });
+
   it('pasa a (EXISTENTE) si las líneas citadas no cambiaron', () => {
     const line = '- [RT-02] (CAMBIO HU) Filtro LIFE. Fuente: ReportUseCase.java:38-39, 142-145';
     expect(reconcileChangeLabels(line, changedPaths, diffs)).toContain('(EXISTENTE)');
