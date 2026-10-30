@@ -25,9 +25,10 @@ const CONTEXT_FORMAT_WITH_CRITERIA = `
 
 ## Flujo de ejecución real
 (Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
-- Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Disparo: pantalla (ruta de menú, selecciones y botón, tal como la recorre un usuario) y el endpoint que llama / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
-- Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
+- Opciones de la pantalla: si la pantalla tiene varias opciones (tipo de mantenimiento, pestaña, módulo) que consultan fuentes distintas, una línea por opción: opción → endpoint o fuente → filtro clave (o "Ninguna").
+- Dependencias a simular: solo sistemas fuera del producto (terceros, otros dominios); los microservicios y BD propios del flujo son el sistema bajo prueba y NO se simulan. Servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
 - Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
 - Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
@@ -57,9 +58,10 @@ const CONTEXT_FORMAT_CODE_ONLY = `
 
 ## Flujo de ejecución real
 (Guía para que QA ejecute la prueba sin conocer el código. Lenguaje funcional: tablas, campos, endpoints y archivos; NUNCA clases ni métodos. Una línea por punto, con valores concretos:)
-- Disparo: pantalla (ruta de menú y botón) / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
+- Disparo: pantalla (ruta de menú, selecciones y botón, tal como la recorre un usuario) y el endpoint que llama / endpoint (método, ruta, parámetros con su default) / job o malla (nombre y programación). Si es un job, cómo forzarlo en pruebas (endpoint que invoca o parámetro de fecha). Si un parámetro define el periodo o los datos procesados, da un ejemplo de su efecto (p. ej. "endDate=2024-06-01 → procesa el cierre 2024-05-31").
 - Datos a preparar: primero el registro base mínimo para que un dato sea procesado (tablas y relaciones obligatorias del flujo), luego por regla la columna=valor que la activa; formato \`esquema.tabla\` (columna=valor). Solo tablas y columnas vistas en el código.
-- Dependencias a simular: servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
+- Opciones de la pantalla: si la pantalla tiene varias opciones (tipo de mantenimiento, pestaña, módulo) que consultan fuentes distintas, una línea por opción: opción → endpoint o fuente → filtro clave (o "Ninguna").
+- Dependencias a simular: solo sistemas fuera del producto (terceros, otros dominios); los microservicios y BD propios del flujo son el sistema bajo prueba y NO se simulan. Servicios externos, buckets, colas u otros microservicios que el flujo llama, y qué deben responder (o "Ninguna").
 - Fuentes de la salida: si el resultado combina varias consultas/fuentes, una línea por fuente con sus condiciones de inclusión y el valor que aporta (así se detectan solapamientos y duplicados).
 - Salida observable: pantalla/archivo (nombre exacto)/registro/respuesta, columnas o campos a revisar y cómo identificar un registro en ella (columnas que lo distinguen si la salida no muestra un id).
 - Consulta de control: tabla y filtros para calcular el valor esperado en BD (p. ej. "\`esquema.tabla\` filtrando columna=valor"), si aplica.
@@ -184,6 +186,7 @@ REGLAS:
 - Razona SOLO con el código literal de las reglas, nunca con su descripción: si no coinciden, manda el código.
 - Si el valor visible se calcula en varias etapas (\`etapa 1\` ⇒ \`etapa 2\`), compón las fórmulas sustituyendo números en orden antes de concluir.
 - Un campo acumulado de la tabla (p. ej. un total pagado) ya incluye todos sus movimientos: restarle los movimientos de una ventana de fechas REVIERTE esos movimientos (deja el valor como estaba antes de la ventana).
+- Si el criterio usa un término de negocio y el código filtra por su equivalente técnico en el dominio (p. ej. "productos de moneda local" ⇔ moneda COP), cuenta como implementado; un contraejemplo que exige un dato que el negocio no produce (p. ej. un producto en moneda extranjera pagado en COP) no es alcanzable, salvo que la HU o el código muestren que existe.
 - PARCIAL y DIFERENTE exigen un "Contraejemplo:" con datos concretos y ALCANZABLES por los procesos reales (nada de pagos posteriores al momento de ejecución ni fotos al cierre con registros creados después; un rango que termina en el momento de ejecución ya cubre todo lo existente), y su verificación numérica sustituyendo esos datos en la fórmula literal (p. ej. "saldo = 500.000 − (100.000 − 100.000) = 500.000"). Si el cálculo cumple el criterio, no hay contraejemplo: es IMPLEMENTADO.
 - Compara el alcance literal del criterio ("todos", "donde esté") con el del código (filtros WHERE/if): si el código cubre un subconjunto, indícalo con el filtro exacto.
 - La descripción de la HU (el "requiero… para que…") es el objetivo, no un criterio: no la numeres.

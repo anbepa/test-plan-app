@@ -111,6 +111,8 @@ export interface WorkItemChangeGroup {
 export interface WorkItemChanges {
   workItemId: number;
   groups: WorkItemChangeGroup[];
+  /** PRs vinculados que no se analizan (promociones entre ramas o de otra HU). */
+  omitted?: { repositoryName: string; prId: number; title: string; reason: string }[];
 }
 
 export interface AzureRepoSearchResult {

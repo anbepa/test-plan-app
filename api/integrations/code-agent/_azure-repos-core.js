@@ -612,8 +612,9 @@ async function getWorkItemChanges(organization, pat, workItemId) {
   }));
 
   // Agrupar por repo + rama destino.
+  const { kept, omitted } = dropForeignSegments(segments.filter((item) => item.baseCommit && item.targetCommit), id);
   const groupsByKey = new Map();
-  for (const segment of segments.filter((item) => item.baseCommit && item.targetCommit)) {
+  for (const segment of kept) {
     const key = `${segment.repositoryId}|${segment.targetBranch}`;
     if (!groupsByKey.has(key)) groupsByKey.set(key, []);
     groupsByKey.get(key).push(segment);
@@ -667,7 +668,34 @@ async function getWorkItemChanges(organization, pat, workItemId) {
     result.push(group);
   }
 
-  return { workItemId: id, groups: result };
+  return { workItemId: id, groups: result, omitted };
+}
+
+const INTEGRATION_BRANCH = /^(releases?\/.+|current|current-qa|trunk|main|master|develop|dev|qa|staging)$/i;
+const HU_IN_BRANCH = /(?:^|[^a-z0-9])(?:hu|us|wi)[_-]?(\d{5,})/i;
+
+/**
+ * Descarta PRs que no son trabajo de la HU: promociones entre ramas de integración
+ * (current → release, release → trunk: traen cambios de muchas HUs) y PRs cuya
+ * rama nombra otra HU (vinculados por error). Si no queda nada, conserva todo.
+ */
+function dropForeignSegments(segments, workItemId) {
+  const reasonOf = (segment) => {
+    if (!segment.pr) return null;
+    if (INTEGRATION_BRANCH.test(segment.pr.sourceBranch)) return 'promoción entre ramas de integración';
+    const hu = segment.pr.sourceBranch.match(HU_IN_BRANCH);
+    if (hu && Number(hu[1]) !== workItemId) return `rama de la HU ${hu[1]}`;
+    return null;
+  };
+  const kept = segments.filter((segment) => !reasonOf(segment));
+  if (kept.length === 0) return { kept: segments, omitted: [] };
+  const omitted = segments.filter(reasonOf).map((segment) => ({
+    repositoryName: segment.repositoryName || segment.repositoryId,
+    prId: segment.pr.id,
+    title: segment.pr.title,
+    reason: reasonOf(segment),
+  }));
+  return { kept, omitted };
 }
 
 /**
