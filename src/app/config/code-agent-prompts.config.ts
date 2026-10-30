@@ -196,6 +196,8 @@ REGLAS:
 - Un criterio con varias reglas atómicas distintas se divide en varios CA; consecutivos.
 - "Reglas:" lista las reglas RT que sustentan el estado (o "ninguna"). Las consecuencias de un PARCIAL/DIFERENTE van en su Detalle.
 
+CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen" e "Interpretación" no se evalúan.
+
 FORMATO (solo esto, una línea por criterio, en el orden de los criterios):
 ## Cobertura de criterios en el código
 - [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Reglas: RT-01, RT-03`,

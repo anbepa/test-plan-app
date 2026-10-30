@@ -1335,3 +1335,38 @@ textarea.form-control.auto-grow {
   outline: 2px solid #1d4ed8;
   outline-offset: 1px;
 }
+
+/* Criterios interpretados (CA-xx) */
+.criteria-normalized {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem 0.75rem;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.criteria-normalized-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.criteria-normalized-status {
+  font-weight: 400;
+  color: #64748b;
+}
+
+.criteria-normalized-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.criteria-coverage-gap {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.85rem;
+}

@@ -211,11 +211,30 @@
           <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
             [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
             [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
-            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)"></textarea>
+            class="form-control auto-grow" (input)="autoGrowTextarea($event.target)" (blur)="refreshNormalizedCriteria()"></textarea>
           <div
             *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
             class="validation-error" role="alert">
             Criterios de Aceptación son requeridos.
+          </div>
+
+          <div *ngIf="currentAcceptanceCriteria.trim() && (normalizingCriteria || normalizedCriteria)" class="criteria-normalized" aria-live="polite">
+            <div class="md-box-header criteria-normalized-header">
+              <span class="criteria-normalized-title">
+                Criterios a cubrir<span *ngIf="normalizedCriteriaCount"> ({{ normalizedCriteriaCount }})</span>
+                <span *ngIf="normalizingCriteria" class="criteria-normalized-status">· interpretando…</span>
+              </span>
+              <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios a cubrir" *ngIf="normalizedCriteria && !normalizingCriteria">
+                <button type="button" [class.is-active]="!normalizedCriteriaEditing" (click)="normalizedCriteriaEditing = false">Vista</button>
+                <button type="button" [class.is-active]="normalizedCriteriaEditing" (click)="editNormalizedCriteria()">Editar</button>
+              </div>
+            </div>
+            <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">Cada CA tendrá al menos un escenario propio. Corrígelo solo si la interpretación no es la correcta.</p>
+            <div *ngIf="normalizedCriteria && !normalizedCriteriaEditing" class="form-control md-preview"
+              [innerHTML]="normalizedCriteria | markdownLite" (dblclick)="editNormalizedCriteria()" title="Doble clic para editar"></div>
+            <textarea *ngIf="normalizedCriteriaEditing" id="tcNormalizedCriteria" name="normalizedCriteria"
+              [(ngModel)]="normalizedCriteria" class="form-control code-context-textarea"
+              (input)="autoGrowTextarea($event.target)"></textarea>
           </div>
         </div>
 
@@ -358,6 +377,10 @@
 
       <!-- MODO PREVISUALIZACIÓN -->
       <ng-container *ngIf="componentState === 'previewingGenerated'">
+
+        <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
+          ⚠ Sin escenario: {{ criteriaCoverageGap.join(', ') }}. Usa refinar para cubrirlos.
+        </p>
 
         <!-- Acciones arriba de la tabla -->
         <div class="preview-top-actions" *ngIf="!loadingScenarios && (generatedHUData.detailedTestCases.length || 0) > 0 && !errorScenarios">

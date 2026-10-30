@@ -14,6 +14,8 @@ import { AzureDevOpsImportedUserStory } from '../models/azure-devops.model';
 import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
+import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
+import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
 import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChanges } from '../models/code-agent.model';
 
 interface CoverageRow {
@@ -95,6 +97,56 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   criteriaEditing: boolean = true;
   codeContextEditing: boolean = false;
   private codeAgentSub?: Subscription;
+
+  /** Criterios interpretados como lista numerada (CA-xx): cada uno tendrá un escenario propio. */
+  normalizedCriteria: string = '';
+  /** Criterios originales a los que corresponde normalizedCriteria. */
+  private normalizedCriteriaFor: string = '';
+  normalizingCriteria: boolean = false;
+  normalizedCriteriaEditing: boolean = false;
+  /** CA-xx que quedaron sin escenario en la última generación. */
+  criteriaCoverageGap: string[] = [];
+
+  /** Criterios que reciben el agente y la generación: la lista numerada si existe. */
+  get effectiveCriteria(): string {
+    const raw = this.currentAcceptanceCriteria.trim();
+    return raw && this.normalizedCriteriaFor === raw && this.normalizedCriteria.trim() ? this.normalizedCriteria.trim() : this.currentAcceptanceCriteria;
+  }
+
+  get normalizedCriteriaCount(): number {
+    return criteriaIds(this.normalizedCriteria).length;
+  }
+
+  private get needsCriteriaNormalization(): boolean {
+    const raw = this.currentAcceptanceCriteria.trim();
+    return !!raw && this.normalizedCriteriaFor !== raw;
+  }
+
+  /** Interpreta los criterios del funcional; si falla, se usan tal cual. */
+  async refreshNormalizedCriteria(): Promise<void> {
+    if (!this.needsCriteriaNormalization || this.normalizingCriteria) return;
+    const raw = this.currentAcceptanceCriteria.trim();
+    this.normalizingCriteria = true;
+    this.normalizedCriteriaEditing = false;
+    this.cdr.markForCheck();
+    let text = '';
+    try {
+      text = await this.criteriaNormalizer.normalize(this.currentDescription, raw);
+    } catch (error) {
+      console.warn('[CRITERIA] No se pudieron interpretar los criterios; se usan tal cual.', error);
+    }
+    this.normalizingCriteria = false;
+    if (raw === this.currentAcceptanceCriteria.trim()) {
+      this.normalizedCriteria = text;
+      this.normalizedCriteriaFor = raw;
+    }
+    this.cdr.markForCheck();
+  }
+
+  editNormalizedCriteria(): void {
+    this.normalizedCriteriaEditing = true;
+    this.growAndFocus('tcNormalizedCriteria');
+  }
 
   get usesCodeContext(): boolean {
     return this.contextSource !== 'criteria';
@@ -275,7 +327,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private azureDevOpsIntegrationService: AzureDevOpsIntegrationService,
     private cellsConfigService: CellsConfigService,
     private azureReposService: AzureReposService,
-    private codeExplorerAgent: CodeExplorerAgentService
+    private codeExplorerAgent: CodeExplorerAgentService,
+    private criteriaNormalizer: CriteriaNormalizerService
   ) { }
 
   ngOnInit(): void {
@@ -412,6 +465,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.currentDescription = '';
     this.currentAcceptanceCriteria = '';
     this.criteriaEditing = true;
+    this.normalizedCriteria = '';
+    this.normalizedCriteriaFor = '';
+    this.criteriaCoverageGap = [];
     this.currentGenerationContext = '';
     this.generatedHUData = null;
     this.userRefinementContext = '';
@@ -492,6 +548,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.currentDescription = importedHu.description || '';
           this.currentAcceptanceCriteria = importedHu.acceptanceCriteria || '';
           this.criteriaEditing = false;
+          this.refreshNormalizedCriteria();
 
           const matchedCell = this.resolveCellFromAzureNodeName(importedHu.nodeName);
           if (matchedCell) {
@@ -840,6 +897,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.codeAgentError = 'Escribe la descripción de la HU antes de explorar el código.';
       return;
     }
+    // El juez evalúa la misma lista numerada que luego cubre la generación.
+    if (this.needsCriteriaNormalization) {
+      this.refreshNormalizedCriteria().then(() => this.exploreCode(onDone, useCache));
+      return;
+    }
 
     const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
 
@@ -863,7 +925,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       },
       mode: this.contextSource,
       description: this.currentDescription,
-      acceptanceCriteria: this.currentAcceptanceCriteria,
+      acceptanceCriteria: this.effectiveCriteria,
       userRequest: this.currentGenerationContext
     }, { useCache }).subscribe({
       next: (event) => {
@@ -949,16 +1011,21 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
     // Con código como fuente: si aún no hay contexto técnico, el agente explora
     // primero y al terminar continúa automáticamente con la generación.
+    if (this.needsCriteriaNormalization) {
+      this.refreshNormalizedCriteria().then(() => this.generateInitialHuAndCases());
+      return;
+    }
     if (this.usesCodeContext && !this.codeContextText.trim()) {
       this.exploreCode(() => this.generateInitialHuAndCases());
       return;
     }
+    this.criteriaCoverageGap = [];
     const codeContext = this.usesCodeContext ? this.codeContextText.trim() : '';
     const huData: UIHUData = {
       originalInput: {
         generationMode: this.currentGenerationMode,
         description: this.currentDescription,
-        acceptanceCriteria: this.currentAcceptanceCriteria,
+        acceptanceCriteria: this.effectiveCriteria,
         selectedTechnique: this.currentSelectedTechnique || this.AUTO_TECHNIQUE,
         userRequest: this.currentGenerationContext,
         codeContext: codeContext || undefined,
@@ -1023,6 +1090,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
               this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
                 rawTestCases.map((tc: any) => tc.title)
               );
+              this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases);
             } else {
               console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
               this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';

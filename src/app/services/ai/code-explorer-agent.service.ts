@@ -144,6 +144,14 @@ export class CodeExplorerAgentService {
   // LLM (proveedores actuales con tool calling)
   // ---------------------------------------------------------------------------
 
+  /** Llamada de texto sin herramientas con el proveedor activo (p. ej. normalizar criterios). */
+  async complete(messages: ChatMessage[]): Promise<string> {
+    const providerId = this.providersService.getActiveProviderId();
+    if (providerId === 'gemini') throw new Error('Se requiere DeepSeek o GitHub Models como proveedor activo.');
+    const { message } = await this.callLlm(providerId, messages, [], false);
+    return message.content || '';
+  }
+
   private async callLlm(
     providerId: string | null,
     messages: ChatMessage[],
