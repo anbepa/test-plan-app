@@ -10,6 +10,8 @@ import type {
   AzureRepoTree,
   CodeAgentEvent,
   CodeExplorationInput,
+  FileDiffSegments,
+  WorkItemChangedFile,
   WorkItemChangeGroup,
   WorkItemChanges,
 } from '../../models/code-agent.model';
@@ -57,7 +59,7 @@ export interface CodeAgentGateway {
   readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Promise<AzureRepoFile[]>;
   search(ref: RepoRef, terms: string[], paths: string[]): Promise<AzureRepoSearchResult>;
   getBranchDiff(ref: RepoRef, baseBranch: string): Promise<AzureBranchDiff>;
-  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string): Promise<AzureFileDiff>;
+  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string, segments?: FileDiffSegments): Promise<AzureFileDiff>;
   /** Búsqueda en todos los repos del aplicativo (opcional: sin ella, search_app no está disponible). */
   searchApp?(projectId: string, repoPrefixes: string[], terms: string[]): Promise<AzureAppSearchResult>;
 }
@@ -119,7 +121,7 @@ const BUILD_FILE = /(^|\/)(build\.gradle|settings\.gradle|pom\.xml|package\.json
 interface Workspace {
   name: string;
   ref: RepoRef;
-  files: { path: string; changeType: string; baseCommit: string; targetCommit: string }[];
+  files: WorkItemChangedFile[];
   group: WorkItemChangeGroup;
 }
 
@@ -131,6 +133,13 @@ export class CodeAgentRunner {
   private appSearches = 0;
 
   constructor(private gateway: CodeAgentGateway) {}
+
+  /** Una ruta puede cambiar en varias ramas destino de la HU (p. ej. release/current y trunk): se conservan todos. */
+  private rememberDiff(path: string, diff: string): void {
+    const previous = this.seenDiffs.get(path);
+    if (previous?.includes(diff)) return;
+    this.seenDiffs.set(path, previous ? `${previous}\n${diff}` : diff);
+  }
 
   async run(
     input: CodeExplorationInput,
@@ -343,7 +352,8 @@ export class CodeAgentRunner {
       }
       for (const ws of workspaces) {
         const prs = ws.group.prs.map((pr) => `PR ${pr.id}`).join(', ') || `${ws.group.commits.length} commit(s)`;
-        const also = ws.group.alsoMergedInto.length ? ` (también en ${ws.group.alsoMergedInto.join(', ')})` : '';
+        const also = (ws.group.extraOver ? ` (cambios adicionales a ${ws.group.extraOver})` : '')
+          + (ws.group.alsoMergedInto.length ? ` (también en ${ws.group.alsoMergedInto.join(', ')})` : '');
         emit({ type: 'progress', message: `${ws.name} → ${ws.group.targetBranch}${also}: ${prs}, ${ws.files.length} archivo(s).` });
       }
       return workspaces;
@@ -364,7 +374,7 @@ export class CodeAgentRunner {
     emit({ type: 'tool', message: `🧬 Precargando diffs de ${entries.filter((entry) => priority(entry.file.path) < 2).length} archivo(s) de la HU…` });
     const diffs = await this.mapLimit(entries, CODE_AGENT_BUDGET.diffConcurrency, async ({ ws, file }) => {
       if (priority(file.path) === 2) return null; // build/config: solo se listan
-      return this.gateway.getFileDiff(ws.ref, { path: file.path, changeType: file.changeType }, file.baseCommit, file.targetCommit)
+      return this.gateway.getFileDiff(ws.ref, { path: file.path, changeType: file.changeType }, file.baseCommit, file.targetCommit, file)
         .catch((error: any) => ({ path: file.path, error: error?.message || 'error' } as AzureFileDiff));
     });
 
@@ -375,7 +385,7 @@ export class CodeAgentRunner {
       const label = multiRepo ? `${ws.name}:${file.path}` : file.path;
       const diff = diffs[index];
       const kind = priority(file.path) === 2 ? 'build/config' : priority(file.path) === 1 ? 'prueba' : 'código';
-      if (diff?.diff) this.seenDiffs.set(file.path, diff.diff);
+      if (diff?.diff) this.rememberDiff(file.path, diff.diff);
       if (diff && diff.diff && used + diff.diff.length <= CODE_AGENT_BUDGET.preloadDiffChars) {
         used += diff.diff.length;
         inlined.push(`=== ${file.path} [${file.changeType}, ${kind}${multiRepo ? `, repo ${ws.name}` : ''}; +${diff.added}/-${diff.removed}] ===\n${diff.diff}`);
@@ -388,7 +398,8 @@ export class CodeAgentRunner {
       const group = ws.group;
       const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`);
       const commits = group.commits.map((commit) => `commit ${commit.sha.slice(0, 8)} "${commit.comment || ''}"`);
-      return `Repositorio ${ws.name} → ${group.targetBranch}${group.alsoMergedInto.length ? ` (también integrado en ${group.alsoMergedInto.join(', ')})` : ''}:\n${[...prs, ...commits].map((line) => `  - ${line}`).join('\n')}`;
+      const extra = group.extraOver ? ` (trae cambios adicionales a los de ${group.extraOver}; sus diffs muestran solo lo adicional)` : '';
+      return `Repositorio ${ws.name} → ${group.targetBranch}${extra}${group.alsoMergedInto.length ? ` (también integrado en ${group.alsoMergedInto.join(', ')})` : ''}:\n${[...prs, ...commits].map((line) => `  - ${line}`).join('\n')}`;
     }).join('\n');
 
     return [
@@ -573,10 +584,10 @@ export class CodeAgentRunner {
           const wsFile = workspace?.files.find((file) => file.path.toLowerCase() === requested);
           if (wsFile) {
             emit({ type: 'tool', message: `🧬 Diff de ${wsFile.path.split('/').pop()}` });
-            const fileDiff = await this.gateway.getFileDiff(ref, { path: wsFile.path, changeType: wsFile.changeType }, wsFile.baseCommit, wsFile.targetCommit);
+            const fileDiff = await this.gateway.getFileDiff(ref, { path: wsFile.path, changeType: wsFile.changeType }, wsFile.baseCommit, wsFile.targetCommit, wsFile);
             if (fileDiff.error) return `=== ${wsFile.path} ===\nERROR: ${fileDiff.error}`;
             filesReviewed.add(wsFile.path);
-            if (fileDiff.diff) this.seenDiffs.set(wsFile.path, fileDiff.diff);
+            if (fileDiff.diff) this.rememberDiff(wsFile.path, fileDiff.diff);
             return `=== ${wsFile.path} (+${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
           }
           const change = ctx.branchDiff?.changes.find((item) => item.path.toLowerCase() === requested);
@@ -587,7 +598,7 @@ export class CodeAgentRunner {
           const fileDiff = await this.gateway.getFileDiff(ref, change, ctx.branchDiff.commonCommit, ctx.branchDiff.targetCommit);
           if (fileDiff.error) return `=== ${change.path} ===\nERROR: ${fileDiff.error}`;
           filesReviewed.add(change.path);
-          if (fileDiff.diff) this.seenDiffs.set(change.path, fileDiff.diff);
+          if (fileDiff.diff) this.rememberDiff(change.path, fileDiff.diff);
           return `=== ${change.path} (${change.changeType}; +${fileDiff.added}/-${fileDiff.removed}) ===\n${fileDiff.diff}`;
         }
 

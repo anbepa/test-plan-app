@@ -5,148 +5,23 @@
             <span class="breadcrumb-separator">/</span>
             <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del
                 Plan</button>
-            <ng-container *ngIf="!isContextPage">
-                <span class="breadcrumb-separator">/</span>
-                <button type="button" class="breadcrumb-button breadcrumb-link"
-                    (click)="goToScenariosTable()">hu-scenarios</button>
-            </ng-container>
-            <ng-container *ngIf="isContextPage">
-                <span class="breadcrumb-separator">/</span>
-                <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToRefinerPage()">Editar /
-                    Refinar con IA</button>
-            </ng-container>
             <span class="breadcrumb-separator">/</span>
-            <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">{{
-                isContextPage ? 'Regenerar Escenarios con Contexto' : 'Editar / Refinar con IA' }}</button>
+            <button type="button" class="breadcrumb-button breadcrumb-link"
+                (click)="goToScenariosTable()">hu-scenarios</button>
+            <span class="breadcrumb-separator">/</span>
+            <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Editar /
+                Refinar con IA</button>
         </div>
     </div>
 
     <div class="refiner-content">
-            <!-- Formulario estilo Generator -->
-        <div class="gen-form-card" *ngIf="isContextPage">
-
-            <!-- Header compacto al estilo generator -->
-            <div class="gen-form-header">
-                <div class="gen-header-content">
-                    <div class="gen-header-main">
-                        <h2 class="gen-section-title">Regenerar Escenarios con IA</h2>
-                    </div>
-                </div>
-            </div>
-
-            <div *ngIf="isLoadingDb" class="gen-loading-state">
-                <span class="spinner-sm"></span>
-                <span>Cargando datos desde base de datos...</span>
-            </div>
-
-            <ng-container *ngIf="!isLoadingDb">
-                <!-- Bloque de metadatos compacto -->
-                <div class="gen-metadata-block">
-                    <div class="gen-metadata-grid">
-                        <div class="gen-form-group">
-                            <label for="rfHuId">ID de la HU:<span class="gen-required">*</span></label>
-                            <input id="rfHuId" type="text" class="gen-control" [(ngModel)]="editedHuId"
-                                [disabled]="isLoading" placeholder="Ej: HU_1234" />
-                        </div>
-                        <div class="gen-form-group gen-title-group">
-                            <label for="rfHuTitle">Título de la HU:<span class="gen-required">*</span></label>
-                            <input id="rfHuTitle" type="text" class="gen-control" [(ngModel)]="editedTitle"
-                                [disabled]="isLoading" placeholder="Como usuario, quiero..." />
-                        </div>
-                        <div class="gen-form-group">
-                            <label for="rfCellName">Nombre Célula:<span class="gen-required">*</span></label>
-                            <select id="rfCellName" class="gen-control" [(ngModel)]="editedCellName"
-                                [disabled]="isLoading">
-                                <option value="" disabled>Seleccione una célula</option>
-                                <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
-                            </select>
-                        </div>
-                        <div class="gen-form-group">
-                            <label for="rfSprint">Sprint:<span class="gen-required">*</span></label>
-                            <input id="rfSprint" type="text" class="gen-control" [(ngModel)]="editedSprint"
-                                [disabled]="isLoading" placeholder="Ej: Sprint 1" />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Campos principales -->
-                <div class="gen-form-grid">
-                    <div class="gen-form-group gen-full-width">
-                        <label for="rfDescription">Descripción de la HU:<span class="gen-required">*</span></label>
-                        <textarea id="rfDescription" class="gen-control" rows="4" [(ngModel)]="editedDescription"
-                            [disabled]="isLoading"
-                            placeholder="Ej: La HU describe la funcionalidad..."></textarea>
-                    </div>
-
-                    <div class="gen-form-group gen-full-width">
-                        <label for="rfAcceptanceCriteria">Criterios de Aceptación:<span class="gen-required">*</span></label>
-                        <textarea id="rfAcceptanceCriteria" class="gen-control" rows="6"
-                            [(ngModel)]="editedAcceptanceCriteria" [disabled]="isLoading"
-                            placeholder="Ej: - Dado que..."></textarea>
-                    </div>
-
-                    <!-- Contexto adicional con tags rápidos -->
-                    <div class="gen-form-group gen-full-width">
-                        <label for="rfContext">
-                            Contexto adicional (opcional):
-                            <span class="gen-context-hint">— ¿qué deseas ajustar, ampliar o priorizar?</span>
-                        </label>
-                        <textarea id="rfContext" class="gen-control" rows="4" [(ngModel)]="editedContext"
-                            [disabled]="isLoading"
-                            placeholder="Agrega criterios específicos o restricciones del sistema. Ej: Priorizar casos negativos en validaciones de negocio..."></textarea>
-                        <div class="rf-quick-tags" style="margin-top: 0.6rem;">
-                            <button *ngFor="let tag of contextQuickTags" type="button"
-                                class="rf-tag" (click)="appendContextTag(tag)" [disabled]="isLoading">
-                                {{ tag }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Error de formulario -->
-                <div *ngIf="formError" class="gen-form-error" role="alert">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
-                        style="width:16px;height:16px;flex-shrink:0">
-                        <path fill-rule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
-                            clip-rule="evenodd" />
-                    </svg>
-                    {{ formError }}
-                </div>
-
-                <!-- Hint de validación + Botón de acción principal -->
-                <div class="gen-form-actions">
-                    <span class="gen-validation-hint" *ngIf="!isFormValid">
-                        Completa Título, Criterios y Célula para continuar
-                    </span>
-                    <button type="button" class="gen-btn-primary gen-full-width-action"
-                        (click)="regenerateWithAI()"
-                        [disabled]="isLoading || isRefining || !isFormValid">
-                        <span *ngIf="isRefining" class="spinner-sm" style="border-top-color:#fff"></span>
-                        <svg *ngIf="!isRefining" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-                            fill="currentColor" style="width:18px;height:18px">
-                            <path fill-rule="evenodd"
-                                d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z"
-                                clip-rule="evenodd" />
-                        </svg>
-                        {{ isRefining ? 'Regenerando casos...' : 'Regenerar Casos con IA' }}
-                    </button>
-                </div>
-            </ng-container>
-        </div>
-
-        <div *ngIf="!isContextPage && isLoadingDb" class="input-loading-state" style="padding: 0.5rem 0 1rem;">
+        <div *ngIf="isLoadingDb" class="input-loading-state" style="padding: 0.5rem 0 1rem;">
             <span class="spinner-sm"></span>
             <span>Cargando casos desde base de datos...</span>
         </div>
 
-        <ng-container *ngIf="!isContextPage && !isLoadingDb">
+        <ng-container *ngIf="!isLoadingDb">
             <div class="actions table-actions" style="margin-top:0;margin-bottom:1rem;">
-                <button class="button-ai" (click)="openContextRegeneratorPage()"
-                    [disabled]="isLoading || isRefining"
-                    title="Regenera todos los escenarios usando la HU {{ hu.id }} como contexto y los criterios de aceptación actuales">
-                    ✦ Regenerar Escenarios con contexto
-                </button>
                 <button (click)="addNewTestCase()" [disabled]="isLoading" class="button-secondary">
                     + Agregar Caso
                 </button>
@@ -160,7 +35,7 @@
                                 <th class="check-col">
                                     <input type="checkbox" [checked]="areAllTestCasesSelected()"
                                         (change)="onToggleSelectAllTestCases($any($event.target).checked)"
-                                        [disabled]="isLoading || isRefining">
+                                        [disabled]="isLoading">
                                 </th>
                                 <th>ID Caso</th>
                                 <th>Escenario de Prueba (Título)</th>
@@ -176,7 +51,7 @@
                                     <td class="check-col" data-label="Seleccionar">
                                         <input type="checkbox" [checked]="isTestCaseSelected(i)"
                                             (change)="onTestCaseSelectionChange(i, $any($event.target).checked)"
-                                            [disabled]="isLoading || isRefining">
+                                            [disabled]="isLoading">
                                     </td>
                                     <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
                                     <td data-label="Escenario de Prueba (Título)">
@@ -267,18 +142,18 @@
                         {{ selectedTestCaseIndexes.length === 1 ? 'caso seleccionado' : 'casos seleccionados' }}
                     </span>
                     <button type="button" class="bulk-delete-btn" (click)="requestDeleteSelectedTestCases()"
-                        [disabled]="isLoading || isRefining">
+                        [disabled]="isLoading">
                         <span class="icon-trash-white"></span>
                         Eliminar seleccionados
                     </button>
                     <button type="button" class="bulk-cancel-btn" (click)="selectedTestCaseIndexes = []"
-                        [disabled]="isLoading || isRefining">Cancelar</button>
+                        [disabled]="isLoading">Cancelar</button>
                 </div>
             </div>
 
             <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="empty-state">
                 <h3>No hay casos de prueba</h3>
-                <p>Usa el botón "Regenerar Escenarios con contexto" para generar escenarios con IA.</p>
+                <p>Usa "+ Agregar Caso" para crear un escenario.</p>
             </div>
         </ng-container>
     </div>
@@ -294,12 +169,4 @@
 <app-confirmation-modal [isOpen]="isDeleteModalOpen" [title]="deleteModalTitle" [message]="deleteModalMessage"
     confirmText="Eliminar" cancelText="Cancelar" type="danger" (confirm)="onConfirmDeleteTestCase()"
     (cancel)="onCancelDeleteTestCase()">
-</app-confirmation-modal>
-
-<app-confirmation-modal [isOpen]="isAiBusy" mode="progress" [allowBackdropClose]="false" [title]="aiProgressTitle"
-    [message]="aiProgressMessage" [progressStep]="aiProgressStep"
-    [streamingReasoning]="streamingReasoning" [streamingContent]="streamingContent"
-    [testPlanData]="currentHuDataForModal"
-    progressHint=""
-    (cancelProgress)="cancelAiGeneration()">
 </app-confirmation-modal>

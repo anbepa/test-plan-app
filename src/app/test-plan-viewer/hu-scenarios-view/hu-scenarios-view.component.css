@@ -187,9 +187,8 @@
 /* ── Per-row action column ── */
 .detailed-test-cases-table th.actions-col,
 .detailed-test-cases-table td.actions-col {
-  width: 52px;
+  width: 88px;
   text-align: center;
-  vertical-align: middle;
 }
 
 .row-action-btn {
@@ -251,8 +250,6 @@
   background: color-mix(in srgb, #2563eb 9%, #ffffff) !important;
   border-color: #2563eb !important;
 }
-
-
 
 .plan-section-content {
   background: #f9fafb;
@@ -579,7 +576,6 @@
   color: #374151;
 }
 
-
 /* ==================== EDITING MODE STYLES (from refiner) ==================== */
 
 .check-col {
@@ -708,6 +704,38 @@
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
+/* En edición los campos crecen con el contenido en lugar de mostrar scroll interno */
+.row-editing textarea.table-field {
+    field-sizing: content;
+    min-height: 64px;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+/* Mientras se edita una fila, anchos repartidos sobre el ancho disponible: ningún campo queda
+   diminuto y la tabla no desborda en horizontal. "Paso a paso" toma el espacio restante. */
+.detailed-test-cases-table:has(.row-editing) {
+    table-layout: fixed;
+    /* Ocupa justo el contenedor: el min-width de la vista de lectura la hacía desbordar */
+    min-width: 0;
+}
+.detailed-test-cases-table:has(.row-editing) th:nth-child(1) { width: 44px; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(2) { width: 108px; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(3) { width: 14%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(4) { width: 14%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(6) { width: 19%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(7) { width: 64px; }
+/* ✓ y ✕ apilados para caber en la columna de acciones */
+.row-editing .row-actions {
+    flex-direction: column;
+}
+.detailed-test-cases-table:has(.row-editing) :is(th, td) {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+    overflow-wrap: anywhere;
+}
+
+.row-editing textarea.step-textarea,
 .step-textarea {
     resize: none;
     min-height: 34px;
@@ -737,51 +765,145 @@
 }
 
 .step-editor-row {
+    position: relative;
     display: flex;
     align-items: flex-start;
-    gap: 0.4rem;
+    gap: 0.35rem;
+    border-radius: 8px;
 }
+
+.step-editor-row.is-dragging {
+    opacity: 0.45;
+}
+
+/* Línea indicadora de dónde caerá el paso arrastrado */
+.step-editor-row.drop-above::before,
+.step-editor-row.drop-below::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: #2563eb;
+}
+.step-editor-row.drop-above::before { top: -4px; }
+.step-editor-row.drop-below::after { bottom: -4px; }
+
+.step-handle {
+    flex-shrink: 0;
+    width: 16px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #c0c6d0;
+    cursor: grab;
+    border-radius: 4px;
+}
+.step-handle:active { cursor: grabbing; }
+.step-editor-row:hover .step-handle { color: #6b7280; }
 
 .step-number {
     width: 18px;
     color: #9ca3af;
     flex-shrink: 0;
-    padding-top: 0.35rem;
+    padding-top: 0.45rem;
     font-size: 0.8rem;
+    text-align: right;
 }
 
-.step-btn {
+.step-textarea {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Subir / bajar / eliminar: discretos hasta pasar el cursor o enfocar el paso */
+.step-tools {
     flex-shrink: 0;
-    width: 30px;
-    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 34px;
+    padding-top: 2px;
+    opacity: 0.35;
+    transition: opacity 0.15s ease;
+}
+.step-editor-row:hover .step-tools,
+.step-editor-row:focus-within .step-tools {
+    opacity: 1;
+}
+
+.step-tool {
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
     border: none;
-    background: #fef2f2;
-    border-radius: 999px;
-    cursor: pointer;
+    background: transparent;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    opacity: 0.85;
-    transition: opacity 0.15s ease, background 0.15s ease;
-    padding: 0;
+    color: #6b7280;
+    cursor: pointer;
+    box-shadow: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+/* Subir y bajar apilados: ocupan el ancho de un solo botón */
+.step-move {
+    display: inline-flex;
+    flex-direction: column;
+}
+.step-move .step-tool {
+    width: 24px;
+    height: 16px;
+    min-height: 16px;
+    border-radius: 4px;
 }
 
-.step-btn:hover:not(:disabled) {
-    opacity: 1;
-    background: #fee2e2;
+.step-tool:hover:not(:disabled) {
+    background: #eff6ff;
+    color: #2563eb;
 }
-
-.step-btn:disabled {
-    opacity: 0.45;
+.step-tool.danger:hover:not(:disabled) {
+    background: #fef2f2;
+}
+.step-tool:disabled {
+    opacity: 0.3;
     cursor: not-allowed;
 }
+.step-tool:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 1px;
+}
 
-.step-btn.danger {
-    color: #dc2626;
+.steps-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    margin-top: 0.35rem;
+    padding-left: 22px;
+}
+
+.steps-hint {
+    font-size: 0.72rem;
+    color: #9ca3af;
+}
+.steps-hint kbd {
+    font-family: inherit;
+    font-size: 0.68rem;
+    padding: 0 4px;
+    border: 1px solid #e5e7eb;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: #fff;
+    color: #6b7280;
 }
 
 .step-btn-add {
-    margin-top: 0.35rem;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -1184,39 +1306,6 @@ textarea.rf-control {
     line-height: 1.45;
 }
 
-.rf-quick-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.6rem;
-}
-
-.rf-tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.35rem 0.75rem;
-    border: 1.5px dashed #93c5fd;
-    border-radius: 999px;
-    background: #f0f9ff;
-    color: #1d4ed8;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.rf-tag:hover:not(:disabled) {
-    background: #dbeafe;
-    border-color: #60a5fa;
-    color: #1e3a8a;
-}
-
-.rf-tag:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-}
-
 .rf-form-error {
     display: flex;
     align-items: center;
@@ -1328,50 +1417,6 @@ textarea.rf-control {
     to { transform: rotate(360deg); }
 }
 
-/* ══════════════════════════════════════════════════
-   ESTILOS GEN-* — Formulario "Regenerar con Contexto"
-   Replica el look & feel del test-case-generator
-   ══════════════════════════════════════════════════ */
-
-.gen-form-card {
-    background: #FFFFFF;
-    border-radius: 18px;
-    border: 1px solid #E5E7EB;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1.5rem;
-    overflow: hidden;
-}
-
-/* Header compacto */
-.gen-form-header {
-    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
-    border-bottom: 1px solid rgba(229, 231, 235, 0.8);
-    padding: 1.25rem 1.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.gen-header-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
-}
-
-.gen-header-main {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.gen-section-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #111827;
-    margin: 0;
-    line-height: 1.3;
-    letter-spacing: -0.02em;
-}
-
 .gen-header-subtitle {
     display: flex;
     align-items: center;
@@ -1384,244 +1429,3 @@ textarea.rf-control {
     line-height: 1.4;
 }
 
-/* Estado de carga */
-.gen-loading-state {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    color: #6b7280;
-    font-size: 0.875rem;
-    padding: 1.5rem 1.75rem;
-}
-
-.spinner-sm {
-    width: 18px;
-    height: 18px;
-    border: 2px solid #e5e7eb;
-    border-top-color: #2563eb;
-    border-radius: 50%;
-    animation: scenarios-spin 0.7s linear infinite;
-    flex-shrink: 0;
-}
-
-/* Bloque de metadatos */
-.gen-metadata-block {
-    background: #f8fafc;
-    border-bottom: 1px solid #e5e7eb;
-    padding: 1rem 1.5rem;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.gen-metadata-grid {
-    display: grid;
-    grid-template-columns: minmax(140px, 1fr) minmax(280px, 2fr) minmax(140px, 1fr);
-    gap: 16px;
-    width: 100%;
-    align-items: start;
-}
-
-.gen-title-group {
-    grid-column: span 1;
-}
-
-/* Grid principal de campos */
-.gen-form-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
-    padding: 1.5rem;
-}
-
-.gen-full-width {
-    grid-column: 1 / -1;
-}
-
-/* Grupo de campo */
-.gen-form-group {
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.gen-form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #374151;
-}
-
-.gen-required {
-    color: #EF4444;
-    margin-left: 4px;
-    font-weight: 600;
-}
-
-.gen-context-hint {
-    font-weight: 400;
-    color: #6b7280;
-    font-size: 0.82rem;
-    margin-left: 4px;
-}
-
-/* Control de formulario */
-.gen-control {
-    width: 100%;
-    padding: 0.75rem 1rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    font-size: 0.95rem;
-    line-height: 1.5;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    background-color: #fff;
-    color: #1f2937;
-    font-family: inherit;
-    box-sizing: border-box;
-    appearance: auto;
-}
-
-.gen-control:focus {
-    border-color: #2563eb;
-    outline: 0;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.gen-control:disabled {
-    background: #f9fafb;
-    color: #9ca3af;
-    cursor: not-allowed;
-}
-
-textarea.gen-control {
-    min-height: 100px;
-    resize: vertical;
-}
-
-/* Error de formulario */
-.gen-form-error {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0 1.5rem;
-    padding: 0.75rem 1rem;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 8px;
-    color: #b91c1c;
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-/* Sección de acciones */
-.gen-form-actions-row {
-    padding: 1.25rem 1.5rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.gen-actions-btn-group {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.gen-validation-hint {
-    text-align: left;
-    font-size: 0.82rem;
-    color: #9ca3af;
-    font-weight: 500;
-}
-
-/* Botón primario — idéntico al generator */
-.gen-btn-primary {
-    background-color: #2563eb;
-    color: #FFFFFF;
-    padding: 14px 24px;
-    min-height: 48px;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
-    font-family: inherit;
-    flex: 1;
-}
-
-.gen-btn-primary:hover:not(:disabled) {
-    background-color: #1d4ed8;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 12px -2px rgba(37, 99, 235, 0.3);
-}
-
-.gen-btn-primary:disabled {
-    background-color: #9CA3AF;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
-
-.btn-cancel-compact {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 14px 24px;
-    min-height: 48px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    color: #4b5563;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.btn-cancel-compact:hover {
-    background: #f9fafb;
-    border-color: #d1d5db;
-    color: #111827;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .gen-metadata-grid {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .gen-form-header {
-        padding: 1rem 1rem;
-    }
-
-    .gen-form-grid {
-        padding: 1rem;
-    }
-
-    .gen-metadata-block {
-        padding: 0.875rem 1rem;
-    }
-
-    .gen-form-actions-row {
-        padding: 1rem 1rem 1.25rem;
-    }
-
-    .gen-form-error {
-        margin: 0 1rem;
-    }
-
-    .gen-actions-btn-group {
-        flex-direction: column;
-    }
-
-    .gen-btn-primary, .btn-cancel-compact {
-        width: 100%;
-    }
-}

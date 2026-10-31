@@ -29,7 +29,9 @@ const ALLOWED_EXTENSIONS = new Set([
   'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'java', 'kt', 'kts', 'cs', 'vb', 'py', 'go', 'rb', 'php',
   'scala', 'swift', 'm', 'dart', 'rs', 'vue', 'svelte', 'html', 'htm', 'cshtml', 'razor', 'css',
   'scss', 'less', 'sql', 'json', 'yaml', 'yml', 'xml', 'gradle', 'properties', 'md', 'feature',
-  'groovy', 'sh', 'graphql', 'gql', 'proto', 'jsp', 'xhtml', 'txt'
+  'groovy', 'sh', 'graphql', 'gql', 'proto', 'jsp', 'xhtml', 'txt',
+  // Plantillas de reportes/documentos (p. ej. JasperReports): son la lógica visible de los reportes.
+  'jrxml', 'xsl', 'xslt', 'ftl'
 ]);
 
 /** Archivos que pueden contener secretos: nunca se envían a la IA. */
@@ -523,10 +525,14 @@ function computeLineDiff(baseText, targetText) {
   return ops;
 }
 
-/** Formatea el diff en bloques (hunks) con contexto, numerados con la línea de la rama. */
-function formatHunks(ops) {
+/**
+ * Formatea el diff en bloques (hunks) con contexto, numerados con la línea de la rama.
+ * Con `known` ({ added, removed } de lineKey) solo se muestran los hunks con líneas que no estén ya en esos cambios.
+ */
+function formatHunks(ops, known = null) {
   const context = LIMITS.diffContextLines;
-  const changed = ops.map((op) => op.type !== ' ');
+  const novel = (op) => op.type !== ' ' && (!known || !known[op.type === '+' ? 'added' : 'removed'].has(lineKey(op.text)));
+  const changed = ops.map(novel);
   const keep = new Array(ops.length).fill(false);
   changed.forEach((isChanged, index) => {
     if (!isChanged) return;
@@ -540,7 +546,11 @@ function formatHunks(ops) {
       inHunk = false;
       continue;
     }
-    const op = ops[index];
+    let op = ops[index];
+    if (op.type !== ' ' && !changed[index]) {
+      if (op.type === '-') continue;
+      op = { ...op, type: ' ' };
+    }
     if (!inHunk) {
       output += `@@ cerca de la línea ${op.targetLine || op.baseLine} @@\n`;
       inHunk = true;
@@ -555,37 +565,118 @@ function formatHunks(ops) {
   return output || 'Sin cambios de contenido (posible cambio de permisos, renombre o fin de línea).';
 }
 
-/** Diff de un archivo entre el ancestro común (base) y el último commit de la rama. */
+const MAX_DIFF_SEGMENTS = 20;
+const splitLines = (text) => (text ? text.split(/\r?\n/) : []);
+
+/** Valida los tramos (PR/commit de la HU) que llegan del cliente. */
+function normalizeSegments(list, path) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  if (list.length > MAX_DIFF_SEGMENTS) throw new CodeAgentError(400, 'Demasiados tramos para el diff.');
+  return list.map((segment, index) => ({
+    label: String((segment && segment.label) || '').slice(0, 120),
+    baseCommit: requireCommit(segment && segment.baseCommit, `segments[${index}].baseCommit`),
+    targetCommit: requireCommit(segment && segment.targetCommit, `segments[${index}].targetCommit`),
+    changeType: String((segment && segment.changeType) || 'edit').toLowerCase(),
+    originalPath: segment && segment.originalPath ? normalizeRepoPath(segment.originalPath) : path,
+  }));
+}
+
+/**
+ * Cambios de la HU sobre un archivo como tramos base→target. Dos PRs/commits seguidos de la HU se unen en un
+ * tramo solo si nadie más tocó el archivo entre ellos (el target del primero es igual a la base del segundo);
+ * si no, quedan separados y los cambios intermedios de otras HUs no se atribuyen a esta.
+ */
+async function fileChains(organization, pat, project, repositoryId, path, segments) {
+  const cache = new Map();
+  const content = (filePath, commit) => {
+    if (!commit) return Promise.resolve('');
+    const key = `${commit}|${filePath}`;
+    if (!cache.has(key)) {
+      cache.set(key, fetchFileContent(organization, pat, project, repositoryId, commit, filePath, 'commit')
+        .then(redactSecrets).catch(() => ''));
+    }
+    return cache.get(key);
+  };
+  const texts = await Promise.all(segments.map((segment) => Promise.all([
+    content(segment.originalPath || path, segment.changeType.includes('add') ? null : segment.baseCommit),
+    content(path, segment.changeType.includes('delete') ? null : segment.targetCommit),
+  ])));
+  const chains = [];
+  segments.forEach((segment, index) => {
+    const [base, target] = texts[index];
+    const last = chains[chains.length - 1];
+    if (last && last.target === base) {
+      last.target = target;
+      last.labels.push(segment.label);
+    } else {
+      chains.push({ base, target, labels: [segment.label] });
+    }
+  });
+  return chains;
+}
+
+/** Líneas agregadas/eliminadas (lineKey) de los tramos; null si alguno es demasiado grande para compararlo. */
+function chainsChangedLines(chains) {
+  const added = new Set();
+  const removed = new Set();
+  for (const chain of chains) {
+    const ops = computeLineDiff(splitLines(chain.base), splitLines(chain.target));
+    if (!ops) return null;
+    for (const op of ops) {
+      const key = lineKey(op.text);
+      if (op.type !== ' ' && key) (op.type === '+' ? added : removed).add(key);
+    }
+  }
+  return { added, removed };
+}
+
+/**
+ * Diff de un archivo. Con `segments` (un tramo por PR/commit de la HU) se muestran solo los cambios propios;
+ * con `exclude` (tramos del mismo archivo en otra rama destino) solo lo que no esté ya en esa rama.
+ * Sin ellos: diff entre baseCommit y targetCommit.
+ */
 async function getFileDiff(organization, pat, project, repositoryId, body) {
   const path = normalizeRepoPath(body.path);
   if (!isReadableFile(path)) {
     return { path, error: 'Archivo no permitido (binario, generado o potencialmente con secretos).' };
   }
-  const baseCommit = requireCommit(body.baseCommit, 'baseCommit');
-  const targetCommit = requireCommit(body.targetCommit, 'targetCommit');
   const changeType = String(body.changeType || 'edit').toLowerCase();
   const originalPath = body.originalPath ? normalizeRepoPath(body.originalPath) : path;
+  const segments = normalizeSegments(body.segments, path) || [{
+    label: '', baseCommit: requireCommit(body.baseCommit, 'baseCommit'), targetCommit: requireCommit(body.targetCommit, 'targetCommit'),
+    changeType, originalPath,
+  }];
+  const exclude = normalizeSegments(body.exclude, path);
 
-  const [baseRaw, targetRaw] = await Promise.all([
-    changeType.includes('add') ? Promise.resolve('') : fetchFileContent(organization, pat, project, repositoryId, baseCommit, originalPath, 'commit').catch(() => ''),
-    changeType.includes('delete') ? Promise.resolve('') : fetchFileContent(organization, pat, project, repositoryId, targetCommit, path, 'commit'),
+  const [chains, excluded] = await Promise.all([
+    fileChains(organization, pat, project, repositoryId, path, segments),
+    exclude ? fileChains(organization, pat, project, repositoryId, path, exclude) : Promise.resolve(null),
   ]);
+  const known = excluded ? chainsChangedLines(excluded) : null;
 
-  const baseLines = baseRaw ? redactSecrets(baseRaw).split(/\r?\n/) : [];
-  const targetLines = targetRaw ? redactSecrets(targetRaw).split(/\r?\n/) : [];
-  const ops = computeLineDiff(baseLines, targetLines);
-
-  if (!ops) {
-    return {
-      path,
-      changeType,
-      error: 'El archivo cambió demasiado para calcular el diff; léelo con read_files (por rangos).',
-    };
+  let added = 0;
+  let removed = 0;
+  const parts = [];
+  for (const chain of chains) {
+    const ops = computeLineDiff(splitLines(chain.base), splitLines(chain.target));
+    if (!ops) {
+      return { path, changeType, error: 'El archivo cambió demasiado para calcular el diff; léelo con read_files (por rangos).' };
+    }
+    added += ops.filter((op) => op.type === '+').length;
+    removed += ops.filter((op) => op.type === '-').length;
+    const hunks = formatHunks(ops, known);
+    parts.push(chains.length > 1 ? `[${chain.labels.filter(Boolean).join(', ')}]\n${hunks}` : hunks);
   }
-
-  const added = ops.filter((op) => op.type === '+').length;
-  const removed = ops.filter((op) => op.type === '-').length;
-  return { path, changeType, added, removed, diff: formatHunks(ops) };
+  let diff = parts.join('\n');
+  if (chains.length > 1) {
+    diff = '(Entre los cambios de la HU otras HUs modificaron este archivo: se muestra cada cambio propio por separado y no lo de otras HUs.)\n' + diff;
+  }
+  if (known) diff = '(Solo los cambios que no están ya en la otra rama destino de la HU.)\n' + diff;
+  const previous = segments.find((segment) => segment.originalPath && segment.originalPath !== path);
+  if (previous) {
+    diff = `(Script nuevo que redefine un objeto existente: se compara con su definición anterior ${previous.originalPath}.)\n` + diff;
+  }
+  return { path, changeType, added, removed, diff };
 }
 
 /**
@@ -601,7 +692,10 @@ async function getFileDiff(organization, pat, project, repositoryId, body) {
  *    nombra otra HU y PRs vinculados a muchas HUs (lotes de integración).
  *  - Un mismo cambio integrado en varias ramas (release/current, current,
  *    trunk, ramas "-on-trunk") se analiza una sola vez, en la rama de
- *    desarrollo preferida; las demás se informan como "también en".
+ *    desarrollo preferida; las demás se informan como "también en", salvo
+ *    que traigan líneas propias adicionales (se analiza solo lo adicional).
+ *  - Cada PR/commit de la HU se compara contra su propio padre: los cambios
+ *    de otras HUs integrados entre dos PRs de la HU no se le atribuyen.
  *  - Las ramas sin commits propios se informan, no se analizan.
  */
 async function getWorkItemChanges(organization, pat, workItemId) {
@@ -711,9 +805,11 @@ async function getWorkItemChanges(organization, pat, workItemId) {
     }
   });
 
+  const built = buildGroups(segments.filter((item) => item.baseCommit && item.targetCommit));
+  const { groups, covered } = selectGroups(await resolvePreviousDefinitions(organization, pat, built));
   return {
     workItemId: id,
-    groups: selectGroups(buildGroups(segments.filter((item) => item.baseCommit && item.targetCommit))),
+    groups: await dropRedundantBranchFiles(organization, pat, await refineCoveredGroups(organization, pat, groups, covered)),
     omitted,
     emptyBranches,
   };
@@ -761,7 +857,8 @@ function foreignPrReason(pr, linkedWorkItems, workItemId) {
   if (isPromotionBranch(pr.sourceBranch)) return 'paso a producción o nivelación (no es el desarrollo de la HU)';
   const ids = workItemIdsInBranch(pr.sourceBranch);
   if (ids.includes(workItemId)) return null;
-  if (ids.length) return `rama de la HU ${ids[0]}`;
+  // Un PR vinculado solo a esta HU es de esta HU aunque reutilice una rama con el nombre de otra.
+  if (ids.length && linkedWorkItems > 1) return `rama de la HU ${ids[0]}`;
   if (linkedWorkItems > MAX_WORK_ITEMS_PER_PR) return `PR vinculado a ${linkedWorkItems} HUs (lote de integración)`;
   return null;
 }
@@ -862,8 +959,13 @@ async function branchSegment(branch, segments, get, diffCommits) {
   let baseBranch;
   if (ownPrs.length) {
     // Si la rama se reutilizó luego para otra HU, lo posterior no es de esta HU.
-    const all = await get(branch, `pullrequests?searchCriteria.sourceRefName=refs/heads/${encoded}&searchCriteria.status=all&$top=100`)
-      .then((data) => (data.value || []).filter((pr) => pr.status !== 'abandoned')).catch(() => []);
+    const prs = await get(branch, `pullrequests?searchCriteria.sourceRefName=refs/heads/${encoded}&searchCriteria.status=all&$top=100`)
+      .then((data) => data.value || []).catch(() => []);
+    // El trabajo de un PR abandonado se descartó: si la punta de la rama es ese trabajo, no hay nada nuevo.
+    if (prs.some((pr) => pr.status === 'abandoned' && pr.lastMergeSourceCommit && pr.lastMergeSourceCommit.commitId === tip)) {
+      return { empty: 'solo tiene los commits de un PR abandonado' };
+    }
+    const all = prs.filter((pr) => pr.status !== 'abandoned');
     all.sort((a, b) => String(b.creationDate).localeCompare(String(a.creationDate)));
     const latest = all[0];
     if (latest && !ownPrs.some((item) => item.pr.id === latest.pullRequestId)) return { empty: 'rama reutilizada después por otra HU' };
@@ -872,21 +974,22 @@ async function branchSegment(branch, segments, get, diffCommits) {
     baseBranch = stripHeads(latest.targetRefName);
   }
 
-  // Commits propios de la rama frente a su rama base (desde el ancestro común).
-  for (const candidate of baseBranch ? [baseBranch] : BASE_BRANCH_CANDIDATES) {
-    if (candidate === branch.branch) continue;
-    const diff = await diffCommits(branch, candidate, 'branch', tip, 'commit').catch(() => null);
-    if (!diff) continue;
-    if (!Number(diff.aheadCount)) return { empty: `sin commits propios frente a ${candidate}` };
-    const files = fileChangesOf(diff.changes);
-    if (!files.length) return { empty: `sin cambios de archivos frente a ${candidate}` };
-    return {
-      pr: null, kind: 'branch', targetBranch: `rama ${branch.branch}`, sourceBranch: branch.branch, baseBranch: candidate,
-      date: new Date().toISOString(), baseCommit: diff.commonCommit, targetCommit: tip, files,
-      comment: `${diff.aheadCount} commit(s) sin PR frente a ${candidate}`,
-    };
-  }
-  return { empty: 'no se encontró rama base para comparar' };
+  // Commits propios de la rama frente a su rama base (desde el ancestro común). Sin PR que la indique, la base es
+  // la rama de integración más cercana (menos commits por delante): una rama desactualizada como base atribuiría
+  // a la HU todo lo integrado después.
+  const candidates = (baseBranch ? [baseBranch] : BASE_BRANCH_CANDIDATES).filter((candidate) => candidate !== branch.branch);
+  const diffs = (await Promise.all(candidates.map((candidate) => diffCommits(branch, candidate, 'branch', tip, 'commit')
+    .then((diff) => ({ candidate, diff }), () => null)))).filter(Boolean);
+  if (!diffs.length) return { empty: 'no se encontró rama base para comparar' };
+  const { candidate, diff } = diffs.reduce((best, item) => (Number(item.diff.aheadCount || 0) < Number(best.diff.aheadCount || 0) ? item : best));
+  if (!Number(diff.aheadCount)) return { empty: `sin commits propios frente a ${candidate}` };
+  const files = fileChangesOf(diff.changes);
+  if (!files.length) return { empty: `sin cambios de archivos frente a ${candidate}` };
+  return {
+    pr: null, kind: 'branch', targetBranch: `rama ${branch.branch}`, sourceBranch: branch.branch, baseBranch: candidate,
+    date: new Date().toISOString(), baseCommit: diff.commonCommit, targetCommit: tip, files,
+    comment: `${diff.aheadCount} commit(s) sin PR frente a ${candidate}`,
+  };
 }
 
 /** Agrupa por repo + rama destino; por archivo, base del primer cambio y destino del último. */
@@ -905,6 +1008,7 @@ function buildGroups(segments) {
     const last = groupSegments[groupSegments.length - 1];
     const files = new Map();
     for (const segment of groupSegments) {
+      const label = segment.pr ? `PR ${segment.pr.id}` : segment.sourceBranch || segment.targetCommit.slice(0, 10);
       for (const file of segment.files) {
         if (!isReadableFile(file.path)) continue;
         const existing = files.get(file.path);
@@ -913,6 +1017,11 @@ function buildGroups(segments) {
           changeType: existing && existing.changeType === 'add' ? 'add' : file.changeType,
           baseCommit: existing ? existing.baseCommit : segment.baseCommit,
           targetCommit: segment.targetCommit,
+          // Cada PR/commit de la HU por separado: entre uno y otro pueden haberse integrado cambios de otras HUs.
+          segments: [...(existing ? existing.segments : []), {
+            label, baseCommit: segment.baseCommit, targetCommit: segment.targetCommit,
+            changeType: file.changeType, originalPath: file.originalPath || file.path,
+          }],
         });
       }
     }
@@ -943,10 +1052,99 @@ function groupPriority(group) {
   return [kind, port, target < 0 ? TARGET_PRIORITY.length : target];
 }
 
+/** Objeto de BD que crea/reemplaza un script SQL (las migraciones tipo Liquibase redefinen el objeto en un archivo nuevo). */
+const SQL_OBJECT_DEFINITION = /\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?(view|function|procedure|trigger)\s+(?:if\s+not\s+exists\s+)?((?:"?[\w$]+"?\.)?"?[\w$]+"?)/i;
+const MAX_PREVIOUS_DEFINITION_READS = 8;
+
+function sqlObjectOf(content) {
+  const match = SQL_OBJECT_DEFINITION.exec(content || '');
+  if (!match) return null;
+  const name = match[2].replace(/"/g, '').toLowerCase();
+  return { kind: match[1].toLowerCase(), name, shortName: name.split('.').pop() };
+}
+
+/**
+ * Un script SQL agregado por la HU que redefine un objeto existente (CREATE OR REPLACE VIEW/FUNCTION…) no es
+ * código nuevo: se compara con la definición anterior del objeto en el repo para mostrar solo lo que cambió la
+ * HU y no la vista/función completa (que incluye la lógica de otras HUs).
+ */
+async function resolvePreviousDefinitions(organization, pat, groups) {
+  const trees = new Map();
+  const treeAt = (group, commit) => {
+    const key = `${group.repositoryId}|${commit}`;
+    if (!trees.has(key)) {
+      trees.set(key, getTree(organization, pat, group.projectId, group.repositoryId, { version: commit, versionType: 'commit' }, '/')
+        .then((tree) => tree.files).catch(() => []));
+    }
+    return trees.get(key);
+  };
+  const read = (group, commit, path) => fetchFileContent(organization, pat, group.projectId, group.repositoryId, commit, path, 'commit').catch(() => '');
+  const baseName = (path) => path.split('/').pop().toLowerCase();
+
+  for (const group of groups) {
+    for (const file of group.files) {
+      const segment = file.segments[0];
+      if (!/\.sql$/i.test(file.path) || !segment.changeType.includes('add')) continue;
+      const object = sqlObjectOf(await read(group, segment.targetCommit, file.path));
+      if (!object) continue;
+      const candidates = (await treeAt(group, segment.baseCommit))
+        .filter((path) => /\.sql$/i.test(path) && path !== file.path && baseName(path).includes(object.shortName))
+        .sort((a, b) => baseName(b).localeCompare(baseName(a)))
+        .slice(0, MAX_PREVIOUS_DEFINITION_READS);
+      for (const candidate of candidates) {
+        const previous = sqlObjectOf(await read(group, segment.baseCommit, candidate));
+        if (previous && previous.kind === object.kind && previous.name === object.name) {
+          segment.originalPath = candidate;
+          segment.changeType = 'edit';
+          if (file.changeType.includes('add')) file.changeType = 'edit';
+          file.previousDefinition = candidate;
+          break;
+        }
+      }
+    }
+  }
+  return groups;
+}
+
+/** Contenido comparable: sin espacios repetidos y, en SQL, sin comentarios (p. ej. el --changeset de Liquibase). */
+function comparableContent(path, content) {
+  const text = /\.sql$/i.test(path) ? String(content || '').replace(/--[^\n]*/g, '') : String(content || '');
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * Una rama de la HU sin PR suele guardar borradores de lo que luego entró por PR con otro nombre de archivo
+ * (copias, scripts renombrados). Esos archivos se descartan si su contenido ya está en un PR del mismo repo;
+ * si no queda ninguno, la rama se informa como "también en".
+ */
+async function dropRedundantBranchFiles(organization, pat, groups) {
+  const read = (group, file) => (file.changeType.includes('delete') ? Promise.resolve('')
+    : fetchFileContent(organization, pat, group.projectId, group.repositoryId, file.targetCommit, file.path, 'commit')
+      .then((content) => comparableContent(file.path, content)).catch(() => ''));
+  const result = [];
+  for (const group of groups) {
+    const others = groups.filter((item) => item !== group && item.kind !== 'branch' && item.repositoryId === group.repositoryId);
+    if (group.kind !== 'branch' || !others.length) {
+      result.push(group);
+      continue;
+    }
+    const known = new Set((await Promise.all(others.flatMap((other) => other.files.map((file) => read(other, file))))).filter(Boolean));
+    const contents = await Promise.all(group.files.map((file) => read(group, file)));
+    const files = group.files.filter((file, index) => !contents[index] || !known.has(contents[index]));
+    if (files.some((file) => !BUILD_CONFIG_FILE.test(file.path))) {
+      result.push({ ...group, files });
+    } else {
+      others[0].alsoMergedInto.push(group.targetBranch);
+    }
+  }
+  return result;
+}
+
 /**
  * Una versión por cambio: si los archivos de código de un grupo ya están en
- * otro preferido del mismo repo (mismo trabajo integrado en otra rama), se
- * informa como "también en" en lugar de analizarse dos veces.
+ * otro preferido del mismo repo (posible mismo trabajo integrado en otra rama),
+ * se devuelve en `covered` junto a ese grupo para compararlos por contenido
+ * (refineCoveredGroups) antes de informarlo como "también en".
  */
 function selectGroups(groups) {
   const ordered = groups.slice().sort((a, b) => {
@@ -957,17 +1155,46 @@ function selectGroups(groups) {
   });
 
   const result = [];
+  const covered = [];
   for (const group of ordered) {
     const codeFiles = group.files.filter((file) => !BUILD_CONFIG_FILE.test(file.path));
     const keeper = result.find((kept) => kept.repositoryId === group.repositoryId
       && codeFiles.every((file) => kept.files.some((keptFile) => keptFile.path === file.path)));
     if (keeper) {
-      keeper.alsoMergedInto.push(group.targetBranch);
+      covered.push({ group, keeper });
       continue;
     }
     result.push(group);
   }
-  return result;
+  return { groups: result, covered };
+}
+
+/**
+ * Un grupo cubierto (p. ej. el port a trunk) solo se descarta si no trae líneas nuevas frente a su grupo
+ * preferido; si las trae, se conserva con esos archivos y `exclude` para que el diff muestre solo lo adicional.
+ */
+async function refineCoveredGroups(organization, pat, groups, covered) {
+  const changedLines = async (group, file) => chainsChangedLines(
+    await fileChains(organization, pat, group.projectId, group.repositoryId, file.path, file.segments),
+  );
+  const isSubset = (a, b) => [...a].every((item) => b.has(item));
+  for (const { group, keeper } of covered) {
+    const extra = [];
+    for (const file of group.files) {
+      if (BUILD_CONFIG_FILE.test(file.path)) continue;
+      const keptFile = keeper.files.find((item) => item.path === file.path);
+      const [own, kept] = await Promise.all([changedLines(group, file), changedLines(keeper, keptFile)]);
+      if (!own || !kept || !isSubset(own.added, kept.added) || !isSubset(own.removed, kept.removed)) {
+        extra.push({ ...file, exclude: keptFile.segments });
+      }
+    }
+    if (extra.length) {
+      groups.push({ ...group, files: extra, extraOver: keeper.targetBranch });
+    } else {
+      keeper.alsoMergedInto.push(group.targetBranch);
+    }
+  }
+  return groups;
 }
 
 /**
@@ -1077,4 +1304,6 @@ module.exports = {
   foreignPrReason,
   buildGroups,
   selectGroups,
+  fileChains,
+  chainsChangedLines,
 };

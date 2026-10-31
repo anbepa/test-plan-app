@@ -938,6 +938,13 @@ textarea::placeholder {
   color: #64748b;
   font-size: 0.76rem;
   min-width: 10rem;
+  /* Las rutas largas sin espacios no deben acaparar el ancho de la tabla */
+  width: 22%;
+  overflow-wrap: anywhere;
+}
+
+.md-preview .md-path {
+  cursor: help;
 }
 
 .md-preview .md-status {

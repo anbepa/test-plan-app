@@ -1,11 +1,11 @@
 <!-- src/app/test-case-generator/test-case-generator.component.html -->
-<div class="form-section" aria-labelledby="test-case-form-section-title">
+<div class="form-section" [class.is-flow]="componentState === 'initialForm'" aria-labelledby="test-case-form-section-title">
   <div class="form-header-compact">
     <div class="header-content">
       <div class="header-main">
         <div class="header-text-column">
           <h2 id="test-case-form-section-title" class="section-title">
-            <span *ngIf="componentState === 'initialForm'">Datos de Entrada</span>
+            <span *ngIf="componentState === 'initialForm'">Generar casos de prueba</span>
             <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
             <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
             <span *ngIf="componentState === 'submitting'">Enviando</span>
@@ -13,7 +13,7 @@
           <div class="header-subtitle-row">
             <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-subtitle">{{
               generatedHUData.title }}</span>
-            <span *ngIf="componentState === 'initialForm'" class="subtitle-inline">HU por Descripción</span>
+            <span *ngIf="componentState === 'initialForm'" class="subtitle-inline">Importa la HU, revisa sus criterios y genera la matriz.</span>
           </div>
         </div>
       </div>
@@ -47,38 +47,27 @@
         </p>
       </div>
 
-      <!-- Mapa del flujo: cada paso alimenta al siguiente -->
-      <nav class="flow-stepper" aria-label="Pasos para generar la matriz">
-        <ol>
-          <li *ngFor="let step of flowSteps; let last = last" [ngClass]="'is-' + step.status">
-            <button type="button" class="flow-stepper-item" (click)="scrollToFlowStep(step.id)"
-              [attr.aria-label]="'Paso ' + step.num + ': ' + step.title + ' — ' + step.statusLabel">
-              <span class="flow-step-num" aria-hidden="true">
-                <span *ngIf="step.status === 'running'" class="spinner-inline"></span>
-                <ng-container *ngIf="step.status === 'done'">✓</ng-container>
-                <ng-container *ngIf="step.status === 'stale'">!</ng-container>
-                <ng-container *ngIf="step.status !== 'running' && step.status !== 'done' && step.status !== 'stale'">{{ step.num }}</ng-container>
-              </span>
-              <span class="flow-stepper-text">
-                <span class="flow-stepper-title">{{ step.title }}</span>
-                <span class="flow-stepper-summary">{{ step.summary }}</span>
-              </span>
-            </button>
-            <span *ngIf="!last" class="flow-stepper-line" aria-hidden="true"></span>
-          </li>
-        </ol>
-      </nav>
-
       <ng-template #stepHeader let-step let-help="help">
         <header class="flow-step-header">
-          <span class="flow-step-num" aria-hidden="true">{{ step.num }}</span>
+          <span class="flow-step-num" aria-hidden="true">
+            <span *ngIf="step.status === 'running'" class="spinner-inline"></span>
+            <ng-container *ngIf="step.status === 'done'">✓</ng-container>
+            <ng-container *ngIf="step.status === 'stale'">!</ng-container>
+            <ng-container *ngIf="step.status !== 'running' && step.status !== 'done' && step.status !== 'stale'">{{ step.num }}</ng-container>
+          </span>
           <div class="flow-step-heading">
             <h3>{{ step.title }}</h3>
-            <p>{{ help }}</p>
+            <!-- Resumido: lo que contiene el paso; abierto: para qué sirve -->
+            <p *ngIf="isStepCollapsed(step.id); else stepHelp" class="flow-step-summary" [title]="step.summary">{{ step.summary }}</p>
+            <ng-template #stepHelp><p>{{ help }}</p></ng-template>
           </div>
-          <span class="flow-status-chip" [ngClass]="'is-' + step.status">
+          <span *ngIf="step.status === 'running' || step.status === 'stale' || step.status === 'optional'" class="flow-status-chip" [ngClass]="'is-' + step.status">
             <span *ngIf="step.status === 'running'" class="spinner-inline"></span>{{ step.statusLabel }}
           </span>
+          <button *ngIf="canToggleStep(step.id)" type="button" class="flow-step-toggle" (click)="toggleStep(step.id)"
+            [attr.aria-expanded]="!isStepCollapsed(step.id)" [attr.aria-controls]="'flow-body-' + step.id">
+            {{ isStepCollapsed(step.id) ? 'Editar' : 'Contraer' }}
+          </button>
         </header>
         <div *ngIf="flowNotice(step.id) as notice" class="flow-notice" role="status">
           <span class="flow-notice-icon" aria-hidden="true">ℹ</span>
@@ -88,9 +77,10 @@
       </ng-template>
 
       <!-- PASO: HISTORIA DE USUARIO -->
-      <section class="flow-step" id="flow-step-hu" [ngClass]="'is-' + flowStep('hu').status">
-        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('hu'), help: 'Escribe el ID y pulsa Importar: se traen título, sprint, descripción y criterios desde Azure DevOps' + (usesCodeContext ? ', y se buscan los PRs y commits de la HU.' : '.') }"></ng-container>
-        <div class="flow-step-body">
+      <section class="flow-step" id="flow-step-hu" [ngClass]="'is-' + flowStep('hu').status"
+        [class.is-collapsed]="isStepCollapsed('hu')" (focusin)="onStepFocusIn('hu', $event)" (focusout)="onStepFocusOut('hu', $event)">
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('hu'), help: 'Escribe el ID y pulsa Importar para traer la HU desde Azure DevOps' + (usesCodeContext ? ' junto con sus PRs y commits.' : '.') }"></ng-container>
+        <div class="flow-step-body" id="flow-body-hu" [hidden]="isStepCollapsed('hu')">
           <div class="metadata-block full-width">
             <div class="metadata-grid">
               <div class="form-group">
@@ -174,19 +164,29 @@
       </section>
 
       <!-- PASO: CRITERIOS -->
-      <section class="flow-step" id="flow-step-criteria" [ngClass]="'is-' + flowStep('criteria').status">
-        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Los criterios de la HU se interpretan como una lista CA-01, CA-02… Esa lista es la que se cubre en la matriz.' }"></ng-container>
-        <div class="flow-step-body">
+      <section class="flow-step" id="flow-step-criteria" [ngClass]="'is-' + flowStep('criteria').status"
+        [class.is-collapsed]="isStepCollapsed('criteria')" (focusin)="onStepFocusIn('criteria', $event)" (focusout)="onStepFocusOut('criteria', $event)">
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Se separan en una lista CA-01, CA-02…: cada criterio tendrá al menos un escenario.' }"></ng-container>
+        <div class="flow-step-body" id="flow-body-criteria" [hidden]="isStepCollapsed('criteria')">
           <div class="form-group full-width">
             <label for="tcCurrentAcceptanceCriteria">Criterios de aceptación de la HU<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
                 *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
-            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
+            <div *ngIf="normalizedCriteria && !criteriaEditing && currentAcceptanceCriteria.trim()" class="criteria-original-bar">
+              <button type="button" class="criteria-original-toggle" (click)="showOriginalCriteria = !showOriginalCriteria"
+                [attr.aria-expanded]="showOriginalCriteria" aria-controls="tcCriteriaOriginalPreview">
+                <span class="criteria-original-caret" [class.is-open]="showOriginalCriteria" aria-hidden="true">›</span>
+                Texto original de la HU
+              </button>
+              <button type="button" class="code-link-btn" (click)="editCriteria()">Editar</button>
+            </div>
+            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim() && (!normalizedCriteria || criteriaEditing)">
               <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
                 <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
                 <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
               </div>
             </div>
-            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()" class="form-control md-preview"
+            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim() && (!normalizedCriteria || showOriginalCriteria)"
+              id="tcCriteriaOriginalPreview" class="form-control md-preview"
               [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
               title="Doble clic para editar"></div>
             <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
@@ -210,7 +210,7 @@
                   <button type="button" [class.is-active]="normalizedCriteriaEditing" (click)="editNormalizedCriteria()">Editar</button>
                 </div>
               </div>
-              <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">La IA separa los criterios originales en una lista numerada: cada CA tendrá al menos un escenario propio{{ usesCodeContext ? ' y el agente lo contrastará con el código' : '' }}. Corrígela solo si la interpretación no es la correcta.</p>
+              <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">Cada CA tendrá al menos un escenario{{ usesCodeContext ? ' y se contrastará con el código' : '' }}. Corrígela si la interpretación no es correcta.</p>
               <p class="criteria-normalized-hint flow-inline-warning" *ngIf="flowStep('criteria').status === 'stale'">Editaste los criterios originales: al salir del campo se volverá a interpretar esta lista.</p>
               <div *ngIf="normalizedCriteria && !normalizedCriteriaEditing" class="form-control md-preview"
                 [innerHTML]="normalizedCriteria | markdownLite" (dblclick)="editNormalizedCriteria()" title="Doble clic para editar"></div>
@@ -225,9 +225,10 @@
 
       <ng-container *ngIf="usesCodeContext">
         <!-- PASO: CÓDIGO DE LA HU -->
-        <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status">
-          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas donde se desarrolló la HU, tomados de sus PRs y commits vinculados.' }"></ng-container>
-          <div class="flow-step-body">
+        <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status"
+        [class.is-collapsed]="isStepCollapsed('code')" (focusin)="onStepFocusIn('code', $event)" (focusout)="onStepFocusOut('code', $event)">
+          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas de los PRs y commits vinculados a la HU.' }"></ng-container>
+          <div class="flow-step-body" id="flow-body-code" [hidden]="isStepCollapsed('code')">
             <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
               <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
                 <!-- Consultando PRs/commits de la HU -->
@@ -253,6 +254,7 @@
                       <span class="code-change-meta">
                         último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
                         · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                        <ng-container *ngIf="group.extraOver"> · cambios adicionales a {{ group.extraOver }}</ng-container>
                         <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
                       </span>
                     </li>
@@ -314,62 +316,58 @@
 
         <!-- PASO: CONTEXTO TÉCNICO -->
         <section class="flow-step" id="flow-step-context" [ngClass]="'is-' + flowStep('context').status" aria-live="polite">
-          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('context'), help: 'Un agente lee el código del paso ' + flowStep('code').num + ' y explica cómo se ejecuta cada criterio: pantallas, datos y procesos que la HU no cuenta.' }"></ng-container>
+          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('context'), help: 'Un agente revisa el código y explica cómo se ejecuta cada criterio.' }"></ng-container>
           <div class="flow-step-body">
             <p *ngIf="isCodeContextStale" class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
             <p *ngIf="!isCodeTargetReady && !codeContextText" class="flow-lock-hint">Completa el paso {{ flowStep('code').num }} para poder explorar el código.</p>
-            <div class="code-agent-header">
-              <span class="flow-field-label">Qué hace el agente</span>
+            <div class="code-agent-bar">
+              <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
+                <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
+                  Contrasta cada criterio con el código: Implementado, Parcial, Diferente o Sin evidencia.
+                </ng-container>
+                <ng-template #codeOnlyHint>Reconstruye las reglas observables desde el código.</ng-template>
+                <span class="code-agent-optional">Opcional: si no exploras ahora, se hace al generar (1–3 min).</span>
+              </p>
+              <p *ngIf="codeExploring" class="code-source-hint code-agent-meta">El agente está revisando el código de la HU; suele tardar entre 1 y 3 minutos.</p>
+              <p *ngIf="codeContextText && !codeExploring" class="code-source-hint code-agent-meta">
+                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados</span>
+                <ng-container *ngIf="codeAgentLog.length">
+                  <span *ngIf="codeFilesReviewed.length" aria-hidden="true"> · </span>
+                  <button type="button" class="code-link-btn" (click)="showAgentLog = !showAgentLog" [attr.aria-expanded]="showAgentLog">
+                    {{ showAgentLog ? 'Ocultar' : 'Ver' }} pasos del agente ({{ codeAgentLog.length }})
+                  </button>
+                </ng-container>
+              </p>
               <div class="code-agent-actions">
-                <button *ngIf="!codeExploring" type="button" class="tc-tag" (click)="exploreCode()"
-                  [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios">
-                  {{ codeContextText ? '↻ Volver a explorar' : '🔎 Explorar código' }}
+                <button *ngIf="!codeExploring" type="button" class="btn-flow-secondary" (click)="exploreCode()"
+                  [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios"
+                  title="Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.">
+                  {{ codeContextText ? '↻ Volver a explorar' : 'Explorar código' }}
                 </button>
-                <button *ngIf="codeExploring" type="button" class="tc-tag" (click)="cancelCodeExploration()">Cancelar exploración</button>
+                <button *ngIf="codeExploring" type="button" class="btn-flow-secondary" (click)="cancelCodeExploration()">Cancelar exploración</button>
               </div>
             </div>
-
-            <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
-              <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
-                El agente contrastará cada criterio con el código de la rama (Implementado, Parcial, Diferente o Sin evidencia).
-                Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.
-              </ng-container>
-              <ng-template #codeOnlyHint>El agente reconstruirá las reglas observables desde el código de la rama.</ng-template>
-              Puedes revisar y editar el resultado antes de generar. Si pulsas "Generar" sin explorar, se explora automáticamente (1-3 min).
-            </p>
 
             <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
               <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last">
                 <span *ngIf="last" class="spinner-inline"></span>{{ line }}
               </li>
             </ul>
-            <details *ngIf="codeAgentLog.length && !codeExploring" class="code-agent-log-details">
-              <summary>Ver pasos del agente ({{ codeAgentLog.length }})</summary>
-              <ul class="code-agent-log">
-                <li *ngFor="let line of codeAgentLog">{{ line }}</li>
-              </ul>
-            </details>
+            <ul *ngIf="codeAgentLog.length && !codeExploring && showAgentLog" class="code-agent-log">
+              <li *ngFor="let line of codeAgentLog">{{ line }}</li>
+            </ul>
 
             <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
 
             <ng-container *ngIf="codeContextText">
-              <p class="code-source-hint">
-                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
-                Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
-              </p>
-              <div class="md-box-header">
-                <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
-                  <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
-                </div>
-                <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
-                  <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
-                  <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
-                </div>
-              </div>
               <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
-                <div class="coverage-editor-title">Cobertura de criterios en el código
-                  <span class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</span>
+                <div class="coverage-editor-title">
+                  <span>Cobertura de criterios en el código</span>
+                  <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
+                    <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+                  </div>
                 </div>
+                <p class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</p>
                 <div class="md-table-wrap">
                   <table class="md-table coverage-table">
                     <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
@@ -390,7 +388,22 @@
                   </table>
                 </div>
               </div>
-              <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
+              <!-- Resumen técnico: plegado cuando hay tabla de cobertura, que es lo que se revisa -->
+              <div class="code-context-head">
+                <button *ngIf="codeCoverageRows.length && !codeContextEditing; else contextTitle" type="button" class="criteria-original-toggle"
+                  (click)="showCodeContextText = !showCodeContextText" [attr.aria-expanded]="showCodeContextText" aria-controls="tcCodeContextPreview">
+                  <span class="criteria-original-caret" [class.is-open]="showCodeContextText" aria-hidden="true">›</span>
+                  Resumen técnico del agente
+                </button>
+                <ng-template #contextTitle><span class="criteria-original-toggle">Resumen técnico del agente</span></ng-template>
+                <span class="code-context-note">Se envía como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}</span>
+                <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
+                  <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
+                  <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
+                </div>
+              </div>
+              <div *ngIf="!codeContextEditing && (showCodeContextText || !codeCoverageRows.length)" id="tcCodeContextPreview"
+                class="form-control md-preview code-context-preview"
                 [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
                 title="Doble clic para editar"></div>
               <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
@@ -401,32 +414,32 @@
         </section>
       </ng-container>
 
-      <!-- PASO: GENERAR -->
-      <section class="flow-step" id="flow-step-generate" [ngClass]="'is-' + flowStep('generate').status">
-        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('generate'), help: 'Se envía a la IA todo lo anterior para crear los escenarios de prueba.' }"></ng-container>
-        <div class="flow-step-body">
-          <ul class="flow-checklist" aria-label="Qué se enviará a la generación">
-            <li *ngFor="let step of flowSteps | slice:0:-1" [ngClass]="'is-' + step.status">
-              <span class="flow-checklist-mark" aria-hidden="true">{{ step.status === 'done' ? '✓' : step.status === 'optional' ? '–' : step.status === 'stale' ? '!' : '○' }}</span>
-              <span><strong>{{ step.title }}:</strong> {{ step.summary }}</span>
-              <button *ngIf="step.status !== 'done' && step.status !== 'optional'" type="button" class="code-link-btn" (click)="scrollToFlowStep(step.id)">Ir al paso {{ step.num }}</button>
-            </li>
-          </ul>
-          <div class="form-actions main-form-actions">
-            <button type="submit" class="button-primary compact-action"
-              [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios || normalizingCriteria">
-              <span *ngIf="loadingScope || loadingScenarios || codeExploring || normalizingCriteria" class="spinner"></span>
-              {{ generateButtonLabel }}
-            </button>
-          </div>
-          <p *ngIf="usesCodeContext && !codeContextText.trim() && !codeExploring" class="code-source-hint flow-generate-hint">
-            Aún no hay contexto técnico: al generar, primero se explorará el código (1-3 min) y luego se crearán los casos.
-          </p>
-          <div *ngIf="formError" class="error-message initial-form-error" role="alert">
-            <p>{{formError}}</p>
-          </div>
+      <!-- Barra de acción fija: qué falta o qué se enviará, junto al botón de generar -->
+      <div class="flow-actionbar" id="flow-step-generate">
+        <div *ngIf="formError" class="error-message initial-form-error" role="alert">
+          <p>{{formError}}</p>
         </div>
-      </section>
+        <div class="flow-actionbar-row">
+          <p class="flow-actionbar-status" aria-live="polite">
+            <ng-container *ngIf="generateBlockers.length; else readyToGenerate">
+              <span class="flow-actionbar-label">Falta:</span>
+              <ng-container *ngFor="let blocker of generateBlockers; let last = last">
+                <button type="button" class="code-link-btn" (click)="scrollToFlowStep(blocker.step)">{{ blocker.label }}</button><span *ngIf="!last">, </span>
+              </ng-container>
+            </ng-container>
+            <ng-template #readyToGenerate>
+              <span *ngIf="isFlowBusy; else readyMark" class="spinner-inline" aria-hidden="true"></span>
+              <ng-template #readyMark><span class="flow-actionbar-ready" aria-hidden="true">✓</span></ng-template>
+              {{ generateSummary || 'Listo para generar' }}
+            </ng-template>
+          </p>
+          <button type="submit" class="button-primary compact-action"
+            [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios || normalizingCriteria">
+            <span *ngIf="loadingScope || loadingScenarios || codeExploring || normalizingCriteria" class="spinner"></span>
+            {{ generateButtonLabel }}
+          </button>
+        </div>
+      </div>
     </ng-container>
   </form>
 

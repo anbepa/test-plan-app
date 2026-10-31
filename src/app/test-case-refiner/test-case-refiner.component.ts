@@ -1,15 +1,13 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, HostListener } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HUData, DetailedTestCase, TestCaseStep } from '../models/hu-data.model';
 import { DatabaseService } from '../services/database/database.service';
-import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
 import { DbTestCaseWithRelations } from '../models/database.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
 import { HuSyncService } from '../services/core/hu-sync.service';
-import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-test-case-refiner',
@@ -18,13 +16,10 @@ import { Subscription } from 'rxjs';
   templateUrl: './test-case-refiner.component.html',
   styleUrls: ['./test-case-refiner.component.css']
 })
-export class TestCaseRefinerComponent implements OnInit, OnDestroy {
+export class TestCaseRefinerComponent implements OnInit {
   hu: HUData | null = null;
   testPlanId: string = '';
-  isContextPage: boolean = false;
   isLoading: boolean = false;
-  isRefining: boolean = false;
-  private aiStreamSub?: Subscription;
   isLoadingDb: boolean = true;
 
   editedHuId: string = '';
@@ -35,7 +30,6 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   editedCellName: string = '';
   editedSelectedTechnique: string = '';
   editedContext: string = '';
-  formError: string | null = null;
 
   editingTestCaseIndex: number | null = null;
   openActionsMenuIndex: number | null = null;
@@ -46,74 +40,21 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   deleteModalMessage: string = '';
   selectedTestCaseIndexes: number[] = [];
   private pendingDeleteTestCaseIndexes: number[] = [];
-  private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
-  private aiProgressIndex = 0;
   private lastStepAddAt = new Map<number, number>();
-
-  /** Tokens de razonamiento (CoT) acumulados durante el stream */
-  streamingReasoning: string = '';
-  /** Tokens de contenido JSON acumulados durante el stream */
-  streamingContent: string = '';
-
-  readonly cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
-  readonly techniqueOptions = [
-    { value: 'Equivalent Partitioning', label: 'Partición Equivalente' },
-    { value: 'Boundary Value Analysis', label: 'Análisis de Valor Límite' },
-    { value: 'Decision Table Testing', label: 'Tabla de Decisión' },
-    { value: 'State Transition Testing', label: 'Pruebas de Transición de Estados' }
-  ];
-
-  readonly techniqueDescriptions: Record<string, string> = {
-    'Equivalent Partitioning': 'La IA generará casos para cada partición válida e inválida, evitando redundancias.',
-    'Boundary Value Analysis': 'La IA enfocará los casos en los valores límite (mínimo, máximo y sus adyacentes) de cada parámetro.',
-    'Decision Table Testing': 'La IA creará combinaciones de condiciones y acciones para cubrir todas las reglas del negocio.',
-    'State Transition Testing': 'La IA modelará los estados del sistema y las transiciones posibles entre ellos.'
-  };
-
-  readonly contextQuickTags: string[] = [
-    '+ Solo happy path',
-    '+ Casos negativos',
-    '+ Validaciones de frontera',
-    '+ Datos inválidos',
-    '+ Solo 5 escenarios',
-    '+ Flujo alternativo',
-    '+ Creación de ruta crítica'
-  ];
-
-  inputDataCollapsed: boolean = false;
-
-  get techniqueDescription(): string {
-    return this.editedSelectedTechnique
-      ? (this.techniqueDescriptions[this.editedSelectedTechnique] ?? '')
-      : '';
-  }
-
-  get isFormValid(): boolean {
-    return !!(this.editedTitle?.trim() && this.editedAcceptanceCriteria?.trim() && this.editedCellName?.trim());
-  }
-
-  appendContextTag(tag: string): void {
-    // Reemplaza por completo el contexto con el tag seleccionado.
-    this.editedContext = tag.replace(/^\+\s*/, '');
-  }
 
   private userStoryDbId: string | null = null;
   private existingDbTestCases: DbTestCaseWithRelations[] = [];
 
   constructor(
     private router: Router,
-    private route: ActivatedRoute,
     private location: Location,
     private databaseService: DatabaseService,
-    private aiService: AiUnifiedService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef,
     private huSyncService: HuSyncService
   ) { }
 
   ngOnInit(): void {
-    this.isContextPage = this.route.snapshot.routeConfig?.path === 'refiner/context';
-
     const navigation = this.router.getCurrentNavigation();
     const state = navigation?.extras?.state || history.state;
 
@@ -131,209 +72,6 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     } else {
       this.toastService.error('No se encontraron datos para editar');
       this.router.navigate(['/viewer']);
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.stopAiProgress();
-    this.aiStreamSub?.unsubscribe();
-  }
-
-  /** Cancela el refinamiento en curso desde el modal de progreso. */
-  cancelAiGeneration(): void {
-    this.aiStreamSub?.unsubscribe();
-    this.aiStreamSub = undefined;
-    this.stopAiProgress();
-    this.isLoading = false;
-    this.isRefining = false;
-    this.streamingReasoning = '';
-    this.streamingContent = '';
-    this.cdr.detectChanges();
-  }
-
-  get isAiBusy(): boolean {
-    return this.isRefining;
-  }
-
-  get currentHuDataForModal() {
-    if (!this.hu) return null;
-    return {
-      huId: this.hu.id || this.editedHuId,
-      huTitle: this.hu.title || this.editedTitle,
-      huDescription: this.editedDescription || this.hu.originalInput?.description,
-      acceptanceCriteria: this.editedAcceptanceCriteria || this.hu.originalInput?.acceptanceCriteria
-    };
-  }
-
-  get aiProgressTitle(): string {
-    const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
-    return this.isContextPage ? `Regenerando con ${provider}` : `Refinando con ${provider}`;
-  }
-
-  get aiProgressMessage(): string {
-    const id = this.editedHuId ? `${this.editedHuId} · ` : '';
-    const title = this.editedTitle
-      ? (this.editedTitle.length > 50 ? this.editedTitle.slice(0, 50) + '…' : this.editedTitle)
-      : 'Procesando solicitud…';
-    return `${id}${title}`;
-  }
-
-  get aiProgressStep(): string {
-    const shortTech = this.shortTechniqueName(this.editedSelectedTechnique);
-
-    const regenerateSteps = [
-      'Analizando contexto y descripción…',
-      shortTech ? `Regenerando escenarios con técnica ${shortTech}…` : 'Regenerando escenarios de prueba…',
-      'Validando resultados…'
-    ];
-
-    const refineSteps = [
-      'Leyendo casos de prueba actuales…',
-      shortTech ? `Refinando casos con técnica ${shortTech}…` : 'Aplicando ajustes solicitados…',
-      'Validando escenarios…'
-    ];
-
-    const steps = this.isContextPage ? regenerateSteps : refineSteps;
-    return steps[this.aiProgressIndex % steps.length];
-  }
-
-  private startAiProgress(): void {
-    this.stopAiProgress();
-    this.aiProgressIndex = 0;
-    this.aiProgressInterval = setInterval(() => {
-      this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
-      this.cdr.markForCheck();
-    }, 1800);
-  }
-
-  private stopAiProgress(): void {
-    if (this.aiProgressInterval) {
-      clearInterval(this.aiProgressInterval);
-      this.aiProgressInterval = null;
-    }
-    this.aiProgressIndex = 0;
-  }
-
-  private shortTechniqueName(technique: string): string {
-    const map: Record<string, string> = {
-      'Equivalent Partitioning': 'Partición Equiv.',
-      'Boundary Value Analysis': 'Val. Límite',
-      'Decision Table Testing': 'Tabla Decisión',
-      'State Transition Testing': 'Trans. Estado'
-    };
-    return map[technique] || '';
-  }
-
-  async regenerateWithAI(): Promise<void> {
-    if (!this.hu) return;
-    this.formError = null;
-
-    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim()) {
-      this.formError = 'Completa la Descripción y los Criterios de Aceptación antes de regenerar.';
-      return;
-    }
-
-    this.hu.id = this.editedHuId || this.hu.id;
-    this.hu.title = this.editedTitle || this.hu.title;
-    this.hu.sprint = this.editedSprint || this.hu.sprint;
-    this.hu.originalInput.description = this.editedDescription;
-    this.hu.originalInput.acceptanceCriteria = this.editedAcceptanceCriteria;
-    this.hu.originalInput.selectedTechnique = this.editedSelectedTechnique;
-    this.hu.refinementTechnique = this.editedSelectedTechnique;
-    this.hu.refinementContext = this.editedContext;
-
-    this.isLoading = true;
-    this.isRefining = true;
-    this.streamingReasoning = '';
-    this.streamingContent = '';
-    this.startAiProgress();
-    this.cdr.detectChanges();
-
-    // Elegir stream de refinamiento o de generación según contexto
-    const stream$ = (this.isContextPage && this.editedContext?.trim())
-      ? this.aiService.refineTestCasesDirectStream(
-          this.hu!.originalInput,
-          this.hu!.detailedTestCases || [],
-          this.editedSelectedTechnique,
-          this.editedContext.trim()
-        )
-      : this.aiService.generateTestCasesSmartStream(
-          this.editedDescription,
-          this.editedAcceptanceCriteria,
-          this.editedSelectedTechnique
-        );
-
-    this.aiStreamSub = stream$.subscribe({
-      next: (event: any) => {
-        this.streamingReasoning = event.reasoning || '';
-        this.streamingContent = event.content || '';
-        this.cdr.detectChanges();
-      },
-      error: (error: any) => {
-        console.error('Error al regenerar con streaming:', error);
-        this.toastService.error(error?.userMessage || 'Error al regenerar casos de prueba');
-        this.isLoading = false;
-        this.isRefining = false;
-        this.streamingReasoning = '';
-        this.streamingContent = '';
-        this.stopAiProgress();
-        this.cdr.detectChanges();
-      },
-      complete: async () => {
-        // Parsear JSON del contenido final del stream
-        const result = this.parseStreamResult(this.streamingContent);
-        this.streamingReasoning = '';
-        this.streamingContent = '';
-
-        if (!result?.testCases || !this.hu) {
-          this.toastService.error('La IA no devolvió escenarios válidos');
-          this.isLoading = false;
-          this.isRefining = false;
-          this.stopAiProgress();
-          this.cdr.detectChanges();
-          return;
-        }
-
-        this.hu.detailedTestCases = result.testCases;
-
-        const saved = await this.saveData();
-        if (!saved) {
-          this.toastService.error('No se pudo guardar la regeneración en base de datos');
-          this.isLoading = false;
-          this.isRefining = false;
-          this.stopAiProgress();
-          this.cdr.detectChanges();
-          return;
-        }
-
-        this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'refiner');
-        this.toastService.success(`${result.testCases.length} casos regenerados y guardados con éxito`);
-
-        this.isLoading = false;
-        this.isRefining = false;
-        this.stopAiProgress();
-        this.cdr.detectChanges();
-
-        if (this.isContextPage) {
-          this.goToScenariosTable();
-        }
-      }
-    });
-  }
-
-  /** Parsea el contenido JSON del stream final */
-  private parseStreamResult(content: string): any {
-    if (!content) return null;
-    try {
-      const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
-      return JSON.parse(clean);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { return JSON.parse(match[0]); } catch {}
-      }
-      console.warn('[REFINER] No se pudo parsear JSON del stream');
-      return null;
     }
   }
 
@@ -361,7 +99,7 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
   goToCurrentPage(): void {
     if (!this.hu) return;
 
-    this.router.navigate([this.isContextPage ? '/refiner/context' : '/refiner'], {
+    this.router.navigate(['/refiner'], {
       state: {
         hu: this.hu,
         testPlanId: this.testPlanId
@@ -373,17 +111,6 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
     this.goToPlanDetail();
   }
 
-  openContextRegeneratorPage(): void {
-    if (!this.hu) return;
-
-    this.router.navigate(['/refiner/context'], {
-      state: {
-        hu: this.hu,
-        testPlanId: this.testPlanId
-      }
-    });
-  }
-
   goToScenariosTable(): void {
     if (!this.hu) return;
 
@@ -392,17 +119,6 @@ export class TestCaseRefinerComponent implements OnInit, OnDestroy {
         huId: this.hu.dbUuid || this.hu.id,
         testPlanId: this.testPlanId
       },
-      state: {
-        hu: this.hu,
-        testPlanId: this.testPlanId
-      }
-    });
-  }
-
-  goToRefinerPage(): void {
-    if (!this.hu) return;
-
-    this.router.navigate(['/refiner'], {
       state: {
         hu: this.hu,
         testPlanId: this.testPlanId

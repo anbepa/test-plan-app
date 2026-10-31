@@ -76,12 +76,6 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
-    path: 'refiner/context',
-    loadComponent: () => import('./test-case-refiner/test-case-refiner.component').then(m => m.TestCaseRefinerComponent),
-    title: 'Regenerar Escenarios con Contexto',
-    canActivate: [authGuard]
-  },
-  {
     path: 'preview/:id',
     loadComponent: () => import('./test-plan-preview/test-plan-preview.component').then(m => m.TestPlanPreviewComponent),
     title: 'Previsualizar Test Plan',

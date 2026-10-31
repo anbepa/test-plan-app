@@ -53,6 +53,9 @@ const FLOW_STATUS_LABELS: Record<FlowStepStatus, string> = {
   pending: 'Pendiente', running: 'En curso', done: 'Listo', stale: 'Desactualizado', optional: 'Opcional'
 };
 
+/** Pasos que se resumen en una línea al completarse (el contexto técnico se revisa antes de generar). */
+const COLLAPSIBLE_STEPS: FlowStepId[] = ['hu', 'criteria', 'code'];
+
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
@@ -127,6 +130,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   private codeContextBasis: string = '';
   /** Por qué un paso se limpió o rehízo solo (p. ej. al importar otra HU): se muestra en el paso. */
   flowNotices: Partial<Record<FlowStepId, string>> = {};
+  /** Pasos completados que el usuario abrió a mano: no se vuelven a resumir solos. */
+  private openedSteps = new Set<FlowStepId>();
+  /** Paso donde está el foco: no se resume mientras se escribe en él. */
+  private focusedStep: FlowStepId | null = null;
+  /** Texto original de los criterios visible aunque ya exista la lista CA-xx. */
+  showOriginalCriteria: boolean = false;
+  /** Pasos del agente y resumen técnico desplegados (la tabla de cobertura es lo principal). */
+  showAgentLog: boolean = false;
+  showCodeContextText: boolean = false;
 
   // ---- Flujo de trabajo: HU → criterios → código → contexto técnico → generación ----
 
@@ -149,7 +161,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         return {
           title: 'Historia de usuario',
           status: this.azureImportLoading ? 'running' : ready ? 'done' : 'pending',
-          summary: this.azureImportLoading ? 'Importando desde Azure…' : this.currentHuId.trim() ? `HU ${this.currentHuId.trim()}` : 'Importa o escribe la HU'
+          summary: this.azureImportLoading ? 'Importando desde Azure…'
+            : ready ? [this.currentHuId.trim(), this.currentHuTitle.trim(), this.cellName, this.currentSprint.trim()].join(' · ')
+            : this.currentHuId.trim() ? `HU ${this.currentHuId.trim()}` : 'Importa o escribe la HU'
         };
       }
       case 'criteria': {
@@ -204,7 +218,77 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   scrollToFlowStep(id: FlowStepId): void {
-    this.elRef.nativeElement.querySelector(`#flow-step-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (this.isStepCollapsed(id)) this.toggleStep(id);
+    setTimeout(() => {
+      this.elRef.nativeElement.querySelector(`#flow-step-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  /** Un paso completado se resume en una línea, salvo que el usuario lo abra o esté escribiendo en él. */
+  isStepCollapsed(id: FlowStepId): boolean {
+    return COLLAPSIBLE_STEPS.includes(id)
+      && this.flowStep(id)?.status === 'done'
+      && !this.openedSteps.has(id)
+      && this.focusedStep !== id
+      && !this.flowNotices[id];
+  }
+
+  /** ¿El paso admite el botón Editar / Contraer? */
+  canToggleStep(id: FlowStepId): boolean {
+    return COLLAPSIBLE_STEPS.includes(id) && this.flowStep(id)?.status === 'done';
+  }
+
+  /** Editar / Contraer: depende solo de si el usuario abrió el paso, no del foco. */
+  toggleStep(id: FlowStepId): void {
+    if (!this.openedSteps.has(id)) {
+      this.openedSteps.add(id);
+      setTimeout(() => this.autoGrowFormTextareas());
+    } else {
+      this.openedSteps.delete(id);
+      if (this.focusedStep === id) this.focusedStep = null;
+    }
+  }
+
+  onStepFocusIn(id: FlowStepId, event: FocusEvent): void {
+    // El foco que toma el propio botón Editar/Contraer no abre el paso: lo decide el clic.
+    if ((event.target as HTMLElement | null)?.closest('.flow-step-toggle')) return;
+    this.focusedStep = id;
+  }
+
+  onStepFocusOut(id: FlowStepId, event: FocusEvent): void {
+    const section = event.currentTarget as HTMLElement | null;
+    if (section?.contains(event.relatedTarget as Node | null)) return;
+    if (this.focusedStep === id) this.focusedStep = null;
+  }
+
+  /** Qué falta para poder generar, en el mismo orden que valida isFormInvalidForGeneration(). */
+  get generateBlockers(): { label: string; step: FlowStepId }[] {
+    const blockers: { label: string; step: FlowStepId }[] = [];
+    if (!this.currentHuId) blockers.push({ label: 'ID de la HU', step: 'hu' });
+    if (!this.currentHuTitle) blockers.push({ label: 'título', step: 'hu' });
+    if (!this.currentSprint) blockers.push({ label: 'sprint', step: 'hu' });
+    if (!this.currentDescription) blockers.push({ label: 'descripción', step: 'hu' });
+    if (this.contextSource !== 'code' && !this.currentAcceptanceCriteria) blockers.push({ label: 'criterios de aceptación', step: 'criteria' });
+    if (this.usesCodeContext && !this.isCodeTargetReady) blockers.push({ label: 'código a analizar', step: 'code' });
+    return blockers;
+  }
+
+  /** Resumen de lo que se enviará a la generación, para la barra de acción. */
+  get generateSummary(): string {
+    const parts: string[] = [];
+    const criteria = this.flowStep('criteria');
+    if (criteria.status === 'done') parts.push(criteria.summary);
+    if (this.usesCodeContext) {
+      parts.push(this.flowStep('code').summary);
+      parts.push(this.codeExploring ? 'el agente está explorando el código…'
+        : this.codeContextText.trim() ? 'contexto técnico listo' : 'el código se explora al generar (1–3 min)');
+    }
+    return parts.join(' · ');
+  }
+
+  /** Hay un proceso en curso (interpretar, explorar o generar): la barra no muestra "listo". */
+  get isFlowBusy(): boolean {
+    return this.normalizingCriteria || this.codeExploring || this.loadingScope || this.loadingScenarios;
   }
 
   flowNotice(id: FlowStepId): string | undefined {
@@ -604,6 +688,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.normalizedCriteriaFor = '';
     this.criteriaCoverageGap = [];
     this.flowNotices = {};
+    this.openedSteps.clear();
+    this.focusedStep = null;
+    this.showOriginalCriteria = false;
     this.generatedHUData = null;
     this.userRefinementContext = '';
     this.refinementTechnique = this.AUTO_TECHNIQUE;
@@ -699,6 +786,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.azureImportSuccessMessage = `HU ${importedHu.id} importada correctamente desde Azure DevOps.`;
           this.azureImportErrorMessage = null;
           this.toastService.success(`HU ${importedHu.id} importada correctamente desde Azure DevOps.`);
+          // Importada la HU, su paso se resume para dejar a la vista lo que falta.
+          this.openedSteps.delete('hu');
+          this.focusedStep = null;
+          this.showOriginalCriteria = false;
           setTimeout(() => this.autoGrowFormTextareas(), 0);
         },
         error: (error: unknown) => {
