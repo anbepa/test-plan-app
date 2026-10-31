@@ -3,10 +3,22 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PlanExecution, HUData, TestRun } from '../../../models/hu-data.model';
 import { EvidenceDownloadModalComponent } from '../evidence-download-modal/evidence-download-modal.component';
-import { EvidenceUploadModalComponent } from '../evidence-upload-modal/evidence-upload-modal.component';
+import { EvidenceUploadModalComponent, OfficeFormats } from '../evidence-upload-modal/evidence-upload-modal.component';
 import { SerenityReportService, SerenityReportRecord } from '../../../services/export/serenity-report.service';
 import { AzureDevOpsEvidenceService } from '../../../services/integrations/azure-devops-evidence.service';
 import { ToastService } from '../../../services/core/toast.service';
+
+/** Destino de una carga a Azure: un formato suelto o un paquete con varios formatos. */
+export type UploadTarget = 'word' | 'pdf' | 'excel' | 'serenity' | 'bundle';
+
+/** Datos de presentación de cada destino de carga (título y nombre .zip por defecto). */
+const UPLOAD_TARGETS: Record<UploadTarget, { label: string; zipPrefix: string }> = {
+  word: { label: 'Word', zipPrefix: 'Evidencia_Word' },
+  pdf: { label: 'PDF', zipPrefix: 'Evidencia_PDF' },
+  excel: { label: 'Excel', zipPrefix: 'Evidencia_Excel' },
+  serenity: { label: 'reporte Serenity', zipPrefix: 'Reporte_Serenity' },
+  bundle: { label: 'paquete de evidencias', zipPrefix: 'Evidencia' }
+};
 
 @Component({
   selector: 'app-evidence-manager',
@@ -34,9 +46,16 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   processingMessage = '';
   /** Menú ⋮ abierto actualmente (formato), o null si ninguno. */
   activeMenu: 'word' | 'pdf' | 'excel' | 'serenity' | null = null;
-  /** Sub-modal de "Cargar Azure" abierto. */
+  /** Sub-modal de "Cargar a Azure" abierto y el formato (o paquete) que se carga. */
   showUploadModal = false;
-  uploadMode: 'office' | 'serenity' | null = null;
+  uploadMode: UploadTarget | null = null;
+
+  /** Nombre del .zip de cada destino: cada formato se carga con su propio nombre. */
+  fileNames: Record<UploadTarget, string> = { word: '', pdf: '', excel: '', serenity: '', bundle: '' };
+  /** Nombres editados a mano: no se recalculan al cambiar el ID del plan. */
+  private editedNames = new Set<UploadTarget>();
+  /** Formatos incluidos en el paquete (solo modo 'bundle'). */
+  bundleFormats: OfficeFormats = { docx: true, pdf: true, excel: true };
 
   /** Último reporte Serenity (para mostrar su estado al cargar a Azure). */
   serenityReport: SerenityReportRecord | null = null;
@@ -80,11 +99,34 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     return !!this.serenityReport?.artifactDownloadUrl;
   }
 
+  get serenityPending(): boolean {
+    return this.serenityReport?.status === 'pending';
+  }
+
+  get uploadTitle(): string {
+    return this.uploadMode ? `Cargar ${UPLOAD_TARGETS[this.uploadMode].label} a Azure` : '';
+  }
+
+  get hasBundleFormat(): boolean {
+    return this.bundleFormats.docx || this.bundleFormats.pdf || this.bundleFormats.excel;
+  }
+
+  /** ¿El sub-modal tiene todo lo necesario para cargar? */
+  get canConfirmUpload(): boolean {
+    if (this.isBusy || !this.uploadMode || !this.up?.inputPlanId.trim()) return false;
+    if (!this.fileNames[this.uploadMode].trim()) return false;
+    if (this.uploadMode === 'serenity') return this.serenityReady;
+    if (this.uploadMode === 'bundle') return this.hasBundleFormat;
+    return !!this.execution;
+  }
+
   openModal(): void {
     if (this.isProcessing) return;
     this.lastFocusedElement = document.activeElement as HTMLElement;
     this.showModal = true;
     this.lockBodyScroll();
+    // El estado de Serenity se muestra en su fila, sin abrir ningún sub-modal.
+    this.loadSerenityReport();
   }
 
   /** Cerrar con Escape: sub-modal → menú ⋮ → modal principal. */
@@ -147,26 +189,37 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.activeMenu = this.activeMenu === format ? null : format;
   }
 
-  // ── Sub-modal "Cargar Azure" ──
-  openUploadModal(mode: 'office' | 'serenity'): void {
+  // ── Sub-modal "Cargar a Azure" ──
+  openUploadModal(mode: UploadTarget): void {
+    if (this.isBusy) return;
     this.activeMenu = null;
     this.uploadMode = mode;
     this.showUploadModal = true;
-    // Pre-inicializa el nombre del .zip (solo si está vacío) para habilitar el botón "Cargar"
-    // y evitar que el campo quede vacío o se sobrescriba con el ID del plan.
-    if (mode === 'serenity') {
-      this.up?.ensureSerenityFileName?.();
-      this.loadSerenityReport();
-    } else {
-      this.up?.ensureOfficeFileName?.();
-    }
+    if (!this.fileNames[mode].trim()) this.fileNames[mode] = this.defaultFileName(mode);
+    if (mode === 'serenity') this.loadSerenityReport();
   }
 
   closeUploadModal(): void {
     if (this.isBusy) return;
     this.showUploadModal = false;
     this.uploadMode = null;
-    this.stopSerenityPolling();
+  }
+
+  /** Al cambiar el ID del plan, actualiza los nombres por defecto que el usuario no editó. */
+  onPlanIdChange(): void {
+    (Object.keys(this.fileNames) as UploadTarget[]).forEach(t => {
+      if (this.fileNames[t] && !this.editedNames.has(t)) this.fileNames[t] = this.defaultFileName(t);
+    });
+  }
+
+  onFileNameChange(target: UploadTarget): void {
+    this.editedNames.add(target);
+  }
+
+  private defaultFileName(target: UploadTarget): string {
+    const ref = (this.up?.validatedPlan?.planId || this.up?.inputPlanId || '').trim();
+    const prefix = UPLOAD_TARGETS[target].zipPrefix;
+    return ref ? `${prefix}_${ref}.zip` : `${prefix}.zip`;
   }
 
   /** Carga el último reporte Serenity para mostrar su estado en el sub-modal. */
@@ -224,13 +277,13 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** Publica en DevOps los formatos Word/Excel/PDF marcados (juntos, como un único .zip). */
-  async publishOfficeFormats(): Promise<void> {
+  /** Publica en DevOps uno o varios formatos Word/PDF/Excel empaquetados en un único .zip. */
+  async publishOfficeFormats(formats: OfficeFormats, fileName: string): Promise<void> {
     if (!this.up) return;
-    if (!this.up.hasSelectedFormat()) return;
+    if (!formats.docx && !formats.pdf && !formats.excel) return;
     const ready = await this.ensurePlanValidated();
     if (!ready) return;
-    await this.up.startUpload();
+    await this.up.startUpload({ formats, fileName });
   }
 
   /** Carga a Azure el último reporte Serenity generado (sin regenerarlo). */
@@ -238,8 +291,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     const report = this.serenityReport;
     if (!report?.artifactDownloadUrl) return;
     if (!this.up) return;
-    const fileName = (this.up.serenityFileName || '').trim();
-    if (!fileName) return;
+    const fileName = this.up.sanitizeZipName(this.fileNames.serenity, 'Reporte_Serenity.zip');
 
     const ready = await this.ensurePlanValidated();
     if (!ready) return;
@@ -247,7 +299,6 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     // Cierra el sub-modal y deja el aviso de proceso en el modal principal.
     this.showUploadModal = false;
     this.uploadMode = null;
-    this.stopSerenityPolling();
 
     this.isProcessing = true;
     this.processingMessage = 'Cargando reporte Serenity...';
@@ -275,17 +326,23 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   /** Acción del botón "Cargar" del sub-modal. */
   async confirmUpload(): Promise<void> {
     const mode = this.uploadMode;
+    if (!mode || !this.canConfirmUpload) return;
     if (mode === 'serenity') {
       await this.attachSerenity();
-    } else {
-      this.closeUploadModal();
-      await this.publishOfficeFormats();
+      return;
     }
+    const formats: OfficeFormats = mode === 'bundle'
+      ? { ...this.bundleFormats }
+      : { docx: mode === 'word', pdf: mode === 'pdf', excel: mode === 'excel' };
+    const fileName = this.fileNames[mode];
+    this.closeUploadModal();
+    await this.publishOfficeFormats(formats, fileName);
   }
 
   /** Permite al usuario cambiar el ID de plan tras haberlo validado. */
   changePlan(): void {
     this.up?.resetToPlantId?.();
+    this.onPlanIdChange();
   }
 
   handleOpenSerenityHistory(): void {

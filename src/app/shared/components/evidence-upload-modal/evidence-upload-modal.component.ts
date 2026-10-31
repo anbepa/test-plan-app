@@ -18,6 +18,9 @@ import { ExportService } from '../../../services/export/export.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
+/** Formatos ofimáticos que se generan en el cliente. */
+export interface OfficeFormats { docx: boolean; pdf: boolean; excel: boolean; }
+
 @Component({
   selector: 'app-evidence-upload-modal',
   standalone: true,
@@ -46,7 +49,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   /** Nombre del .zip del reporte Serenity (se empaqueta de forma independiente). */
   serenityFileName = '';
   // Por defecto se marcan los tres formatos ofimáticos para agilizar la carga.
-  selectedFormats = { docx: true, pdf: true, excel: true };
+  selectedFormats: OfficeFormats = { docx: true, pdf: true, excel: true };
   isValidating = false;
   isUploading = false;
   planValidated = false;
@@ -174,7 +177,11 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     }
   }
 
-  async startUpload(): Promise<void> {
+  /**
+   * Empaqueta y carga los formatos ofimáticos. Por defecto usa los formatos marcados y el
+   * nombre del formulario; `override` permite cargar un formato suelto con su propio nombre.
+   */
+  async startUpload(override?: { formats: OfficeFormats; fileName: string }): Promise<void> {
     if (!this.validatedPlan || !this.execution) {
       this.toastService.error('Falta información necesaria para la carga');
       return;
@@ -188,11 +195,12 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     try {
       console.log('[startUpload] Iniciando carga para plan:', this.validatedPlan.planId);
       
-      const zipNameTemplate = this.sanitizeZipName(this.inputFileName, 'Evidencia.zip');
+      const formats = override?.formats || this.selectedFormats;
+      const zipNameTemplate = this.sanitizeZipName(override?.fileName ?? this.inputFileName, 'Evidencia.zip');
       
       console.log('[startUpload] Nombre archivo ZIP:', zipNameTemplate);
 
-      const extraFiles = await this.buildExtraFiles();
+      const extraFiles = await this.buildExtraFiles(formats);
       
       this.orchestrator
         .watchProgress()
@@ -209,7 +217,7 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
         effectiveTestRun,
         zipNameTemplate,
         {
-          formats: { serenity: false, ...this.selectedFormats },
+          formats: { serenity: false, ...formats },
           extraFiles
         }
       );
@@ -346,25 +354,25 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     return this.selectedFormats.docx || this.selectedFormats.pdf || this.selectedFormats.excel;
   }
 
-  private async buildExtraFiles(): Promise<{ name: string; base64: string }[]> {
+  private async buildExtraFiles(formats: OfficeFormats): Promise<{ name: string; base64: string }[]> {
     const files: { name: string; base64: string }[] = [];
     if (!this.execution) return files;
 
     const baseName = (this.execution.huTitle || 'Ejecucion').replace(/[^\w\-]+/g, '_').slice(0, 60);
 
-    if (this.selectedFormats.docx) {
+    if (formats.docx) {
       this.onProcessing.emit({ isProcessing: true, message: 'Generando documento Word...' });
       const blob = await this.exportService.exportExecutionToDOCX(this.execution, this.huData, undefined, true) as Blob;
       files.push({ name: `${baseName}.docx`, base64: await this.blobToBase64(blob) });
     }
 
-    if (this.selectedFormats.pdf) {
+    if (formats.pdf) {
       this.onProcessing.emit({ isProcessing: true, message: 'Generando documento PDF...' });
       const blob = await this.exportService.exportExecutionToPDF(this.execution, this.huData, undefined, true) as Blob;
       files.push({ name: `${baseName}.pdf`, base64: await this.blobToBase64(blob) });
     }
 
-    if (this.selectedFormats.excel) {
+    if (formats.excel) {
       this.onProcessing.emit({ isProcessing: true, message: 'Generando documento Excel...' });
       const blob = await this.exportService.exportExecutionToXLSX(this.execution, this.huData, undefined, true) as Blob;
       files.push({ name: `${baseName}.xlsx`, base64: await this.blobToBase64(blob) });
