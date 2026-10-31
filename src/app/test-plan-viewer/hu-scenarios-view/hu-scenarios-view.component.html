@@ -126,7 +126,7 @@
                   <th>Precondiciones</th>
                   <th>Paso a Paso</th>
                   <th>Resultado Esperado</th>
-                  <th style="width: 88px; text-align: center;">Acciones</th>
+                  <th class="actions-col">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,7 +201,7 @@
                       </ng-container>
                       <ng-template #readExpected><pre class="table-pre">{{ tc.expectedResults }}</pre></ng-template>
                     </td>
-                    <td data-label="Acciones" style="text-align: center; width: 100px;">
+                    <td class="actions-col" data-label="Acciones">
                       <div class="row-actions" *ngIf="isEditingTestCase(i); else menuActions">
                         <button class="action-btn-save" (click)="saveEditTestCase(i)" [disabled]="isLoading" title="Guardar cambios">
                           ✓
