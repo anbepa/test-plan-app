@@ -75,6 +75,16 @@
     width: calc(100% - 32px);
 }
 
+/* En el formulario inicial el encabezado es un título simple, no otra caja dentro de la tarjeta */
+.form-section.is-flow .form-header-compact {
+    margin: 0 0 1.5rem;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
