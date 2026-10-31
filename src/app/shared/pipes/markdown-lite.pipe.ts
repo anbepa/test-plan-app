@@ -102,7 +102,7 @@ function coverageTable(lines: string[]): string {
     const { detail, source } = splitSource(rest.replace(/^Detalle:\s*/i, ''));
     return `<tr><td class="md-id">${id}</td><td>${inline(criterion.replace(/^"|"$/g, ''))}</td>`
       + `<td><span class="md-status ${STATUS_CLASS[status]}">${status}</span></td>`
-      + `<td>${inline(detail)}</td><td class="md-source">${inline(source)}</td></tr>`;
+      + `<td>${inline(detail)}</td><td class="md-source">${sourceCell(source)}</td></tr>`;
   });
   return tableWrap('<tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th><th>Fuente</th></tr>', rows);
 }
@@ -112,7 +112,7 @@ function behaviorTable(lines: string[]): string {
     const [, id, kind, rest] = line.match(RT_LINE)!;
     const { detail, source } = splitSource(rest);
     const kindHtml = kind ? `<span class="md-status ${kind === 'CAMBIO HU' ? 'md-status-partial' : 'md-status-none'}">${kind}</span>` : '';
-    return `<tr><td class="md-id">${id}</td><td>${kindHtml}</td><td>${inline(detail)}</td><td class="md-source">${inline(source)}</td></tr>`;
+    return `<tr><td class="md-id">${id}</td><td>${kindHtml}</td><td>${inline(detail)}</td><td class="md-source">${sourceCell(source)}</td></tr>`;
   });
   return tableWrap('<tr><th>RT</th><th>Tipo</th><th>Comportamiento</th><th>Fuente</th></tr>', rows);
 }
@@ -139,6 +139,14 @@ function splitSource(text: string): { detail: string; source: string } {
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Columna Fuente: rutas largas como carpeta/…/archivo, con la ruta completa en el tooltip. */
+function sourceCell(source: string): string {
+  return inline(source).replace(/[\w.@-]+(?:\/[\w.@-]+){3,}/g, (path) => {
+    const parts = path.split('/');
+    return `<span class="md-path" title="${path}">${parts[0]}/…/${parts[parts.length - 1]}</span>`;
+  });
 }
 
 function inline(text: string): string {
