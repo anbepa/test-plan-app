@@ -57,7 +57,6 @@
 }
 
 /* === FORM LAYOUT === */
-/* === FORM LAYOUT === */
 .form-section {
     background: #FFFFFF;
     border-radius: 18px;
@@ -68,6 +67,12 @@
     width: auto;
     max-width: none;
     box-sizing: border-box;
+}
+
+.form-section.is-flow {
+    max-width: 1100px;
+    margin: 20px auto;
+    width: calc(100% - 32px);
 }
 
 .form-grid {
@@ -1128,18 +1133,6 @@ textarea.form-control.auto-grow {
   cursor: pointer;
 }
 
-.code-agent-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.code-agent-header label {
-  margin: 0;
-}
-
 .code-agent-log {
   list-style: none;
   margin: 0.6rem 0 0;
@@ -1421,91 +1414,7 @@ textarea.form-control.auto-grow {
   margin: 0;
 }
 
-/* Mapa del flujo */
-.flow-stepper {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  margin: 0 -0.5rem;
-  padding: 0.6rem 0.5rem;
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid #eef2f7;
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-.flow-stepper ol {
-  display: flex;
-  align-items: center;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  min-width: max-content;
-}
-
-.flow-stepper li {
-  display: flex;
-  align-items: center;
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.flow-stepper-item {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem 0.5rem;
-  border: none;
-  border-radius: 10px;
-  background: none;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition-fast, 150ms ease);
-}
-
-.flow-stepper-item:hover,
-.flow-stepper-item:focus-visible {
-  background: #f1f5f9;
-}
-
-.flow-stepper-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.flow-stepper-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary, #111827);
-  white-space: nowrap;
-}
-
-.flow-stepper-summary {
-  font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
-  white-space: nowrap;
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.flow-stepper-line {
-  flex: 1 1 auto;
-  min-width: 16px;
-  height: 2px;
-  margin: 0 0.35rem;
-  border-radius: 1px;
-  background: #e2e8f0;
-}
-
-.flow-stepper li.is-done .flow-stepper-line {
-  background: var(--flow-done);
-}
-
-/* Número del paso (stepper y tarjetas) */
+/* Número del paso */
 .flow-step-num {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1549,20 +1458,22 @@ textarea.form-control.auto-grow {
   border-style: dashed;
 }
 
-/* Tarjeta de cada paso */
+/* Tarjeta de cada paso: el estado lo indica solo el círculo numerado */
 .flow-step {
-  scroll-margin-top: 84px;
+  scroll-margin-top: 24px;
   border: 1px solid #e5e7eb;
-  border-left: 4px solid var(--flow-pending);
   border-radius: 14px;
   background: #fff;
-  transition: border-color var(--transition-base, 250ms ease);
 }
 
-.flow-step.is-done { border-left-color: var(--flow-done); }
-.flow-step.is-running { border-left-color: var(--flow-running); }
-.flow-step.is-stale { border-left-color: var(--flow-stale); }
-.flow-step.is-optional { border-left-style: dashed; }
+/* Paso completado y resumido en una línea */
+.flow-step.is-collapsed {
+  background: #fcfcfd;
+}
+.flow-step.is-collapsed .flow-step-header {
+  align-items: center;
+  padding-bottom: 1rem;
+}
 
 .flow-step-header {
   display: flex;
@@ -1589,6 +1500,32 @@ textarea.form-control.auto-grow {
   color: var(--text-secondary, #6b7280);
 }
 
+.flow-step-heading .flow-step-summary {
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flow-step-toggle {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-color, #007AFF);
+  cursor: pointer;
+}
+.flow-step-toggle:hover {
+  border-color: var(--primary-color, #007AFF);
+  background: #f0f7ff;
+}
+
 .flow-status-chip {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1603,7 +1540,6 @@ textarea.form-control.auto-grow {
 }
 
 .flow-status-chip .spinner-inline { margin: 0; }
-.flow-status-chip.is-done { background: #dcfce7; color: #166534; }
 .flow-status-chip.is-running { background: #dbeafe; color: #1d4ed8; }
 .flow-status-chip.is-stale { background: #fef3c7; color: #92400e; }
 
@@ -1614,9 +1550,20 @@ textarea.form-control.auto-grow {
   padding: 1rem 1.25rem 1.25rem;
 }
 
+.flow-step-body[hidden] {
+  display: none;
+}
+
 .flow-step-body > .form-group,
 .flow-step-body > .metadata-block {
   margin: 0;
+}
+
+/* Dentro de un paso los metadatos no necesitan otra caja */
+.flow-step .metadata-block {
+  background: none;
+  border: none;
+  padding: 0;
 }
 
 /* Avisos: por qué un paso se limpió o se rehízo */
@@ -1666,62 +1613,139 @@ textarea.form-control.auto-grow {
 
 .flow-lock-hint {
   margin: 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  color: #475569;
+  color: #64748b;
   font-size: 0.84rem;
 }
 
-/* Resumen de lo que se enviará a la generación */
-.flow-checklist {
-  list-style: none;
-  margin: 0;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
+/* Texto original de los criterios, plegado cuando ya existe la lista CA-xx */
+.criteria-original-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.86rem;
-  color: #334155;
 }
-
-.flow-checklist li {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
+.criteria-original-toggle {
+  display: inline-flex;
+  align-items: center;
   gap: 0.4rem;
-}
-
-.flow-checklist .code-link-btn {
   height: auto;
   min-height: 0;
-  margin-left: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+.criteria-original-caret {
+  display: inline-block;
+  transition: transform 150ms ease;
+}
+.criteria-original-caret.is-open {
+  transform: rotate(90deg);
+}
+.criteria-original-bar + .md-preview {
+  margin-top: 0.5rem;
+}
+
+/* Contexto técnico: explicación corta y botón de explorar */
+.code-agent-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+.code-agent-bar .code-source-hint {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.code-agent-optional {
+  display: block;
+  margin-top: 0.15rem;
+  color: #94a3b8;
+}
+.code-agent-actions {
+  margin-left: auto;
+}
+.btn-flow-secondary {
+  height: auto;
+  min-height: 36px;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--primary-color, #007AFF);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-color, #007AFF);
+  cursor: pointer;
+}
+.btn-flow-secondary:hover:not(:disabled) {
+  background: #f0f7ff;
+}
+.btn-flow-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Barra de acción fija al pie: qué falta o qué se enviará + botón de generar */
+.flow-actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 0 -0.5rem;
+  padding: 0.75rem 0.5rem;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid #e5e7eb;
+}
+.flow-actionbar .initial-form-error {
+  margin: 0 0 0.6rem;
+}
+.flow-actionbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+}
+.flow-actionbar-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  color: #475569;
+}
+.flow-actionbar-label {
+  font-weight: 600;
+  color: #92400e;
+  margin-right: 0.25rem;
+}
+.flow-actionbar-status .code-link-btn {
+  height: auto;
+  min-height: 0;
+  margin: 0;
   padding: 0;
   border: none;
   box-shadow: none;
   background: none;
+  font-size: inherit;
   color: var(--primary-color, #007AFF);
-  font-size: 0.8rem;
 }
-
-.flow-checklist-mark {
-  width: 1rem;
+.flow-actionbar-ready {
+  color: var(--flow-done);
   font-weight: 700;
-  color: var(--flow-pending);
 }
-
-.flow-checklist li.is-done .flow-checklist-mark { color: var(--flow-done); }
-.flow-checklist li.is-stale .flow-checklist-mark { color: var(--flow-stale); }
-.flow-checklist li.is-running .flow-checklist-mark { color: var(--flow-running); }
-
-.flow-step .main-form-actions {
-  margin: 0;
-}
-
-.flow-generate-hint {
-  margin: 0;
+.flow-actionbar .compact-action {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
 }
 
 @media (max-width: 640px) {
@@ -1736,18 +1760,18 @@ textarea.form-control.auto-grow {
     margin-right: 0.9rem;
   }
 
-  .flow-stepper-summary {
+  .flow-status-chip {
     display: none;
   }
 
-  .flow-status-chip {
-    display: none;
+  .flow-actionbar-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flow-step,
-  .flow-stepper-item {
+  .criteria-original-caret {
     transition: none;
   }
 }
