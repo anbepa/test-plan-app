@@ -1313,6 +1313,10 @@ textarea.form-control.auto-grow {
   background: #ffffff;
 }
 
+.coverage-editor-title .code-coverage-chips {
+  margin-top: 0;
+}
+
 .coverage-editor-title {
   display: flex;
   flex-wrap: wrap;
@@ -1325,6 +1329,7 @@ textarea.form-control.auto-grow {
 }
 
 .coverage-editor-hint {
+  margin: 0 0 0.5rem;
   font-weight: 400;
   font-size: 0.78rem;
   color: #64748b;
@@ -1412,6 +1417,19 @@ textarea.form-control.auto-grow {
 
 .flow-mode .code-source-hint {
   margin: 0;
+}
+
+/* Indicador de carga pequeño (círculo del paso, chips y barra de acción) */
+.spinner-inline {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 122, 255, 0.25);
+  border-top-color: var(--primary-color, #007AFF);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
 }
 
 /* Número del paso */
@@ -1673,6 +1691,39 @@ textarea.form-control.auto-grow {
 }
 .code-agent-actions {
   margin-left: auto;
+}
+.code-agent-meta {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.code-agent-meta .code-link-btn {
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: none;
+  font-size: inherit;
+  text-decoration: none;
+  color: var(--primary-color, #007AFF);
+}
+
+/* Cabecera del resumen técnico: título plegable, nota y Vista/Editar */
+.code-context-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+.code-context-note {
+  flex: 1 1 auto;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+/* Desplegado no necesita scroll propio: el paso ya es la zona de lectura */
+.code-context-preview {
+  max-height: none;
 }
 .btn-flow-secondary {
   height: auto;

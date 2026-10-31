@@ -328,6 +328,16 @@
                 <ng-template #codeOnlyHint>Reconstruye las reglas observables desde el código.</ng-template>
                 <span class="code-agent-optional">Opcional: si no exploras ahora, se hace al generar (1–3 min).</span>
               </p>
+              <p *ngIf="codeExploring" class="code-source-hint code-agent-meta">El agente está revisando el código de la HU; suele tardar entre 1 y 3 minutos.</p>
+              <p *ngIf="codeContextText && !codeExploring" class="code-source-hint code-agent-meta">
+                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados</span>
+                <ng-container *ngIf="codeAgentLog.length">
+                  <span *ngIf="codeFilesReviewed.length" aria-hidden="true"> · </span>
+                  <button type="button" class="code-link-btn" (click)="showAgentLog = !showAgentLog" [attr.aria-expanded]="showAgentLog">
+                    {{ showAgentLog ? 'Ocultar' : 'Ver' }} pasos del agente ({{ codeAgentLog.length }})
+                  </button>
+                </ng-container>
+              </p>
               <div class="code-agent-actions">
                 <button *ngIf="!codeExploring" type="button" class="btn-flow-secondary" (click)="exploreCode()"
                   [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios"
@@ -343,33 +353,21 @@
                 <span *ngIf="last" class="spinner-inline"></span>{{ line }}
               </li>
             </ul>
-            <details *ngIf="codeAgentLog.length && !codeExploring" class="code-agent-log-details">
-              <summary>Ver pasos del agente ({{ codeAgentLog.length }})</summary>
-              <ul class="code-agent-log">
-                <li *ngFor="let line of codeAgentLog">{{ line }}</li>
-              </ul>
-            </details>
+            <ul *ngIf="codeAgentLog.length && !codeExploring && showAgentLog" class="code-agent-log">
+              <li *ngFor="let line of codeAgentLog">{{ line }}</li>
+            </ul>
 
             <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
 
             <ng-container *ngIf="codeContextText">
-              <p class="code-source-hint">
-                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados. </span>
-                Revisa y edita: este texto se enviará como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}.
-              </p>
-              <div class="md-box-header">
-                <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Cobertura de criterios en el código">
-                  <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
-                </div>
-                <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
-                  <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
-                  <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
-                </div>
-              </div>
               <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
-                <div class="coverage-editor-title">Cobertura de criterios en el código
-                  <span class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</span>
+                <div class="coverage-editor-title">
+                  <span>Cobertura de criterios en el código</span>
+                  <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
+                    <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+                  </div>
                 </div>
+                <p class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</p>
                 <div class="md-table-wrap">
                   <table class="md-table coverage-table">
                     <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
@@ -390,7 +388,22 @@
                   </table>
                 </div>
               </div>
-              <div *ngIf="!codeContextEditing" class="form-control md-preview code-context-preview"
+              <!-- Resumen técnico: plegado cuando hay tabla de cobertura, que es lo que se revisa -->
+              <div class="code-context-head">
+                <button *ngIf="codeCoverageRows.length && !codeContextEditing; else contextTitle" type="button" class="criteria-original-toggle"
+                  (click)="showCodeContextText = !showCodeContextText" [attr.aria-expanded]="showCodeContextText" aria-controls="tcCodeContextPreview">
+                  <span class="criteria-original-caret" [class.is-open]="showCodeContextText" aria-hidden="true">›</span>
+                  Resumen técnico del agente
+                </button>
+                <ng-template #contextTitle><span class="criteria-original-toggle">Resumen técnico del agente</span></ng-template>
+                <span class="code-context-note">Se envía como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}</span>
+                <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
+                  <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
+                  <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
+                </div>
+              </div>
+              <div *ngIf="!codeContextEditing && (showCodeContextText || !codeCoverageRows.length)" id="tcCodeContextPreview"
+                class="form-control md-preview code-context-preview"
                 [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
                 title="Doble clic para editar"></div>
               <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
@@ -415,7 +428,9 @@
               </ng-container>
             </ng-container>
             <ng-template #readyToGenerate>
-              <span class="flow-actionbar-ready" aria-hidden="true">✓</span> {{ generateSummary || 'Listo para generar' }}
+              <span *ngIf="isFlowBusy; else readyMark" class="spinner-inline" aria-hidden="true"></span>
+              <ng-template #readyMark><span class="flow-actionbar-ready" aria-hidden="true">✓</span></ng-template>
+              {{ generateSummary || 'Listo para generar' }}
             </ng-template>
           </p>
           <button type="submit" class="button-primary compact-action"

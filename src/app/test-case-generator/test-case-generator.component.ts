@@ -136,6 +136,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   private focusedStep: FlowStepId | null = null;
   /** Texto original de los criterios visible aunque ya exista la lista CA-xx. */
   showOriginalCriteria: boolean = false;
+  /** Pasos del agente y resumen técnico desplegados (la tabla de cobertura es lo principal). */
+  showAgentLog: boolean = false;
+  showCodeContextText: boolean = false;
 
   // ---- Flujo de trabajo: HU → criterios → código → contexto técnico → generación ----
 
@@ -274,9 +277,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     if (criteria.status === 'done') parts.push(criteria.summary);
     if (this.usesCodeContext) {
       parts.push(this.flowStep('code').summary);
-      parts.push(this.codeContextText.trim() ? 'contexto técnico listo' : 'el código se explora al generar (1–3 min)');
+      parts.push(this.codeExploring ? 'el agente está explorando el código…'
+        : this.codeContextText.trim() ? 'contexto técnico listo' : 'el código se explora al generar (1–3 min)');
     }
     return parts.join(' · ');
+  }
+
+  /** Hay un proceso en curso (interpretar, explorar o generar): la barra no muestra "listo". */
+  get isFlowBusy(): boolean {
+    return this.normalizingCriteria || this.codeExploring || this.loadingScope || this.loadingScenarios;
   }
 
   flowNotice(id: FlowStepId): string | undefined {
