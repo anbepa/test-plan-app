@@ -666,17 +666,22 @@
     top: 0;
     left: 0;
     right: 0;
-    z-index: 1001;
+    /* Por debajo del sidebar (1000+) y de los modales (>=1000) */
+    z-index: 990;
   }
 
   .menu-toggle {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 40px;
     width: 40px;
     height: 40px;
+    min-height: 40px;
+    padding: 0;
     background: transparent;
     border: none;
+    box-shadow: none;
     cursor: pointer;
     border-radius: 8px;
     transition: background 0.2s ease;
@@ -687,6 +692,7 @@
   }
 
   .menu-toggle svg {
+    flex: 0 0 24px;
     width: 24px;
     height: 24px;
     color: #1d1d1f;
@@ -696,6 +702,10 @@
     font-size: 17px;
     font-weight: 600;
     color: #1d1d1f;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Sidebar como overlay en móvil */
@@ -713,8 +723,18 @@
     overflow: hidden;
   }
 
+  .sidebar:not(.open) {
+    /* Evita que la sombra del sidebar cerrado asome por el borde izquierdo */
+    box-shadow: none;
+    visibility: hidden;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.3s;
+  }
+
   .sidebar.open {
     transform: translateX(0);
+    visibility: visible;
+    z-index: 1002;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .logo-section {
@@ -801,9 +821,11 @@
   /* Main content ajustado */
   .main-content {
     margin-left: 0;
-    margin-top: 56px;
+    margin-top: calc(56px + env(safe-area-inset-top));
     width: 100%;
     max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
   }
 
   .sidebar.collapsed ~ .main-content {
@@ -813,6 +835,7 @@
   /* Mostrar overlay cuando sidebar está abierto */
   .sidebar-overlay {
     display: block;
+    z-index: 995;
     background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);

@@ -1836,3 +1836,31 @@ textarea.form-control.auto-grow {
     transition: none;
   }
 }
+
+/* === MÓVIL: formulario a una columna y menos relleno ===
+   En pantallas estrechas los campos en dos columnas quedaban de ~100px
+   (placeholders y selects cortados). */
+@media (max-width: 560px) {
+    .form-section {
+        padding: 20px 16px;
+        margin: 12px 0;
+        border-radius: 14px;
+    }
+
+    .metadata-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .metadata-grid > * {
+        grid-column: auto !important;
+        min-width: 0;
+    }
+
+    .cot-modal-content {
+        padding: 20px 16px;
+        width: calc(100% - 24px);
+        max-height: 90dvh;
+        overflow-y: auto;
+    }
+}

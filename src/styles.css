@@ -616,19 +616,23 @@ textarea::placeholder {
   }
 
   /* Barras de acciones compactas globales en móvil */
-  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) {
+  /* Las acciones se reparten en varias filas: en móvil un scroll horizontal
+     escondía botones (p. ej. "Crear plan", "Ver riesgos del plan"). */
+  :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .hu-table-actions, .actions) {
     display: flex;
     flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
+    flex-wrap: wrap !important;
     gap: 0.45rem;
-    padding-bottom: 0.2rem;
-    scrollbar-width: thin;
     justify-content: flex-start !important;
     align-items: center !important;
+    max-width: 100%;
+  }
+
+  :where(.welcome-actions) {
+    display: flex;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 0.6rem;
   }
 
   :where(.table-actions, .table-actions-bar, .action-bar, .topbar-actions, .header-actions, .welcome-actions, .hu-table-actions, .actions) :where(
@@ -971,4 +975,54 @@ textarea::placeholder {
 
 .code-agent-log-details summary {
   cursor: pointer;
+}
+
+/* =====================================================
+   Dispositivos táctiles (sin hover)
+   Varias acciones solo aparecían al pasar el ratón; en móvil/tablet
+   nunca se veían. Se muestran siempre.
+   ===================================================== */
+@media (hover: none) {
+  .btn-edit-title-minimal,
+  .btn-edit-step-minimal,
+  .step-item-actions,
+  .ev-thumb-actions,
+  .step-tools,
+  .row-trash-btn,
+  .plans-table .actions-group,
+  .card-actions-overlay {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* =====================================================
+   Red de seguridad móvil: evita desbordes horizontales
+   ===================================================== */
+@media (max-width: 768px) {
+  /* (sin canvas: fabric.js calcula el puntero con el tamaño real) */
+  img,
+  video {
+    max-width: 100%;
+  }
+
+  pre,
+  code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Ejecución de plan, pantallas ≤400px: el buscador baja a su propia fila
+   (aquí y no en el componente para no superar su presupuesto de CSS). */
+@media (max-width: 400px) {
+  .exec-body .filter-pills { flex-wrap: wrap !important; }
+  .exec-body .filter-pills > * { flex: 1 1 100% !important; }
 }
