@@ -32,9 +32,6 @@
 .tb-actions { display: flex; align-items: center; gap: 8px; }
 
 /* Buttons */
-.btn-save-exec { display: inline-flex; align-items: center; gap: 5px; padding: 8px 16px; border-radius: 10px; border: none; background: var(--primary-color, #007AFF); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 200ms; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,122,255,.28); }
-.btn-save-exec:hover { background: #0069d9; box-shadow: 0 4px 14px rgba(0,122,255,.34); }
-.btn-save-exec:active { transform: translateY(1px); }
 .btn-export { display: inline-flex; align-items: center; gap: 5px; padding: 8px 14px; border-radius: 10px; border: 1.5px solid rgba(0,122,255,.3); background: var(--background-color, #fff); color: var(--primary-color, #007AFF); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 200ms; white-space: nowrap; }
 .btn-export:hover { background: rgba(0,122,255,.09); }
 .btn-export-pdf { border-color: rgba(220,38,38,.35); color: #dc2626; }
@@ -56,7 +53,7 @@
 
 /* Filter + Search row */
 .tab-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 20px; background: #fbfcfe; border-top: 1px solid transparent; }
-.filter-pills { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.filter-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .filter-select {
   appearance: none;
@@ -88,7 +85,6 @@
 .filter-pill-failed.active { border-color: #ef4444; color: #ef4444; background: rgba(239,68,68,.08); }
 .filter-pill-pending.active { border-color: #f59e0b; color: #f59e0b; background: rgba(245,158,11,.08); }
 .filter-pill-progress.active { border-color: #007AFF; color: #007AFF; background: rgba(0,122,255,.08); }
-.search-zone { display: flex; align-items: center; gap: 8px; }
 .search-input-wrap { display: flex; align-items: center; gap: 6px; border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 4px 10px; background: #fff; height: 34px; box-sizing: border-box; transition: border-color .15s, box-shadow .15s; }
 .search-input-wrap:hover { border-color: #c3cbd6; }
 .search-input-wrap:focus-within { border-color: var(--primary-color, #007AFF); background: #fff; box-shadow: 0 0 0 3px rgba(0,122,255,.14); }
@@ -968,6 +964,11 @@
   .act-menu-panel { min-width: 210px; max-width: calc(100vw - 24px); }
   .exec-body { padding: 12px 12px 24px; }
   .tc-row-body { padding: 0 8px 12px 56px; }
+  /* Filtros en una fila (buscador ocupa el resto) y el botón debajo, a todo el ancho */
+  .filter-pills { width: 100%; flex-wrap: nowrap; }
+  .search-input-wrap { flex: 1; min-width: 0; }
+  .search-input { width: 100%; }
+  .btn-add-testcase-top { width: 100%; justify-content: center; }
 }
 
 /* ── Pagination ── */
@@ -1319,11 +1320,11 @@
 .btn-add-step:active { opacity: 0.7; }
 .btn-add-step svg { flex-shrink: 0; }
 
-/* Botón "Agregar escenario" reubicado en la barra superior (junto al buscador).
+/* Botón "Agregar escenario" en el extremo derecho de la barra de filtros.
    Estilo de botón secundario estándar: borde sólido (sin línea punteada). */
 .btn-add-testcase-top {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 34px; box-sizing: border-box;
+  height: 34px; min-height: 34px; box-sizing: border-box;
   padding: 0 14px;
   background: var(--background-color, #fff); color: var(--primary-color, #007AFF);
   border: 1.5px solid rgba(0,122,255,.3); border-radius: 8px;

@@ -1181,13 +1181,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  async saveExecution(): Promise<void> {
-    if (!this.execution) return;
-
-    await this.fastSaveExecutionState();
-    this.toastService.success('Ejecución guardada');
-  }
-
   private async autoSaveExecutionState(): Promise<void> {
     if (!this.execution) return;
 
