@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { ExcelMatrixExporterComponent } from '../../excel-matrix-exporter/excel-matrix-exporter.component';
@@ -10,8 +10,6 @@ import { ExportService } from '../../services/export/export.service';
 import { HuSyncService } from '../../services/core/hu-sync.service';
 import { DatabaseService } from '../../services/database/database.service';
 import { TestPlanMapperService } from '../../services/database/test-plan-mapper.service';
-import { AiUnifiedService } from '../../services/ai/ai-unified.service';
-import { GeminiParserService } from '../../services/ai/gemini-parser.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -35,58 +33,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   // Modo edicion / refinamiento
   isEditingMode: boolean = false;
   isLoading: boolean = false;
-  isRefining: boolean = false;
 
   // Edicion inline de caso
   editingTestCaseIndex: number | null = null;
   openActionsMenuIndex: number | null = null;
   private editingBackup: DetailedTestCase | null = null;
   private isCreatingNewCase: boolean = false;
-
-  // Context regenerator panel
-  isContextPanelOpen: boolean = false;
-  editedDescription: string = '';
-  editedAcceptanceCriteria: string = '';
-  editedSelectedTechnique: string = '';
-  editedContext: string = '';
-  editedHuId: string = '';
-  editedTitle: string = '';
-  editedSprint: string = '';
-  editedCellName: string = '';
-  formError: string | null = null;
-  inputDataCollapsed: boolean = false;
-
-  readonly cellOptions: string[] = ['BRAINSTORM', 'WAYRA', 'FURY', 'WAKANDA'];
-  readonly techniqueOptions = [
-    { value: 'Equivalent Partitioning', label: 'Partición Equivalente' },
-    { value: 'Boundary Value Analysis', label: 'Análisis de Valor Límite' },
-    { value: 'Decision Table Testing', label: 'Tabla de Decisión' },
-    { value: 'State Transition Testing', label: 'Pruebas de Transición de Estados' }
-  ];
-  readonly techniqueDescriptions: Record<string, string> = {
-    'Equivalent Partitioning': 'La IA generará casos para cada partición válida e inválida, evitando redundancias.',
-    'Boundary Value Analysis': 'La IA enfocará los casos en los valores límite (mínimo, máximo y sus adyacentes) de cada parámetro.',
-    'Decision Table Testing': 'La IA creará combinaciones de condiciones y acciones para cubrir todas las reglas del negocio.',
-    'State Transition Testing': 'La IA modelará los estados del sistema y las transiciones posibles entre ellos.'
-  };
-  readonly contextQuickTags: string[] = [
-    '+ Solo happy path', '+ Casos negativos', '+ Validaciones de frontera',
-    '+ Datos inválidos', '+ Solo 5 escenarios', '+ Flujo alternativo',
-    '+ Creación de ruta crítica'
-  ];
-
-  get techniqueDescription(): string {
-    return this.editedSelectedTechnique ? (this.techniqueDescriptions[this.editedSelectedTechnique] ?? '') : '';
-  }
-
-  get isFormValid(): boolean {
-    return !!(this.editedTitle?.trim() && this.editedAcceptanceCriteria?.trim());
-  }
-
-  appendContextTag(tag: string): void {
-    // Reemplaza por completo el contexto con el tag seleccionado.
-    this.editedContext = tag.replace(/^\+\s*/, '');
-  }
 
   // Seleccion / eliminacion masiva
   selectedTestCaseIndexes: number[] = [];
@@ -95,52 +47,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   deleteModalMessage: string = '';
   private pendingDeleteTestCaseIndexes: number[] = [];
 
-  // AI progress
-  streamingReasoning: string = '';
-  streamingContent: string = '';
-  acceptedScenarioIndices: number[] = [];
-  isAcceptancePhase: boolean = false;
-
-  get currentHuDataForModal() {
-    if (!this.hu) return null;
-    return {
-      huId: this.hu.id,
-      huTitle: this.hu.title,
-      huDescription: this.hu.originalInput?.description || '',
-      acceptanceCriteria: this.hu.originalInput?.acceptanceCriteria || ''
-    };
-  }
-  private aiProgressInterval: ReturnType<typeof setInterval> | null = null;
-  private aiProgressIndex = 0;
-  private lastStepAddAt = new Map<number, number>();
+  /** Paso que se está arrastrando y posición sobre la que se soltaría. */
+  dragStep: { tc: number; index: number } | null = null;
+  dropStepIndex: number | null = null;
 
   private componentLoadedAt = Date.now();
   private huSyncSubscription: Subscription | null = null;
-  private aiStreamSub?: Subscription;
-
-  get isAiBusy(): boolean {
-    return this.isRefining;
-  }
-
-  get aiProgressTitle(): string {
-    const provider = this.aiService.getActiveProviderName().replace('(por defecto)', '').trim();
-    return this.isContextPanelOpen ? `Regenerando con ${provider}` : `Refinando con ${provider}`;
-  }
-
-  get aiProgressMessage(): string {
-    const id = this.hu?.id ? `${this.hu.id} - ` : '';
-    const title = this.hu?.title
-      ? (this.hu.title.length > 50 ? this.hu.title.slice(0, 50) + '...' : this.hu.title)
-      : 'Procesando solicitud...';
-    return `${id}${title}`;
-  }
-
-  get aiProgressStep(): string {
-    const steps = this.isContextPanelOpen
-      ? ['Analizando contexto y descripción…', 'Regenerando escenarios de prueba…', 'Validando resultados…']
-      : ['Leyendo casos de prueba actuales...', 'Aplicando ajustes solicitados...', 'Validando escenarios...'];
-    return steps[this.aiProgressIndex % steps.length];
-  }
 
   constructor(
     private router: Router,
@@ -150,9 +62,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     private huSyncService: HuSyncService,
     private databaseService: DatabaseService,
     private mapper: TestPlanMapperService,
-    private aiService: AiUnifiedService,
-    private parserService: GeminiParserService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private hostRef: ElementRef<HTMLElement>
   ) { }
 
   ngOnInit(): void {
@@ -338,8 +249,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.huSyncSubscription?.unsubscribe();
-    this.aiStreamSub?.unsubscribe();
-    this.stopAiProgress();
   }
 
   goToPlansList(): void {
@@ -362,146 +271,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  openContextRegeneratorPage(): void {
-    if (!this.hu) return;
-    this.editedDescription = this.hu.originalInput?.description || '';
-    this.editedAcceptanceCriteria = this.hu.originalInput?.acceptanceCriteria || '';
-    this.editedSelectedTechnique = this.hu.refinementTechnique || '';
-    this.editedContext = this.hu.refinementContext || '';
-    this.editedHuId = this.hu.id;
-    this.editedTitle = this.hu.title;
-    this.editedSprint = this.hu.sprint || '';
-    this.editedCellName = 'BRAINSTORM';
-    this.isContextPanelOpen = true;
-    this.inputDataCollapsed = false;
-    this.formError = null;
-    this.cdr.detectChanges();
-  }
-
-  closeContextPanel(): void {
-    this.isContextPanelOpen = false;
-    this.formError = null;
-    this.cdr.detectChanges();
-  }
-
-  async regenerateWithAI(): Promise<void> {
-    if (!this.hu) return;
-    this.formError = null;
-    if (!this.editedDescription.trim() || !this.editedAcceptanceCriteria.trim()) {
-      this.formError = 'Completa la Descripción y los Criterios de Aceptación antes de regenerar.';
-      return;
-    }
-    this.hu.id = this.editedHuId || this.hu.id;
-    this.hu.title = this.editedTitle || this.hu.title;
-    this.hu.sprint = this.editedSprint || this.hu.sprint;
-    this.hu.originalInput.description = this.editedDescription;
-    this.hu.originalInput.acceptanceCriteria = this.editedAcceptanceCriteria;
-    this.hu.originalInput.selectedTechnique = this.editedSelectedTechnique;
-    this.hu.refinementTechnique = this.editedSelectedTechnique;
-    this.hu.refinementContext = this.editedContext;
-
-    this.isLoading = true;
-    this.isRefining = true;
-    this.streamingReasoning = '';
-    this.streamingContent = '';
-    this.startAiProgress();
-    this.cdr.detectChanges();
-
-    const stream$ = this.editedContext?.trim()
-      ? this.aiService.refineTestCasesDirectStream(
-          this.hu.originalInput, this.hu.detailedTestCases || [],
-          this.editedSelectedTechnique, this.editedContext.trim()
-        )
-      : this.aiService.generateTestCasesSmartStream(
-          this.editedDescription, this.editedAcceptanceCriteria, this.editedSelectedTechnique
-        );
-
-    this.aiStreamSub = stream$.subscribe({
-      next: (event: any) => {
-        this.streamingReasoning = event.reasoning || '';
-        this.streamingContent = event.content || '';
-        this.cdr.detectChanges();
-      },
-      error: (error: any) => {
-        console.error('Error al regenerar con streaming:', error);
-        this.toastService.error(error?.userMessage || 'Error al regenerar casos de prueba');
-        this.isLoading = false;
-        this.isRefining = false;
-        this.streamingReasoning = '';
-        this.streamingContent = '';
-        this.stopAiProgress();
-        this.cdr.detectChanges();
-      },
-      complete: async () => {
-        const result = this.parseStreamResult(this.streamingContent);
-        this.streamingReasoning = '';
-        // Preservar streamingContent durante la animación de aceptación
-        if (!result?.testCases || !this.hu) {
-          this.toastService.error('La IA no devolvió escenarios válidos');
-          this.isLoading = false;
-          this.isRefining = false;
-          this.streamingContent = '';
-          this.stopAiProgress();
-          this.cdr.detectChanges();
-          return;
-        }
-        this.hu.detailedTestCases = result.testCases;
-        this.stopAiProgress();
-        this.isAcceptancePhase = true;
-        this.acceptedScenarioIndices = [];
-        this.cdr.detectChanges();
-
-        // Animar la aceptación secuencial de cada escenario
-        const totalCases = this.hu.detailedTestCases?.length || 0;
-        if (totalCases > 0) {
-          const delay = Math.min(400, 2000 / totalCases);
-          let idx = 0;
-          const acceptInterval = setInterval(() => {
-            this.acceptedScenarioIndices = [...this.acceptedScenarioIndices, idx];
-            this.cdr.detectChanges();
-            idx++;
-            if (idx >= totalCases) {
-              clearInterval(acceptInterval);
-              setTimeout(async () => {
-                const saved = await this.saveData();
-                if (!saved) {
-                  this.toastService.error('Error al persistir cambios en la base de datos');
-                } else {
-                  this.toastService.success(`${result.length} escenarios guardados permanentemente`);
-                }
-                this.isLoading = false;
-                this.isRefining = false;
-                this.isAcceptancePhase = false;
-                this.acceptedScenarioIndices = [];
-                this.streamingContent = '';
-                this.isContextPanelOpen = false;
-                this.cdr.detectChanges();
-              }, 500);
-            }
-          }, delay);
-        } else {
-          const saved = await this.saveData();
-          if (!saved) {
-            this.toastService.error('No se pudo guardar la regeneración en base de datos');
-          } else {
-            this.huSyncService.publishHuUpdate(this.hu, this.testPlanId, 'viewer' as any);
-            this.toastService.success('Casos regenerados y guardados con éxito');
-          }
-          this.isLoading = false;
-          this.isRefining = false;
-          this.isAcceptancePhase = false;
-          this.acceptedScenarioIndices = [];
-          this.streamingContent = '';
-          this.isContextPanelOpen = false;
-          this.cdr.detectChanges();
-        }
-      }
-    });
-  }
-
   editHuScenarios(): void {
     if (!this.hu) return;
-    this.isContextPanelOpen = false;
     this.isEditingMode = true;
     this.selectedTestCaseIndexes = [];
     this.editingTestCaseIndex = null;
@@ -510,7 +281,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   cancelEditingMode(): void {
     this.isEditingMode = false;
-    this.isContextPanelOpen = false;
     this.selectedTestCaseIndexes = [];
     this.editingTestCaseIndex = null;
     this.editingBackup = null;
@@ -653,16 +423,111 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   addStepToTestCase(index: number): void {
-    if (!this.hu || !this.hu.detailedTestCases) return;
-    const tc = this.hu.detailedTestCases[index];
-    if (!tc.steps) tc.steps = [];
-    tc.steps.push({ numero_paso: tc.steps.length + 1, accion: '' });
-    this.cdr.detectChanges();
+    const tc = this.hu?.detailedTestCases?.[index];
+    if (!tc) return;
+    this.insertStepAfter(index, (tc.steps?.length || 0) - 1);
   }
 
-  onStepEnter(event: Event, testCaseIndex: number, _stepIndex: number): void {
+  /**
+   * Atajos del editor de pasos:
+   * Enter crea un paso debajo · Shift+Enter salto de línea · Alt+↑/↓ mueve el paso ·
+   * Retroceso en un paso vacío lo elimina y vuelve al anterior.
+   */
+  onStepKeydown(event: KeyboardEvent, tcIndex: number, stepIndex: number): void {
+    const tc = this.hu?.detailedTestCases?.[tcIndex];
+    if (!tc?.steps || event.isComposing) return;
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.insertStepAfter(tcIndex, stepIndex);
+    } else if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      this.moveStep(tcIndex, stepIndex, event.key === 'ArrowUp' ? -1 : 1);
+    } else if (event.key === 'Backspace' && !tc.steps[stepIndex].accion && tc.steps.length > 1) {
+      event.preventDefault();
+      this.removeStepFromTestCase(tcIndex, stepIndex);
+      this.focusStep(tcIndex, Math.max(0, stepIndex - 1));
+    }
+  }
+
+  private insertStepAfter(tcIndex: number, stepIndex: number): void {
+    const tc = this.hu?.detailedTestCases?.[tcIndex];
+    if (!tc) return;
+    if (!tc.steps) tc.steps = [];
+    tc.steps.splice(stepIndex + 1, 0, { numero_paso: 0, accion: '' });
+    this.renumberSteps(tc);
+    this.cdr.detectChanges();
+    this.focusStep(tcIndex, stepIndex + 1);
+  }
+
+  /** Mueve un paso `delta` posiciones (−1 sube, +1 baja). */
+  moveStep(tcIndex: number, stepIndex: number, delta: number): void {
+    this.moveStepTo(tcIndex, stepIndex, stepIndex + delta);
+  }
+
+  private moveStepTo(tcIndex: number, from: number, to: number): void {
+    const steps = this.hu?.detailedTestCases?.[tcIndex]?.steps;
+    if (!steps || from === to || to < 0 || to >= steps.length) return;
+    const [moved] = steps.splice(from, 1);
+    steps.splice(to, 0, moved);
+    this.renumberSteps(this.hu!.detailedTestCases![tcIndex]);
+    this.cdr.detectChanges();
+    this.focusStep(tcIndex, to);
+  }
+
+  // ── Arrastrar y soltar pasos ──
+  onStepDragStart(event: DragEvent, tcIndex: number, stepIndex: number): void {
+    this.dragStep = { tc: tcIndex, index: stepIndex };
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(stepIndex));
+      const row = (event.target as HTMLElement).closest('.step-editor-row');
+      if (row) event.dataTransfer.setDragImage(row, 16, 16);
+    }
+  }
+
+  onStepDragOver(event: DragEvent, tcIndex: number, stepIndex: number): void {
+    if (!this.dragStep || this.dragStep.tc !== tcIndex) return;
     event.preventDefault();
-    this.addStepToTestCase(testCaseIndex);
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dropStepIndex = stepIndex;
+  }
+
+  onStepDrop(event: DragEvent, tcIndex: number, stepIndex: number): void {
+    if (!this.dragStep || this.dragStep.tc !== tcIndex) return;
+    event.preventDefault();
+    const from = this.dragStep.index;
+    this.onStepDragEnd();
+    this.moveStepTo(tcIndex, from, stepIndex);
+  }
+
+  onStepDragEnd(): void {
+    this.dragStep = null;
+    this.dropStepIndex = null;
+  }
+
+  /** Indicador de dónde caerá el paso arrastrado: 'above' | 'below' | null. */
+  stepDropPosition(tcIndex: number, stepIndex: number): 'above' | 'below' | null {
+    if (!this.dragStep || this.dragStep.tc !== tcIndex || this.dropStepIndex !== stepIndex) return null;
+    if (this.dragStep.index === stepIndex) return null;
+    return this.dragStep.index > stepIndex ? 'above' : 'below';
+  }
+
+  private renumberSteps(tc: DetailedTestCase): void {
+    (tc.steps || []).forEach((step, idx) => { step.numero_paso = idx + 1; });
+  }
+
+  /** Enfoca el textarea de un paso y deja el cursor al final. */
+  private focusStep(tcIndex: number, stepIndex: number): void {
+    setTimeout(() => {
+      const fields = this.hostRef.nativeElement.querySelectorAll<HTMLTextAreaElement>(
+        `.steps-editor[data-tc-index="${tcIndex}"] .step-textarea`
+      );
+      const field = fields[stepIndex];
+      if (!field) return;
+      field.focus();
+      field.setSelectionRange(field.value.length, field.value.length);
+    });
   }
 
   removeStepFromTestCase(caseIndex: number, stepIndex: number): void {
@@ -673,9 +538,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       if (!tc.steps.length) {
         tc.steps.push({ numero_paso: 1, accion: '' });
       }
-      tc.steps.forEach((step, idx) => {
-        step.numero_paso = idx + 1;
-      });
+      this.renumberSteps(tc);
       this.cdr.detectChanges();
     }
   }
@@ -794,32 +657,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     return text ? text.split('\n').filter(line => line.trim()) : [];
   }
 
-  private parseStreamResult(content: string): any {
-    if (!content) return null;
-    try {
-      const result = this.parserService.cleanAndParseJSONWithMeta(content);
-      if (result.possiblyTruncated) {
-        this.toastService.warning(`La IA superó el límite de texto. Se rescataron ${result.completedTestCaseCount} casos completos.`);
-      }
-      return result.parsed;
-    } catch (e) {
-      console.warn('Falló el parseo con GeminiParserService, intentando fallback.', e);
-      // Fallback
-      try {
-        const clean = content.trim().replace(/^```json\s*/i, '').replace(/```\s*$/, '');
-        return JSON.parse(clean);
-      } catch {
-        const match = content.match(/\{[\s\S]*\}/);
-        if (!match) return null;
-        try {
-          return JSON.parse(match[0]);
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-
   private async saveData(successMessage?: string): Promise<boolean> {
     // Intentar usar dbUuid o id (si el id es un UUID)
     const userStoryId = this.hu?.dbUuid || (this.hu?.id?.length && this.hu.id.length > 20 ? this.hu.id : null);
@@ -889,36 +726,5 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   private cloneTestCase(testCase: DetailedTestCase): DetailedTestCase {
     return { ...testCase, steps: (testCase.steps || []).map((step: TestCaseStep) => ({ ...step })) };
-  }
-
-  private startAiProgress(): void {
-    this.stopAiProgress();
-    this.aiProgressIndex = 0;
-    this.aiProgressInterval = setInterval(() => {
-      this.aiProgressIndex = (this.aiProgressIndex + 1) % 3;
-      this.cdr.markForCheck();
-    }, 1800);
-  }
-
-  /** Cancela el refinamiento/identificación en curso desde el modal de progreso. */
-  cancelAiGeneration(): void {
-    this.aiStreamSub?.unsubscribe();
-    this.aiStreamSub = undefined;
-    this.stopAiProgress();
-    this.isLoading = false;
-    this.isRefining = false;
-    this.isAcceptancePhase = false;
-    this.acceptedScenarioIndices = [];
-    this.streamingReasoning = '';
-    this.streamingContent = '';
-    this.cdr.detectChanges();
-  }
-
-  private stopAiProgress(): void {
-    if (this.aiProgressInterval) {
-      clearInterval(this.aiProgressInterval);
-      this.aiProgressInterval = null;
-    }
-    this.aiProgressIndex = 0;
   }
 }
