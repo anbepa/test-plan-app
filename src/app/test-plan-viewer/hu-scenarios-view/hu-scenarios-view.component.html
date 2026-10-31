@@ -169,14 +169,16 @@
                               rows="1" [attr.aria-label]="'Paso ' + (stepIndex + 1)"
                               (keydown)="onStepKeydown($event, i, stepIndex)"></textarea>
                             <div class="step-tools">
-                              <button type="button" class="step-tool" (click)="moveStep(i, stepIndex, -1)"
-                                [disabled]="isLoading || first" title="Subir paso (Alt+↑)" [attr.aria-label]="'Subir paso ' + (stepIndex + 1)">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
-                              </button>
-                              <button type="button" class="step-tool" (click)="moveStep(i, stepIndex, 1)"
-                                [disabled]="isLoading || last" title="Bajar paso (Alt+↓)" [attr.aria-label]="'Bajar paso ' + (stepIndex + 1)">
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-                              </button>
+                              <span class="step-move">
+                                <button type="button" class="step-tool" (click)="moveStep(i, stepIndex, -1)"
+                                  [disabled]="isLoading || first" title="Subir paso (Alt+↑)" [attr.aria-label]="'Subir paso ' + (stepIndex + 1)">
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+                                </button>
+                                <button type="button" class="step-tool" (click)="moveStep(i, stepIndex, 1)"
+                                  [disabled]="isLoading || last" title="Bajar paso (Alt+↓)" [attr.aria-label]="'Bajar paso ' + (stepIndex + 1)">
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                              </span>
                               <button type="button" class="step-tool danger" (click)="removeStepFromTestCase(i, stepIndex)"
                                 [disabled]="isLoading" title="Eliminar paso" [attr.aria-label]="'Eliminar paso ' + (stepIndex + 1)">
                                 <span class="icon-trash-red" style="width:13px;height:13px"></span>

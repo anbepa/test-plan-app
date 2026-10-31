@@ -713,11 +713,20 @@
     line-height: 1.45;
 }
 
-/* Columnas con ancho mínimo mientras se edita una fila, para que los campos no queden diminutos */
-.detailed-test-cases-table:has(.row-editing) th:nth-child(3) { min-width: 180px; }
-.detailed-test-cases-table:has(.row-editing) th:nth-child(4) { min-width: 200px; }
-.detailed-test-cases-table:has(.row-editing) th:nth-child(5) { min-width: 340px; }
-.detailed-test-cases-table:has(.row-editing) th:nth-child(6) { min-width: 220px; }
+/* Mientras se edita una fila, anchos repartidos sobre el ancho disponible: ningún campo queda
+   diminuto y la tabla no desborda en horizontal. "Paso a paso" toma el espacio restante. */
+.detailed-test-cases-table:has(.row-editing) { table-layout: fixed; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(1) { width: 44px; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(2) { width: 120px; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(3) { width: 14%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(4) { width: 14%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(6) { width: 19%; }
+.detailed-test-cases-table:has(.row-editing) th:nth-child(7) { width: 96px; }
+.detailed-test-cases-table:has(.row-editing) :is(th, td) {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+    overflow-wrap: anywhere;
+}
 
 .row-editing textarea.step-textarea,
 .step-textarea {
@@ -808,6 +817,7 @@
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    min-height: 34px;
     padding-top: 2px;
     opacity: 0.35;
     transition: opacity 0.15s ease;
@@ -833,6 +843,18 @@
     box-shadow: none;
     transition: background 0.15s ease, color 0.15s ease;
 }
+/* Subir y bajar apilados: ocupan el ancho de un solo botón */
+.step-move {
+    display: inline-flex;
+    flex-direction: column;
+}
+.step-move .step-tool {
+    width: 24px;
+    height: 16px;
+    min-height: 16px;
+    border-radius: 4px;
+}
+
 .step-tool:hover:not(:disabled) {
     background: #eff6ff;
     color: #2563eb;
