@@ -17,6 +17,7 @@ import {
   AzureRepoTree,
   AzureRepository,
   ContextSource,
+  FileDiffSegments,
   WorkItemChanges,
 } from '../../models/code-agent.model';
 import { RepoRef } from '../ai/code-agent-runner';
@@ -74,7 +75,7 @@ export class AzureReposService {
     return this.authorizedPost<AzureBranchDiff>(`${this.baseUrl}/branch-diff`, { ...ref, baseBranch });
   }
 
-  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string): Observable<AzureFileDiff> {
+  getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string, segments?: FileDiffSegments): Observable<AzureFileDiff> {
     return this.authorizedPost<AzureFileDiff>(`${this.baseUrl}/file-diff`, {
       project: ref.project,
       repositoryId: ref.repositoryId,
@@ -82,7 +83,9 @@ export class AzureReposService {
       changeType: change.changeType,
       originalPath: change.originalPath,
       baseCommit,
-      targetCommit
+      targetCommit,
+      segments: segments?.segments,
+      exclude: segments?.exclude
     });
   }
 

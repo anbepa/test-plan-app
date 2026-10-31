@@ -85,13 +85,31 @@ export interface AzureFileDiff {
   error?: string;
 }
 
+/** Cambio de un PR/commit de la HU sobre un archivo (contra su propio padre). */
+export interface WorkItemFileSegment {
+  label: string;
+  baseCommit: string;
+  targetCommit: string;
+  changeType: string;
+  originalPath?: string;
+}
+
 /** Archivo del conjunto de cambios de la HU, con su base y destino para el diff. */
 export interface WorkItemChangedFile {
   path: string;
   changeType: string;
   baseCommit: string;
   targetCommit: string;
+  /** Un tramo por PR/commit de la HU: el diff se arma con ellos para no incluir cambios de otras HUs. */
+  segments?: WorkItemFileSegment[];
+  /** Tramos del mismo archivo en la rama destino preferida: el diff muestra solo lo adicional. */
+  exclude?: WorkItemFileSegment[];
+  /** Script SQL nuevo que redefine un objeto: archivo con la definición anterior contra la que se compara. */
+  previousDefinition?: string;
 }
+
+/** Tramos opcionales para el diff de un archivo de la HU. */
+export type FileDiffSegments = Pick<WorkItemChangedFile, 'segments' | 'exclude'>;
 
 /** Cambios de la HU en un repositorio + rama destino (PRs/commits vinculados o rama sin PR). */
 export interface WorkItemChangeGroup {
@@ -108,6 +126,8 @@ export interface WorkItemChangeGroup {
   lastCommit: string;
   files: WorkItemChangedFile[];
   alsoMergedInto: string[];
+  /** El grupo es otra rama destino del mismo trabajo y solo trae lo adicional a esta rama. */
+  extraOver?: string;
 }
 
 export interface WorkItemChanges {

@@ -253,6 +253,7 @@
                       <span class="code-change-meta">
                         último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
                         · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                        <ng-container *ngIf="group.extraOver"> · cambios adicionales a {{ group.extraOver }}</ng-container>
                         <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
                       </span>
                     </li>
