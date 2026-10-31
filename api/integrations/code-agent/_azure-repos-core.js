@@ -809,7 +809,7 @@ async function getWorkItemChanges(organization, pat, workItemId) {
   const { groups, covered } = selectGroups(await resolvePreviousDefinitions(organization, pat, built));
   return {
     workItemId: id,
-    groups: await refineCoveredGroups(organization, pat, groups, covered),
+    groups: await dropRedundantBranchFiles(organization, pat, await refineCoveredGroups(organization, pat, groups, covered)),
     omitted,
     emptyBranches,
   };
@@ -1104,6 +1104,40 @@ async function resolvePreviousDefinitions(organization, pat, groups) {
     }
   }
   return groups;
+}
+
+/** Contenido comparable: sin espacios repetidos y, en SQL, sin comentarios (p. ej. el --changeset de Liquibase). */
+function comparableContent(path, content) {
+  const text = /\.sql$/i.test(path) ? String(content || '').replace(/--[^\n]*/g, '') : String(content || '');
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * Una rama de la HU sin PR suele guardar borradores de lo que luego entró por PR con otro nombre de archivo
+ * (copias, scripts renombrados). Esos archivos se descartan si su contenido ya está en un PR del mismo repo;
+ * si no queda ninguno, la rama se informa como "también en".
+ */
+async function dropRedundantBranchFiles(organization, pat, groups) {
+  const read = (group, file) => (file.changeType.includes('delete') ? Promise.resolve('')
+    : fetchFileContent(organization, pat, group.projectId, group.repositoryId, file.targetCommit, file.path, 'commit')
+      .then((content) => comparableContent(file.path, content)).catch(() => ''));
+  const result = [];
+  for (const group of groups) {
+    const others = groups.filter((item) => item !== group && item.kind !== 'branch' && item.repositoryId === group.repositoryId);
+    if (group.kind !== 'branch' || !others.length) {
+      result.push(group);
+      continue;
+    }
+    const known = new Set((await Promise.all(others.flatMap((other) => other.files.map((file) => read(other, file))))).filter(Boolean));
+    const contents = await Promise.all(group.files.map((file) => read(group, file)));
+    const files = group.files.filter((file, index) => !contents[index] || !known.has(contents[index]));
+    if (files.some((file) => !BUILD_CONFIG_FILE.test(file.path))) {
+      result.push({ ...group, files });
+    } else {
+      others[0].alsoMergedInto.push(group.targetBranch);
+    }
+  }
+  return result;
 }
 
 /**
