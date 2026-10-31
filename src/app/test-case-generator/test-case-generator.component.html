@@ -78,7 +78,7 @@
 
       <!-- PASO: HISTORIA DE USUARIO -->
       <section class="flow-step" id="flow-step-hu" [ngClass]="'is-' + flowStep('hu').status"
-        [class.is-collapsed]="isStepCollapsed('hu')" (focusin)="onStepFocusIn('hu')" (focusout)="onStepFocusOut('hu', $event)">
+        [class.is-collapsed]="isStepCollapsed('hu')" (focusin)="onStepFocusIn('hu', $event)" (focusout)="onStepFocusOut('hu', $event)">
         <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('hu'), help: 'Escribe el ID y pulsa Importar para traer la HU desde Azure DevOps' + (usesCodeContext ? ' junto con sus PRs y commits.' : '.') }"></ng-container>
         <div class="flow-step-body" id="flow-body-hu" [hidden]="isStepCollapsed('hu')">
           <div class="metadata-block full-width">
@@ -165,7 +165,7 @@
 
       <!-- PASO: CRITERIOS -->
       <section class="flow-step" id="flow-step-criteria" [ngClass]="'is-' + flowStep('criteria').status"
-        [class.is-collapsed]="isStepCollapsed('criteria')" (focusin)="onStepFocusIn('criteria')" (focusout)="onStepFocusOut('criteria', $event)">
+        [class.is-collapsed]="isStepCollapsed('criteria')" (focusin)="onStepFocusIn('criteria', $event)" (focusout)="onStepFocusOut('criteria', $event)">
         <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Se separan en una lista CA-01, CA-02…: cada criterio tendrá al menos un escenario.' }"></ng-container>
         <div class="flow-step-body" id="flow-body-criteria" [hidden]="isStepCollapsed('criteria')">
           <div class="form-group full-width">
@@ -226,7 +226,7 @@
       <ng-container *ngIf="usesCodeContext">
         <!-- PASO: CÓDIGO DE LA HU -->
         <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status"
-        [class.is-collapsed]="isStepCollapsed('code')" (focusin)="onStepFocusIn('code')" (focusout)="onStepFocusOut('code', $event)">
+        [class.is-collapsed]="isStepCollapsed('code')" (focusin)="onStepFocusIn('code', $event)" (focusout)="onStepFocusOut('code', $event)">
           <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas de los PRs y commits vinculados a la HU.' }"></ng-container>
           <div class="flow-step-body" id="flow-body-code" [hidden]="isStepCollapsed('code')">
             <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>

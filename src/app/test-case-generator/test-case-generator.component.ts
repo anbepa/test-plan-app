@@ -238,8 +238,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return COLLAPSIBLE_STEPS.includes(id) && this.flowStep(id)?.status === 'done';
   }
 
+  /** Editar / Contraer: depende solo de si el usuario abrió el paso, no del foco. */
   toggleStep(id: FlowStepId): void {
-    if (this.isStepCollapsed(id)) {
+    if (!this.openedSteps.has(id)) {
       this.openedSteps.add(id);
       setTimeout(() => this.autoGrowFormTextareas());
     } else {
@@ -248,7 +249,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
   }
 
-  onStepFocusIn(id: FlowStepId): void {
+  onStepFocusIn(id: FlowStepId, event: FocusEvent): void {
+    // El foco que toma el propio botón Editar/Contraer no abre el paso: lo decide el clic.
+    if ((event.target as HTMLElement | null)?.closest('.flow-step-toggle')) return;
     this.focusedStep = id;
   }
 
