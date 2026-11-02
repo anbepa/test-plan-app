@@ -223,7 +223,7 @@ REGLAS:
 - Antes de declarar PARCIAL por un elemento que falta en una lista del código, revisa si con las equivalencias confirmadas la lista coincide con el criterio; un supuesto propio sobre el significado no es evidencia.
 - "Reglas:" lista las reglas RT que sustentan el estado (o "ninguna"). Las consecuencias de un PARCIAL/DIFERENTE van en su Detalle.
 
-CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen", "Interpretación" y "Definiciones" no se evalúan.
+CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen" y "Definiciones" no se evalúan. Una línea "Interpretación" es una duda del funcional sobre el criterio de arriba: no cambia su estado, pero busca la respuesta en el "Código:" literal de las reglas y agrégala al final del Detalle de ese criterio, antes de "Reglas:", como "Duda resuelta por el código: <qué hace, con el valor, mensaje o condición literal>." o "Duda sin respuesta en el código." (solo una de las dos, en una frase).
 
 FORMATO (solo estas dos secciones, en el orden de los criterios):
 ## Análisis
@@ -232,7 +232,8 @@ CA-01 | exige: (lo que pide, con el alcance que le fijan los criterios específi
 
 ## Cobertura de criterios en el código
 (El ESTADO de cada línea es el mismo que concluyó su análisis: "dato que lo viola: ninguno" ⇒ IMPLEMENTADO, salvo SIN EVIDENCIA cuando ninguna regla lo trata.)
-- [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Reglas: RT-01, RT-03`,
+- [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Duda resuelta por el código: (solo si el CA trae "Interpretación" y el código la responde: valor, mensaje o condición literal) | Duda sin respuesta en el código. (si el CA trae "Interpretación" y el código no la responde). Reglas: RT-01, RT-03
+(Todo CA con línea "Interpretación" lleva exactamente una de las dos frases de duda; los demás no llevan ninguna. Busca la respuesta también en mensajes, validadores, estados y textos del front citados en las reglas.)`,
 
   JUDGE_USER: (description: string, acceptanceCriteria: string, facts: string): string => `
 HISTORIA DE USUARIO (objetivo, no es criterio):
