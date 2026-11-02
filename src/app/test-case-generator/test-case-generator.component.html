@@ -87,7 +87,7 @@
                 <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
                 <div class="id-hybrid-field" [class.is-loading]="azureImportLoading">
                   <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
-                    placeholder="Escribe o importa desde Azure (Ej: 7632264)" class="form-control id-hybrid-input"
+                    placeholder="Ej: 7632264" class="form-control id-hybrid-input"
                     [disabled]="azureImportLoading">
                   <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
                     [disabled]="azureImportLoading"
@@ -414,6 +414,18 @@
         </section>
       </ng-container>
 
+      <!-- HUs guardadas temporalmente: permite crear el plan sin generar otra HU -->
+      <div class="saved-hus-banner" *ngIf="accumulatedHUsCount > 0" role="status">
+        <p class="saved-hus-text">
+          <strong>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }}</strong>
+          temporalmente, aún sin añadir al plan. Genera otra HU o confírmala{{ accumulatedHUsCount > 1 ? 's' : '' }} ya.
+        </p>
+        <button type="button" class="saved-hus-btn" (click)="confirmAndEmitHUDataToPlan()"
+          [disabled]="isFlowBusy">
+          Confirmar y añadir al plan
+        </button>
+      </div>
+
       <!-- Barra de acción fija: qué falta o qué se enviará, junto al botón de generar -->
       <div class="flow-actionbar" id="flow-step-generate">
         <div *ngIf="formError" class="error-message initial-form-error" role="alert">
@@ -430,7 +442,7 @@
             <ng-template #readyToGenerate>
               <span *ngIf="isFlowBusy; else readyMark" class="spinner-inline" aria-hidden="true"></span>
               <ng-template #readyMark><span class="flow-actionbar-ready" aria-hidden="true">✓</span></ng-template>
-              {{ generateSummary || 'Listo para generar' }}
+              {{ generateSummary || (isFlowBusy ? 'Preparando criterios…' : 'Listo para generar') }}
             </ng-template>
           </p>
           <button type="submit" class="button-primary compact-action"

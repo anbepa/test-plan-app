@@ -474,7 +474,7 @@ export class TestPlanGeneratorComponent {
 
     // Mostrar toast de éxito
     this.toastService.success(
-      `HU "${huData.title}" guardada (${this.savedUserStoryIds.length} HUs)`,
+      `HU "${huData.title}" guardada temporalmente (${this.savedUserStoryIds.length} HU${this.savedUserStoryIds.length === 1 ? '' : 's'} sin añadir al plan)`,
       4000
     );
 
