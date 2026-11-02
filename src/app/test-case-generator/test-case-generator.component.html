@@ -495,7 +495,7 @@
       <ng-container *ngIf="componentState === 'previewingGenerated'">
 
         <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
-          ⚠ Sin escenario: {{ criteriaCoverageGap.join(', ') }}. Usa refinar para cubrirlos.
+          ⚠ {{ criteriaCoverageGap.length }} criterio{{ criteriaCoverageGap.length > 1 ? 's' : '' }} sin escenario: {{ criteriaCoverageGap.join(', ') }}. Revísalo{{ criteriaCoverageGap.length > 1 ? 's' : '' }} antes de añadir la HU al plan.
         </p>
 
         <!-- Acciones arriba de la tabla -->
@@ -531,7 +531,7 @@
         <div
           *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios"
           class="preview-table-container">
-          <h4>Casos de Prueba Generados (Previsualización)</h4>
+          <h4>Casos de Prueba Generados ({{ generatedHUData.detailedTestCases.length }})</h4>
           <table class="detailed-test-cases-table preview-only-table">
             <thead>
               <tr>

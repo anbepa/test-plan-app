@@ -141,6 +141,9 @@ body {
   background-color: var(--background-color);
   min-height: 100vh;
   overflow-x: hidden;
+  /* clip evita el desborde sin crear un contenedor de scroll, que anulaba
+     position: sticky en toda la app (hidden queda de respaldo) */
+  overflow-x: clip;
 }
 
 img,
@@ -1029,4 +1032,12 @@ textarea::placeholder {
 @media (max-width: 400px) {
   .exec-body .filter-pills { flex-wrap: wrap !important; }
   .exec-body .filter-pills > * { flex: 1 1 100% !important; }
+}
+
+/* Móvil: las barras superiores fijas (sticky) de cada página van debajo del
+   header fijo de 56px en lugar de quedar ocultas tras él. */
+@media (max-width: 767px) {
+  :where(.page-topbar, .exec-header, .sprint-header, .plans-table thead th, .detailed-test-cases-table thead th) {
+    top: calc(56px + env(safe-area-inset-top)) !important;
+  }
 }

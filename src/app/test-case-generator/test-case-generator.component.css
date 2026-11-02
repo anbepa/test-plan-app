@@ -2099,3 +2099,43 @@ button.code-coverage-chip.is-selected {
     grid-column: 1 / -1;
   }
 }
+
+/* === Previsualización: acciones siempre a mano ===
+   Con muchos casos la página es muy larga y "Guardar HU" / "Confirmar y
+   Añadir al Plan" quedaban solo arriba. La barra se queda fija al hacer
+   scroll. */
+.preview-top-actions {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin-left: -8px;
+    margin-right: -8px;
+    padding: 10px 8px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-bottom: 1px solid #eef2f7;
+}
+
+@media (max-width: 767px) {
+    .preview-top-actions {
+        /* bajo el header fijo móvil (56px) */
+        top: calc(56px + env(safe-area-inset-top));
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .preview-top-actions .hu-counter-badge {
+        grid-column: 1 / -1;
+    }
+
+    .preview-top-actions .btn-preview-action {
+        width: 100%;
+        min-height: 42px;
+        padding: 8px 10px;
+        font-size: 0.85rem;
+        white-space: normal;
+        line-height: 1.2;
+    }
+}
