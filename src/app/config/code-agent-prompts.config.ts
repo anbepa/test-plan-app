@@ -123,8 +123,9 @@ ESTRATEGIA:
 ${source === 'changeset'
     ? `1. Ya recibiste los DIFFS de los PRs/commits vinculados a la HU: son exactamente lo que se construyó para ella y tu fuente principal. Analízalos primero, sin herramientas.
 2. Usa read_files SOLO si necesitas contexto que el diff no muestra y que cambia el análisis (p. ej. de dónde sale un parámetro, quién invoca el método, qué hace una constante, el job/malla que lo ejecuta). Usa diff_file para archivos "no precargados" relevantes.
+2b. Capas: la HU puede cambiar pantalla (capa front), servicios (capa back) y base de datos (capa bd); cada archivo indica su capa. Revisa cada capa cambiada. Si cambió la capa front, revisa sus "ARCHIVOS DE PANTALLA DE LA HU" (diff_file si no vienen precargados): vista (.html), componente y rutas/menú. De ahí salen los pasos E2E: ruta de navegación (rutas/menú), títulos y subtítulos, etiquetas de campos, selectores y sus opciones, botones y cuándo se habilitan, mensajes exactos, formatos de valores, columnas de tablas, pop-ups y validaciones de pantalla. Una pantalla nueva de la HU solo existe en estos cambios: search_app busca en la rama principal y no la encontrará.
 3. Usa search_code solo para criterios que no aparezcan en los cambios (pueden estar en código existente o en otro componente).
-4. Si con los diffs ya tienes el código de todos los criterios, llama a finish DE INMEDIATO: cada paso extra cuesta tiempo y tokens.`
+4. Llama a finish en cuanto tengas el código de todos los criterios Y hayas revisado cada capa que cambió la HU (en front, sus archivos de pantalla): cada paso extra cuesta tiempo y tokens.`
     : source === 'branch-diff'
       ? `1. La rama tiene cambios propios respecto a su base: ESOS cambios son la implementación de la HU. Empieza revisándolos con diff_file (prioriza controladores, servicios, casos de uso, adaptadores, consultas y DTOs; luego pruebas unitarias).
 2. Si la lista es enorme, la rama incluye trabajo ajeno: prioriza archivos cuyo nombre coincide con el vocabulario de la HU.
@@ -222,7 +223,7 @@ REGLAS:
 - Antes de declarar PARCIAL por un elemento que falta en una lista del código, revisa si con las equivalencias confirmadas la lista coincide con el criterio; un supuesto propio sobre el significado no es evidencia.
 - "Reglas:" lista las reglas RT que sustentan el estado (o "ninguna"). Las consecuencias de un PARCIAL/DIFERENTE van en su Detalle.
 
-CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen", "Interpretación" y "Definiciones" no se evalúan.
+CRITERIOS NUMERADOS: si los criterios vienen numerados (líneas "- **CA-xx**"), evalúa exactamente esa lista con los mismos ids, sin dividir, fusionar ni renumerar. Las líneas "Opciones" son partes del criterio de arriba; "Resumen" y "Definiciones" no se evalúan. Una línea "Interpretación" es una duda del funcional sobre el criterio de arriba: no cambia su estado, pero busca la respuesta en el "Código:" literal de las reglas y agrégala al final del Detalle de ese criterio, antes de "Reglas:", como "Duda resuelta por el código: <qué hace, con el valor, mensaje o condición literal>." o "Duda sin respuesta en el código." (solo una de las dos, en una frase).
 
 FORMATO (solo estas dos secciones, en el orden de los criterios):
 ## Análisis
@@ -231,7 +232,8 @@ CA-01 | exige: (lo que pide, con el alcance que le fijan los criterios específi
 
 ## Cobertura de criterios en el código
 (El ESTADO de cada línea es el mismo que concluyó su análisis: "dato que lo viola: ninguno" ⇒ IMPLEMENTADO, salvo SIN EVIDENCIA cuando ninguna regla lo trata.)
-- [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Reglas: RT-01, RT-03`,
+- [CA-01] "resumen breve del criterio" → ESTADO. Detalle: (máx. 2 líneas; dato/límite exacto o qué falta/difiere, con el Contraejemplo y su cálculo si aplica). Duda resuelta por el código: (solo si el CA trae "Interpretación" y el código la responde: valor, mensaje o condición literal) | Duda sin respuesta en el código. (si el CA trae "Interpretación" y el código no la responde). Reglas: RT-01, RT-03
+(Todo CA con línea "Interpretación" lleva exactamente una de las dos frases de duda; los demás no llevan ninguna. Busca la respuesta también en mensajes, validadores, estados y textos del front citados en las reglas.)`,
 
   JUDGE_USER: (description: string, acceptanceCriteria: string, facts: string): string => `
 HISTORIA DE USUARIO (objetivo, no es criterio):
@@ -242,6 +244,11 @@ ${acceptanceCriteria.trim()}
 
 HECHOS EXTRAÍDOS DEL CÓDIGO:
 ${facts}`,
+
+  /** Recordatorio (una vez) si el agente intenta terminar sin revisar la pantalla que cambió la HU. */
+  FRONT_PENDING: (paths: string[]): string => `Aún no terminas: la HU cambió la capa front y no revisaste estos archivos de pantalla:
+${paths.slice(0, 8).map((path) => `- ${path}`).join('\n')}
+Revísalos con diff_file (una llamada por archivo; puedes hacer varias en el mismo paso, indicando el repo) y completa en el contexto técnico: "Disparo" con la ruta de navegación real (menú y opción), y para los criterios de pantalla la evidencia literal (títulos, etiquetas, botones y su habilitación, mensajes, formatos, columnas, pop-ups). Luego llama a finish.`,
 
   FORCE_FINISH: `
 Se agotó el presupuesto de exploración. Llama AHORA a finish con el contexto técnico usando solo la evidencia ya leída. Lo que no alcanzaste a verificar anótalo en "Búsquedas sin resultado" (o como no verificable). No llames otras herramientas.`,

@@ -118,6 +118,61 @@ const SOURCE_HINTS = /(controller|service|handler|validator|validation|rule|usec
 const TEST_FILE = /(^|\/)(test|tests|__tests__|spec)(\/|$)|\.(spec|test)\.|Test\.(java|kt|cs)$|Tests?\.(cs|py)$/i;
 const BUILD_FILE = /(^|\/)(build\.gradle|settings\.gradle|pom\.xml|package\.json|.*\.csproj|.*\.ya?ml|.*\.properties|dockerfile|.*\.sh)$/i;
 
+/** Capa de un archivo cambiado: la HU puede tocar pantalla (front), servicios (back) y base de datos (bd). */
+export type CodeLayer = 'front' | 'back' | 'bd';
+const DB_FILE = /\.sql$|(^|\/)(migrations?|liquibase|flyway|changelog|db|database)\//i;
+const FRONT_FILE = /\.(html|scss|sass|css|less|tsx|jsx|vue|svelte)$|\.(component|page|view|routes|routing|module)\.(ts|js)$|(^|\/)(app\.routes|routes|menu[^/]*)\.(ts|js)$/i;
+const FRONT_REPO = /front|web|portal/i;
+/** Archivos de la pantalla en sí (vista, componente, rutas/menú): de ahí salen los pasos E2E. */
+const FRONT_SCREEN_FILE = /\.html$|\.(component|page|view)\.(ts|js|tsx|jsx)$|\.(tsx|jsx|vue|svelte)$|(routes|routing|menu)[^/]*\.(ts|js)$/i;
+
+export function codeLayer(path: string, repoName: string = ''): CodeLayer {
+  if (DB_FILE.test(path)) return 'bd';
+  if (FRONT_FILE.test(path)) return 'front';
+  if (FRONT_REPO.test(repoName) && /\.(ts|js|tsx|jsx|json)$/i.test(path)) return 'front';
+  return 'back';
+}
+
+/**
+ * true si el archivo es la pantalla en sí. Con `changedPaths`, un .ts/.js cuyo
+ * .html hermano también cambió es el componente de esa vista (Angular sin sufijo .component).
+ */
+export function isFrontScreenFile(path: string, changedPaths?: Set<string>): boolean {
+  if (TEST_FILE.test(path)) return false;
+  if (FRONT_SCREEN_FILE.test(path)) return true;
+  return !!changedPaths && /\.(ts|js)$/i.test(path) && changedPaths.has(path.replace(/\.(ts|js)$/i, '.html'));
+}
+
+/**
+ * Elige qué diffs precargar: primero reparte el presupuesto por capa (para que
+ * el front o la BD de la HU no queden fuera cuando el back es grande) y luego
+ * usa el sobrante en el orden global. Devuelve los índices precargados.
+ */
+export function pickPreloadedDiffs(items: { layer: CodeLayer; size: number }[], budget: number): Set<number> {
+  const layers = Array.from(new Set(items.filter((item) => item.size > 0).map((item) => item.layer)));
+  const share = layers.length ? Math.floor(budget / layers.length) : 0;
+  const usedByLayer = new Map<CodeLayer, number>();
+  const picked = new Set<number>();
+  let used = 0;
+  items.forEach((item, index) => {
+    if (!item.size) return;
+    const layerUsed = usedByLayer.get(item.layer) || 0;
+    if (layerUsed + item.size <= share) {
+      usedByLayer.set(item.layer, layerUsed + item.size);
+      used += item.size;
+      picked.add(index);
+    }
+  });
+  items.forEach((item, index) => {
+    if (!item.size || picked.has(index)) return;
+    if (used + item.size <= budget) {
+      used += item.size;
+      picked.add(index);
+    }
+  });
+  return picked;
+}
+
 interface Workspace {
   name: string;
   ref: RepoRef;
@@ -129,6 +184,10 @@ export class CodeAgentRunner {
   /** Diffs vistos en la corrida (precargados o pedidos con diff_file), por ruta. */
   private seenDiffs = new Map<string, string>();
   private changedPaths: string[] = [];
+  /** Archivos de pantalla (front) que cambió la HU: el agente debe revisarlos antes de terminar. */
+  private frontScreenPaths: string[] = [];
+  private frontReminderSent = false;
+  private frontScreenRepo = new Map<string, string>();
   private appScope: AppScope | null = null;
   private appSearches = 0;
 
@@ -214,6 +273,8 @@ export class CodeAgentRunner {
     this.appScope = appScope;
     this.appSearches = 0;
     const filesReviewed = new Set<string>(workspaces.flatMap((ws) => ws.files.map((file) => file.path)).filter((path) => changesBlock.includes(`=== ${path}`)));
+    // Los diffs precargados ya van en el prompt: no consumen el cupo de archivos que el agente lee con herramientas.
+    const preloadedCount = filesReviewed.size;
     let toolOutputChars = 0;
 
     for (let step = 1; step <= CODE_AGENT_BUDGET.maxSteps + 1; step++) {
@@ -222,7 +283,7 @@ export class CodeAgentRunner {
       const overBudget = step > CODE_AGENT_BUDGET.maxSteps
         || Date.now() - startedAt > CODE_AGENT_BUDGET.maxDurationMs
         || toolOutputChars > CODE_AGENT_BUDGET.maxToolOutputChars
-        || filesReviewed.size >= CODE_AGENT_BUDGET.maxFilesRead;
+        || filesReviewed.size - preloadedCount >= CODE_AGENT_BUDGET.maxFilesRead;
 
       if (overBudget) {
         messages.push({ role: 'user', content: CODE_AGENT_PROMPTS.FORCE_FINISH });
@@ -256,6 +317,15 @@ export class CodeAgentRunner {
 
         if (call.function.name === 'finish') {
           const context = String(args.technical_context || '').trim();
+          const pendingScreens = this.pendingFrontScreens(filesReviewed);
+          if (context && !overBudget && pendingScreens.length && !this.frontReminderSent) {
+            // Una sola vez: la HU cambió la pantalla y el agente no la revisó (los pasos E2E salen de ahí).
+            this.frontReminderSent = true;
+            emit({ type: 'tool', message: '🖥️ Revisando la pantalla de la HU antes de terminar…' });
+            messages.push({ role: 'tool', tool_call_id: call.id, content: CODE_AGENT_PROMPTS.FRONT_PENDING(
+              pendingScreens.map((path) => (this.frontScreenRepo.get(path) ? `${path} (repo ${this.frontScreenRepo.get(path)})` : path))) });
+            continue;
+          }
           if (context) return this.finalize(context, input, emit, isCancelled, filesReviewed, versionKey, stats, startedAt);
         }
 
@@ -272,6 +342,12 @@ export class CodeAgentRunner {
     }
 
     throw new Error('El agente no logró completar la exploración dentro del presupuesto.');
+  }
+
+  /** Archivos de pantalla de la HU que el agente no ha visto (ni precargados ni leídos con diff_file/read_files). */
+  private pendingFrontScreens(filesReviewed: Set<string>): string[] {
+    // seenDiffs no sirve aquí: guarda también los diffs descargados que no se precargaron en el prompt.
+    return this.frontScreenPaths.filter((path) => !filesReviewed.has(path));
   }
 
   /**
@@ -369,7 +445,17 @@ export class CodeAgentRunner {
     const entries = workspaces.flatMap((ws) => ws.files.map((file) => ({ ws, file })));
     const priority = (path: string) => (BUILD_FILE.test(path) ? 2 : TEST_FILE.test(path) ? 1 : 0);
     const rankedPaths = this.rankFiles(entries.map((entry) => entry.file.path), keywords);
-    entries.sort((a, b) => priority(a.file.path) - priority(b.file.path) || rankedPaths.indexOf(a.file.path) - rankedPaths.indexOf(b.file.path));
+    const changedSet = new Set(entries.map((entry) => entry.file.path));
+    const isScreen = (path: string) => isFrontScreenFile(path, changedSet);
+    const screenFirst = (path: string) => (isScreen(path) ? 0 : 1);
+    entries.sort((a, b) => priority(a.file.path) - priority(b.file.path)
+      || screenFirst(a.file.path) - screenFirst(b.file.path)
+      || rankedPaths.indexOf(a.file.path) - rankedPaths.indexOf(b.file.path));
+    const layerOf = (entry: { ws: Workspace; file: { path: string } }) => codeLayer(entry.file.path, entry.ws.name);
+    const frontScreens = entries.filter((entry) => layerOf(entry) === 'front' && isScreen(entry.file.path));
+    this.frontScreenPaths = frontScreens.map((entry) => entry.file.path);
+    this.frontScreenRepo = new Map(frontScreens.map((entry) => [entry.file.path, entry.ws.name]));
+    this.frontReminderSent = false;
 
     emit({ type: 'tool', message: `🧬 Precargando diffs de ${entries.filter((entry) => priority(entry.file.path) < 2).length} archivo(s) de la HU…` });
     const diffs = await this.mapLimit(entries, CODE_AGENT_BUDGET.diffConcurrency, async ({ ws, file }) => {
@@ -378,21 +464,34 @@ export class CodeAgentRunner {
         .catch((error: any) => ({ path: file.path, error: error?.message || 'error' } as AzureFileDiff));
     });
 
-    let used = 0;
+    // Presupuesto repartido por capa: el back no debe dejar fuera la pantalla ni la BD de la HU.
+    const preloaded = pickPreloadedDiffs(
+      entries.map((entry, index) => ({
+        layer: layerOf(entry),
+        size: priority(entry.file.path) < 2 && diffs[index]?.diff ? diffs[index]!.diff!.length : 0,
+      })),
+      CODE_AGENT_BUDGET.preloadDiffChars
+    );
     const listed: string[] = [];
     const inlined: string[] = [];
+    const layerCounts = new Map<CodeLayer, number>();
     entries.forEach(({ ws, file }, index) => {
       const label = multiRepo ? `${ws.name}:${file.path}` : file.path;
       const diff = diffs[index];
-      const kind = priority(file.path) === 2 ? 'build/config' : priority(file.path) === 1 ? 'prueba' : 'código';
+      const layer = layerOf({ ws, file });
+      layerCounts.set(layer, (layerCounts.get(layer) || 0) + 1);
+      const kind = priority(file.path) === 2 ? 'build/config' : priority(file.path) === 1 ? 'prueba' : isScreen(file.path) ? 'pantalla' : 'código';
       if (diff?.diff) this.rememberDiff(file.path, diff.diff);
-      if (diff && diff.diff && used + diff.diff.length <= CODE_AGENT_BUDGET.preloadDiffChars) {
-        used += diff.diff.length;
-        inlined.push(`=== ${file.path} [${file.changeType}, ${kind}${multiRepo ? `, repo ${ws.name}` : ''}; +${diff.added}/-${diff.removed}] ===\n${diff.diff}`);
+      if (diff && diff.diff && preloaded.has(index)) {
+        inlined.push(`=== ${file.path} [${file.changeType}, ${kind}, capa ${layer}${multiRepo ? `, repo ${ws.name}` : ''}; +${diff.added}/-${diff.removed}] ===\n${diff.diff}`);
       } else {
-        listed.push(`- [${file.changeType}, ${kind}] ${label}${diff?.error ? ` (diff no disponible: ${diff.error})` : priority(file.path) < 2 ? ' (usa diff_file)' : ''}`);
+        listed.push(`- [${file.changeType}, ${kind}, capa ${layer}] ${label}${diff?.error ? ` (diff no disponible: ${diff.error})` : priority(file.path) < 2 ? ' (usa diff_file)' : ''}`);
       }
     });
+    const layersLine = (['front', 'back', 'bd'] as CodeLayer[])
+      .filter((layer) => layerCounts.get(layer))
+      .map((layer) => `${layer} (${layerCounts.get(layer)} archivo(s))`)
+      .join(', ');
 
     const header = workspaces.map((ws) => {
       const group = ws.group;
@@ -405,6 +504,10 @@ export class CodeAgentRunner {
     return [
       'CAMBIOS DE CÓDIGO DE LA HU (PRs/commits vinculados en Azure Boards; es exactamente lo que se construyó para esta HU):',
       header,
+      layersLine ? `\nCAPAS QUE CAMBIÓ LA HU: ${layersLine}.` : '',
+      this.frontScreenPaths.length
+        ? `ARCHIVOS DE PANTALLA DE LA HU (revísalos antes de finish; la pantalla nueva solo existe en estos cambios, no en la rama principal que consulta search_app):\n${this.frontScreenPaths.map((path) => `- ${path}`).join('\n')}`
+        : '',
       '',
       inlined.length ? `DIFFS (líneas "+" agregadas, "-" eliminadas, espacios normalizados):\n\n${inlined.join('\n\n')}` : '',
       listed.length ? `\nOTROS ARCHIVOS CAMBIADOS (no precargados):\n${listed.join('\n')}` : '',

@@ -365,6 +365,13 @@
   position: relative;
 }
 
+/* El panel debe quedar por encima de la lista de casos que viene después */
+.actions.table-actions {
+  position: relative;
+  z-index: 30;
+  overflow: visible !important;
+}
+
 .export-menu-trigger {
   min-width: 190px;
   justify-content: space-between;
@@ -1429,3 +1436,26 @@ textarea.rf-control {
     line-height: 1.4;
 }
 
+/* Móvil: título de casos y buscador en filas separadas */
+@media (max-width: 600px) {
+  .tc-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .tc-search-wrap,
+  .tc-search-input {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Móvil: el menú de exportación se abría hacia la izquierda, fuera de la pantalla */
+@media (max-width: 600px) {
+  .export-menu-panel {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 2rem);
+  }
+}

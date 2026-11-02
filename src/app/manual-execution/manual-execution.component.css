@@ -1331,9 +1331,36 @@
   .title-bar { flex-direction: column; }
   .filters-bar { flex-direction: column; }
   .modal-form-grid { grid-template-columns: 1fr; }
-  .plans-table { min-width: 900px; }
-  .plan-tree-sidebar { width: 160px; }
-  .plan-hu-selector-inner { height: 280px; }
+  /* La tabla se muestra como tarjetas (ver @media 860px); no forzar ancho */
+  .plans-table { min-width: 0; }
+  .plan-hu-selector-inner { height: auto; }
+  .filter-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .filter-group .filter-select { width: 100%; min-width: 0; }
+  .search-box { width: 100%; }
+  .title-bar-actions, .title-bar-actions .button-primary { width: 100%; }
+
+  .plans-table tbody tr { margin: 0.6rem; width: auto; }
+  .plan-title-link { background: none; box-shadow: none; min-height: 0; }
+  .plans-table tbody td { min-width: 0; }
+  .plans-table tbody td > * { min-width: 0; }
+  .plan-title-link, .cell-meta { white-space: normal; overflow-wrap: anywhere; }
+  .row-tags { justify-content: flex-end; flex-wrap: wrap; }
+
+  .pagination-container { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+  .pagination-controls { justify-content: center; flex-wrap: wrap; gap: 0.35rem; }
+  .pagination-button { min-height: 36px; padding: 0.35rem 0.7rem; }
+  .pagination-number { min-width: 36px; min-height: 36px; padding: 0; }
+
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-container,
+  .modal-container.modal-wide { max-width: 100%; max-height: 94dvh; border-radius: 16px 16px 0 0; }
+  .modal-header { padding: 1rem; }
+  .modal-body { padding: 1rem; }
+  .modal-footer { flex-wrap: wrap; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom)); }
+  .modal-footer-hint { flex: 1 1 100%; margin: 0; }
+  .modal-footer > button { flex: 1 1 0; }
+
+  .bulk-delete-bar { left: 1rem; right: 1rem; transform: none; bottom: 1rem; white-space: normal; flex-wrap: wrap; justify-content: center; border-radius: 16px; }
 }
 
 

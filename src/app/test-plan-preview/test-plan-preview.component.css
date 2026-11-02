@@ -462,3 +462,24 @@
         padding: 1rem;
     }
 }
+/* Móvil: el texto justificado deja huecos enormes entre palabras en
+   columnas estrechas; se alinea a la izquierda y se permite cortar URLs. */
+@media (max-width: 600px) {
+    ::ng-deep .paper-sheet p,
+    ::ng-deep .paper-sheet li {
+        text-align: left;
+        font-size: 0.95rem;
+        overflow-wrap: anywhere;
+    }
+
+    ::ng-deep .paper-sheet table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    ::ng-deep .paper-sheet img {
+        max-width: 100%;
+        height: auto;
+    }
+}

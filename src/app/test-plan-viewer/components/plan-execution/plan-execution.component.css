@@ -212,6 +212,7 @@
 
 /* ── Menú contextual (⋮) de acciones por caso de prueba ────────────── */
 .act-kebab-btn {
+  min-height: 30px; box-shadow: none;
   width: 30px; height: 30px; padding: 0;
   border: none; background: transparent; border-radius: 50%;
   color: #8e8e93; cursor: pointer;
@@ -958,12 +959,17 @@
   .summary-bottom-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .tc-table-head, .tc-row-header { grid-template-columns: 32px 32px 1fr 110px 40px; }
+  /* Móvil: el estado baja bajo el título; el menú ⋮ no se recorta */
+  .tc-table-head, .tc-row-header { grid-template-columns: 24px 28px minmax(0,1fr) 36px; gap: 6px 4px; padding: 10px 8px; }
+  .tc-col-title { min-width: 0; padding-right: 4px; overflow-wrap: anywhere; }
+  .tc-col-status { grid-area: 2/3; }
+  .tc-col-actions { grid-area: 1/4; }
+  .tc-table-head .tc-col-status, .tc-table-head .tc-col-actions { display: none; }
   /* El menú (⋮) sí se mantiene en móvil: ocupa poco y agrupa todas las acciones */
   .tc-col-actions { display: flex; }
   .act-menu-panel { min-width: 210px; max-width: calc(100vw - 24px); }
   .exec-body { padding: 12px 12px 24px; }
-  .tc-row-body { padding: 0 8px 12px 56px; }
+  .tc-row-body { padding: 0 8px 12px 12px; }
   /* Filtros en una fila (buscador ocupa el resto) y el botón debajo, a todo el ancho */
   .filter-pills { width: 100%; flex-wrap: nowrap; }
   .search-input-wrap { flex: 1; min-width: 0; }

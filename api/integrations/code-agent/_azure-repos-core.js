@@ -126,7 +126,11 @@ async function azureRepoRequest(url, pat, body) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
+      // 401 = PAT vencido/revocado; 403 = PAT válido sin el alcance de código.
+      if (response.status === 401) {
+        throw new CodeAgentError(401, 'PAT inválido, vencido o revocado.');
+      }
+      if (response.status === 403) {
         throw new CodeAgentError(403, 'El PAT no tiene permiso para leer código. Genera un PAT con el alcance "Code (Read)" y vuelve a guardar la conexión de Azure DevOps.');
       }
       if (response.status === 404) {

@@ -27,7 +27,9 @@ export class DeepSeekService {
      */
     private readonly STREAM_MODEL = 'deepseek-flash';
     /** Tope de tokens para streaming: suficiente para la matriz y acorde a los 60s. */
-    private readonly STREAM_MAX_TOKENS = 8000;
+    // 16000 (igual que las llamadas sin stream): con 8000 una HU de ~36 criterios
+    // no cabía y el modelo omitía los últimos criterios para respetar el presupuesto.
+    private readonly STREAM_MAX_TOKENS = 16000;
     private readonly MAX_CONTINUATIONS = 2; // Máximo de llamadas de continuación
     private readonly RISK_STRATEGY_MAX_RETRIES = 1;
 
@@ -435,6 +437,7 @@ export class DeepSeekService {
             temperature: codeContext.trim() ? 0.2 : 0.5,
             max_tokens: this.STREAM_MAX_TOKENS,
             stream: true,
+            stream_options: { include_usage: true },
             thinking: { type: 'disabled' }
         };
 
@@ -461,6 +464,7 @@ export class DeepSeekService {
             temperature: 0.3,
             max_tokens: this.STREAM_MAX_TOKENS,
             stream: true,
+            stream_options: { include_usage: true },
             thinking: { type: 'disabled' }
         };
 

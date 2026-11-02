@@ -87,7 +87,7 @@
                 <label for="tcCurrentHuIdText">ID de la HU:<span class="required-indicator">*</span></label>
                 <div class="id-hybrid-field" [class.is-loading]="azureImportLoading">
                   <input id="tcCurrentHuIdText" type="text" name="currentHuId" [(ngModel)]="currentHuId" required
-                    placeholder="Escribe o importa desde Azure (Ej: 7632264)" class="form-control id-hybrid-input"
+                    placeholder="Ej: 7632264" class="form-control id-hybrid-input"
                     [disabled]="azureImportLoading">
                   <button type="button" class="id-hybrid-import-btn" (click)="importFromAzureDevOps()"
                     [disabled]="azureImportLoading"
@@ -108,6 +108,7 @@
                 </div>
                 <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
                   {{ azureImportErrorMessage }}
+                  <a *ngIf="isPatError(azureImportErrorMessage)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
                 </div>
                 <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
                   {{ azureNodeNameWarning }}
@@ -309,7 +310,10 @@
               </div>
               <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
                 {{ codeTargetError }}
-                <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+                <span class="import-error-actions">
+                  <a *ngIf="isPatError(codeTargetError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+                  <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+                </span>
               </div>
           </div>
         </section>
@@ -321,7 +325,7 @@
             <p *ngIf="isCodeContextStale" class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
             <p *ngIf="!isCodeTargetReady && !codeContextText" class="flow-lock-hint">Completa el paso {{ flowStep('code').num }} para poder explorar el código.</p>
             <div class="code-agent-bar">
-              <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
+              <p *ngIf="isCodeTargetReady && !codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
                 <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
                   Contrasta cada criterio con el código: Implementado, Parcial, Diferente o Sin evidencia.
                 </ng-container>
@@ -357,14 +361,18 @@
               <li *ngFor="let line of codeAgentLog">{{ line }}</li>
             </ul>
 
-            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
+            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}
+              <a *ngIf="isPatError(codeAgentError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a></div>
 
             <ng-container *ngIf="codeContextText">
               <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
                 <div class="coverage-editor-title">
                   <span>Cobertura de criterios en el código</span>
                   <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
-                    <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+                    <button type="button" *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css"
+                      [class.is-selected]="coverageFilter === item.key" [attr.aria-pressed]="coverageFilter === item.key"
+                      (click)="toggleCoverageFilter(item.key)" [title]="coverageFilter === item.key ? 'Mostrar todos' : 'Mostrar solo ' + item.label.toLowerCase()">{{ item.label }}: {{ item.count }}</button>
+                    <button *ngIf="coverageFilter" type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
                   </div>
                 </div>
                 <p class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</p>
@@ -372,7 +380,7 @@
                   <table class="md-table coverage-table">
                     <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
                     <tbody>
-                      <tr *ngFor="let row of codeCoverageRows; trackBy: trackCoverageRow">
+                      <tr *ngFor="let row of visibleCoverageRows; trackBy: trackCoverageRow">
                         <td class="md-id">{{ row.id }}</td>
                         <td>{{ row.criterion }}</td>
                         <td>
@@ -382,7 +390,7 @@
                             <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
                           </select>
                         </td>
-                        <td class="coverage-detail">{{ row.detail }}</td>
+                        <td class="coverage-detail"><ng-container *ngFor="let part of row.detailParts"><code *ngIf="part.code">{{ part.text }}</code><ng-container *ngIf="!part.code">{{ part.text }}</ng-container></ng-container></td>
                       </tr>
                     </tbody>
                   </table>
@@ -414,6 +422,18 @@
         </section>
       </ng-container>
 
+      <!-- HUs guardadas temporalmente: permite crear el plan sin generar otra HU -->
+      <div class="saved-hus-banner" *ngIf="accumulatedHUsCount > 0" role="status">
+        <p class="saved-hus-text">
+          <strong>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }}</strong>
+          temporalmente, aún sin añadir al plan. Genera otra HU o confírmala{{ accumulatedHUsCount > 1 ? 's' : '' }} ya.
+        </p>
+        <button type="button" class="saved-hus-btn" (click)="confirmAndEmitHUDataToPlan()"
+          [disabled]="isFlowBusy">
+          Confirmar y añadir al plan
+        </button>
+      </div>
+
       <!-- Barra de acción fija: qué falta o qué se enviará, junto al botón de generar -->
       <div class="flow-actionbar" id="flow-step-generate">
         <div *ngIf="formError" class="error-message initial-form-error" role="alert">
@@ -430,7 +450,7 @@
             <ng-template #readyToGenerate>
               <span *ngIf="isFlowBusy; else readyMark" class="spinner-inline" aria-hidden="true"></span>
               <ng-template #readyMark><span class="flow-actionbar-ready" aria-hidden="true">✓</span></ng-template>
-              {{ generateSummary || 'Listo para generar' }}
+              {{ generateSummary || (isFlowBusy ? 'Preparando criterios…' : 'Listo para generar') }}
             </ng-template>
           </p>
           <button type="submit" class="button-primary compact-action"
@@ -475,7 +495,7 @@
       <ng-container *ngIf="componentState === 'previewingGenerated'">
 
         <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
-          ⚠ Sin escenario: {{ criteriaCoverageGap.join(', ') }}. Usa refinar para cubrirlos.
+          ⚠ {{ criteriaCoverageGap.length }} criterio{{ criteriaCoverageGap.length > 1 ? 's' : '' }} sin escenario: {{ criteriaCoverageGap.join(', ') }}. Revísalo{{ criteriaCoverageGap.length > 1 ? 's' : '' }} antes de añadir la HU al plan.
         </p>
 
         <!-- Acciones arriba de la tabla -->
@@ -511,7 +531,7 @@
         <div
           *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios"
           class="preview-table-container">
-          <h4>Casos de Prueba Generados (Previsualización)</h4>
+          <h4>Casos de Prueba Generados ({{ generatedHUData.detailedTestCases.length }})</h4>
           <table class="detailed-test-cases-table preview-only-table">
             <thead>
               <tr>

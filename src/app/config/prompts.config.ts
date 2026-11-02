@@ -84,8 +84,14 @@ function buildNumberedCriteriaBlock(acceptanceCriteria: string = '', codeContext
 CRITERIOS NUMERADOS — MÍNIMO UN CASO PROPIO POR CRITERIO (obligatorio, prevalece sobre las reglas de agrupación):
 1. Los criterios ya vienen interpretados y numerados (${ids[0]} a ${ids[ids.length - 1]}): son exactamente ${ids.length}. Genera un caso propio por cada uno, en el mismo orden. El caso propio de un CA lo lista primero en "coveredCriteria", y sus pasos lo ejercitan con los datos de su pantalla u opción.
 2. Un caso puede verificar además otro CA como apoyo (listado después), pero nunca reemplaza el caso propio de ese CA.
-3. Las líneas "Opciones" se recorren dentro del caso de su CA; "Resumen", "Interpretación" y "Definición" no son criterios y no generan casos. Las "Definición" explican qué es cada término y cómo se origina: úsalas para preparar los datos por el camino real.
+3. Las líneas "Opciones" se recorren dentro del caso de su CA; "Resumen", "Interpretación" y "Definición" no son criterios y no generan casos propios. Las "Definición" explican qué es cada término y cómo se origina: úsalas para preparar los datos por el camino real.
 3b. Si las Opciones de un CA marcan qué aplica y qué no (p. ej. "fila → ninguna (no aplica)" o una parte que no aparece), el caso de ese CA verifica lo que aplica (registro A) y al menos una combinación que NO aplica (registro B), elegida entre las que el código podría confundir, con resultado esperado "no se aplica / no se bloquea".
+3c. Una línea "Interpretación" es una duda (vacío) del criterio de arriba y se cubre DENTRO del caso propio de ese CA; una duda nunca genera un caso adicional:
+   - Si "Cobertura de criterios en el código" trae para ese CA "Duda resuelta por el código: …", el caso usa ese comportamiento (valor, mensaje o condición literal) y preconditions inicia con "⚠ Duda del criterio resuelta con el código: <respuesta>; confirmar con el funcional."
+   - Si trae "Duda sin respuesta en el código" o no hay contexto técnico, el caso prueba las alternativas de la duda como registros etiquetados en la misma ejecución (p. ej. registro A: solo un campo diligenciado; registro B: todos), el resultado esperado de cada alternativa no resuelta es "registrar el comportamiento observado" (nunca inventes cuál es el correcto) y preconditions inicia con "⚠ Duda sin resolver: <duda>; confirmar con el funcional."
+   - Si la duda es de formato o texto (p. ej. decimales de un patrón que no coincide con su ejemplo), verifica lo que el criterio fija sin ambigüedad y deja la parte dudosa como observación a registrar, con la misma ⚠.
+   - Si el caso ya lleva otra advertencia ⚠ (estado del código), la de la duda va a continuación, en la misma línea.
+   - Autochequeo: cada CA con "Interpretación" tiene su ⚠ de duda y ningún caso existe solo para una duda.
 4. Negativos, alternos y bordes van dentro del caso de su CA (registros etiquetados que deben incluirse y excluirse, valor en el límite y fuera de él). Un CA tiene un caso adicional solo si su resultado alterno exige otra ejecución (p. ej. un formulario que rechaza y otro que acepta, o un mensaje de error).${behaviors.length ? `
 5. Comportamientos (CAMBIO HU) que el código agrega y ningún criterio cubre: ${behaviors.join(', ')}. Cada uno debe aparecer en algún "coveredCriteria": dentro del caso de un CA con el mismo disparo (listado después del CA, con su registro etiquetado y su resultado esperado) o en un caso propio si es un riesgo de regresión que necesita otro disparo u otros datos (respeta el límite de casos propios de RT). Los (EXISTENTE) nunca generan casos.` : ''}
 `;
@@ -499,15 +505,11 @@ VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 
 PRESUPUESTO DE SALIDA — OBLIGATORIO:
 1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
-2. Antes de escribir, estima cuántos casos caben y prioriza en este orden:
-   a) Reglas de negocio y validaciones con resultado observable.
-   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
-   c) Flujos alternos, errores y recuperación.
-   d) Navegación, textos informativos y verificaciones cosméticas.
-3. Si no caben todos los casos, agrupa reglas afines de la misma prioridad en un caso combinado antes que omitirlas.
-4. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
-5. Si tuviste que agrupar u omitir cobertura por espacio, indícalo brevemente al final de "scope".
-6. Sé conciso en title, preconditions y expectedResults; la exhaustividad va en la cobertura, no en la redacción.
+2. La cobertura NO se recorta para ahorrar espacio: si los criterios vienen numerados (CA-xx), cada uno conserva su caso propio, también los últimos de la lista. Para que quepan, recorta la redacción, nunca los casos.
+3. Antes de escribir, estima el espacio. Si es justo, en este orden: acorta title, preconditions y expectedResults; usa 3 pasos en los casos simples; quita casos adicionales de negativos, alternos o bordes (llévalos como registro etiquetado dentro del caso de su CA). Nunca elimines el caso propio de un CA.
+4. Solo si los criterios NO vienen numerados y aun así no cabe todo, agrupa reglas afines en un caso combinado antes que omitirlas, priorizando: a) reglas de negocio y validaciones con resultado observable; b) datos, formatos, límites y habilitación; c) alternos, errores y recuperación; d) navegación y textos cosméticos.
+5. Nunca dejes un caso a medias: termina cada caso y cierra el JSON.
+6. Si tuviste que agrupar cobertura por espacio, indícalo brevemente al final de "scope". En "scope" no cuentes criterios: descríbelos.
 
 TRAZABILIDAD — OBLIGATORIA:
 1. Usa los identificadores CA-01, CA-02, ... asignados en la normalización interna.
@@ -518,6 +520,7 @@ TRAZABILIDAD — OBLIGATORIA:
 6. Todo criterio de "criteriaMap" debe aparecer al menos una vez en algún "coveredCriteria", salvo que no sea comprobable.
 
 REGLAS DE CALIDAD:
+- Si el CA de un caso trae una línea "Interpretación" (duda del funcional), preconditions de ese caso INICIA con "⚠ Duda sin resolver: <duda en pocas palabras>; confirmar con el funcional." (o "⚠ Duda del criterio resuelta con el código: …" si el contexto técnico la resolvió), también en el modo solo criterios. Sin esa línea, el caso está incompleto.
 - Título claro, sin identificadores técnicos como TC_001.
 - Entre 3 y 7 pasos: los de preparación de datos cuentan, porque son los que más cuestan al ejecutor.
 - Pasos concretos, ejecutables y ordenados.
