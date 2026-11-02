@@ -15,6 +15,8 @@ export interface DeepSeekRequest {
     temperature?: number;
     max_tokens?: number;
     stream?: boolean;
+    /** Con stream: pide el uso de tokens en el último evento (para diagnóstico). */
+    stream_options?: { include_usage: boolean };
     response_format?: {
         type: 'json_object' | 'text';
     };
@@ -163,6 +165,8 @@ export class DeepSeekClientService {
                 let buffer = '';
                 let receivedAnyToken = false;
                 let streamError: string | null = null;
+                let finishReason = '';
+                let usageInfo = '';
 
                 const processLine = (line: string) => {
                     if (!line.startsWith('data: ')) return;
@@ -176,6 +180,10 @@ export class DeepSeekClientService {
                         if (parsed?.error) {
                             streamError = parsed?.message || parsed?.error?.message || 'Error del proveedor durante el stream';
                             return;
+                        }
+                        if (parsed?.choices?.[0]?.finish_reason) finishReason = parsed.choices[0].finish_reason;
+                        if (parsed?.usage?.completion_tokens != null) {
+                            usageInfo = `prompt=${parsed.usage.prompt_tokens} completion=${parsed.usage.completion_tokens}`;
                         }
                         const delta = parsed?.choices?.[0]?.delta;
                         if (!delta) return;
@@ -214,7 +222,10 @@ export class DeepSeekClientService {
                     }
                     // Procesar resto del buffer si quedó algo
                     if (buffer.trim()) processLine(buffer.trim());
-                    console.log(`[DeepSeek Stream] Stream completado. reasoning: ${accReasoning.length} chars, content: ${accContent.length} chars`);
+                    console.log(`[DeepSeek Stream] Stream completado. reasoning: ${accReasoning.length} chars, content: ${accContent.length} chars, finish_reason=${finishReason || 'n/d'}${usageInfo ? `, tokens ${usageInfo}` : ''}, max_tokens=${payload.max_tokens}`);
+                    if (finishReason === 'length') {
+                        console.warn('[DeepSeek Stream] La respuesta alcanzó max_tokens: puede estar incompleta.');
+                    }
                 } catch (err) {
                     this.ngZone.run(() => observer.error(err));
                     return;

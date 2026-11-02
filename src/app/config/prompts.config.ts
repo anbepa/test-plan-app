@@ -499,15 +499,11 @@ VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 
 PRESUPUESTO DE SALIDA — OBLIGATORIO:
 1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
-2. Antes de escribir, estima cuántos casos caben y prioriza en este orden:
-   a) Reglas de negocio y validaciones con resultado observable.
-   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
-   c) Flujos alternos, errores y recuperación.
-   d) Navegación, textos informativos y verificaciones cosméticas.
-3. Si no caben todos los casos, agrupa reglas afines de la misma prioridad en un caso combinado antes que omitirlas.
-4. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
-5. Si tuviste que agrupar u omitir cobertura por espacio, indícalo brevemente al final de "scope".
-6. Sé conciso en title, preconditions y expectedResults; la exhaustividad va en la cobertura, no en la redacción.
+2. La cobertura NO se recorta para ahorrar espacio: si los criterios vienen numerados (CA-xx), cada uno conserva su caso propio, también los últimos de la lista. Para que quepan, recorta la redacción, nunca los casos.
+3. Antes de escribir, estima el espacio. Si es justo, en este orden: acorta title, preconditions y expectedResults; usa 3 pasos en los casos simples; quita casos adicionales de negativos, alternos o bordes (llévalos como registro etiquetado dentro del caso de su CA). Nunca elimines el caso propio de un CA.
+4. Solo si los criterios NO vienen numerados y aun así no cabe todo, agrupa reglas afines en un caso combinado antes que omitirlas, priorizando: a) reglas de negocio y validaciones con resultado observable; b) datos, formatos, límites y habilitación; c) alternos, errores y recuperación; d) navegación y textos cosméticos.
+5. Nunca dejes un caso a medias: termina cada caso y cierra el JSON.
+6. Si tuviste que agrupar cobertura por espacio, indícalo brevemente al final de "scope". En "scope" no cuentes criterios: descríbelos.
 
 TRAZABILIDAD — OBLIGATORIA:
 1. Usa los identificadores CA-01, CA-02, ... asignados en la normalización interna.
