@@ -1,4 +1,4 @@
-import { buildCriteriaContext, judgeFacts, mergeJudgeVotes, reconcileChangeLabels, recipeLines, replaceSection, validateEquivalences } from './code-agent-runner';
+import { buildCriteriaContext, codeLayer, isFrontScreenFile, pickPreloadedDiffs, judgeFacts, mergeJudgeVotes, reconcileChangeLabels, recipeLines, replaceSection, validateEquivalences } from './code-agent-runner';
 
 describe('reconcileChangeLabels', () => {
   const changedPaths = ['/domain/usecase/ReportUseCase.java'];
@@ -167,5 +167,48 @@ describe('receta de datos', () => {
     const withoutRecipe = '## Flujo de ejecución real\n- Disparo: x\n\n## Reglas del código\n- [RT-01] r';
     expect(replaceSection(withoutRecipe, 'Receta de datos', '- Dato: a | b')).toBe('## Flujo de ejecución real\n- Disparo: x\n\n## Receta de datos\n- Dato: a | b\n\n## Reglas del código\n- [RT-01] r');
     expect(replaceSection(context, 'Receta de datos', '')).toBe(context);
+  });
+});
+
+describe('capas de los cambios de la HU', () => {
+  it('clasifica pantalla, servicios y base de datos', () => {
+    expect(codeLayer('src/app/maintenance/commission-maintenance.html', 'APP_Front')).toBe('front');
+    expect(codeLayer('src/app/maintenance/commission-maintenance.ts', 'APP_Front')).toBe('front');
+    expect(codeLayer('src/app/app.routes.ts', 'APP_ms_x')).toBe('front');
+    expect(codeLayer('domain/usecase/CreateUseCase.java', 'APP_ms_maintenance')).toBe('back');
+    expect(codeLayer('scripts/20261015_alter_tbl.sql', 'APP_SQL')).toBe('bd');
+  });
+
+  it('reconoce los archivos de pantalla y excluye sus pruebas', () => {
+    expect(isFrontScreenFile('src/app/x/commission-maintenance.html')).toBeTrue();
+    expect(isFrontScreenFile('src/app/x/filters.component.ts')).toBeTrue();
+    expect(isFrontScreenFile('src/app/x/filters.component.spec.ts')).toBeFalse();
+    expect(isFrontScreenFile('src/app/x/maintenance.service.ts')).toBeFalse();
+  });
+
+  it('el back grande no deja fuera la pantalla ni la BD al precargar', () => {
+    const items = [
+      { layer: 'back' as const, size: 9000 }, { layer: 'back' as const, size: 9000 },
+      { layer: 'back' as const, size: 9000 }, { layer: 'back' as const, size: 9000 },
+      { layer: 'front' as const, size: 5000 }, { layer: 'bd' as const, size: 1000 },
+    ];
+    const picked = pickPreloadedDiffs(items, 28000);
+    expect(picked.has(4)).toBeTrue();
+    expect(picked.has(5)).toBeTrue();
+    const total = [...picked].reduce((sum, index) => sum + items[index].size, 0);
+    expect(total).toBeLessThanOrEqual(28000);
+  });
+
+  it('con una sola capa usa todo el presupuesto en el orden recibido', () => {
+    const picked = pickPreloadedDiffs([{ layer: 'back', size: 10000 }, { layer: 'back', size: 10000 }, { layer: 'back', size: 10000 }], 28000);
+    expect([...picked]).toEqual([0, 1]);
+  });
+});
+
+describe('pantallas sin sufijo .component', () => {
+  it('el .ts cuyo .html hermano cambió es la pantalla', () => {
+    const changed = new Set(['src/app/x/commission-maintenance.html', 'src/app/x/commission-maintenance.ts', 'src/app/x/maintenance.service.ts']);
+    expect(isFrontScreenFile('src/app/x/commission-maintenance.ts', changed)).toBeTrue();
+    expect(isFrontScreenFile('src/app/x/maintenance.service.ts', changed)).toBeFalse();
   });
 });

@@ -123,8 +123,9 @@ ESTRATEGIA:
 ${source === 'changeset'
     ? `1. Ya recibiste los DIFFS de los PRs/commits vinculados a la HU: son exactamente lo que se construyó para ella y tu fuente principal. Analízalos primero, sin herramientas.
 2. Usa read_files SOLO si necesitas contexto que el diff no muestra y que cambia el análisis (p. ej. de dónde sale un parámetro, quién invoca el método, qué hace una constante, el job/malla que lo ejecuta). Usa diff_file para archivos "no precargados" relevantes.
+2b. Capas: la HU puede cambiar pantalla (capa front), servicios (capa back) y base de datos (capa bd); cada archivo indica su capa. Revisa cada capa cambiada. Si cambió la capa front, revisa sus "ARCHIVOS DE PANTALLA DE LA HU" (diff_file si no vienen precargados): vista (.html), componente y rutas/menú. De ahí salen los pasos E2E: ruta de navegación (rutas/menú), títulos y subtítulos, etiquetas de campos, selectores y sus opciones, botones y cuándo se habilitan, mensajes exactos, formatos de valores, columnas de tablas, pop-ups y validaciones de pantalla. Una pantalla nueva de la HU solo existe en estos cambios: search_app busca en la rama principal y no la encontrará.
 3. Usa search_code solo para criterios que no aparezcan en los cambios (pueden estar en código existente o en otro componente).
-4. Si con los diffs ya tienes el código de todos los criterios, llama a finish DE INMEDIATO: cada paso extra cuesta tiempo y tokens.`
+4. Llama a finish en cuanto tengas el código de todos los criterios Y hayas revisado cada capa que cambió la HU (en front, sus archivos de pantalla): cada paso extra cuesta tiempo y tokens.`
     : source === 'branch-diff'
       ? `1. La rama tiene cambios propios respecto a su base: ESOS cambios son la implementación de la HU. Empieza revisándolos con diff_file (prioriza controladores, servicios, casos de uso, adaptadores, consultas y DTOs; luego pruebas unitarias).
 2. Si la lista es enorme, la rama incluye trabajo ajeno: prioriza archivos cuyo nombre coincide con el vocabulario de la HU.
@@ -242,6 +243,11 @@ ${acceptanceCriteria.trim()}
 
 HECHOS EXTRAÍDOS DEL CÓDIGO:
 ${facts}`,
+
+  /** Recordatorio (una vez) si el agente intenta terminar sin revisar la pantalla que cambió la HU. */
+  FRONT_PENDING: (paths: string[]): string => `Aún no terminas: la HU cambió la capa front y no revisaste estos archivos de pantalla:
+${paths.slice(0, 8).map((path) => `- ${path}`).join('\n')}
+Revísalos con diff_file (una llamada por archivo; puedes hacer varias en el mismo paso, indicando el repo) y completa en el contexto técnico: "Disparo" con la ruta de navegación real (menú y opción), y para los criterios de pantalla la evidencia literal (títulos, etiquetas, botones y su habilitación, mensajes, formatos, columnas, pop-ups). Luego llama a finish.`,
 
   FORCE_FINISH: `
 Se agotó el presupuesto de exploración. Llama AHORA a finish con el contexto técnico usando solo la evidencia ya leída. Lo que no alcanzaste a verificar anótalo en "Búsquedas sin resultado" (o como no verificable). No llames otras herramientas.`,
