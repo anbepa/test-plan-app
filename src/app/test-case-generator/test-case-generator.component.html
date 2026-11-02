@@ -369,7 +369,10 @@
                 <div class="coverage-editor-title">
                   <span>Cobertura de criterios en el código</span>
                   <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
-                    <span *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css">{{ item.label }}: {{ item.count }}</span>
+                    <button type="button" *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css"
+                      [class.is-selected]="coverageFilter === item.key" [attr.aria-pressed]="coverageFilter === item.key"
+                      (click)="toggleCoverageFilter(item.key)" [title]="coverageFilter === item.key ? 'Mostrar todos' : 'Mostrar solo ' + item.label.toLowerCase()">{{ item.label }}: {{ item.count }}</button>
+                    <button *ngIf="coverageFilter" type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
                   </div>
                 </div>
                 <p class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</p>
@@ -377,7 +380,7 @@
                   <table class="md-table coverage-table">
                     <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
                     <tbody>
-                      <tr *ngFor="let row of codeCoverageRows; trackBy: trackCoverageRow">
+                      <tr *ngFor="let row of visibleCoverageRows; trackBy: trackCoverageRow">
                         <td class="md-id">{{ row.id }}</td>
                         <td>{{ row.criterion }}</td>
                         <td>
@@ -387,7 +390,7 @@
                             <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
                           </select>
                         </td>
-                        <td class="coverage-detail">{{ row.detail }}</td>
+                        <td class="coverage-detail"><ng-container *ngFor="let part of row.detailParts"><code *ngIf="part.code">{{ part.text }}</code><ng-container *ngIf="!part.code">{{ part.text }}</ng-container></ng-container></td>
                       </tr>
                     </tbody>
                   </table>

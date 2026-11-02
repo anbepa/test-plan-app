@@ -2042,3 +2042,60 @@ textarea.form-control.auto-grow {
     font-weight: 600;
     text-decoration: underline;
 }
+
+/* === Cobertura: resúmenes como filtros y código legible === */
+button.code-coverage-chip {
+  min-height: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+button.code-coverage-chip.is-selected {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.coverage-filter-clear {
+  font-size: 0.8rem;
+}
+
+.coverage-detail code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+  overflow-wrap: anywhere;
+}
+
+/* Móvil: cada criterio de la cobertura como bloque (CA + criterio, estado, detalle) */
+@media (max-width: 600px) {
+  .coverage-table thead {
+    display: none;
+  }
+
+  .coverage-table,
+  .coverage-table tbody {
+    display: block;
+  }
+
+  .coverage-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .coverage-table td {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+    min-width: 0;
+  }
+
+  .coverage-table td:nth-child(3),
+  .coverage-table td:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+}

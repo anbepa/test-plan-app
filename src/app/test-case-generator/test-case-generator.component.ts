@@ -23,6 +23,8 @@ interface CoverageRow {
   id: string;
   criterion: string;
   status: CriterionCodeStatus;
+  /** Detalle partido en texto y `código` para mostrarlo sin las comillas invertidas. */
+  detailParts: { text: string; code: boolean }[];
   detail: string;
 }
 import { MarkdownLitePipe } from '../shared/pipes/markdown-lite.pipe';
@@ -420,7 +422,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   /** Conteo de estados por criterio a partir de la matriz de cobertura del contexto técnico. */
-  get codeCoverageSummary(): { label: string; count: number; css: string }[] {
+  get codeCoverageSummary(): { key: CriterionCodeStatus; label: string; count: number; css: string }[] {
     if (!this.codeContextText || this.contextSource !== 'criteria-code') return [];
     const statuses = [
       { key: 'IMPLEMENTADO', label: 'Implementados', css: 'is-ok' },
@@ -431,6 +433,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     const lines = this.codeContextText.split('\n').filter((line) => /\[CA-\d+\]/.test(line));
     return statuses
       .map((status) => ({
+        key: status.key as CriterionCodeStatus,
         label: status.label,
         css: status.css,
         count: lines.filter((line) => new RegExp(`→\\s*${status.key}\\b`, 'i').test(line)).length
@@ -448,7 +451,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         const match = line.match(/^\s*[-*]\s*\[(CA-\d+)\]\s*"?(.*?)"?\s*→\s*(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)\b\.?\s*(.*)$/i);
         if (!match) return null;
         const detail = match[4].replace(/^Detalle:\s*/i, '').replace(/\s*\(?\bFuentes?:.*$/i, '').trim();
-        return { id: match[1], criterion: match[2], status: match[3].toUpperCase() as CriterionCodeStatus, detail };
+        const detailParts = detail.split(/(`[^`]+`)/).filter(Boolean)
+          .map((part) => part.startsWith('`') && part.endsWith('`') && part.length > 1
+            ? { text: part.slice(1, -1), code: true }
+            : { text: part, code: false });
+        return { id: match[1], criterion: match[2], status: match[3].toUpperCase() as CriterionCodeStatus, detail, detailParts };
       }).filter((row): row is CoverageRow => !!row);
       this.coverageCache = { text: this.codeContextText, rows };
     }
@@ -459,6 +466,18 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   setCoverageStatus(id: string, status: CriterionCodeStatus): void {
     const pattern = new RegExp(`(\\[${id}\\][^\\n]*?→\\s*)(IMPLEMENTADO|PARCIAL|DIFERENTE|SIN EVIDENCIA)`, 'i');
     this.codeContextText = this.codeContextText.replace(pattern, `$1${status}`);
+  }
+
+  /** Filtro de la tabla de cobertura (clic en un resumen); null = todos. */
+  coverageFilter: CriterionCodeStatus | null = null;
+
+  toggleCoverageFilter(status: CriterionCodeStatus): void {
+    this.coverageFilter = this.coverageFilter === status ? null : status;
+  }
+
+  get visibleCoverageRows(): CoverageRow[] {
+    const rows = this.codeCoverageRows;
+    return this.coverageFilter ? rows.filter((row) => row.status === this.coverageFilter) : rows;
   }
 
   trackCoverageRow(_: number, row: CoverageRow): string {
@@ -1598,6 +1617,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.componentState = 'previewingGenerated';
     this.cdr.detectChanges();
   }
+
 
   // Handlers para el nuevo componente TestCaseEditor
   handleRefineWithAI(event: { technique: string; context: string }): void {

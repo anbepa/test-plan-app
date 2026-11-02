@@ -275,7 +275,7 @@ button:disabled,
   .copy-btn,
   .copy-field-btn,
   .button-icon,
-  .btn-icon,
+  .btn-icon:not(svg),
   .step-btn,
   .button-save-individual,
   .row-actions-item,
@@ -311,7 +311,7 @@ button:disabled,
   .copy-btn,
   .copy-field-btn,
   .button-icon,
-  .btn-icon,
+  .btn-icon:not(svg),
   .step-btn,
   .button-save-individual,
   .row-actions-item,
@@ -427,7 +427,7 @@ button:disabled,
   transform: translateY(-1px);
 }
 
-:where(.copy-btn, .copy-field-btn, .button-icon, .btn-icon, .step-btn, .toast-action, .onboarding-skip) {
+:where(.copy-btn, .copy-field-btn, .button-icon, .btn-icon:not(svg), .step-btn, .toast-action, .onboarding-skip) {
   min-height: 38px !important;
   padding: 0.5rem 0.85rem !important;
   font-size: 0.8125rem !important;
