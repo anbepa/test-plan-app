@@ -108,6 +108,7 @@
                 </div>
                 <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
                   {{ azureImportErrorMessage }}
+                  <a *ngIf="isPatError(azureImportErrorMessage)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
                 </div>
                 <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
                   {{ azureNodeNameWarning }}
@@ -309,7 +310,10 @@
               </div>
               <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
                 {{ codeTargetError }}
-                <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+                <span class="import-error-actions">
+                  <a *ngIf="isPatError(codeTargetError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+                  <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
+                </span>
               </div>
           </div>
         </section>
@@ -321,7 +325,7 @@
             <p *ngIf="isCodeContextStale" class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
             <p *ngIf="!isCodeTargetReady && !codeContextText" class="flow-lock-hint">Completa el paso {{ flowStep('code').num }} para poder explorar el código.</p>
             <div class="code-agent-bar">
-              <p *ngIf="!codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
+              <p *ngIf="isCodeTargetReady && !codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
                 <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
                   Contrasta cada criterio con el código: Implementado, Parcial, Diferente o Sin evidencia.
                 </ng-container>
@@ -357,7 +361,8 @@
               <li *ngFor="let line of codeAgentLog">{{ line }}</li>
             </ul>
 
-            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}</div>
+            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}
+              <a *ngIf="isPatError(codeAgentError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a></div>
 
             <ng-container *ngIf="codeContextText">
               <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">

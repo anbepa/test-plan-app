@@ -2010,3 +2010,35 @@ textarea.form-control.auto-grow {
         padding-left: 1.2rem;
     }
 }
+
+/* === Errores de Azure DevOps: acciones dentro del aviso === */
+.import-error-link {
+    display: inline-block;
+    margin-top: 6px;
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.import-error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin-top: 6px;
+}
+
+.import-error-actions .import-error-link {
+    margin-top: 0;
+}
+
+.import-error .code-link-btn {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    color: #1d4ed8;
+    font-weight: 600;
+    text-decoration: underline;
+}

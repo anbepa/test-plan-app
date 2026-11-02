@@ -1,3 +1,4 @@
+import { RouterLink } from '@angular/router';
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
@@ -59,7 +60,7 @@ const COLLAPSIBLE_STEPS: FlowStepId[] = ['hu', 'criteria', 'code'];
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe],
+  imports: [FormsModule, CommonModule, RouterLink, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })
@@ -215,6 +216,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     if (this.loadingScope || this.loadingScenarios) return 'Generando…';
     if (this.usesCodeContext && !this.codeContextText.trim()) return 'Explorar código y generar casos';
     return 'Generar casos de prueba';
+  }
+
+  /** Errores que se arreglan actualizando el PAT de Azure DevOps en Configuración. */
+  isPatError(message: string | null | undefined): boolean {
+    return !!message && /\bPAT\b/.test(message);
   }
 
   scrollToFlowStep(id: FlowStepId): void {

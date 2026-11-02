@@ -834,6 +834,10 @@ textarea::placeholder {
 }
 
 .md-toggle button {
+  /* Anula el alto/sombra globales de botón: es un control segmentado compacto */
+  min-height: 28px;
+  border-radius: 0;
+  box-shadow: none;
   padding: 0.2rem 0.75rem;
   border: 0;
   background: #ffffff;
