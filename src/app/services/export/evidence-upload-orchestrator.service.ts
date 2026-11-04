@@ -21,7 +21,7 @@ import { firstValueFrom } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 
 export interface EvidenceExtraFile {
-  /** Nombre del archivo dentro del ZIP, ej: "Ejecucion.docx" */
+  /** Nombre con el que se adjunta el archivo, ej: "Evidencia_7695070.docx" */
   name: string;
   /** Contenido en base64 (sin prefijo data:) */
   base64: string;
@@ -30,6 +30,21 @@ export interface EvidenceExtraFile {
 export interface EvidenceUploadOptions {
   formats: { serenity: boolean; docx: boolean; pdf: boolean; excel?: boolean };
   extraFiles: EvidenceExtraFile[];
+}
+
+/** Límite de tamaño por adjunto de Azure DevOps Services. */
+export const AZURE_ATTACHMENT_MAX_BYTES = 60 * 1024 * 1024;
+
+/** Tipo MIME según la extensión del archivo de evidencia. */
+export function mimeTypeFor(fileName: string): string {
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  switch (ext) {
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'pdf': return 'application/pdf';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'zip': return 'application/zip';
+    default: return 'application/octet-stream';
+  }
 }
 
 @Injectable({
@@ -325,9 +340,8 @@ export class EvidenceUploadOrchestrator {
     }
 
     // ── Ruta DIRECTA a Azure DevOps (sin artifact Serenity) ──
-    // Cuando solo se suben DOCX/PDF generados en el cliente, evitamos el límite de
-    // body de Vercel (4.5MB) empaquetando el ZIP en el navegador y subiéndolo
-    // directamente a Azure DevOps, igual que la carga manual (soporta archivos grandes).
+    // Cuando solo se suben DOCX/PDF/XLSX generados en el cliente, cada archivo se
+    // sube en su formato directamente a Azure DevOps (evita el límite de 4.5MB de Vercel).
     if (!this.currentArtifactUrl && extraFiles && extraFiles.length > 0) {
       await this.uploadExtraFilesDirectToAzure(extraFiles);
       return;
@@ -372,99 +386,88 @@ export class EvidenceUploadOrchestrator {
   }
 
   /**
-   * Empaqueta los archivos extra (DOCX/PDF) en un ZIP en el cliente y lo sube
-   * DIRECTAMENTE a Azure DevOps, evitando el límite de 4.5MB de Vercel.
+   * Sube cada archivo extra (DOCX/PDF/XLSX) EN SU FORMATO, como un adjunto
+   * independiente, DIRECTAMENTE a Azure DevOps (sin pasar por Vercel, evita
+   * su límite de 4.5MB) y lo vincula al plan. El .zip queda solo para Serenity:
+   * comprimir un .docx no reduce su tamaño (ya es un zip) y un PDF baja ~20%.
    */
   private async uploadExtraFilesDirectToAzure(extraFiles: EvidenceExtraFile[]): Promise<void> {
     const plan = this.currentValidatedPlan!;
-    const fileName = this.currentFileName || 'Evidencia.zip';
 
-    // 1) Empaquetar en ZIP en el navegador
-    this.setState(EvidenceUploadState.COMPRESSING_EVIDENCE, 'Empaquetando evidencias...');
+    const files = extraFiles
+      .map((f) => ({ name: (f?.name || '').trim(), base64: (f?.base64 || '').trim() }))
+      .filter((f) => f.name && f.base64)
+      .map((f) => ({ name: f.name, blob: this.base64ToBlob(f.base64, mimeTypeFor(f.name)) }));
 
-    const filesMap = new Map<string, Blob>();
-    for (const f of extraFiles) {
-      const name = (f?.name || '').trim();
-      const base64 = (f?.base64 || '').trim();
-      if (!name || !base64) continue;
-      filesMap.set(name, this.base64ToBlob(base64));
-    }
-
-    if (filesMap.size === 0) {
+    if (files.length === 0) {
       throw new Error('No hay archivos válidos para cargar');
     }
 
-    const compression = await this.compressionService.compressFiles(
-      filesMap,
-      fileName,
-      (progress) => {
-        this.updateProgress(p => ({
-          ...p,
-          state: EvidenceUploadState.COMPRESSING_EVIDENCE,
-          compressionProgress: progress
-        }));
-      }
-    );
-
-    // 2) Obtener configuración de carga directa (payload pequeño ~100 bytes)
-    this.setState(EvidenceUploadState.UPLOADING_ATTACHMENT, 'Subiendo evidencias a Azure DevOps...');
+    // Azure DevOps Services rechaza adjuntos de más de 60 MB: se avisa antes de subir nada.
+    const tooBig = files.filter((f) => f.blob.size > AZURE_ATTACHMENT_MAX_BYTES);
+    if (tooBig.length) {
+      const list = tooBig.map((f) => `${f.name} (${(f.blob.size / 1048576).toFixed(1)} MB)`).join(', ');
+      throw new Error(`Azure DevOps admite adjuntos de hasta 60 MB y estos archivos lo superan: ${list}. Reduce las evidencias o descárgalo y compártelo por otro medio.`);
+    }
 
     const headers = await this.buildAuthHeaders();
-    const configParams = new URLSearchParams({
-      workItemId: plan.planId,
-      action: 'get-upload-config',
-      projectId: plan.projectId || '',
-      areaPath: plan.areaPath || '',
-      fileName: compression.fileName
-    });
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const position = files.length > 1 ? ` (${i + 1} de ${files.length})` : '';
+      this.setState(EvidenceUploadState.UPLOADING_ATTACHMENT, `Subiendo ${file.name} a Azure DevOps${position}...`);
 
-    const uploadConfig = await firstValueFrom(
-      this.http.get<{ uploadUrl: string; authHeader: string; organization: string }>(
-        `${this.baseUrl}/work-items?${configParams.toString()}`,
-        { headers }
-      )
-    );
-
-    if (!uploadConfig?.uploadUrl || !uploadConfig?.authHeader) {
-      throw new Error('No se pudo obtener la configuración de carga de Azure DevOps');
-    }
-
-    // 3) Subir el ZIP binario DIRECTAMENTE a Azure DevOps (sin pasar por Vercel)
-    const uploadResponse = await fetch(uploadConfig.uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': uploadConfig.authHeader,
-        'Content-Type': 'application/octet-stream',
-        'Accept': 'application/json'
-      },
-      body: compression.zipBlob
-    });
-
-    if (!uploadResponse.ok) {
-      const errText = await uploadResponse.text().catch(() => '');
-      if (uploadResponse.status === 401 || uploadResponse.status === 403) {
-        throw new Error('No autorizado para subir archivos a Azure DevOps. Verifica el PAT.');
+      // 1) Configuración de carga directa (payload pequeño ~100 bytes)
+      const configParams = new URLSearchParams({
+        workItemId: plan.planId,
+        action: 'get-upload-config',
+        projectId: plan.projectId || '',
+        areaPath: plan.areaPath || '',
+        fileName: file.name
+      });
+      const uploadConfig = await firstValueFrom(
+        this.http.get<{ uploadUrl: string; authHeader: string; organization: string }>(
+          `${this.baseUrl}/work-items?${configParams.toString()}`,
+          { headers }
+        )
+      );
+      if (!uploadConfig?.uploadUrl || !uploadConfig?.authHeader) {
+        throw new Error('No se pudo obtener la configuración de carga de Azure DevOps');
       }
-      throw new Error(`Azure DevOps rechazó la carga (${uploadResponse.status}): ${errText}`);
+
+      // 2) Subir el archivo binario DIRECTAMENTE a Azure DevOps (sin pasar por Vercel)
+      const uploadResponse = await fetch(uploadConfig.uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': uploadConfig.authHeader,
+          'Content-Type': 'application/octet-stream',
+          'Accept': 'application/json'
+        },
+        body: file.blob
+      });
+      if (!uploadResponse.ok) {
+        const errText = await uploadResponse.text().catch(() => '');
+        if (uploadResponse.status === 401 || uploadResponse.status === 403) {
+          throw new Error('No autorizado para subir archivos a Azure DevOps. Verifica el PAT.');
+        }
+        throw new Error(`Azure DevOps rechazó la carga de ${file.name} (${uploadResponse.status}): ${errText}`);
+      }
+      const attachment = await uploadResponse.json();
+      if (!attachment?.url) {
+        throw new Error(`Azure DevOps no devolvió la URL del adjunto ${file.name}`);
+      }
+
+      this.currentAttachmentId = attachment.id;
+      this.currentAttachmentUrl = attachment.url;
+      this.updateProgress(p => ({
+        ...p,
+        state: EvidenceUploadState.LINKING_ATTACHMENT,
+        attachmentUrl: attachment.url,
+        attachmentId: attachment.id
+      }));
+
+      // 3) Vincular este adjunto al plan
+      await this.step5LinkAttachment();
     }
-
-    const attachment = await uploadResponse.json();
-    if (!attachment?.url) {
-      throw new Error('Azure DevOps no devolvió la URL del adjunto cargado');
-    }
-
-    this.currentAttachmentId = attachment.id;
-    this.currentAttachmentUrl = attachment.url;
-
-    this.updateProgress(p => ({
-      ...p,
-      state: EvidenceUploadState.LINKING_ATTACHMENT,
-      attachmentUrl: attachment.url,
-      attachmentId: attachment.id
-    }));
-
-    // 4) Vincular el adjunto al plan
-    await this.step5LinkAttachment();
   }
 
   // ─────────────────────────────────────────
