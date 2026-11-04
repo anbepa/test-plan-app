@@ -180,7 +180,69 @@ async function triggerAzureRelease(
   return releaseId;
 }
 
+/** Ubica bucket y ruta de un objeto de Supabase Storage a partir de su URL (firmada, pública o autenticada). */
+export function parseStorageObjectUrl(url: string): { bucket: string; path: string } | null {
+  const match = String(url || '').match(/\/storage\/v1\/object\/(?:sign|public|authenticated)\/([^/?#]+)\/([^?#]+)/);
+  if (!match) return null;
+  return { bucket: decodeURIComponent(match[1]), path: decodeURIComponent(match[2]) };
+}
+
+/**
+ * GET ?action=sign&reportId=:id — Devuelve un enlace vigente al reporte Serenity.
+ * El enlace guardado lo firma el pipeline con 24 h de validez: pasado ese tiempo,
+ * descargar o cargar el reporte fallaba con "InvalidJWT" aunque siguiera "Completado".
+ * Aquí se vuelve a firmar con el cliente de servicio (la carpeta no es visible por RLS).
+ */
+async function handleSign(req: VercelRequest, res: VercelResponse) {
+  try {
+    const user = await getAuthenticatedUser(req.headers);
+    const reportId = String((req.query as Record<string, string>)['reportId'] || '').trim();
+    if (!reportId) {
+      return res.status(400).json({ error: 'Falta reportId.' });
+    }
+
+    const { adminClient } = getSupabaseClients();
+    const { data: row, error } = await adminClient
+      .from('serenity_report_results')
+      .select('id, user_id, artifact_download_url')
+      .eq('id', reportId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error || !row?.artifact_download_url) {
+      return res.status(404).json({ error: 'No se encontró el reporte Serenity.', code: 'REPORT_NOT_FOUND' });
+    }
+
+    const location = parseStorageObjectUrl(row.artifact_download_url);
+    if (!location) {
+      // No es un objeto de Supabase Storage: se devuelve tal cual.
+      return res.status(200).json({ url: row.artifact_download_url });
+    }
+
+    const { data: signed, error: signError } = await adminClient.storage
+      .from(location.bucket)
+      .createSignedUrl(location.path, 3600);
+
+    if (signError || !signed?.signedUrl) {
+      console.warn('[serenity-report-azure] No se pudo volver a firmar el reporte:', signError?.message);
+      return res.status(410).json({
+        error: 'El reporte Serenity ya no está disponible en el almacenamiento. Vuelve a generarlo.',
+        code: 'REPORT_GONE',
+      });
+    }
+
+    return res.status(200).json({ url: signed.signedUrl });
+  } catch (error: any) {
+    if (error instanceof ApiError) {
+      return res.status(error.status).json({ error: error.message });
+    }
+    console.error('[serenity-report-azure] Error al firmar el reporte:', error);
+    return res.status(500).json({ error: 'No fue posible obtener el enlace del reporte.' });
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET' && (req.query as Record<string, string>)['action'] === 'sign') return handleSign(req, res);
   if (req.method === 'GET') return handlePoll(req, res);
   if (req.method === 'POST') return handleStart(req, res);
   return res.status(405).json({ error: 'Method not allowed.' });

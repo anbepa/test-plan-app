@@ -326,7 +326,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.processingMessage = 'Cargando reporte Serenity...';
     try {
       const validated = this.up.validatedPlan!;
-      const blob = await this.fetchAsBlob(report.artifactDownloadUrl);
+      const blob = await this.fetchAsBlob(await this.serenityReportService.getFreshDownloadUrl(report));
       const base64 = await this.blobToBase64(blob);
       await this.azureEvidence.uploadAttachment(
         validated.planId,
@@ -416,7 +416,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
 
   private async fetchAsBlob(url: string): Promise<Blob> {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('No se pudo descargar el reporte');
+    if (!res.ok) throw new Error(`No se pudo descargar el reporte (HTTP ${res.status})`);
     return res.blob();
   }
 
