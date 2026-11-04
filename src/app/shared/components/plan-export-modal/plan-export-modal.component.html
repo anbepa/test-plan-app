@@ -1,130 +1,121 @@
-<div class="modal-overlay" (click)="closeIfClickOutside($event)">
-  <div class="modal-content plan-export-modal" role="dialog" aria-modal="true"
-    aria-labelledby="plan-export-title" [attr.aria-busy]="isBusy">
+<div class="pe-backdrop" (click)="closeIfClickOutside($event)">
+  <div class="pe-modal" role="dialog" aria-modal="true" aria-labelledby="plan-export-title" [attr.aria-busy]="isBusy">
 
-    <!-- Header -->
-    <div class="modal-header">
-      <div class="modal-heading">
-        <h2 id="plan-export-title">Gestionar Plan de Pruebas</h2>
-        <p class="modal-subtitle" *ngIf="testPlanTitle || huCount > 0">
-          <span class="modal-subtitle-text" *ngIf="testPlanTitle" [title]="testPlanTitle">{{ testPlanTitle }}</span>
-          <span class="meta-chip" *ngIf="huCount > 0">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }}</span>
-          <span class="meta-dot" *ngIf="huCount > 0 && scenarioCount > 0" aria-hidden="true">·</span>
-          <span class="meta-plain" *ngIf="scenarioCount > 0">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
-        </p>
+    <!-- Cabecera -->
+    <div class="pe-header">
+      <div class="pe-titlebar">
+        <div class="pe-heading">
+          <h3 id="plan-export-title">Gestionar plan de pruebas</h3>
+          <p class="pe-subtitle">Descarga el plan o envíalo a un plan de pruebas de Azure DevOps.</p>
+        </div>
+        <button class="close-btn" type="button" (click)="close()" [disabled]="isBusy" aria-label="Cerrar"
+          [title]="isBusy ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
-      <button class="btn-close" type="button" (click)="close()" [disabled]="isBusy" aria-label="Cerrar"
-        [title]="isBusy ? 'Espera a que finalice el proceso en curso' : 'Cerrar (Esc)'">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
     </div>
 
-    <!-- Pestañas -->
-    <div class="modal-tabs" role="tablist" aria-label="Acciones del plan de pruebas" (keydown)="onTabsKeydown($event)">
-      <button type="button" class="tab-btn" role="tab"
-        id="plan-tab-local" aria-controls="plan-panel-local"
-        [attr.aria-selected]="activeTab === 'local'"
-        [attr.tabindex]="activeTab === 'local' ? 0 : -1"
-        [class.active]="activeTab === 'local'"
-        (click)="selectTab('local')" [disabled]="isBusy">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        Exportar Local
-      </button>
-      <button type="button" class="tab-btn" role="tab"
-        id="plan-tab-azure" aria-controls="plan-panel-azure"
-        [attr.aria-selected]="activeTab === 'azure'"
-        [attr.tabindex]="activeTab === 'azure' ? 0 : -1"
-        [class.active]="activeTab === 'azure'"
-        (click)="selectTab('azure')" [disabled]="isBusy">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-          <line x1="12" y1="11" x2="12" y2="17"/>
-          <polyline points="9 14 12 11 15 14"/>
-        </svg>
-        Enviar a Azure DevOps
-      </button>
-      <span class="tab-indicator" [class.at-azure]="activeTab === 'azure'" aria-hidden="true"></span>
-    </div>
+    <div class="pe-body">
+      <!-- Plan que se exporta -->
+      <div class="plan-meta" *ngIf="testPlanTitle || huCount > 0">
+        <span class="plan-meta-title" *ngIf="testPlanTitle" [title]="testPlanTitle">{{ testPlanTitle }}</span>
+        <span class="plan-meta-chips">
+          <span class="meta-chip" *ngIf="huCount > 0">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }}</span>
+          <span class="meta-chip" *ngIf="scenarioCount > 0">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
+        </span>
+      </div>
 
-    <!-- Body -->
-    <div class="modal-body">
+      <!-- Plan de Azure ya validado (se recuerda entre envíos) -->
+      <div class="plan-chip" *ngIf="planValidated">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        <span class="plan-chip-text">Plan destino <strong>{{ validatedPlan?.planId }}</strong> · {{ validatedPlan?.planTitle }}</span>
+        <button type="button" class="plan-chip-change" (click)="resetValidation()" [disabled]="isBusy">Cambiar</button>
+      </div>
 
-      <!-- TAB 1: EXPORTACIÓN LOCAL -->
-      <div class="tab-content" *ngIf="activeTab === 'local'"
-        role="tabpanel" id="plan-panel-local" aria-labelledby="plan-tab-local">
-
-        <div class="dl-group">
-          <span class="dl-group-label">Descargar como</span>
-          <div class="dl-format-row" role="group" aria-label="Formato de descarga">
-
-            <!-- Copiar al portapapeles -->
-            <button type="button" class="dl-format-btn" (click)="copyToClipboard()"
-              [class.is-done]="copiedToClipboard"
-              [disabled]="!previewHtmlContent"
-              [title]="!previewHtmlContent ? 'No hay contenido de plan para copiar' : 'Copiar el plan al portapapeles'">
-              <span class="opt-icon opt-icon-clipboard" aria-hidden="true">
-                <svg *ngIf="!copiedToClipboard" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
-                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                </svg>
-                <svg *ngIf="copiedToClipboard" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              </span>
-              <span class="dl-format-name">{{ copiedToClipboard ? 'Copiado' : 'Copiar' }}</span>
-              <span class="dl-format-ext">Portapapeles</span>
-            </button>
-
-            <!-- Descargar PDF -->
-            <button type="button" class="dl-format-btn" (click)="downloadPdf()"
-              [disabled]="hasNoScenarios"
-              [title]="hasNoScenarios ? 'El plan no tiene escenarios para exportar' : 'Descargar la matriz de escenarios en PDF'">
-              <span class="opt-icon opt-icon-pdf" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="8" y1="13" x2="16" y2="13"/>
-                  <line x1="8" y1="17" x2="13" y2="17"/>
-                </svg>
-              </span>
-              <span class="dl-format-name">PDF</span>
-              <span class="dl-format-ext">.pdf</span>
-            </button>
-
-            <!-- Descargar DOCX -->
-            <button type="button" class="dl-format-btn" (click)="downloadDocx()"
+      <ul class="ev-list">
+        <!-- Word -->
+        <li class="ev-row">
+          <span class="format-icon word" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          </span>
+          <div class="ev-row-text">
+            <span class="format-name">Word</span>
+            <span class="ev-row-meta">.docx · Plan de pruebas completo</span>
+          </div>
+          <div class="ev-row-actions">
+            <button type="button" class="opt-btn" (click)="downloadDocx()"
               [class.is-loading]="wordExporter?.isExporting"
               [attr.aria-busy]="wordExporter?.isExporting"
-              [disabled]="wordExporter?.isExporting || huCount === 0"
+              [disabled]="wordExporter?.isExporting || huCount === 0 || isBusy"
               [title]="huCount === 0 ? 'El plan no tiene historias de usuario' : 'Descargar el plan completo en Word'">
-              <span class="opt-icon opt-icon-word" aria-hidden="true">
-                <span class="opt-spinner" *ngIf="wordExporter?.isExporting"></span>
-                <svg *ngIf="!wordExporter?.isExporting" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="8" y1="13" x2="16" y2="13"/>
-                  <line x1="8" y1="17" x2="16" y2="17"/>
-                </svg>
-              </span>
-              <span class="dl-format-name">Word</span>
-              <span class="dl-format-ext">.docx</span>
+              <span class="opt-spinner" *ngIf="wordExporter?.isExporting" aria-hidden="true"></span>
+              {{ wordExporter?.isExporting ? 'Generando…' : 'Descargar' }}
             </button>
-
           </div>
-        </div>
+        </li>
 
-        <!-- Aviso cuando no hay escenarios que exportar -->
-        <p class="empty-note" *ngIf="hasNoScenarios" role="status">
-          Aún no hay escenarios generados. La exportación de PDF no está disponible.
-        </p>
+        <!-- PDF -->
+        <li class="ev-row">
+          <span class="format-icon pdf" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+          </span>
+          <div class="ev-row-text">
+            <span class="format-name">PDF</span>
+            <span class="ev-row-meta">.pdf · Matriz de escenarios</span>
+          </div>
+          <div class="ev-row-actions">
+            <button type="button" class="opt-btn" (click)="downloadPdf()" [disabled]="hasNoScenarios || isBusy"
+              [title]="hasNoScenarios ? 'El plan no tiene escenarios para exportar' : 'Descargar la matriz de escenarios en PDF'">
+              Descargar
+            </button>
+          </div>
+        </li>
 
-      </div>
+        <!-- Portapapeles -->
+        <li class="ev-row">
+          <span class="format-icon clipboard" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+          </span>
+          <div class="ev-row-text">
+            <span class="format-name">Portapapeles</span>
+            <span class="ev-row-meta">Texto con formato para pegar en Word u otro editor</span>
+          </div>
+          <div class="ev-row-actions">
+            <button type="button" class="opt-btn" (click)="copyToClipboard()" [class.is-done]="copiedToClipboard"
+              [disabled]="!previewHtmlContent || isBusy"
+              [title]="!previewHtmlContent ? 'No hay contenido de plan para copiar' : 'Copiar el plan al portapapeles'">
+              <svg *ngIf="copiedToClipboard" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              {{ copiedToClipboard ? 'Copiado' : 'Copiar' }}
+            </button>
+          </div>
+        </li>
+
+        <!-- Azure DevOps -->
+        <li class="ev-row">
+          <span class="format-icon azure" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 11 15 14"/></svg>
+          </span>
+          <div class="ev-row-text">
+            <span class="format-name">Azure DevOps</span>
+            <span class="ev-row-meta">
+              <ng-container *ngIf="!sendCompleted">Actualiza el título y la descripción de un plan de pruebas</ng-container>
+              <span class="sent-status" *ngIf="sendCompleted">Enviado al plan {{ validatedPlan?.planId }}</span>
+            </span>
+          </div>
+          <div class="ev-row-actions">
+            <button type="button" class="opt-btn" (click)="openAzureModal()" [disabled]="isBusy || !previewHtmlContent"
+              [title]="!previewHtmlContent ? 'No hay contenido de plan para enviar' : 'Enviar el plan a Azure DevOps'">
+              Enviar…
+            </button>
+          </div>
+        </li>
+      </ul>
+
+      <p class="empty-note" *ngIf="hasNoScenarios" role="status">
+        Aún no hay escenarios generados: la descarga en PDF no está disponible.
+      </p>
 
       <!-- WordExporter oculto (instancia para llamar sus métodos) -->
       <div style="display:none">
@@ -140,150 +131,92 @@
           [huList]="huList">
         </app-word-exporter>
       </div>
+    </div>
 
-      <!-- TAB 2: ENVIAR A AZURE DEVOPS -->
-      <div class="tab-content" *ngIf="activeTab === 'azure'"
-        role="tabpanel" id="plan-panel-azure" aria-labelledby="plan-tab-azure">
+    <!-- Aviso persistente mientras hay un proceso en curso -->
+    <div class="pe-processing" *ngIf="isBusy" role="status" aria-live="polite">
+      <span class="opt-spinner" aria-hidden="true"></span>
+      {{ isSending ? 'Enviando el plan a Azure DevOps…' : 'Validando el plan en Azure DevOps…' }}
+    </div>
+  </div>
+</div>
 
-        <!-- Indicador de pasos -->
-        <ol class="plan-stepper" *ngIf="!sendCompleted" aria-label="Progreso del envío">
-          <li class="plan-step" [class.active]="!planValidated && !isSending" [class.done]="planValidated || isSending">
-            <span class="step-dot">1</span><span class="step-label">Validar</span>
-          </li>
-          <li class="step-line" aria-hidden="true"></li>
-          <li class="plan-step" [class.active]="planValidated && !isSending" [class.done]="isSending">
-            <span class="step-dot">2</span><span class="step-label">Revisar</span>
-          </li>
-          <li class="step-line" aria-hidden="true"></li>
-          <li class="plan-step" [class.active]="isSending">
-            <span class="step-dot">3</span><span class="step-label">Enviar</span>
-          </li>
-        </ol>
+<!-- Sub-modal: Enviar a Azure DevOps -->
+<div class="upload-modal-backdrop" *ngIf="showAzureModal" (click)="closeAzureModal()">
+  <div class="upload-modal" role="dialog" aria-modal="true" aria-labelledby="plan-azure-title" (click)="$event.stopPropagation()">
+    <div class="upload-modal-header">
+      <span class="format-icon azure" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><polyline points="9 14 12 11 15 14"/></svg>
+      </span>
+      <h4 id="plan-azure-title">Enviar plan a Azure DevOps</h4>
+      <button class="close-btn" type="button" (click)="closeAzureModal()" [disabled]="isBusy" aria-label="Cerrar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
 
-        <!-- PASO 1: Ingreso de Plan ID -->
-        <div class="upload-section" *ngIf="!planValidated && !isSending">
-          <div class="form-group">
-            <label for="planId">ID del Plan de Pruebas <span class="req">*</span></label>
+    <form class="upload-modal-body" id="plan-azure-form" (ngSubmit)="azurePrimaryAction()">
+      <!-- Enviado -->
+      <div class="sent-box" *ngIf="sendCompleted" role="status" aria-live="polite">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+        <div>
+          <strong>Plan actualizado</strong>
+          <p>Se envió al plan <strong>{{ validatedPlan?.planId }}</strong> · {{ validatedPlan?.planTitle }}.</p>
+        </div>
+      </div>
+
+      <ng-container *ngIf="!sendCompleted">
+        <!-- ID del plan -->
+        <div class="form-field">
+          <label for="plan-export-plan-id" class="plan-id-label">ID del Plan de Pruebas</label>
+          <div class="plan-id-inputs">
             <input
-              id="planId"
+              id="plan-export-plan-id"
+              name="plan-id"
+              class="plan-id-input"
               type="text"
               inputmode="numeric"
               autocomplete="off"
-              [(ngModel)]="inputPlanId"
-              (keyup.enter)="validatePlan()"
               placeholder="Ej: 7695070"
-              class="form-input"
+              [(ngModel)]="inputPlanId"
               [class.has-error]="!!validationError"
               [attr.aria-invalid]="!!validationError"
-              aria-describedby="planId-help"
-              [disabled]="isValidating">
-            <small class="help-text" id="planId-help">
-              Lo encuentras en la URL de Azure DevOps <span class="mono">…?planId=<strong>7695070</strong></span>
-            </small>
+              aria-describedby="plan-export-plan-id-hint"
+              [disabled]="isBusy || planValidated" />
+            <button *ngIf="planValidated" type="button" class="plan-id-change" (click)="resetValidation()" [disabled]="isBusy">Cambiar</button>
           </div>
-
-          <div class="error-message" *ngIf="validationError" role="alert">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/>
-            </svg>
-            <div>
-              <strong>Error de validación</strong>
-              <p>{{ getValidationErrorMessage() }}</p>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <div class="footer-progress" *ngIf="isValidating" role="status" aria-live="polite">
-              <span class="btn-spinner-sm" aria-hidden="true"></span>
-              <span>Validando…</span>
-            </div>
-            <button type="button" (click)="close()" class="btn btn-secondary" [disabled]="isValidating">Cancelar</button>
-            <button type="button" (click)="validatePlan()" class="btn btn-primary"
-              [attr.aria-busy]="isValidating"
-              [title]="!inputPlanId ? 'Ingresa el ID del plan para continuar' : 'Validar el plan en Azure DevOps'"
-              [disabled]="!inputPlanId || isValidating">
-              <span class="btn-spinner" *ngIf="isValidating" aria-hidden="true"></span>
-              {{ isValidating ? 'Validando...' : 'Validar plan' }}
-            </button>
-          </div>
+          <p class="plan-id-hint" *ngIf="planValidated" id="plan-export-plan-id-hint">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+            Plan validado: <strong>{{ validatedPlan?.planTitle }}</strong>
+          </p>
+          <p class="plan-id-hint muted" *ngIf="!planValidated" id="plan-export-plan-id-hint">
+            Lo encuentras en la URL de Azure DevOps <span class="mono">…?planId=<strong>7695070</strong></span>
+          </p>
         </div>
 
-        <!-- PASO 2: Confirmar y Enviar -->
-        <div class="upload-section" *ngIf="planValidated && !isSending && !sendCompleted">
-
-          <div class="plan-validated-pill">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <span>Plan <strong>{{ validatedPlan?.planId }}</strong> — {{ validatedPlan?.planTitle }}</span>
-          </div>
-
-          <div class="plan-summary-box">
-            <div class="summary-item">
-              <span class="summary-label">Título</span>
-              <span class="summary-value">{{ testPlanTitle || 'Plan de Pruebas' }}</span>
-            </div>
-            <div class="summary-item" *ngIf="huCount > 0">
-              <span class="summary-label">Alcance</span>
-              <span class="summary-value">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
-            </div>
-          </div>
-
-          <!-- Advertencia: la acción sobrescribe el Work Item -->
-          <div class="warn-note" role="note">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span>Se reemplazará la descripción actual del Work Item.</span>
-          </div>
-
-          <div class="error-message" *ngIf="sendError" role="alert">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/>
-            </svg>
-            <div>
-              <strong>Error al enviar</strong>
-              <p>{{ sendError }}</p>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="button" (click)="resetValidation()" class="btn btn-secondary">Cambiar plan</button>
-            <button type="button" (click)="sendPlanToAzure()" class="btn btn-primary"
-              title="Actualizar el Work Item con el contenido del plan">
-              Enviar a Azure DevOps
-            </button>
-          </div>
+        <!-- Qué se enviará -->
+        <div class="form-field" *ngIf="planValidated">
+          <span class="plan-id-label">Se enviará</span>
+          <dl class="send-summary">
+            <div><dt>Título</dt><dd>{{ testPlanTitle || 'Plan de Pruebas' }}</dd></div>
+            <div *ngIf="huCount > 0"><dt>Alcance</dt><dd>{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</dd></div>
+          </dl>
+          <p class="warn-note" role="note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Se reemplazarán el título y la descripción actuales del plan {{ validatedPlan?.planId }} en Azure DevOps.
+          </p>
         </div>
 
-        <!-- PASO 3: Enviando -->
-        <div class="upload-section" *ngIf="isSending">
-          <div class="progress-container" role="status" aria-live="polite">
-            <div class="spinner-large" aria-hidden="true"></div>
-            <h3>Enviando a Azure DevOps…</h3>
-            <p>Actualizando Work Item {{ validatedPlan?.planId }}.</p>
-          </div>
-        </div>
+        <p class="error-note" *ngIf="validationError" role="alert">{{ getValidationErrorMessage() }}</p>
+        <p class="error-note" *ngIf="sendError" role="alert">{{ sendError }}</p>
+      </ng-container>
+    </form>
 
-        <!-- PASO 4: Completado -->
-        <div class="upload-section" *ngIf="sendCompleted">
-          <div class="success-container" role="status" aria-live="polite">
-            <div class="success-icon" aria-hidden="true">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            </div>
-            <h3>¡Plan actualizado!</h3>
-            <p>Enviado al Work Item <strong>{{ validatedPlan?.planId }}</strong>.</p>
-            <div class="form-actions" style="margin-top:16px;">
-              <button type="button" (click)="close()" class="btn btn-primary">Cerrar</button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
+    <div class="upload-modal-footer">
+      <button type="button" class="opt-btn" *ngIf="!sendCompleted" (click)="closeAzureModal()" [disabled]="isBusy">Cancelar</button>
+      <button type="submit" form="plan-azure-form" class="opt-btn primary" [disabled]="azurePrimaryDisabled" [attr.aria-busy]="isBusy">
+        <span class="opt-spinner light" *ngIf="isBusy" aria-hidden="true"></span>
+        {{ azurePrimaryLabel }}
+      </button>
     </div>
   </div>
 </div>

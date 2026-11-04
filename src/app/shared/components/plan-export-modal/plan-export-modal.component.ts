@@ -29,7 +29,8 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
 
   @ViewChild('wordExporter') wordExporter!: WordExporterComponent;
 
-  activeTab: 'local' | 'azure' = 'local';
+  /** Sub-modal "Enviar a Azure DevOps" (mismo patrón que Gestionar evidencias). */
+  showAzureModal = false;
   isDownloadingPdf: boolean = false;
   isDownloadingDocx: boolean = false;
 
@@ -74,9 +75,13 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
     this.lastFocusedElement = null;
   }
 
-  /** Cerrar con Escape (bloqueado si hay validación o envío en curso). */
+  /** Escape cierra primero el sub-modal de Azure y después el modal (bloqueado si hay un proceso en curso). */
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    if (this.showAzureModal) {
+      this.closeAzureModal();
+      return;
+    }
     this.close();
   }
 
@@ -112,19 +117,42 @@ export class PlanExportModalComponent implements OnInit, OnDestroy {
     }
   }
 
-  selectTab(tab: 'local' | 'azure'): void {
+  openAzureModal(): void {
     if (this.isBusy) return;
-    this.activeTab = tab;
+    this.sendCompleted = false;
+    this.sendError = '';
+    this.showAzureModal = true;
+    setTimeout(() => this.hostRef.nativeElement.querySelector<HTMLInputElement>('#plan-export-plan-id')?.focus());
   }
 
-  /** Navegación entre pestañas con flechas (patrón ARIA tablist). */
-  onTabsKeydown(event: KeyboardEvent): void {
+  closeAzureModal(): void {
     if (this.isBusy) return;
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-    event.preventDefault();
-    this.activeTab = this.activeTab === 'local' ? 'azure' : 'local';
-    const tabs = this.hostRef.nativeElement.querySelectorAll<HTMLElement>('.tab-btn');
-    tabs[this.activeTab === 'local' ? 0 : 1]?.focus();
+    this.showAzureModal = false;
+  }
+
+  /** Botón principal del sub-modal: validar, enviar o cerrar según el paso. */
+  async azurePrimaryAction(): Promise<void> {
+    if (this.sendCompleted) {
+      this.closeAzureModal();
+      return;
+    }
+    if (!this.planValidated) {
+      await this.validatePlan();
+      return;
+    }
+    await this.sendPlanToAzure();
+  }
+
+  get azurePrimaryLabel(): string {
+    if (this.sendCompleted) return 'Cerrar';
+    if (this.isValidating) return 'Validando...';
+    if (this.isSending) return 'Enviando...';
+    return this.planValidated ? 'Enviar a Azure' : 'Validar plan';
+  }
+
+  get azurePrimaryDisabled(): boolean {
+    if (this.isBusy) return true;
+    return !this.planValidated && !this.sendCompleted && !this.inputPlanId.trim();
   }
 
   // --- LÓGICA DE EXPORTACIÓN LOCAL ---
