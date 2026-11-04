@@ -1,3 +1,4 @@
+import { sprintNumber } from '../shared/utils/plan-title';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -310,7 +311,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
         return {
           id: plan.id || '',
           title: plan.title || 'Sin título',
-          label: this.shortPlanLabel(plan.title || ''),
+          label: this.shortPlanLabel(plan.title || '', huNodes),
           createdAt: plan.created_at || '',
           // Al buscar, se abren los planes cuyas HUs coinciden para ver el resultado directo.
           expanded: !!term && (huNodes.some(h => matched.has(h.dbUuid)) || result.data.length <= 3),
@@ -353,11 +354,17 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     this.loadPlanTree(true);
   }
 
-  /** "TEST PLAN EVC00057_ 7932235 SPRINT Sprint 256" → "HU 7932235 · Sprint 256". */
-  shortPlanLabel(title: string): string {
-    const m = title.match(/_\s*([A-Za-z0-9-]+)\s+SPRINT\s+(?:Sprint\s+)?(.+)$/i);
-    if (m) return `HU ${m[1]} · Sprint ${m[2].trim()}`;
-    return title.replace(/^TEST PLAN\s+/i, '') || 'Sin título';
+  /**
+   * Nombre corto del plan a partir de su última HU ("HU 7932235 · Sprint 256"),
+   * independiente de la plantilla configurada para el título.
+   */
+  shortPlanLabel(title: string, hus: HuNode[]): string {
+    const last = hus[hus.length - 1];
+    if (last?.id) {
+      const sprint = sprintNumber(last.hu.sprint);
+      return sprint ? `HU ${last.id} · Sprint ${sprint}` : `HU ${last.id}`;
+    }
+    return title || 'Sin título';
   }
 
   // ── Filters & Pagination ──

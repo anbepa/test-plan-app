@@ -1,3 +1,4 @@
+import { DEFAULT_PLAN_TITLE_TEMPLATE, PLAN_TITLE_PLACEHOLDERS, buildPlanTitle, validatePlanTitleTemplate } from '../shared/utils/plan-title';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +15,7 @@ import {
 } from '../models/github-models.model';
 import { AiProvidersService } from '../services/ai/ai-providers.service';
 import { ToastService } from '../services/core/toast.service';
-import { GeneralSectionsConfigService, GeneralSectionsMeta } from '../services/core/general-sections-config.service';
+import { GeneralSectionsConfig, GeneralSectionsConfigService, GeneralSectionsMeta } from '../services/core/general-sections-config.service';
 import { CellsConfigService } from '../services/core/cells-config.service';
 
 @Component({
@@ -30,6 +31,10 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   repositoryLink = '';
   teamContent = '';
   teamRows: Array<{ role: string; name: string }> = [];
+  /** Plantilla del nombre del test plan ({HU}, {SPRINT}); se guarda en la BD. */
+  planTitleTemplate = '';
+  readonly defaultPlanTitleTemplate = DEFAULT_PLAN_TITLE_TEMPLATE;
+  readonly planTitlePlaceholders = PLAN_TITLE_PLACEHOLDERS;
   /** Origen de los parámetros mostrados (BD, solo este navegador o valores por defecto). */
   generalMeta: GeneralSectionsMeta = { source: 'defaults', updatedAt: null };
   savingGeneral = false;
@@ -645,7 +650,33 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   }
 
   private currentGeneralState(): string {
-    return JSON.stringify({ repo: this.repositoryLink.trim(), team: this.serializeTeamRows() });
+    return JSON.stringify({
+      repo: this.repositoryLink.trim(),
+      team: this.serializeTeamRows(),
+      title: this.planTitleTemplate.trim()
+    });
+  }
+
+  get planTitleTemplateError(): string | null {
+    return validatePlanTitleTemplate(this.planTitleTemplate);
+  }
+
+  /** Ejemplo con una HU y sprint reales de muestra. */
+  get planTitlePreview(): string {
+    return buildPlanTitle(this.planTitleTemplate, '7932235', 'Sprint 256');
+  }
+
+  insertPlanTitleToken(token: string): void {
+    const el = document.getElementById('planTitleTemplate') as HTMLInputElement | null;
+    const value = this.planTitleTemplate || '';
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    this.planTitleTemplate = value.slice(0, start) + token + value.slice(end);
+    setTimeout(() => {
+      el?.focus();
+      const pos = start + token.length;
+      el?.setSelectionRange(pos, pos);
+    });
   }
 
   async saveGeneralSectionsConfig(): Promise<void> {
@@ -657,6 +688,14 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       this.generalErrorMessage = 'El repositorio de pruebas es obligatorio.';
       return;
     }
+
+    const titleError = this.planTitleTemplateError;
+    if (titleError) {
+      this.generalErrorMessage = titleError;
+      return;
+    }
+    // Vacío = plantilla por defecto.
+    const planTitleTemplate = this.planTitleTemplate.trim() || DEFAULT_PLAN_TITLE_TEMPLATE;
 
     const incomplete = this.teamRows.findIndex((r) => !!(r.role || '').trim() !== !!(r.name || '').trim());
     if (incomplete !== -1) {
@@ -672,7 +711,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
 
     this.savingGeneral = true;
     try {
-      const result = await this.generalSectionsConfigService.saveConfig({ repositoryLink, teamContent });
+      const result = await this.generalSectionsConfigService.saveConfig({ repositoryLink, teamContent, planTitleTemplate });
       this.applyGeneralConfig(result.config);
       if (result.savedToDatabase) {
         this.generalInfoMessage = 'Parámetros guardados en tu cuenta.';
@@ -686,8 +725,9 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     }
   }
 
-  private applyGeneralConfig(config: { repositoryLink: string; teamContent: string }): void {
+  private applyGeneralConfig(config: GeneralSectionsConfig): void {
     this.repositoryLink = config.repositoryLink;
+    this.planTitleTemplate = config.planTitleTemplate;
     this.teamContent = config.teamContent;
     this.teamRows = this.parseTeamContent(config.teamContent);
     this.generalSnapshot = this.currentGeneralState();

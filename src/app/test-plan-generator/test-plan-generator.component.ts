@@ -123,6 +123,8 @@ export class TestPlanGeneratorComponent {
     this.generalSectionsConfigService.ready().then((loaded) => {
       if (this.repositoryLink === config.repositoryLink) this.repositoryLink = loaded.repositoryLink;
       if (this.teamContent === config.teamContent) this.teamContent = loaded.teamContent;
+      // Si ya hay HUs, el nombre se recalcula con la plantilla guardada en la BD.
+      if (this.huList.length > 0) this.updateTestPlanTitle();
     });
   }
 
@@ -791,7 +793,11 @@ export class TestPlanGeneratorComponent {
   }
 
   public updateTestPlanTitle(): void {
-    this.testPlanTitle = this.mapper.generateTestPlanTitle(this.huList);
+    // La plantilla del nombre viene de Configuración > Parámetros globales (BD).
+    this.testPlanTitle = this.mapper.generateTestPlanTitle(
+      this.huList,
+      this.generalSectionsConfigService.getConfig().planTitleTemplate
+    );
     this.cdr.detectChanges();
   }
 

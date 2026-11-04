@@ -1,3 +1,4 @@
+import { buildPlanTitle } from '../../shared/utils/plan-title';
 import { Injectable } from '@angular/core';
 import { HUData } from '../../models/hu-data.model';
 import { DbTestPlan, DbUserStoryWithRelations } from './database.service';
@@ -102,7 +103,7 @@ export class TestPlanMapperService {
     /**
      * Genera el título del plan basado en la última HU
      */
-    generateTestPlanTitle(huList: HUData[]): string {
+    generateTestPlanTitle(huList: HUData[], template?: string): string {
         if (huList.length === 0) {
             return 'Plan de Pruebas (Aún sin entradas)';
         }
@@ -112,7 +113,7 @@ export class TestPlanMapperService {
             .find(hu => hu.originalInput.generationMode !== undefined)
             || huList[huList.length - 1];
 
-        return `TEST PLAN EVC00057_ ${relevantHu.id} SPRINT ${relevantHu.sprint}`;
+        return buildPlanTitle(template, relevantHu.id, relevantHu.sprint);
     }
 
     /**
