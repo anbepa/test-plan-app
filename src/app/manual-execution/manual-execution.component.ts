@@ -1,3 +1,4 @@
+import { sprintNumber } from '../shared/utils/plan-title';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,6 +17,9 @@ import { SerenityReportService, SerenityReportState } from '../services/export/s
 interface PlanNode {
   id: string;
   title: string;
+  /** Nombre corto y distinguible (p. ej. "HU 7932235 · Sprint 256"). */
+  label: string;
+  createdAt: string;
   expanded: boolean;
   hus: HuNode[];
 }
@@ -27,6 +31,7 @@ interface HuNode {
   hu: HUData;
   testPlanId: string;
   testPlanTitle: string;
+  testCasesCount: number;
 }
 
 @Component({
@@ -64,16 +69,22 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   newRunNotes = '';
   newRunIncludeAll = false;
   newRunSelectedTestCaseIds: string[] = [];
-  showTestCaseSelector = false;
   testCaseSelectorSearch = '';
   isCreating = false;
   showTagInput = false;
 
-  // Plan/HU tree for selector
+  // Plan/HU tree for selector (paginado y con búsqueda en el servidor)
   planTree: PlanNode[] = [];
   selectedHuNode: HuNode | null = null;
   isLoadingPlans = false;
+  isLoadingMorePlans = false;
   isLoadingTestCases = false;
+  planSearch = '';
+  planTotal = 0;
+  private planPage = 1;
+  private readonly planPageSize = 25;
+  private planSearchTimer: any = null;
+  private planRequestSeq = 0;
 
   // Selection
   selectedRunIds: string[] = [];
@@ -263,37 +274,97 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
 
   // ── Load Plan Tree ──
 
-  async loadPlanTree(): Promise<void> {
-    if (this.planTree.length > 0) return; // already loaded
-    this.isLoadingPlans = true;
+  /**
+   * Carga los planes del selector por páginas (25) y con búsqueda en el servidor.
+   * Antes se traían hasta 500 planes con todas sus HUs (descripción y criterios
+   * incluidos) de una sola vez: lento con muchos planes y los demás no aparecían.
+   */
+  async loadPlanTree(reset = true): Promise<void> {
+    const seq = ++this.planRequestSeq;
+    if (reset) {
+      this.planPage = 1;
+      this.isLoadingPlans = true;
+    } else {
+      this.planPage++;
+      this.isLoadingMorePlans = true;
+    }
+    this.cdr.detectChanges();
 
     try {
-      const result = await this.databaseService.getAllTestPlansWithRelations(1, 500);
-      const plans = result.data || [];
+      const term = this.planSearch.trim();
+      const result = await this.databaseService.getPlansForPicker(term, this.planPage, this.planPageSize);
+      if (seq !== this.planRequestSeq) return; // llegó una búsqueda más reciente
 
-      this.planTree = plans.map(plan => {
-        const hus = this.mapperService.mapDbTestPlanToHUList(plan);
+      const matched = new Set(result.matchedHuIds);
+      const nodes: PlanNode[] = (result.data || []).map((plan: any) => {
+        const stories = [...(plan.user_stories || [])].sort((x: any, y: any) => (x.position ?? 0) - (y.position ?? 0));
+        const hus = this.mapperService.mapDbTestPlanToHUList({ ...plan, user_stories: stories });
+        const huNodes: HuNode[] = hus.map(hu => ({
+          id: hu.id,
+          dbUuid: hu.dbUuid || '',
+          title: hu.title,
+          hu,
+          testPlanId: plan.id || '',
+          testPlanTitle: plan.title || '',
+          testCasesCount: hu.testCasesCount || 0
+        }));
         return {
           id: plan.id || '',
           title: plan.title || 'Sin título',
-          expanded: false,
-          hus: hus.map(hu => ({
-            id: hu.id,
-            dbUuid: hu.dbUuid || '',
-            title: hu.title,
-            hu,
-            testPlanId: plan.id || '',
-            testPlanTitle: plan.title || ''
-          }))
+          label: this.shortPlanLabel(plan.title || '', huNodes),
+          createdAt: plan.created_at || '',
+          // Al buscar, se abren los planes cuyas HUs coinciden para ver el resultado directo.
+          expanded: !!term && (huNodes.some(h => matched.has(h.dbUuid)) || result.data.length <= 3),
+          hus: huNodes
         };
       });
+
+      this.planTree = reset ? nodes : [...this.planTree, ...nodes];
+      this.planTotal = result.count;
     } catch (err) {
       console.error('Error loading plan tree:', err);
+      if (!reset) this.planPage--;
       this.toastService.error('Error al cargar los planes de prueba');
     } finally {
-      this.isLoadingPlans = false;
+      if (seq === this.planRequestSeq) {
+        this.isLoadingPlans = false;
+        this.isLoadingMorePlans = false;
+      }
       this.cdr.detectChanges();
     }
+  }
+
+  get hasMorePlans(): boolean {
+    return this.planTree.length < this.planTotal;
+  }
+
+  loadMorePlans(): void {
+    if (this.isLoadingMorePlans || this.isLoadingPlans || !this.hasMorePlans) return;
+    this.loadPlanTree(false);
+  }
+
+  onPlanSearchChange(): void {
+    clearTimeout(this.planSearchTimer);
+    this.planSearchTimer = setTimeout(() => this.loadPlanTree(true), 300);
+  }
+
+  clearPlanSearch(): void {
+    this.planSearch = '';
+    clearTimeout(this.planSearchTimer);
+    this.loadPlanTree(true);
+  }
+
+  /**
+   * Nombre corto del plan a partir de su última HU ("HU 7932235 · Sprint 256"),
+   * independiente de la plantilla configurada para el título.
+   */
+  shortPlanLabel(title: string, hus: HuNode[]): string {
+    const last = hus[hus.length - 1];
+    if (last?.id) {
+      const sprint = sprintNumber(last.hu.sprint);
+      return sprint ? `HU ${last.id} · Sprint ${sprint}` : `HU ${last.id}`;
+    }
+    return title || 'Sin título';
   }
 
   // ── Filters & Pagination ──
@@ -368,16 +439,16 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     this.newRunNotes = '';
     this.newRunIncludeAll = false;
     this.newRunSelectedTestCaseIds = [];
-    this.showTestCaseSelector = false;
     this.testCaseSelectorSearch = '';
     this.selectedHuNode = null;
     this.showTagInput = false;
-    this.loadPlanTree();
+    // Siempre se recarga la primera página: refleja planes creados desde la última vez.
+    this.planSearch = '';
+    this.loadPlanTree(true);
   }
 
   closeCreateModal(): void {
     this.showCreateModal = false;
-    this.showTestCaseSelector = false;
   }
 
   addTag(): void {
@@ -412,14 +483,6 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     if (!this.showTagInput) this.tagInput = '';
   }
 
-  openTestCaseSelector(): void {
-    this.showTestCaseSelector = true;
-    this.testCaseSelectorSearch = '';
-    this.loadPlanTree();
-  }
-
-  closeTestCaseSelector(): void { this.showTestCaseSelector = false; }
-
   togglePlanNode(plan: PlanNode): void {
     plan.expanded = !plan.expanded;
   }
@@ -427,6 +490,7 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
   async selectHuNode(huNode: HuNode): Promise<void> {
     this.selectedHuNode = huNode;
     this.newRunSelectedTestCaseIds = [];
+    this.testCaseSelectorSearch = '';
 
     // Lazy load test cases if they are not loaded yet but we know they exist
     if ((!huNode.hu.detailedTestCases || huNode.hu.detailedTestCases.length === 0) && huNode.hu.testCasesCount && huNode.hu.testCasesCount > 0) {
@@ -455,6 +519,15 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
         this.isLoadingTestCases = false;
         this.cdr.detectChanges();
       }
+    }
+
+    // Lo habitual es ejecutar todos los casos: quedan marcados y se pueden desmarcar.
+    if (this.selectedHuNode === huNode) {
+      this.newRunSelectedTestCaseIds = this.selectedHuTestCases.map(tc => tc.dbId || tc.title);
+      if (!this.newRunName.trim()) {
+        this.newRunName = `Ejecución HU ${huNode.id}`;
+      }
+      this.cdr.detectChanges();
     }
   }
 
@@ -487,13 +560,22 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     }
   }
 
-  selectAllTestCases(): void {
-    this.newRunSelectedTestCaseIds = this.filteredTestCasesForSelector.map(tc => tc.dbId || tc.title);
+  /** Estado de la casilla "Seleccionar todos" sobre los casos visibles (respeta el filtro). */
+  get selectAllState(): 'all' | 'some' | 'none' {
+    const visible = this.filteredTestCasesForSelector;
+    if (!visible.length) return 'none';
+    const n = visible.filter(tc => this.isTestCaseSelected(tc)).length;
+    return n === 0 ? 'none' : n === visible.length ? 'all' : 'some';
   }
 
-  getTestCaseShortId(tc: DetailedTestCase, index: number): string {
-    if (tc.dbId) return 'tc-' + tc.dbId.substring(0, 8);
-    return 'tc-' + index;
+  toggleSelectAllTestCases(): void {
+    const visibleIds = this.filteredTestCasesForSelector.map(tc => tc.dbId || tc.title);
+    if (this.selectAllState === 'all') {
+      const hide = new Set(visibleIds);
+      this.newRunSelectedTestCaseIds = this.newRunSelectedTestCaseIds.filter(id => !hide.has(id));
+    } else {
+      this.newRunSelectedTestCaseIds = Array.from(new Set([...this.newRunSelectedTestCaseIds, ...visibleIds]));
+    }
   }
 
   async createTestRun(): Promise<void> {
@@ -583,38 +665,20 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
     this.navigatingRunId = run.id;
 
     try {
-      // Find the HU from planTree if loaded
+      // Se carga solo la HU de esta corrida, con sus casos (antes se cargaba el
+      // árbol completo de planes y la HU solía venir sin casos, por lo que la
+      // selección de casos de la corrida no se aplicaba).
       let huForExecution: HUData | null = null;
-
-      // Ensure planTree is loaded to find the full HU
-      if (this.planTree.length === 0) {
-        await this.loadPlanTree();
-      }
-
-      // Paso 1: Búsqueda exacta por testPlanId + huId (evita confundir HUs con mismo nombre en distintos planes)
-      for (const plan of this.planTree) {
-        if (run.testPlanId && plan.id !== run.testPlanId) continue; // Filtrar por plan primero
-        for (const huNode of plan.hus) {
-          const huId = huNode.hu.dbUuid || huNode.hu.id;
-          if (huId === run.huId) {
-            huForExecution = huNode.hu;
-            break;
-          }
-        }
-        if (huForExecution) break;
-      }
-
-      // Paso 2 (fallback): si no encontró con testPlanId, buscar solo por huId en todos los planes
-      if (!huForExecution) {
-        for (const plan of this.planTree) {
-          for (const huNode of plan.hus) {
-            const huId = huNode.hu.dbUuid || huNode.hu.id;
-            if (huId === run.huId || huNode.hu.id === run.huId) {
-              huForExecution = huNode.hu;
-              break;
-            }
-          }
-          if (huForExecution) break;
+      if (run.huId) {
+        const fullHuDb = await this.databaseService.getUserStoryWithTestCases(run.huId);
+        if (fullHuDb) {
+          const cases = [...(fullHuDb.test_cases || [])]
+            .sort((x: any, y: any) => (x.position ?? 0) - (y.position ?? 0) || String(x.created_at || '').localeCompare(String(y.created_at || '')))
+            .map((tc: any) => ({
+              ...tc,
+              test_case_steps: [...(tc.test_case_steps || [])].sort((x: any, y: any) => (x.step_number ?? 0) - (y.step_number ?? 0))
+            }));
+          huForExecution = this.mapperService.mapDbTestPlanToHUList({ user_stories: [{ ...fullHuDb, test_cases: cases }] })[0] || null;
         }
       }
 

@@ -399,6 +399,40 @@ textarea.form-control {
   color: #6b7280;
 }
 
+/* Plantilla del nombre del test plan */
+.token-chip {
+  display: inline-block;
+  min-height: 0;
+  height: auto;
+  width: auto;
+  vertical-align: baseline;
+  box-shadow: none;
+  margin: 0 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font: 600 0.75rem/1.4 'SF Mono', 'Fira Code', monospace;
+  cursor: pointer;
+}
+.token-chip:hover { background: #dbeafe; }
+.token-chip:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.token-desc { display: inline-block; margin-left: 0.25rem; }
+.title-preview {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.82rem;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+.title-preview strong { color: #0f172a; }
+.field-error { margin: 0.4rem 0 0; font-size: 0.8rem; color: #b91c1c; font-weight: 500; }
+#planTitleTemplate[aria-invalid="true"] { border-color: #f87171; }
+
 .team-config-table {
   width: 100%;
   border-collapse: collapse;

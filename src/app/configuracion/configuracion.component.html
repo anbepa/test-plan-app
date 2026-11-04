@@ -34,6 +34,11 @@
         </div>
       </div>
 
+      <p *ngIf="connection?.status === 'expired' || connection?.status === 'invalid'" class="message error" role="alert">
+        Azure DevOps rechazó el token {{ connection?.tokenHint }}: está vencido o fue revocado. Genera un PAT nuevo
+        (permisos Work Items, Test Management y Release: Read, write &amp; execute), pégalo abajo y guarda la conexión.
+      </p>
+
       <div class="form-grid">
         <div class="form-group">
           <label for="organization">Organización</label>
@@ -245,12 +250,36 @@
       <span class="section-arrow" [class.open]="accordionOpen.global" aria-hidden="true">▾</span>
     </button>
     <div class="config-card" *ngIf="accordionOpen.global" id="panel-global" role="region" aria-labelledby="toggle-global">
-      <h3 class="card-title">Repositorio y equipo de los planes</h3>
-      <p class="card-description">Se completan automáticamente en las secciones <strong>Repositorio</strong> y <strong>Equipo de trabajo</strong> de cada plan que crees o previsualices.</p>
+      <h3 class="card-title">Nombre, repositorio y equipo de los planes</h3>
+      <p class="card-description">Se aplican automáticamente a cada plan que crees: el <strong>nombre del test plan</strong> y las secciones <strong>Repositorio</strong> y <strong>Equipo de trabajo</strong>.</p>
       <p class="persistence-status" [attr.data-source]="generalMeta.source" role="status">
         <span class="persistence-dot" aria-hidden="true"></span>{{ generalStatusText }}
       </p>
       <div class="form-grid">
+        <div class="form-group full-width">
+          <label for="planTitleTemplate">Nombre del test plan</label>
+          <input
+            id="planTitleTemplate"
+            name="planTitleTemplate"
+            class="form-control"
+            type="text"
+            maxlength="150"
+            [(ngModel)]="planTitleTemplate"
+            [attr.aria-invalid]="!!planTitleTemplateError"
+            aria-describedby="planTitleTemplate-hint planTitleTemplate-preview"
+            [placeholder]="defaultPlanTitleTemplate">
+          <p class="field-hint" id="planTitleTemplate-hint">
+            Marcadores:
+            <button type="button" class="token-chip" *ngFor="let ph of planTitlePlaceholders"
+                    (click)="insertPlanTitleToken(ph.token)" [title]="'Insertar ' + ph.token">{{ ph.token }}</button>
+            <span class="token-desc">{{ '{HU}' }} = ID de la HU · {{ '{SPRINT}' }} = número del sprint (sin repetir “Sprint”).</span>
+          </p>
+          <p class="title-preview" id="planTitleTemplate-preview" *ngIf="!planTitleTemplateError">
+            Vista previa: <strong>{{ planTitlePreview }}</strong>
+          </p>
+          <p class="field-error" *ngIf="planTitleTemplateError" role="alert">{{ planTitleTemplateError }}</p>
+        </div>
+
         <div class="form-group full-width">
           <label for="repositoryLink">Repositorio de pruebas (Azure Repos)</label>
           <input

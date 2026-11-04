@@ -515,10 +515,17 @@ async function handleUpdateFields(
     }
 
     if (typeof description === 'string' && description.trim()) {
+      // Las HUs marcadas en el HTML (data-azure-hu) se convierten en menciones
+      // de work item (#ID), que Azure muestra como ficha con título y estado.
+      const withMentions = await convertHuMarkersToMentions(
+        description.trim(),
+        connection.organization,
+        connection.personal_access_token
+      );
       patchBody.push({
         op: 'add',
         path: '/fields/System.Description',
-        value: description.trim()
+        value: withMentions
       });
     }
 
@@ -558,4 +565,74 @@ async function handleUpdateFields(
     console.error('Error updating work item fields:', error);
     res.status(500).json({ error: 'Error actualizando campos en Azure DevOps' });
   }
+}
+
+
+const HU_MARKER_REGEX = /<span data-azure-hu="([^"]*)"[^>]*>([\s\S]*?)<\/span>/g;
+
+/**
+ * Reemplaza cada <span data-azure-hu="ID">…</span> por la mención de Azure
+ * DevOps (la misma que se crea al escribir #ID en el editor). Solo se enlazan
+ * los IDs que existen en Azure; el resto queda como texto, sin enlace roto.
+ */
+export async function convertHuMarkersToMentions(
+  html: string,
+  organization: string,
+  personalAccessToken: string
+): Promise<string> {
+  const ids = Array.from(new Set(
+    Array.from(html.matchAll(HU_MARKER_REGEX))
+      .map(m => m[1].trim())
+      .filter(id => /^\d{1,10}$/.test(id) && Number(id) > 0)
+  ));
+
+  let projects = new Map<string, string>();
+  if (ids.length) {
+    try {
+      projects = await fetchWorkItemProjects(organization, personalAccessToken, ids);
+    } catch (error) {
+      // Sin validación no se enlaza nada: el plan se envía igual, con texto plano.
+      console.warn('[azure-devops] No se pudieron validar las HUs para las menciones:', error);
+    }
+  }
+
+  return applyHuMentions(html, organization, projects);
+}
+
+/** Parte pura (sin red) de la conversión, para poder probarla. */
+export function applyHuMentions(html: string, organization: string, projects: Map<string, string>): string {
+  return html.replace(HU_MARKER_REGEX, (_match, rawId: string, inner: string) => {
+    const id = String(rawId).trim();
+    const project = projects.get(id);
+    if (!project) return inner;
+    const href = `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_workitems/edit/${id}/`;
+    return `<a href="${href}" data-vss-mention="version:1.0">#${id}</a>`;
+  });
+}
+
+/** Devuelve ID → proyecto de los work items que existen (los demás se omiten). */
+async function fetchWorkItemProjects(
+  organization: string,
+  personalAccessToken: string,
+  ids: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const url = `https://dev.azure.com/${encodeURIComponent(organization)}/_apis/wit/workitems?ids=${chunk.join(',')}&fields=System.Id,System.TeamProject&errorPolicy=omit&api-version=7.1`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`:${personalAccessToken}`).toString('base64')}`,
+        'Accept': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status} al validar work items`);
+    const data = await response.json() as any;
+    for (const item of (data?.value || [])) {
+      const id = item?.id ?? item?.fields?.['System.Id'];
+      const project = item?.fields?.['System.TeamProject'];
+      if (id && project) result.set(String(id), String(project));
+    }
+  }
+  return result;
 }

@@ -296,7 +296,10 @@ ${safeContent}
     try {
       const planId = this.validatedPlan.planId;
       const titleToUpdate = this.testPlanTitle || `Plan de Pruebas ${planId}`;
-      const descriptionToUpdate = this.previewHtmlContent || '';
+      // El work item ya tiene el título (System.Title): la descripción empieza
+      // directamente en el repositorio, sin repetir "Plan de Pruebas: …".
+      const descriptionToUpdate = (this.previewHtmlContent || '')
+        .replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>\s*/i, '');
 
       await this.evidenceService.updateTestPlanFields(planId, titleToUpdate, descriptionToUpdate);
 

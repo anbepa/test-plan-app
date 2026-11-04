@@ -41,3 +41,9 @@ CREATE POLICY "Usuarios gestionan solo sus parametros globales"
   ON public.user_general_sections
   FOR ALL USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+-- Plantilla del nombre del test plan. Marcadores: {HU} (ID de la HU) y
+-- {SPRINT} (número del sprint, sin repetir la palabra "Sprint").
+-- Vacío = se usa la plantilla por defecto de la app.
+ALTER TABLE public.user_general_sections
+  ADD COLUMN IF NOT EXISTS plan_title_template TEXT NOT NULL DEFAULT '';

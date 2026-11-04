@@ -2,10 +2,13 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
+import { DEFAULT_PLAN_TITLE_TEMPLATE } from '../../shared/utils/plan-title';
 
 export interface GeneralSectionsConfig {
   repositoryLink: string;
   teamContent: string;
+  /** Plantilla del nombre del test plan ({HU}, {SPRINT}). */
+  planTitleTemplate: string;
 }
 
 /** De dónde salen los valores que se muestran. */
@@ -25,7 +28,7 @@ export interface GeneralSectionsSaveResult {
 }
 
 /**
- * Parámetros globales (repositorio y equipo) usados al crear y previsualizar planes.
+ * Parámetros globales (repositorio, equipo y plantilla del nombre del plan) usados al crear y previsualizar planes.
  *
  *  - Fuente de verdad: Supabase, tabla user_general_sections (una fila por usuario, RLS).
  *  - Cache local POR USUARIO para un arranque rápido y para no perder datos si la
@@ -45,7 +48,8 @@ export class GeneralSectionsConfigService {
 
   private readonly defaults: GeneralSectionsConfig = {
     repositoryLink: 'https://dev.azure.com/YOUR_ORG/YOUR_PROJECT/_git/NU0139001_SAF_MR_Test - Repos (visualstudio.com)',
-    teamContent: 'Dueño del Producto – Bancolombia: Diego Fernando Giraldo Hincapie\nAnalista de Desarrollo – Pragma: Eddy Johana Cristancho\nAnalista de Desarrollo: Luis Alfredo Chuscano Remolina\nAnalista de Desarrollo: Kevin David Cuadros Estupinan\nAnalista de Pruebas – TCS: Gabriel Ernesto Montoya Henao\nAnalista de Pruebas – TCS: Andrés Antonio Bernal Padilla'
+    teamContent: 'Dueño del Producto – Bancolombia: Diego Fernando Giraldo Hincapie\nAnalista de Desarrollo – Pragma: Eddy Johana Cristancho\nAnalista de Desarrollo: Luis Alfredo Chuscano Remolina\nAnalista de Desarrollo: Kevin David Cuadros Estupinan\nAnalista de Pruebas – TCS: Gabriel Ernesto Montoya Henao\nAnalista de Pruebas – TCS: Andrés Antonio Bernal Padilla',
+    planTitleTemplate: DEFAULT_PLAN_TITLE_TEMPLATE
   };
 
   private readonly configSubject = new BehaviorSubject<GeneralSectionsConfig>(this.getDefaults());
@@ -92,7 +96,8 @@ export class GeneralSectionsConfigService {
     const current = this.getConfig();
     const updated = this.normalize({
       repositoryLink: config.repositoryLink ?? current.repositoryLink,
-      teamContent: config.teamContent ?? current.teamContent
+      teamContent: config.teamContent ?? current.teamContent,
+      planTitleTemplate: config.planTitleTemplate ?? current.planTitleTemplate
     });
 
     const userId = this.currentUserId;
@@ -107,7 +112,12 @@ export class GeneralSectionsConfigService {
     const { data, error } = await this.supabaseClient.supabase
       .from(this.TABLE)
       .upsert(
-        { user_id: userId, repository_link: updated.repositoryLink, team_content: updated.teamContent },
+        {
+          user_id: userId,
+          repository_link: updated.repositoryLink,
+          team_content: updated.teamContent,
+          plan_title_template: updated.planTitleTemplate
+        },
         { onConflict: 'user_id' }
       )
       .select('updated_at')
@@ -144,7 +154,7 @@ export class GeneralSectionsConfigService {
     try {
       const { data, error } = await this.supabaseClient.supabase
         .from(this.TABLE)
-        .select('repository_link, team_content, updated_at')
+        .select('repository_link, team_content, plan_title_template, updated_at')
         .eq('user_id', userId)
         .limit(1)
         .maybeSingle();
@@ -159,7 +169,8 @@ export class GeneralSectionsConfigService {
       if (data) {
         const config = this.normalize({
           repositoryLink: (data as any).repository_link,
-          teamContent: (data as any).team_content
+          teamContent: (data as any).team_content,
+          planTitleTemplate: (data as any).plan_title_template
         });
         this.configSubject.next(config);
         this.metaSubject.next({ source: 'database', updatedAt: (data as any).updated_at ?? null });
@@ -177,7 +188,8 @@ export class GeneralSectionsConfigService {
   private normalize(config: Partial<GeneralSectionsConfig>): GeneralSectionsConfig {
     return {
       repositoryLink: (config.repositoryLink || '').trim() || this.defaults.repositoryLink,
-      teamContent: (config.teamContent || '').trim() || this.defaults.teamContent
+      teamContent: (config.teamContent || '').trim() || this.defaults.teamContent,
+      planTitleTemplate: (config.planTitleTemplate || '').trim() || this.defaults.planTitleTemplate
     };
   }
 

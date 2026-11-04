@@ -185,88 +185,122 @@
         </div>
         <div class="modal-form-right">
           <div class="form-group">
-            <label class="form-label">Seleccionar Plan / HU y Casos de Prueba</label>
+            <label class="form-label" id="picker-label">Plan, HU y casos de prueba <span class="required">*</span></label>
 
-            <!-- Plan/HU tree inline selector -->
-            <div class="plan-hu-selector">
+            <div class="plan-hu-selector" aria-labelledby="picker-label">
               <div class="plan-hu-selector-inner">
+                <!-- Columna 1: planes y HUs -->
                 <div class="plan-tree-sidebar">
-                  <p class="tc-sidebar-label">Todos los Casos</p>
+                  <div class="picker-search">
+                    <span class="search-icon-sm" aria-hidden="true">🔍</span>
+                    <input type="search" class="form-input search-tc-input"
+                      placeholder="Buscar plan, ID o título de HU…"
+                      aria-label="Buscar plan o HU"
+                      [(ngModel)]="planSearch" (ngModelChange)="onPlanSearchChange()">
+                  </div>
+                  <p class="tc-sidebar-label">
+                    {{ planSearch.trim() ? 'Resultados' : 'Planes recientes' }}
+                    <span class="picker-count" *ngIf="!isLoadingPlans">{{ planTotal }}</span>
+                  </p>
+
                   <div *ngIf="isLoadingPlans" class="tree-loading">
                     <div class="spinner-sm"></div>
-                    <span>Cargando...</span>
+                    <span>{{ planSearch.trim() ? 'Buscando…' : 'Cargando planes…' }}</span>
                   </div>
+
                   <div class="plan-tree" *ngIf="!isLoadingPlans">
                     <div *ngFor="let plan of planTree" class="tree-plan-node">
-                      <div class="tree-plan-header" (click)="togglePlanNode(plan)" [class.expanded]="plan.expanded">
-                        <span class="tree-arrow" [class.expanded]="plan.expanded">▶</span>
-                        <span class="tree-folder-icon">📋</span>
-                        <span class="tree-plan-name" [title]="plan.title">{{ plan.title }}</span>
-                      </div>
+                      <button type="button" class="tree-plan-header" (click)="togglePlanNode(plan)"
+                        [class.expanded]="plan.expanded" [attr.aria-expanded]="plan.expanded" [title]="plan.title">
+                        <span class="tree-arrow" [class.expanded]="plan.expanded" aria-hidden="true">▶</span>
+                        <span class="tree-plan-text">
+                          <span class="tree-plan-name">{{ plan.label }}</span>
+                          <span class="tree-plan-meta">{{ plan.hus.length }} HU{{ plan.hus.length === 1 ? '' : 's' }} · {{ plan.createdAt | date:'dd MMM yyyy' }}</span>
+                        </span>
+                      </button>
                       <div class="tree-hu-list" *ngIf="plan.expanded">
-                        <div *ngFor="let hu of plan.hus"
+                        <button type="button" *ngFor="let hu of plan.hus"
                           class="tree-hu-item"
-                          [class.selected]="!!selectedHuNode && selectedHuNode.id === hu.id && selectedHuNode.testPlanId === hu.testPlanId"
+                          [class.selected]="!!selectedHuNode && selectedHuNode.dbUuid === hu.dbUuid"
+                          [class.empty]="hu.testCasesCount === 0"
+                          [title]="hu.title"
                           (click)="selectHuNode(hu)">
-                          <span class="tree-hu-icon">📄</span>
-                          <span class="tree-hu-name" [title]="hu.title">{{ hu.title }}</span>
-                        </div>
+                          <span class="tree-hu-text">
+                            <span class="tree-hu-id">HU {{ hu.id }}</span>
+                            <span class="tree-hu-name">{{ hu.title }}</span>
+                          </span>
+                          <span class="tree-hu-count" [attr.aria-label]="hu.testCasesCount + ' casos'">{{ hu.testCasesCount }}</span>
+                        </button>
                         <div *ngIf="plan.hus.length === 0" class="tree-empty">Sin HUs</div>
                       </div>
                     </div>
-                    <div *ngIf="planTree.length === 0 && !isLoadingPlans" class="tree-empty">No hay planes disponibles</div>
+
+                    <div *ngIf="planTree.length === 0" class="tree-empty">
+                      {{ planSearch.trim() ? 'Ningún plan o HU coincide con “' + planSearch.trim() + '”.' : 'No hay planes disponibles.' }}
+                      <button *ngIf="planSearch.trim()" type="button" class="tc-select-all-link" (click)="clearPlanSearch()">Limpiar búsqueda</button>
+                    </div>
+
+                    <button *ngIf="hasMorePlans" type="button" class="picker-load-more" (click)="loadMorePlans()" [disabled]="isLoadingMorePlans">
+                      {{ isLoadingMorePlans ? 'Cargando…' : 'Cargar más (' + planTree.length + ' de ' + planTotal + ')' }}
+                    </button>
                   </div>
                 </div>
+
+                <!-- Columna 2: casos de la HU -->
                 <div class="plan-tree-main">
-                  <div *ngIf="isLoadingTestCases" class="tree-main-placeholder" style="display:flex; flex-direction:column; align-items:center; gap: 1rem;">
-                    <div class="spinner-border text-primary" role="status" style="width: 2rem; height: 2rem; border-width: 0.25em;">
-                      <span class="visually-hidden">Cargando...</span>
-                    </div>
-                    <p>Cargando casos de prueba...</p>
+                  <div *ngIf="isLoadingTestCases" class="tree-main-placeholder">
+                    <div class="spinner-sm"></div>
+                    <p>Cargando casos de prueba…</p>
                   </div>
                   <div *ngIf="!isLoadingTestCases && !selectedHuNode" class="tree-main-placeholder">
                     <div class="placeholder-illustration" aria-hidden="true">🗂️</div>
-                    <p class="placeholder-title">Ningún caso seleccionado</p>
-                    <p class="placeholder-hint">Expande un plan y selecciona una HU en el panel izquierdo para ver sus escenarios.</p>
+                    <p class="placeholder-title">Elige una HU</p>
+                    <p class="placeholder-hint">Busca o abre un plan y selecciona una HU para ver sus casos. Se marcan todos; desmarca los que no vayas a ejecutar.</p>
                   </div>
-                  <div *ngIf="!isLoadingTestCases && selectedHuNode">
-                    <div class="search-tc-wrapper">
-                      <span class="search-icon-sm">🔍</span>
-                      <input type="text" class="form-input search-tc-input" placeholder="Buscar casos de prueba..." [(ngModel)]="testCaseSelectorSearch">
-                    </div>
+                  <div *ngIf="!isLoadingTestCases && selectedHuNode" class="tc-panel">
                     <div class="tc-folder-header">
-                      <strong>{{ selectedHuNode.title }}</strong> ({{ selectedHuTestCases.length }} casos)
-                      <button type="button" class="tc-select-all-link" (click)="selectAllTestCases()">Seleccionar todos</button>
+                      <span class="tc-folder-id">HU {{ selectedHuNode.id }}</span>
+                      <strong class="tc-folder-title" [title]="selectedHuNode.title">{{ selectedHuNode.title }}</strong>
                     </div>
-                    <div class="tc-list">
-                      <div class="tc-list-item" *ngFor="let tc of filteredTestCasesForSelector; let i = index" (click)="toggleTestCaseSelection(tc)">
-                        <div class="tc-checkbox" [class.selected]="isTestCaseSelected(tc)">
-                          <span class="check-mark" *ngIf="isTestCaseSelected(tc)">✓</span>
-                        </div>
-                        <div class="tc-item-info">
-                          <span class="tc-item-title">{{ tc.title }}</span>
-                          <span class="tc-item-id">{{ getTestCaseShortId(tc, i) }}</span>
-                        </div>
+                    <div class="tc-toolbar">
+                      <label class="tc-select-all" *ngIf="selectedHuTestCases.length > 0">
+                        <input type="checkbox"
+                          [checked]="selectAllState === 'all'"
+                          [indeterminate]="selectAllState === 'some'"
+                          (change)="toggleSelectAllTestCases()">
+                        <span>Seleccionar todos</span>
+                      </label>
+                      <div class="search-tc-wrapper" *ngIf="selectedHuTestCases.length > 6">
+                        <span class="search-icon-sm" aria-hidden="true">🔍</span>
+                        <input type="search" class="form-input search-tc-input" placeholder="Filtrar casos…" aria-label="Filtrar casos" [(ngModel)]="testCaseSelectorSearch">
                       </div>
+                    </div>
+                    <div class="tc-list" role="group" aria-label="Casos de prueba">
+                      <label class="tc-list-item" *ngFor="let tc of filteredTestCasesForSelector; let i = index" [class.checked]="isTestCaseSelected(tc)">
+                        <input type="checkbox" class="tc-native-check" [checked]="isTestCaseSelected(tc)" (change)="toggleTestCaseSelection(tc)">
+                        <span class="tc-item-info">
+                          <span class="tc-item-title">{{ i + 1 }}. {{ tc.title }}</span>
+                        </span>
+                      </label>
                       <div *ngIf="filteredTestCasesForSelector.length === 0" class="tree-empty" style="padding: 1rem;">
-                        {{ selectedHuTestCases.length === 0 ? 'Esta HU no tiene casos de prueba' : 'Sin resultados' }}
+                        {{ selectedHuTestCases.length === 0 ? 'Esta HU no tiene casos de prueba.' : 'Ningún caso coincide con el filtro.' }}
                       </div>
                     </div>
-                    <div class="tc-selector-count">{{ newRunSelectedTestCaseIds.length }} de {{ selectedHuTestCases.length }} casos seleccionados</div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div class="selected-hu-counter" *ngIf="selectedHuNode">
-              <span class="tc-count">{{ newRunSelectedTestCaseIds.length }} de {{ selectedHuTestCases.length }} caso(s) seleccionado(s)</span>
             </div>
           </div>
         </div>
       </div>
     </div>
     <div class="modal-footer">
-      <span class="modal-footer-hint">{{ newRunSelectedTestCaseIds.length > 0 ? newRunSelectedTestCaseIds.length + ' caso(s) listo(s) para ejecutar' : 'Completa el nombre y selecciona al menos un caso' }}</span>
+      <span class="modal-footer-hint" [class.ready]="newRunName.trim() && newRunSelectedTestCaseIds.length > 0">
+        {{ !selectedHuNode ? 'Elige una HU para continuar'
+           : newRunSelectedTestCaseIds.length === 0 ? 'Selecciona al menos un caso'
+           : !newRunName.trim() ? 'Falta el nombre de la ejecución'
+           : newRunSelectedTestCaseIds.length + ' de ' + selectedHuTestCases.length + ' casos se ejecutarán' }}
+      </span>
       <button type="button" class="button-cancel" (click)="closeCreateModal()">Cancelar</button>
       <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || !selectedHuNode || newRunSelectedTestCaseIds.length === 0 || isCreating">
         {{ isCreating ? 'Creando...' : 'Crear' }}
