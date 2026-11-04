@@ -257,6 +257,56 @@ export class DatabaseService {
     }
   }
 
+  /**
+   * Planes para el selector de "Nueva ejecución": liviano y paginado.
+   * Trae solo lo necesario para elegir (sin descripción ni criterios de cada HU)
+   * y busca en el servidor por título del plan, ID o título de la HU, para que el
+   * selector funcione igual con 20 planes que con miles.
+   */
+  async getPlansForPicker(
+    search: string = '',
+    page: number = 1,
+    pageSize: number = 25
+  ): Promise<{ data: any[]; count: number; matchedHuIds: string[] }> {
+    const currentUserId = await this.getCurrentUserIdOrThrow();
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    // Caracteres reservados por los filtros de PostgREST (or/ilike).
+    const term = search.replace(/[%,()*\\]/g, ' ').trim();
+
+    let query = this.supabase
+      .from('test_plans')
+      .select(`
+        id, title, created_at,
+        user_stories ( id, custom_id, title, sprint, position, test_cases:test_cases(count) )
+      `, { count: 'exact' })
+      .eq('user_id', currentUserId)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    let matchedHuIds: string[] = [];
+    if (term) {
+      // HUs cuyo ID o título coinciden: se incluyen sus planes aunque el título del plan no coincida.
+      const { data: hus } = await this.supabase
+        .from('user_stories')
+        .select('id, test_plan_id')
+        .or(`custom_id.ilike.%${term}%,title.ilike.%${term}%`)
+        .limit(300);
+      matchedHuIds = (hus || []).map((h: any) => h.id);
+      const planIds = Array.from(new Set((hus || []).map((h: any) => h.test_plan_id).filter(Boolean)));
+      query = planIds.length
+        ? query.or(`title.ilike.%${term}%,id.in.(${planIds.join(',')})`)
+        : query.ilike('title', `%${term}%`);
+    }
+
+    const { data, error, count } = await query;
+    if (error) {
+      console.error('❌ Error al buscar planes para el selector:', error);
+      throw error;
+    }
+    return { data: data || [], count: count || 0, matchedHuIds };
+  }
+
   async getTestPlanSummariesPaginated(page: number = 1, pageSize: number = 10): Promise<{ data: any[], count: number }> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
