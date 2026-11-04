@@ -34,6 +34,11 @@
         </div>
       </div>
 
+      <p *ngIf="connection?.status === 'expired' || connection?.status === 'invalid'" class="message error" role="alert">
+        Azure DevOps rechazó el token {{ connection?.tokenHint }}: está vencido o fue revocado. Genera un PAT nuevo
+        (permisos Work Items, Test Management y Release: Read, write &amp; execute), pégalo abajo y guarda la conexión.
+      </p>
+
       <div class="form-grid">
         <div class="form-group">
           <label for="organization">Organización</label>

@@ -849,9 +849,10 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
         return 'Conectado';
       case 'disconnected':
         return 'Pendiente';
-      case 'invalid':
       case 'expired':
-        return 'Error';
+        return 'PAT vencido';
+      case 'invalid':
+        return 'PAT inválido';
       default:
         return 'No configurado';
     }
