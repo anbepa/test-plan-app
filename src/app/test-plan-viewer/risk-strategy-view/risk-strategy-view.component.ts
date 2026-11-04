@@ -157,7 +157,8 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, Afte
 
     // Pasar el conteo de HUs para ajustar dinámicamente la profundidad del análisis de riesgos:
     // más HUs = más espacio para riesgos complejos, causas múltiples, integraciones, etc.
-    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions, this.huList.length)
+    // El riesgo ya registrado se envía para que la IA no lo repita y proponga el siguiente.
+    this.aiService.generateRiskStrategy(huSummary, this.riskScenarioOptions, this.huList.length, this.currentRiskForAI())
       .pipe(
         tap((response: any) => {
           this.riskData = this.mapAIResponse(response);
@@ -290,33 +291,25 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, Afte
       75: '75% - Gran posibilidad de ocurrir', 100: '100% - Ocurrido (Issue)'
     };
 
+    // Los escenarios ya usados (en cualquiera de las dos listas) no se repiten.
+    const used = new Set<string>();
     const normScenarios = (raw: any[], min: number) => {
       const arr = (Array.isArray(raw) ? raw : []).map(s => (s ?? '').toString().trim()).filter(Boolean);
       const resolved: string[] = [];
 
       for (const s of arr) {
-        const sLow = s.toLowerCase();
-        // 1) Coincidencia exacta o la opción contiene el texto de la IA o al revés
-        const match = this.riskScenarioOptions.find(o =>
-          o === s ||
-          o.toLowerCase().includes(sLow) ||
-          sLow.includes(o.toLowerCase())
-        );
-
+        const match = this.matchScenarioOption(s, used);
         if (match) {
           resolved.push(match);
-        } else {
-          // 2) Fallback: primer escenario disponible aún no seleccionado
-          const alreadyPicked = resolved.map(v => v.trim()).filter(Boolean);
-          const fallback = this.riskScenarioOptions.find(o => !alreadyPicked.includes(o.trim()));
-          resolved.push(fallback ?? '');
+          used.add(match);
         }
+        // Sin coincidencia: se descarta en lugar de poner un escenario sin relación.
       }
 
-      // Rellenar hasta el mínimo requerido con opciones disponibles
+      // La pantalla exige un mínimo: se completa con escenarios disponibles no usados.
       while (resolved.length < min) {
-        const alreadyPicked = resolved.map(v => v.trim()).filter(Boolean);
-        const next = this.riskScenarioOptions.find(o => !alreadyPicked.includes(o.trim())) ?? '';
+        const next = this.riskScenarioOptions.find(o => !used.has(o)) ?? '';
+        if (next) used.add(next);
         resolved.push(next);
       }
 
@@ -324,14 +317,73 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, Afte
     };
 
     return {
-      probabilidadDe: (r?.probabilidadDe || '').toString().trim(),
-      puedeOcurrir: (r?.puedeOcurrir || '').toString().trim(),
-      loQuePodriaOcasionar: (r?.loQuePodriaOcasionar || '').toString().trim(),
-      impacto: impactMap[Number(r?.impactLevel)] || '',
-      probabilidad: probMap[Number(r?.probabilityLevel)] || '',
-      positiveScenarios: normScenarios(r?.positiveScenarios, 2),
-      alternateScenarios: normScenarios(r?.alternateScenarios, 1)
+      probabilidadDe: this.pickAiField(r, ['probabilidadDe', 'evento', 'riesgo']),
+      puedeOcurrir: this.pickAiField(r, ['puedeOcurrir', 'causa']),
+      loQuePodriaOcasionar: this.pickAiField(r, ['loQuePodriaOcasionar', 'consecuencia', 'impacto']),
+      impacto: impactMap[Number(this.pickAiField(r, ['impactLevel', 'impacto_nivel']))] || '',
+      probabilidad: probMap[Number(this.pickAiField(r, ['probabilityLevel', 'probabilidad']))] || '',
+      positiveScenarios: normScenarios(r?.positiveScenarios ?? r?.escenariosPositivos, 2),
+      alternateScenarios: normScenarios(r?.alternateScenarios ?? r?.escenariosAlternos, 1)
     };
+  }
+
+  /**
+   * Lee un campo del JSON de la IA tolerando variantes del nombre
+   * (tildes, mayúsculas, guiones bajos) o un sinónimo.
+   */
+  private pickAiField(r: any, names: string[]): string {
+    if (!r || typeof r !== 'object') return '';
+    const norm = (k: string) => k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+    const byKey = new Map(Object.keys(r).map(k => [norm(k), r[k]]));
+    for (const n of names) {
+      const v = byKey.get(norm(n));
+      if (v !== undefined && v !== null && typeof v !== 'object' && `${v}`.trim()) return `${v}`.trim();
+    }
+    return '';
+  }
+
+  /** Resumen del riesgo ya registrado, para que la IA no lo repita. */
+  private currentRiskForAI(): string[] {
+    const r = this.riskData;
+    if (!r?.probabilidadDe?.trim()) return [];
+    return [
+      `Evento: ${r.probabilidadDe.trim()} | Causa: ${(r.puedeOcurrir || '').trim()} | Consecuencia: ${(r.loQuePodriaOcasionar || '').trim()}`
+    ];
+  }
+
+  /**
+   * Empareja el escenario devuelto por la IA con una opción de la lista:
+   * exacto → contenido → mayor coincidencia de palabras (≥ 60%).
+   */
+  private matchScenarioOption(aiText: string, used: Set<string>): string | null {
+    const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/^\s*\d+\s*[.)-]\s*/, '').replace(/\s+/g, ' ').trim();
+    const target = norm(aiText);
+    if (!target) return null;
+    const options = this.riskScenarioOptions.filter(o => !used.has(o));
+
+    const exact = options.find(o => norm(o) === target);
+    if (exact) return exact;
+
+    const contained = options.find(o => {
+      const on = norm(o);
+      return on.includes(target) || target.includes(on) || on.endsWith(target);
+    });
+    if (contained) return contained;
+
+    const words = (t: string) => new Set(t.split(/[^a-z0-9ñ]+/).filter(w => w.length > 2));
+    const tw = words(target);
+    let best: string | null = null;
+    let bestScore = 0;
+    for (const o of options) {
+      const ow = words(norm(o));
+      if (!ow.size || !tw.size) continue;
+      let common = 0;
+      tw.forEach(w => { if (ow.has(w)) common++; });
+      const score = common / Math.min(tw.size, ow.size);
+      if (score > bestScore) { bestScore = score; best = o; }
+    }
+    return bestScore >= 0.6 ? best : null;
   }
 
   private buildScenarioOptions(): string[] {

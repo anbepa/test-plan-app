@@ -14,7 +14,7 @@ import {
 } from '../models/github-models.model';
 import { AiProvidersService } from '../services/ai/ai-providers.service';
 import { ToastService } from '../services/core/toast.service';
-import { GeneralSectionsConfigService } from '../services/core/general-sections-config.service';
+import { GeneralSectionsConfigService, GeneralSectionsMeta } from '../services/core/general-sections-config.service';
 import { CellsConfigService } from '../services/core/cells-config.service';
 
 @Component({
@@ -30,6 +30,16 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   repositoryLink = '';
   teamContent = '';
   teamRows: Array<{ role: string; name: string }> = [];
+  /** Origen de los parámetros mostrados (BD, solo este navegador o valores por defecto). */
+  generalMeta: GeneralSectionsMeta = { source: 'defaults', updatedAt: null };
+  savingGeneral = false;
+  /** Mensajes propios de Parámetros globales (no se mezclan con los de Azure DevOps). */
+  generalInfoMessage: string | null = null;
+  generalErrorMessage: string | null = null;
+  /** Último estado guardado/cargado, para detectar cambios sin guardar. */
+  private generalSnapshot = '';
+  private generalSubs: Subscription[] = [];
+  isResetCellsConfirmOpen = false;
 
   connection: AzureDevOpsConnectionView | null = null;
 
@@ -104,6 +114,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopGithubPolling();
+    this.generalSubs.forEach((sub) => sub.unsubscribe());
   }
 
   toggleSection(section: 'azure' | 'github' | 'global' | 'status' | 'cells'): void {
@@ -614,38 +625,83 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       .join('\n');
   }
 
-  saveGeneralSectionsConfig(): void {
-    const repositoryLink = this.repositoryLink.trim();
-    const teamContent = this.serializeTeamRows();
-
-    if (!repositoryLink) {
-      this.errorMessage = 'El campo Repositorio Pruebas VSTS es obligatorio.';
-      return;
-    }
-
-    if (!teamContent) {
-      this.errorMessage = 'El campo Equipo de Trabajo es obligatorio.';
-      return;
-    }
-
-    const updated = this.generalSectionsConfigService.saveConfig({
-      repositoryLink,
-      teamContent
-    });
-
-    this.repositoryLink = updated.repositoryLink;
-    this.teamContent = updated.teamContent;
-    this.teamRows = this.parseTeamContent(updated.teamContent);
-    this.infoMessage = 'Configuración de secciones generales guardada correctamente.';
-    this.errorMessage = null;
-    this.toastService.success('Parámetros de secciones generales guardados.');
+  /** true si hay cambios en repositorio o equipo que aún no se guardaron. */
+  get generalDirty(): boolean {
+    return this.currentGeneralState() !== this.generalSnapshot;
   }
 
-  private loadGeneralSectionsConfig(): void {
-    const config = this.generalSectionsConfigService.getConfig();
+  /** Texto del estado de persistencia de los parámetros. */
+  get generalStatusText(): string {
+    if (this.generalMeta.source === 'database') {
+      const when = this.generalMeta.updatedAt ? new Date(this.generalMeta.updatedAt) : null;
+      return when && !isNaN(when.getTime())
+        ? `Guardado en tu cuenta · ${when.toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })}`
+        : 'Guardado en tu cuenta';
+    }
+    if (this.generalMeta.source === 'local') {
+      return 'Guardado solo en este navegador: pulsa Guardar para guardarlo en tu cuenta';
+    }
+    return 'Valores por defecto: aún no has guardado los tuyos';
+  }
+
+  private currentGeneralState(): string {
+    return JSON.stringify({ repo: this.repositoryLink.trim(), team: this.serializeTeamRows() });
+  }
+
+  async saveGeneralSectionsConfig(): Promise<void> {
+    this.generalInfoMessage = null;
+    this.generalErrorMessage = null;
+    const repositoryLink = this.repositoryLink.trim();
+
+    if (!repositoryLink) {
+      this.generalErrorMessage = 'El repositorio de pruebas es obligatorio.';
+      return;
+    }
+
+    const incomplete = this.teamRows.findIndex((r) => !!(r.role || '').trim() !== !!(r.name || '').trim());
+    if (incomplete !== -1) {
+      this.generalErrorMessage = `Completa el rol y el nombre del integrante ${incomplete + 1}.`;
+      return;
+    }
+
+    const teamContent = this.serializeTeamRows();
+    if (!teamContent) {
+      this.generalErrorMessage = 'Agrega al menos un integrante al equipo de trabajo.';
+      return;
+    }
+
+    this.savingGeneral = true;
+    try {
+      const result = await this.generalSectionsConfigService.saveConfig({ repositoryLink, teamContent });
+      this.applyGeneralConfig(result.config);
+      if (result.savedToDatabase) {
+        this.generalInfoMessage = 'Parámetros guardados en tu cuenta.';
+        this.toastService.success('Parámetros globales guardados.');
+      } else {
+        this.generalErrorMessage = `Se guardaron solo en este navegador: no fue posible guardarlos en tu cuenta (${result.error || 'error desconocido'}).`;
+        this.toastService.error('No se pudieron guardar los parámetros en tu cuenta.');
+      }
+    } finally {
+      this.savingGeneral = false;
+    }
+  }
+
+  private applyGeneralConfig(config: { repositoryLink: string; teamContent: string }): void {
     this.repositoryLink = config.repositoryLink;
     this.teamContent = config.teamContent;
     this.teamRows = this.parseTeamContent(config.teamContent);
+    this.generalSnapshot = this.currentGeneralState();
+  }
+
+  private loadGeneralSectionsConfig(): void {
+    this.applyGeneralConfig(this.generalSectionsConfigService.getConfig());
+    // Al terminar la carga desde la BD se actualizan los campos, salvo que el usuario ya los esté editando.
+    this.generalSubs.push(
+      this.generalSectionsConfigService.config$.subscribe((config) => {
+        if (!this.generalDirty && !this.savingGeneral) this.applyGeneralConfig(config);
+      }),
+      this.generalSectionsConfigService.meta$.subscribe((meta) => this.generalMeta = meta)
+    );
   }
 
   // ── CRUD "Nombre Célula" ─────────────────────────────────────────────
@@ -710,6 +766,15 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       .finally(() => {
         this.savingCells = false;
       });
+  }
+
+  openResetCellsConfirm(): void {
+    this.isResetCellsConfirmOpen = true;
+  }
+
+  confirmResetCells(): void {
+    this.isResetCellsConfirmOpen = false;
+    this.resetCellsConfig();
   }
 
   resetCellsConfig(): void {

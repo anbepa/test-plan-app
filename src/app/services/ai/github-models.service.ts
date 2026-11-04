@@ -300,12 +300,12 @@ export class GitHubModelsService {
         );
     }
 
-    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
-        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, [], huCount);
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1, previousRisks: string[] = []): Observable<any> {
+        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, previousRisks, huCount);
         return this.callChat({
             messages: [{ role: 'user', content: promptText }],
             temperature: 0.35,
-            max_tokens: 2500,
+            max_tokens: 4000,
             response_format: { type: 'json_object' }
         }).pipe(
             map(response => {

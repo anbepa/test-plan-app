@@ -11,13 +11,17 @@ import { ToastService } from '../../../services/core/toast.service';
 /** Destino de una carga a Azure: un formato suelto o un paquete con varios formatos. */
 export type UploadTarget = 'word' | 'pdf' | 'excel' | 'serenity' | 'bundle';
 
-/** Datos de presentación de cada destino de carga (título y nombre .zip por defecto). */
-const UPLOAD_TARGETS: Record<UploadTarget, { label: string; zipPrefix: string }> = {
-  word: { label: 'Word', zipPrefix: 'Evidencia_Word' },
-  pdf: { label: 'PDF', zipPrefix: 'Evidencia_PDF' },
-  excel: { label: 'Excel', zipPrefix: 'Evidencia_Excel' },
-  serenity: { label: 'reporte Serenity', zipPrefix: 'Reporte_Serenity' },
-  bundle: { label: 'paquete de evidencias', zipPrefix: 'Evidencia' }
+/**
+ * Datos de presentación de cada destino de carga: título, prefijo del nombre por defecto
+ * y extensión. Word, PDF y Excel se adjuntan en su formato; solo Serenity va en .zip.
+ * "Varios formatos" no lleva extensión: cada archivo agrega la suya.
+ */
+const UPLOAD_TARGETS: Record<UploadTarget, { label: string; zipPrefix: string; ext: string }> = {
+  word: { label: 'Word', zipPrefix: 'Evidencia_Word', ext: '.docx' },
+  pdf: { label: 'PDF', zipPrefix: 'Evidencia_PDF', ext: '.pdf' },
+  excel: { label: 'Excel', zipPrefix: 'Evidencia_Excel', ext: '.xlsx' },
+  serenity: { label: 'reporte Serenity', zipPrefix: 'Reporte_Serenity', ext: '.zip' },
+  bundle: { label: 'varios formatos', zipPrefix: 'Evidencia', ext: '' }
 };
 
 @Component({
@@ -50,7 +54,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
   showUploadModal = false;
   uploadMode: UploadTarget | null = null;
 
-  /** Nombre del .zip de cada destino: cada formato se carga con su propio nombre. */
+  /** Nombre del adjunto de cada destino: cada formato se carga con su propio nombre. */
   fileNames: Record<UploadTarget, string> = { word: '', pdf: '', excel: '', serenity: '', bundle: '' };
   /** Nombres editados a mano: no se recalculan al cambiar el ID del plan. */
   private editedNames = new Set<UploadTarget>();
@@ -101,6 +105,24 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
 
   get serenityPending(): boolean {
     return this.serenityReport?.status === 'pending';
+  }
+
+  /** Etiqueta del campo de nombre según el destino (extensión real del adjunto). */
+  get fileNameLabel(): string {
+    if (!this.uploadMode) return 'Nombre del archivo';
+    const ext = UPLOAD_TARGETS[this.uploadMode].ext;
+    return ext ? `Nombre del archivo (${ext})` : 'Nombre de los archivos (sin extensión)';
+  }
+
+  /** Ayuda bajo el campo de nombre. */
+  get fileNameHint(): string {
+    return this.uploadMode === 'bundle'
+      ? 'Cada formato se adjunta por separado con su extensión (.docx, .pdf, .xlsx).'
+      : 'Así aparecerá el adjunto en el plan de pruebas.';
+  }
+
+  get fileNamePlaceholder(): string {
+    return this.uploadMode ? `${UPLOAD_TARGETS[this.uploadMode].zipPrefix}${UPLOAD_TARGETS[this.uploadMode].ext}` : '';
   }
 
   get uploadTitle(): string {
@@ -218,8 +240,8 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
 
   private defaultFileName(target: UploadTarget): string {
     const ref = (this.up?.validatedPlan?.planId || this.up?.inputPlanId || '').trim();
-    const prefix = UPLOAD_TARGETS[target].zipPrefix;
-    return ref ? `${prefix}_${ref}.zip` : `${prefix}.zip`;
+    const { zipPrefix: prefix, ext } = UPLOAD_TARGETS[target];
+    return ref ? `${prefix}_${ref}${ext}` : `${prefix}${ext}`;
   }
 
   /** Carga el último reporte Serenity para mostrar su estado en el sub-modal. */
@@ -277,7 +299,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** Publica en DevOps uno o varios formatos Word/PDF/Excel empaquetados en un único .zip. */
+  /** Publica en DevOps uno o varios formatos Word/PDF/Excel, cada uno como adjunto en su formato. */
   async publishOfficeFormats(formats: OfficeFormats, fileName: string): Promise<void> {
     if (!this.up) return;
     if (!formats.docx && !formats.pdf && !formats.excel) return;
@@ -304,7 +326,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
     this.processingMessage = 'Cargando reporte Serenity...';
     try {
       const validated = this.up.validatedPlan!;
-      const blob = await this.fetchAsBlob(report.artifactDownloadUrl);
+      const blob = await this.fetchAsBlob(await this.serenityReportService.getFreshDownloadUrl(report));
       const base64 = await this.blobToBase64(blob);
       await this.azureEvidence.uploadAttachment(
         validated.planId,
@@ -394,7 +416,7 @@ export class EvidenceManagerComponent implements OnInit, OnDestroy {
 
   private async fetchAsBlob(url: string): Promise<Blob> {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('No se pudo descargar el reporte');
+    if (!res.ok) throw new Error(`No se pudo descargar el reporte (HTTP ${res.status})`);
     return res.blob();
   }
 

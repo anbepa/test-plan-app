@@ -82,25 +82,10 @@ export const routes: Routes = [
     canActivate: [authGuard]
   },
   {
-    path: 'evidence-analysis',
-    redirectTo: 'welcome',
-    pathMatch: 'full'
-  },
-  {
-    path: 'evidence-reports',
-    redirectTo: 'welcome',
-    pathMatch: 'full'
-  },
-  {
     path: 'configuracion',
     loadComponent: () => import('./configuracion/configuracion.component').then(m => m.ConfiguracionComponent),
     title: 'Configuración',
     canActivate: [authGuard]
-  },
-  {
-    path: 'evidence-analysis/report/:id',
-    redirectTo: 'welcome',
-    pathMatch: 'full'
   },
   {
     path: '**',

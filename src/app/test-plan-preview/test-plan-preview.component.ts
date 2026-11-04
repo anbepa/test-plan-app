@@ -61,7 +61,7 @@ export class TestPlanPreviewComponent implements OnInit {
                 this.huList = this.mapper.mapDbTestPlanToHUList(plan);
 
                 // Cargar configuración global con fallback
-                const config = this.generalSectionsConfig.getConfig();
+                const config = await this.generalSectionsConfig.ready();
 
                 // Preferir config global, caer a plan solo si config global está vacía
                 this.repositoryLink = config.repositoryLink || plan.repository_link || '';

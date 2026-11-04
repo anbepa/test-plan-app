@@ -198,11 +198,11 @@
           </li>
         </ul>
 
-        <!-- Acción secundaria: varios formatos en un único .zip -->
+        <!-- Acción secundaria: varios formatos a la vez (cada uno en su formato) -->
         <div class="bundle-upload">
           <button type="button" class="link-btn" (click)="openUploadModal('bundle')" [disabled]="isBusy || !execution">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Cargar varios formatos en un solo .zip…
+            Cargar varios formatos a la vez…
           </button>
         </div>
       </div>
@@ -354,20 +354,20 @@
           <p class="plan-id-hint muted" *ngIf="!up.planValidated">Se valida al pulsar <strong>Cargar</strong>.</p>
         </div>
 
-        <!-- Nombre del .zip propio de este formato -->
+        <!-- Nombre del adjunto de este formato -->
         <div class="form-field" *ngIf="uploadMode">
-          <label for="evidence-zip-name" class="plan-id-label">Nombre del archivo (.zip)</label>
+          <label for="evidence-zip-name" class="plan-id-label">{{ fileNameLabel }}</label>
           <input
             id="evidence-zip-name"
             name="zip-name"
             class="plan-id-input"
             type="text"
-            [placeholder]="uploadMode === 'serenity' ? 'Reporte_Serenity.zip' : 'Evidencia.zip'"
+            [placeholder]="fileNamePlaceholder"
             [(ngModel)]="fileNames[uploadMode]"
             (ngModelChange)="onFileNameChange(uploadMode)"
             [disabled]="isBusy"
             autocomplete="off" />
-          <p class="plan-id-hint muted">Así aparecerá el adjunto en el plan de pruebas.</p>
+          <p class="plan-id-hint muted">{{ fileNameHint }}</p>
         </div>
       </form>
 

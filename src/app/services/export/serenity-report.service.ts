@@ -358,6 +358,29 @@ export class SerenityReportService {
   stopPolling(): void { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; } }
   reset(): void { this.stopPolling(); this.state = { phase: 'idle' }; }
 
+  /**
+   * Enlace vigente para descargar el reporte. El guardado lo firma el pipeline con
+   * 24 h de validez; pasado ese tiempo fallaba ("InvalidJWT") aunque el reporte
+   * siguiera "Completado". El servidor lo vuelve a firmar en cada uso.
+   */
+  async getFreshDownloadUrl(report: { id?: string; artifactDownloadUrl?: string } | null | undefined): Promise<string> {
+    if (report?.id) {
+      try {
+        const headers = await this.buildAuthHeaders();
+        const res = await firstValueFrom(this.http.get<{ url?: string }>(
+          `${this.azApiUrl}?action=sign&reportId=${encodeURIComponent(report.id)}`, { headers }));
+        if (res?.url) return res.url;
+      } catch (err: any) {
+        if (err?.status === 404 || err?.status === 410) {
+          throw new Error(err?.error?.error || 'El reporte Serenity ya no está disponible. Vuelve a generarlo.');
+        }
+        console.warn('[Serenity] No se pudo renovar el enlace del reporte; se usa el guardado.', err?.message);
+      }
+    }
+    if (report?.artifactDownloadUrl) return report.artifactDownloadUrl;
+    throw new Error('Aún no hay un enlace al reporte Serenity.');
+  }
+
   async loadHistory(executionId?: string): Promise<SerenityReportRecord[]> {
     try {
       const { data } = await this.supabaseClient.supabase.auth.getUser();

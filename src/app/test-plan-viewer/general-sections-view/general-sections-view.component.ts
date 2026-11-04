@@ -1,3 +1,4 @@
+import { compactStaticSectionText } from '../../shared/utils/static-section-text';
 import { CommonModule } from '@angular/common';
 import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -281,64 +282,7 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy, AfterVie
   ngOnDestroy(): void { }
 
   private compactStaticSectionContent(content: string): string {
-    if (!content) return '';
-
-    // Límites dinámicos alineados con STATIC_SECTION_ENHANCEMENT (prompts.config.ts).
-    // Antes eran fijos (6 líneas / 220 chars / 1200 total) y cortaban a media palabra,
-    // truncando el contenido que la IA generaba para planes con muchas HUs.
-    const huCount = this.huList.length;
-    let maxLines: number;
-    let maxChars: number;
-    if (huCount <= 3) {
-      maxLines = 4; maxChars = 500;
-    } else if (huCount <= 7) {
-      maxLines = 6; maxChars = 750;
-    } else if (huCount <= 15) {
-      maxLines = 8; maxChars = 1000;
-    } else {
-      maxLines = 10; maxChars = 1400;
-    }
-
-    const lines = content
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean)
-      .map(line => line.replace(/^[-•\d.)\s]+/, '').trim())
-      .slice(0, maxLines);
-
-    let compact = lines.join('\n').trim();
-
-    // Recorte final SIN partir palabras: si excede el tope, corta en el último
-    // espacio antes del límite para no dejar palabras a medias.
-    if (compact.length > maxChars) {
-      const slice = compact.slice(0, maxChars);
-      const lastSpace = slice.lastIndexOf(' ');
-      compact = (lastSpace > maxChars * 0.6 ? slice.slice(0, lastSpace) : slice).trim();
-    }
-
-    // Si el texto termina en una frase incompleta (coma, punto y coma, dos puntos
-    // o conjunción colgante), recorta hasta el último punto para cerrar la idea.
-    compact = this.closeAtLastSentence(compact);
-
-    return compact;
+    return compactStaticSectionText(content, this.huList.length);
   }
 
-  /** Cierra el texto en la última oración completa para evitar frases a medias. */
-  private closeAtLastSentence(text: string): string {
-    const trimmed = text.trim();
-    if (!trimmed) return trimmed;
-    // Si ya termina bien, no tocar.
-    if (/[.!?]$/.test(trimmed)) return trimmed;
-    const lastPeriod = Math.max(
-      trimmed.lastIndexOf('. '),
-      trimmed.lastIndexOf('.\n'),
-      trimmed.endsWith('.') ? trimmed.length - 1 : -1
-    );
-    // Solo recortar si conservamos una porción sustancial (>50%).
-    if (lastPeriod > trimmed.length * 0.5) {
-      return trimmed.slice(0, lastPeriod + 1).trim();
-    }
-    // No hay punto útil: al menos quitar puntuación colgante final.
-    return trimmed.replace(/[\s,;:\-–—]+$/, '').trim();
-  }
 }

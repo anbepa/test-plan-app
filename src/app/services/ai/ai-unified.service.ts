@@ -111,16 +111,16 @@ export class AiUnifiedService {
     /**
      * Generar item de riesgos para la estrategia de pruebas
      */
-    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1, previousRisks: string[] = []): Observable<any> {
         const service = this.getActiveService();
 
         const primary = ('generateRiskStrategy' in service)
-            ? (service as any).generateRiskStrategy(huSummary, availableScenarios, huCount)
-            : this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount);
+            ? (service as any).generateRiskStrategy(huSummary, availableScenarios, huCount, previousRisks)
+            : this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount, previousRisks);
 
         return this.withDeepSeekFallback(
             primary,
-            () => this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount)
+            () => this.deepSeekService.generateRiskStrategy(huSummary, availableScenarios, huCount, previousRisks)
         );
     }
 

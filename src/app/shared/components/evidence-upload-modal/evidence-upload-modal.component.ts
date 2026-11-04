@@ -196,11 +196,12 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
       console.log('[startUpload] Iniciando carga para plan:', this.validatedPlan.planId);
       
       const formats = override?.formats || this.selectedFormats;
-      const zipNameTemplate = this.sanitizeZipName(override?.fileName ?? this.inputFileName, 'Evidencia.zip');
-      
-      console.log('[startUpload] Nombre archivo ZIP:', zipNameTemplate);
+      // Word, PDF y Excel se adjuntan en su formato (sin .zip): el nombre es la base y
+      // cada archivo lleva su extensión (.docx, .pdf, .xlsx).
+      const baseName = this.officeBaseName(override?.fileName ?? this.inputFileName, 'Evidencia');
+      const zipNameTemplate = `${baseName}.zip`;
 
-      const extraFiles = await this.buildExtraFiles(formats);
+      const extraFiles = await this.buildExtraFiles(formats, baseName);
       
       this.orchestrator
         .watchProgress()
@@ -325,19 +326,28 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     return n;
   }
 
+  /**
+   * Nombre base (sin extensión) de un archivo de evidencia ofimática: elimina
+   * caracteres inválidos y una extensión que el usuario haya escrito (.zip, .docx, .pdf, .xlsx).
+   */
+  officeBaseName(name: string, fallback: string): string {
+    let n = (name || '').trim().replace(/\.(zip|docx|pdf|xlsx)$/i, '').trim() || fallback;
+    return n.replace(/[\\/:*?"<>|]+/g, '_');
+  }
+
   /** Identificador del plan disponible (validado o tecleado). */
   private currentPlanRef(): string {
     return (this.validatedPlan?.planId || this.inputPlanId || '').trim();
   }
 
   /**
-   * Inicializa el nombre del .zip de evidencias ofimáticas SOLO si el campo está vacío.
+   * Inicializa el nombre (sin extensión) de las evidencias ofimáticas SOLO si el campo está vacío.
    * Nunca pisa lo que el usuario ya escribió.
    */
   ensureOfficeFileName(): void {
     if (this.inputFileName && this.inputFileName.trim()) return;
     const ref = this.currentPlanRef();
-    this.inputFileName = ref ? `Evidencia_${ref}.zip` : 'Evidencia.zip';
+    this.inputFileName = ref ? `Evidencia_${ref}` : 'Evidencia';
   }
 
   /**
@@ -354,11 +364,9 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     return this.selectedFormats.docx || this.selectedFormats.pdf || this.selectedFormats.excel;
   }
 
-  private async buildExtraFiles(formats: OfficeFormats): Promise<{ name: string; base64: string }[]> {
+  private async buildExtraFiles(formats: OfficeFormats, baseName: string): Promise<{ name: string; base64: string }[]> {
     const files: { name: string; base64: string }[] = [];
     if (!this.execution) return files;
-
-    const baseName = (this.execution.huTitle || 'Ejecucion').replace(/[^\w\-]+/g, '_').slice(0, 60);
 
     if (formats.docx) {
       this.onProcessing.emit({ isProcessing: true, message: 'Generando documento Word...' });

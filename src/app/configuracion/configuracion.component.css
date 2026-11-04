@@ -806,3 +806,96 @@ button:disabled {
     left: 0;
   }
 }
+
+/* ── Parámetros globales: estado de persistencia y cambios sin guardar ── */
+.card-description {
+  margin: 6px 0 12px;
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.persistence-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.persistence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex: 0 0 auto;
+}
+
+.persistence-status[data-source="database"] { background: #ecfdf5; color: #047857; }
+.persistence-status[data-source="database"] .persistence-dot { background: #10b981; }
+.persistence-status[data-source="local"] { background: #fffbeb; color: #92400e; }
+.persistence-status[data-source="local"] .persistence-dot { background: #f59e0b; }
+
+.dirty-hint {
+  align-self: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #b45309;
+}
+
+/* Móvil: cada integrante/célula como bloque, sin columnas apretadas */
+@media (max-width: 640px) {
+  .team-config-table thead {
+    display: none;
+  }
+
+  .team-config-table,
+  .team-config-table tbody {
+    display: block;
+  }
+
+  .team-config-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .team-config-table td {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+    min-width: 0;
+  }
+
+  .team-config-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  .team-config-table td[data-label] {
+    grid-column: 1;
+  }
+
+  .team-config-table td.col-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .dirty-hint {
+    text-align: center;
+  }
+}

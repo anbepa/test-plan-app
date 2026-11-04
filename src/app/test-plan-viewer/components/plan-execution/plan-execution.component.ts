@@ -1687,8 +1687,15 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       await this.openSerenityHistoryModal();
       return;
     }
+    let href: string;
+    try {
+      href = await this.serenityReportService.getFreshDownloadUrl(latest);
+    } catch (err: any) {
+      this.toastService.error(err?.message || 'No se pudo descargar el reporte Serenity');
+      return;
+    }
     const a = document.createElement('a');
-    a.href = latest.artifactDownloadUrl!;
+    a.href = href;
     a.download = 'serenity-report.zip';
     a.rel = 'noopener';
     document.body.appendChild(a);
@@ -1790,7 +1797,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
       const validated = await this.azureEvidenceService.validateTestPlan(planId);
       this.toastService.success(`Plan ${validated.planId} validado`);
 
-      const zipBlob = await this.fetchAsBlob(report.artifactDownloadUrl);
+      const zipBlob = await this.fetchAsBlob(await this.serenityReportService.getFreshDownloadUrl(report));
       const base64 = await this.blobToBase64(zipBlob);
 
       const fileName = (this.attachFileNameInput || this.buildDefaultAttachFileName(report)).trim();
@@ -1819,7 +1826,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
   private async fetchAsBlob(url: string): Promise<Blob> {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('No se pudo descargar el reporte');
+    if (!res.ok) throw new Error(`No se pudo descargar el reporte (HTTP ${res.status})`);
     return res.blob();
   }
 
