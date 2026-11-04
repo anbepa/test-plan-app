@@ -117,6 +117,12 @@ export class TestPlanGeneratorComponent {
     const config = this.generalSectionsConfigService.getConfig();
     this.repositoryLink = config.repositoryLink;
     this.teamContent = config.teamContent;
+    // Los parámetros vienen de la BD: al terminar la carga se actualizan si el
+    // usuario no los cambió en este plan.
+    this.generalSectionsConfigService.ready().then((loaded) => {
+      if (this.repositoryLink === config.repositoryLink) this.repositoryLink = loaded.repositoryLink;
+      if (this.teamContent === config.teamContent) this.teamContent = loaded.teamContent;
+    });
   }
 
   goBackToDetail(): void {
