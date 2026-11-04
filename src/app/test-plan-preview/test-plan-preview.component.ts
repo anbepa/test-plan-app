@@ -90,7 +90,9 @@ export class TestPlanPreviewComponent implements OnInit {
         // 1. ALCANCE
         html += `<h2>1. ALCANCE</h2>\n`;
         this.huList.forEach(hu => {
-            html += `<p><strong>HU ${hu.id}</strong></p>\n`;
+            // data-azure-hu: al enviar a Azure DevOps el backend lo convierte en
+            // mención de work item (#ID), que Azure muestra como ficha con título y estado.
+            html += `<p><strong>HU <span data-azure-hu="${hu.id}">${hu.id}</span></strong></p>\n`;
             if (hu.generatedScope) {
                 html += `<p>${hu.generatedScope}</p>\n`;
             } else {
@@ -110,7 +112,7 @@ export class TestPlanPreviewComponent implements OnInit {
         // 4. Casos de Prueba
         html += `<h2>4. Casos de Prueba</h2>\n`;
         this.huList.forEach(hu => {
-            html += `<h3>ID ${hu.id}: ${hu.title}</h3>\n`;
+            html += `<h3><span data-azure-hu="${hu.id}">ID ${hu.id}: ${hu.title}</span></h3>\n`;
 
             if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
                 html += `<ul>\n`;
