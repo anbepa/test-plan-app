@@ -43,7 +43,7 @@ export class DeepSeekService {
     }
 
     // En modo thinking, deepseek-flash consume ~1000-2500 tokens en razonamiento interno antes de generar el JSON.
-    // El JSON de risk-strategy tiene ~300-500 tokens de output. Total necesario: ~3000-4000 tokens.
+    // El JSON de risk-strategy tiene ~300-900 tokens; 4000 deja margen para planes con muchas HUs sin truncar.
     private readonly RISK_STRATEGY_MODEL = 'deepseek-flash'; // Usa deepseek-flash para evitar overhead de razonamiento
 
     private buildRiskStrategyPayload(promptText: string, isRetry = false): DeepSeekRequest {
@@ -55,7 +55,7 @@ export class DeepSeekService {
             model: this.RISK_STRATEGY_MODEL,
             messages: [{ role: 'user', content: `${promptText}${retryInstruction}` }],
             temperature: isRetry ? 0.2 : 0.35,
-            max_tokens: isRetry ? 3000 : 2500,
+            max_tokens: isRetry ? 4500 : 4000,
             response_format: { type: 'json_object' },
             thinking: { type: 'disabled' }
         };
@@ -150,8 +150,8 @@ export class DeepSeekService {
         );
     }
 
-    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
-        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, [], huCount);
+    public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1, previousRisks: string[] = []): Observable<any> {
+        const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, previousRisks, huCount);
 
         return this.deepSeekClient.callDeepSeek(
             'generateRiskStrategy',

@@ -1,3 +1,4 @@
+import { compactStaticSectionText, isAiEnhanceableSection } from '../shared/utils/static-section-text';
 import { Component, Inject, PLATFORM_ID, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
@@ -730,40 +731,7 @@ export class TestPlanGeneratorComponent {
   public trackHuById = (i: number, hu: HUData): string => hu.id;
 
   private compactStaticSectionContent(content: string): string {
-    if (!content) return '';
-
-    // Límites dinámicos alineados con STATIC_SECTION_ENHANCEMENT (prompts.config.ts).
-    // Antes eran fijos (4 líneas / 110 chars / 420 total) y cortaban a media palabra.
-    const huCount = this.huList.length;
-    let maxLines: number;
-    let maxChars: number;
-    if (huCount <= 3) {
-      maxLines = 4; maxChars = 500;
-    } else if (huCount <= 7) {
-      maxLines = 6; maxChars = 750;
-    } else if (huCount <= 15) {
-      maxLines = 8; maxChars = 1000;
-    } else {
-      maxLines = 10; maxChars = 1400;
-    }
-
-    const lines = content
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .filter(Boolean)
-      .map(line => line.replace(/^[-•\d.)\s]+/, '').trim())
-      .slice(0, maxLines);
-
-    let compact = lines.join('\n').trim();
-
-    // Recorte final SIN partir palabras.
-    if (compact.length > maxChars) {
-      const slice = compact.slice(0, maxChars);
-      const lastSpace = slice.lastIndexOf(' ');
-      compact = (lastSpace > maxChars * 0.6 ? slice.slice(0, lastSpace) : slice).trim();
-    }
-
-    return compact;
+    return compactStaticSectionText(content, this.huList.length);
   }
 
 
@@ -784,8 +752,10 @@ export class TestPlanGeneratorComponent {
       case 'team': sectionNameDisplay = 'Equipo de Trabajo'; currentContent = this.teamContent; loadingFlag = 'loadingTeamAI'; errorFlag = 'errorTeamAI'; detailsOpenFlag = 'isTeamDetailsOpen'; break;
       default: return;
     }
+    // Repositorio y Equipo son datos del equipo (Configuración): la IA solo podría inventarlos.
+    if (!isAiEnhanceableSection(sectionNameDisplay)) return;
     if (loadingFlag) (this[loadingFlag] as any) = true; if (errorFlag) (this[errorFlag] as any) = null; if (detailsOpenFlag) (this[detailsOpenFlag] as any) = true;
-    this.aiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI())
+    this.aiService.generateEnhancedStaticSectionContent(sectionNameDisplay, currentContent, this.getHuSummaryForStaticAI(), this.huList.length)
       .pipe(
         finalize(() => {
           if (loadingFlag) (this[loadingFlag] as any) = false;

@@ -132,7 +132,7 @@ export class TestPlanMapperService {
             maxChars = 6000,
             includeDescription = true,
             includeScenarios = true,
-            maxCriteria = 6,
+            maxCriteria = 12,
             maxScenarios = 8
         } = options;
 
@@ -147,9 +147,11 @@ export class TestPlanMapperService {
                     .trim()
                 : '';
 
+            // Se separa por línea o viñeta, no por cualquier " - " dentro del texto
+            // (partía criterios como "Pagos - Transferencias" en dos).
             const acceptanceCriteria = (hu.originalInput.acceptanceCriteria || '')
-                .split(/\n|\r|•|- /)
-                .map(line => line.trim())
+                .split(/\r?\n|•/)
+                .map(line => line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, '').trim())
                 .filter(Boolean)
                 .slice(0, maxCriteria)
                 .map((line, i) => `CA${i + 1}: ${line}`)

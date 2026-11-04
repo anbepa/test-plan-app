@@ -52,13 +52,13 @@ export class GeminiService {
     );
   }
 
-  public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1): Observable<any> {
-    const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, [], huCount);
+  public generateRiskStrategy(huSummary: string, availableScenarios: string[], huCount: number = 1, previousRisks: string[] = []): Observable<any> {
+    const promptText = PROMPTS.RISK_STRATEGY_PROMPT(huSummary, availableScenarios, previousRisks, huCount);
     const payload: any = {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: {
-        maxOutputTokens: 2000,
-        temperature: 0.6,
+        maxOutputTokens: 4000,
+        temperature: 0.35,
         responseMimeType: 'application/json'
       }
     };
