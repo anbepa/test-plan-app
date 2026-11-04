@@ -238,9 +238,17 @@ export class SerenityReportService {
   }
 
   private async dispatchAzure(bundlePath: string, headers: HttpHeaders, executionId?: string): Promise<void> {
-    const startResult = await firstValueFrom(
-      this.http.post<any>(this.azApiUrl, { bundlePath, executionId }, { headers })
-    );
+    let startResult: any;
+    try {
+      startResult = await firstValueFrom(
+        this.http.post<any>(this.azApiUrl, { bundlePath, executionId }, { headers })
+      );
+    } catch (err: any) {
+      // Mostrar el mensaje del servidor (p. ej. PAT vencido) y no el genérico
+      // "Http failure response … 502".
+      const serverMessage = err?.error?.error || err?.error?.message;
+      throw new Error(serverMessage || `No se pudo iniciar el release de Azure DevOps (HTTP ${err?.status ?? '?'}).`);
+    }
 
     if (!startResult.success) {
       throw new Error(startResult.error || 'Error al iniciar el release de Azure DevOps');

@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { ApiError, getAuthenticatedUser, getSupabaseClients } from './integrations/azure-devops/_shared';
+import { ApiError, getAuthenticatedUser, getAzureConnection, getSupabaseClients, updateAzureConnectionStatus } from './integrations/azure-devops/_shared';
 import { AzureSerenityRuntimeConfig, resolveAzureSerenityRuntimeConfig } from './integrations/serenity/_shared';
 
 function azureGet(url: string, personalAccessToken: string): Promise<Response> {
@@ -164,10 +164,14 @@ async function triggerAzureRelease(
   if (!response.ok) {
     const errText = await response.text();
     console.error('[serenity-report-azure] Error al crear release:', response.status, errText);
-    const hint = response.status === 401 || response.status === 403
-      ? ' Verifica que el PAT tenga permisos Release (Read, Write, & Execute) en Azure DevOps.'
-      : '';
-    throw new ApiError(502, `Error al crear release: ${response.status}.${hint}`.trim());
+    if (response.status === 401) {
+      // Azure rechaza el token: vencido, revocado o mal copiado.
+      throw new ApiError(401, 'El PAT de Azure DevOps está vencido o fue revocado. Genera uno nuevo con permiso Release (Read, write & execute) y actualízalo en Configuración > Azure DevOps.', { code: 'AZURE_PAT_INVALID' });
+    }
+    if (response.status === 403) {
+      throw new ApiError(403, 'El PAT de Azure DevOps no tiene permiso para crear releases. Genera uno con permiso Release (Read, write & execute) y actualízalo en Configuración > Azure DevOps.', { code: 'AZURE_PAT_FORBIDDEN' });
+    }
+    throw new ApiError(502, `Azure DevOps no pudo crear el release (HTTP ${response.status}).`);
   }
 
   const data = await response.json() as any;
@@ -178,6 +182,18 @@ async function triggerAzureRelease(
 
   console.log(`[serenity-report-azure] Release creado: ${releaseId}`);
   return releaseId;
+}
+
+/** Marca como vencida la conexión principal de Azure DevOps del usuario (best-effort). */
+async function markUserAzureConnectionExpired(userId: string): Promise<void> {
+  try {
+    const connection = await getAzureConnection(userId, null);
+    if (connection?.organization && connection.status === 'connected') {
+      await updateAzureConnectionStatus(userId, connection.organization, 'expired');
+    }
+  } catch (err) {
+    console.warn('[serenity-report-azure] No se pudo marcar la conexión como vencida:', err);
+  }
 }
 
 /** Ubica bucket y ruta de un objeto de Supabase Storage a partir de su URL (firmada, pública o autenticada). */
@@ -310,6 +326,13 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       }
       if (uploadedBundlePath) {
         await deleteBundlePathFromStorage(uploadedBundlePath).catch(() => {});
+      }
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        // Se marca la conexión para que Configuración muestre que hay que actualizar el PAT.
+        if (e.status === 401) await markUserAzureConnectionExpired(user.id);
+        // 424: falla una dependencia (el PAT), no la sesión de la app. Un 401 aquí
+        // se confundiría con "sesión vencida" en el cliente.
+        return res.status(424).json({ error: e.message, code: (e.debug as any)?.code });
       }
       const message = e instanceof ApiError
         ? e.message
