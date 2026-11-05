@@ -183,7 +183,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           const groups = this.codeHuChangeGroups.filter((group) => this.isChangeGroupSelected(group));
           summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`;
         } else if (this.isManualCodeTargetReady) {
-          summary = this.codeBranch;
+          const repo = this.codeRepositories.find((r) => r.id === this.codeRepositoryId)?.name;
+          summary = repo ? `${repo} · rama ${this.codeBranch}` : `Rama ${this.codeBranch}`;
         }
         return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? 'Buscando PRs y commits…' : summary };
       }
@@ -244,6 +245,17 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** ¿El paso admite el botón Editar / Contraer? */
   canToggleStep(id: FlowStepId): boolean {
     return COLLAPSIBLE_STEPS.includes(id) && this.flowStep(id)?.status === 'done';
+  }
+
+  /**
+   * Mientras el usuario elige proyecto, repositorio y rama, el paso no debe
+   * cerrarse solo: al elegir el repositorio se autoselecciona la rama principal,
+   * el paso quedaba "completo" y se contraía (en móvil los selectores nativos no
+   * retienen el foco), sin dejar elegir la rama de la HU. Queda abierto hasta
+   * que el usuario pulse Contraer.
+   */
+  keepStepOpen(id: FlowStepId): void {
+    this.openedSteps.add(id);
   }
 
   /** Editar / Contraer: depende solo de si el usuario abrió el paso, no del foco. */
