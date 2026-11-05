@@ -165,6 +165,42 @@ export function uncoveredChangeBehaviorIds(codeContext: string): string[] {
   return section.split('\n').map((line) => line.match(/^\s*[-*]\s*\[(RT-\d+)\]\s*\(CAMBIO HU\)/)?.[1]).filter((id): id is string => !!id);
 }
 
+export type ScenarioType = 'Positivo' | 'Negativo' | 'Regresión';
+
+export function scenarioType(title: string = ''): ScenarioType | null {
+  const match = title.trim().match(/^(Positivo|Negativo|Regresi[oó]n)\s*[–-]/i);
+  if (!match) return null;
+  const word = match[1].toLowerCase();
+  return word.startsWith('pos') ? 'Positivo' : word.startsWith('neg') ? 'Negativo' : 'Regresión';
+}
+
+/**
+ * Faltantes de la matriz de escenarios: cada CA con su positivo y su negativo evaluado
+ * (caso o "N/A: motivo" en criteriaMap) y cada CAMBIO HU sin criterio con su regresión.
+ */
+export function scenarioMatrixGaps(
+  criteriaText: string,
+  testCases: { title?: string; coveredCriteria?: string[] }[],
+  criteriaMap: { id?: string; negative?: string }[] = [],
+  codeContext: string = ''
+): string[] {
+  const owned = (type: ScenarioType, id: string) =>
+    testCases.some((testCase) => scenarioType(testCase.title) === type && testCase.coveredCriteria?.[0] === id);
+  const negativeNotApplicable = (id: string) =>
+    criteriaMap.some((entry) => entry.id === id && /^\s*N\/?A\b/i.test(entry.negative || ''));
+  const covered = new Set(testCases.flatMap((testCase) => testCase.coveredCriteria || []));
+
+  const gaps: string[] = [];
+  for (const id of criteriaIds(criteriaText)) {
+    if (!owned('Positivo', id)) gaps.push(`${id} sin positivo`);
+    if (!owned('Negativo', id) && !negativeNotApplicable(id)) gaps.push(`${id} sin negativo evaluado`);
+  }
+  for (const id of uncoveredChangeBehaviorIds(codeContext)) {
+    if (!owned('Regresión', id) && !covered.has(id)) gaps.push(`${id} sin regresión`);
+  }
+  return gaps;
+}
+
 /** Criterios (o comportamientos) sin ningún escenario que los cubra. */
 export function uncoveredCriteria(criteriaText: string, testCases: { coveredCriteria?: string[] }[], codeContext: string = ''): string[] {
   const covered = new Set(testCases.flatMap((testCase) => testCase.coveredCriteria || []));

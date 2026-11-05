@@ -16,7 +16,7 @@ import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
-import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
+import { criteriaIds, scenarioMatrixGaps, uncoveredCriteria } from '../services/ai/criteria-normalizer';
 import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
 
 interface CoverageRow {
@@ -135,6 +135,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   normalizedCriteriaEditing: boolean = false;
   /** CA-xx que quedaron sin escenario en la última generación. */
   criteriaCoverageGap: string[] = [];
+  scenarioMatrixGap: string[] = [];
   /** Criterios y descripción con los que se exploró el código: si cambian, el contexto queda desactualizado. */
   private codeContextBasis: string = '';
   /** Por qué un paso se limpió o rehízo solo (p. ej. al importar otra HU): se muestra en el paso. */
@@ -923,6 +924,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.normalizedCriteria = '';
     this.normalizedCriteriaFor = '';
     this.criteriaCoverageGap = [];
+    this.scenarioMatrixGap = [];
     this.flowNotices = {};
     this.openedSteps.clear();
     this.focusedStep = null;
@@ -1508,6 +1510,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       return;
     }
     this.criteriaCoverageGap = [];
+    this.scenarioMatrixGap = [];
     const codeContext = this.usesCodeContext ? this.codeContextText.trim() : '';
     const huData: UIHUData = {
       originalInput: {
@@ -1579,6 +1582,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
                 rawTestCases.map((tc: any) => tc.title)
               );
               this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases, codeContext);
+              this.scenarioMatrixGap = scenarioMatrixGaps(huData.originalInput.acceptanceCriteria || '', rawTestCases, result.criteriaMap || [], codeContext);
             } else {
               console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
               this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';
