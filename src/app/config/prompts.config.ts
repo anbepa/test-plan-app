@@ -78,9 +78,12 @@ La matriz la ejecuta y la lee una persona funcional con poco conocimiento técni
 const FUNCTIONAL_FLOW_RULES = `ESCENARIOS POR FLUJO FUNCIONAL (prevalece sobre cualquier otra regla de agrupación):
 - Mira la HU como una funcionalidad, no como criterios sueltos. Antes de escribir, identifica sus flujos: lo que un usuario hace de inicio a fin en una pantalla, reporte o proceso hasta ver el resultado.
 - Cada escenario recorre UN flujo completo y verifica en esa misma ejecución todos los CA que el flujo toca, con registros etiquetados (A, B, C…) preparados juntos y el resultado esperado de cada uno. Lista esos CA en "coveredCriteria".
-- Tipos (inicio del título): "Flujo principal – " (el camino del negocio), "Flujo alterno – " (solo si una exclusión, rechazo o error necesita otra ejecución o da otro resultado que no cabe en el principal) y "Regresión – " (comportamientos CAMBIO HU sin criterio, agrupados por el flujo donde se ven).
+- Tipos (inicio del título): "Flujo principal – " (el camino del negocio); "Flujo alterno – " solo si la HU define un rechazo, error, exclusión o desenlace distinto (p. ej. rechazar en vez de aprobar) que no cabe en el principal; nunca para una opción o vista que también aplica; "Regresión – " solo con contexto de código (CAMBIO HU sin criterio), agrupados por el flujo donde se ven.
 - Cada CA y cada CAMBIO HU debe aparecer en el "coveredCriteria" de algún escenario; un CA no necesita escenario propio. Exclusiones y negativos van como registros dentro del flujo cuando se observan en la misma salida.
-- Pocos escenarios con valor: lo usual son 2 a 6 por HU. No crees un escenario que repita el disparo y la salida de otro.
+- Pocos escenarios con valor: lo usual son 2 a 6 por HU. Si dos escenarios usan la misma pantalla y verifican la misma salida, únelos en uno.
+- Si el criterio habla de un estado, saldo o valor "real" o que cambia, el flujo lo hace cambiar con las acciones del negocio (crear, aprobar, rechazar, pagar) y lo verifica después de cada una.
+- Ejecutable por una persona funcional: los primeros pasos crean los datos por el camino del negocio (pantalla o proceso) como registros etiquetados con valores concretos (cliente/NIT, producto, moneda, valor, fecha); luego un paso = una acción con la ruta de menú y los botones; la verificación dice qué registro y qué campo mirar. Nada de "revisar el listado" o "verificar que funcione" sin decir qué.
+- No inventes pantallas, módulos, estados, roles ni mensajes que no estén en la HU o en el contexto técnico: si no se conocen, nómbralos de forma genérica ("el estado que corresponde a la aprobación").
 `;
 
 function staticSectionDefinition(sectionName: string): { include: string; exclude: string } {
@@ -122,10 +125,10 @@ function buildNumberedCriteriaBlock(acceptanceCriteria: string = '', codeContext
   return `
 CRITERIOS NUMERADOS (${ids[0]} a ${ids[ids.length - 1]}, exactamente ${ids.length}):
 1. Cada CA queda verificado dentro de algún flujo; las líneas "Opciones" se recorren como registros del flujo donde aplica su CA. "Resumen", "Interpretación" y "Definición" no son criterios; las "Definición" explican cómo se origina cada dato: úsalas para preparar los datos por el camino real.
-2. Si las Opciones de un CA marcan qué aplica y qué no, el flujo prepara un registro que aplica y al menos uno que NO aplica, con resultado "no se aplica / no se bloquea".
+2. Solo si las Opciones de un CA dicen literalmente que algo "no aplica", el flujo prepara un registro que aplica y otro que no, con resultado "no se aplica / no se bloquea". Opciones que solo enumeran vistas o tipos se recorren todas como registros del mismo flujo.
 3. Una línea "Interpretación" es una duda del criterio y se cubre dentro del flujo, nunca en un escenario aparte:
    - Si el contexto técnico la resolvió ("Duda resuelta por el código: …"), el flujo usa ese comportamiento y preconditions inicia con "⚠ Duda del criterio resuelta con el código: <respuesta>; confirmar con el funcional."
-   - Si no, el flujo prepara las alternativas como registros etiquetados con resultado "registrar el comportamiento observado" y preconditions inicia con "⚠ Duda sin resolver: <duda>; confirmar con el funcional."
+   - Si no, preconditions inicia con "⚠ Duda sin resolver: <duda>; confirmar con el funcional." y solo la parte dudosa se registra como "comportamiento observado"; lo que los criterios sí definen conserva su resultado esperado concreto.
 ${FUNCTIONAL_FLOW_RULES}${behaviors.length ? `
 - Comportamientos (CAMBIO HU) de esta HU sin criterio: ${behaviors.join(', ')}. Cada uno queda en algún escenario "Regresión – …".` : ''}
 `;
