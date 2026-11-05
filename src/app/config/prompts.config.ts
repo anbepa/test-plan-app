@@ -216,122 +216,60 @@ AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 `;
 }
 
-/** Modo "Solo criterios": prompt original del commit 03b844c, sin cambios. */
+/** Modo "Solo criterios": un solo prompt que extrae reglas, diseña casos, los redacta y verifica la cobertura. */
 function criteriaOnlyGenerationPrompt(description: string, acceptanceCriteria: string, technique: string, userRequest: string): string {
   return `
-Actúa como QA Senior especializado en diseño de pruebas. Genera una matriz suficiente, trazable y sin redundancias. Todo el contenido de salida debe estar en español.
+Actúa como QA Senior. Diseña la matriz de casos de prueba de esta HU: que cubra todos los criterios, sin redundancias y ejecutable por una persona funcional. Todo en español.
 
 HISTORIA DE USUARIO:
 ${description}
 
-CRITERIOS DE ACEPTACIÓN — PUEDEN ESTAR DESORDENADOS:
+CRITERIOS DE ACEPTACIÓN (pueden estar desordenados):
 ${acceptanceCriteria}
 
-TÉCNICA SOLICITADA:
-${technique || 'Automática'}
+TÉCNICA PREFERIDA: ${technique || 'Automática'} (úsala donde aplique; si no aplica a un criterio, usa la adecuada: partición equivalente, valor límite, tabla de decisión, transición de estados o escenario funcional).
 
-INSTRUCCIÓN ESPECÍFICA DEL ANALISTA — PRIORIDAD ALTA:
-${userRequest?.trim() || 'No se proporcionó una instrucción adicional.'}
+INSTRUCCIÓN DEL ANALISTA — PRIORIDAD ALTA:
+${userRequest?.trim() || 'Ninguna.'}
+La instrucción puede cambiar enfoque, cantidad o detalle, pero no inventar ni contradecir requisitos, ni dejar criterios sin cubrir.
 
-JERARQUÍA DE INSTRUCCIONES:
-1. Aplica primero la instrucción específica del analista cuando exista.
-2. La instrucción puede definir enfoque, cantidad, prioridad, exclusiones, detalle o tipos de escenarios.
-3. La instrucción no puede inventar ni contradecir requisitos funcionales de la HU o los criterios.
-4. Si una parte contradice los requisitos, aplica únicamente la parte compatible.
-5. Usa exclusivamente la HU y los criterios como fuente funcional.
-6. Considera la técnica del formulario como PREFERENCIA INICIAL, no como imposición absoluta.
-7. Evalúa cada regla y usa la técnica que realmente corresponda según su estructura.
-8. Mantén la técnica seleccionada donde sea aplicable; compleméntala con otras cuando no cubra todo.
-9. Si la técnica seleccionada no aplica a ningún criterio, sustitúyela internamente por la adecuada.
-10. No fuerces límites, particiones, decisiones o estados inexistentes para cumplir la selección.
-11. Si userRequest está vacío, continúa sin asumir instrucciones adicionales.
-12. La prioridad del analista no autoriza omitir cobertura obligatoria ni alterar el JSON.
+ETAPA 1 — REGLAS (interno; resultado en "criteriaMap"):
+1. Cada criterio del funcional es una regla CA-01, CA-02… en el orden en que aparece. Divídelo solo si contiene resultados independientes que se verifican por separado.
+2. Las dos caras de un mismo límite (incluye hasta X / excluye después de X) son una sola regla.
+3. Los ejemplos dentro de un criterio ("día 30 o 31", "seguro de vida y extraprima") no son reglas nuevas: son variantes de la misma regla.
+4. Si una regla es excepción de otra (p. ej. una retrofecha frente a un corte de fecha, o un tipo que se trata distinto), decláralo en "criteriaMap" con "exceptionOf": "CA-xx" (la regla general).
+5. Usa solo la HU y los criterios; no inventes reglas.
 
-NORMALIZACIÓN INTERNA OBLIGATORIA:
-1. Lee el contenido completo, sin asumir que el orden recibido representa el flujo.
-2. Separa internamente cada regla atómica y asígnale CA-01, CA-02, CA-03, etc.
-3. Para cada regla identifica, cuando exista: condición, acción, resultado, dato, límite, estado, dependencia, excepción y texto exacto.
-4. Une duplicados semánticos, pero conserva diferencias de condición, resultado o restricción.
-5. Relaciona reglas dependientes aunque estén separadas en el texto.
-6. Detecta contradicciones y ambigüedades. No elijas una interpretación arbitraria: crea casos solo para lo comprobable y registra el supuesto mínimo en preconditions cuando sea imprescindible.
-7. No alteres la intención funcional al reorganizar los criterios.
+ETAPA 2 — CASOS:
+1. Agrupa primero: las reglas que se verifican en la misma pantalla, consulta, reporte o proceso con la misma clase de verificación van en un solo caso (p. ej. el mismo filtro aplicado a varios tipos u opciones de un menú es UN caso que recorre cada tipo). Lo que se registra al ejecutar una misma acción (estado, auditoría de usuario/fecha/valores, trazabilidad antes y después) se verifica en el mismo caso de esa acción. Lista en "coveredCriteria" todas las reglas que el caso ejecuta y verifica.
+2. Variantes de una regla se verifican como registros del mismo caso, no como casos nuevos. Un caso cubre como máximo 5 reglas; si el resultado cambia según el producto, modalidad o tipo (p. ej. qué parte se valida en cada producto), agrupa los productos que se verifican igual y separa los que se verifican distinto.
+3. Negativo o alterno solo si la HU define ese rechazo, exclusión, error o límite; nunca sobre procesos externos a la aplicación. Las frases de capacidad, volumen o rendimiento esperado (p. ej. "procesa 1000 por solicitud") se prueban con ese volumen exacto verificando que se procese completo; no inventes un rechazo por encima ni pruebes valores vecinos si la HU no lo dice.
+4. Por cada regla con "exceptionOf" crea UN caso que cubra ambas reglas en "coveredCriteria", con un registro que cae en la excepción y otro equivalente que no (p. ej. dos cuentas creadas el mismo día, una de seguro de vida y otra de otro tipo), cada uno con su resultado. Sin "exceptionOf" no crees casos combinados.
+5. Ningún registro tiene en un caso un resultado y en otro el contrario.
+6. Si una regla exige varias condiciones a la vez (p. ej. moneda COP y producto ML), además del registro que las cumple todas prepara dentro del MISMO caso un registro que cumpla solo una de ellas (p. ej. COP de producto ME), con su resultado; nunca crees un caso nuevo por esto ni por cada valor de una lista (causales, opciones, tipos).
 
-SELECCIÓN ADAPTATIVA DE TÉCNICA — OBLIGATORIA:
-1. Clasifica internamente cada regla atómica según su estructura, no solo por la técnica del formulario.
-2. Usa Partición Equivalente para clases válidas/inválidas, tipos de datos, opciones y reglas de aceptación.
-3. Usa Análisis de Valor Límite únicamente para mínimos, máximos, rangos, fechas, tamaños, cantidades o cardinalidades explícitas.
-4. Usa Tabla de Decisión cuando varias condiciones o combinaciones produzcan acciones o resultados distintos.
-5. Usa Pruebas de Transición de Estados cuando existan estados, eventos, cambios o restricciones dependientes del estado.
-6. Usa escenarios funcionales para secuencias sin estructura suficiente para las técnicas anteriores.
-7. La técnica del formulario es la técnica inicial preferida y debe conservarse en los criterios compatibles.
-8. Combina técnicas cuando distintos criterios necesiten tratamientos diferentes.
-9. Sustituye internamente la técnica seleccionada solo en criterios donde sea inaplicable o insuficiente.
-10. Elige el conjunto mínimo de técnicas que logre cobertura real y evite redundancias.
+ETAPA 3 — REDACCIÓN DE CADA CASO:
+- title: claro y funcional, <= 90 caracteres, sin códigos tipo TC_001.
+- preconditions: entorno y permisos necesarios, <= 180 caracteres.
+- steps: entre 3 y 6. El paso 1 prepara los registros (A, B, C…) describiendo la condición que los hace relevantes (tipo, producto, estado, momento relativo como "creada el día 1 del mes siguiente"). Luego un paso = una acción. El paso de verificación nombra cada registro y qué debe verse; no agregues un paso final que repita lo ya verificado.
+- No inventes NIT, nombres, montos, fechas exactas, usuarios, pantallas, menús ni mensajes que no estén en la HU.
+- expectedResults: una línea por paso, en orden, "Paso 1 → …", "Paso 2 → …". La preparación da como resultado que los registros quedan creados; lo que aparece, se excluye o se calcula va en el paso que lo muestra, por registro (p. ej. "A aparece; B no aparece; C sin descontar el pago").
+- technique: la técnica realmente aplicada.
 
-APLICACIÓN DE TÉCNICAS:
-- Partición equivalente: representa cada clase relevante una vez, salvo que otra combinación cambie el resultado.
-- Valores límite: prueba debajo, en y encima del límite cuando esos puntos sean válidos y estén sustentados.
-- Tabla de decisión: cubre reglas y combinaciones materialmente distintas; elimina combinaciones imposibles o equivalentes.
-- Transición de estados: cubre transiciones válidas clave, inválidas relevantes y restricciones dependientes del estado.
-- No fuerces límites, estados, particiones o combinaciones que no estén respaldados por la entrada.
+ETAPA 4 — AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
+- Cada id de "criteriaMap" aparece en el "coveredCriteria" de al menos un caso, y cada regla con "exceptionOf" comparte un caso con su regla general.
+- Ningún caso lista más de 5 reglas en "coveredCriteria": si pasa, divídelo por producto, tipo o clase de verificación.
+- No hay dos casos que se ejecuten en la misma pantalla o salida con la misma clase de verificación: si los hay, únelos.
+- No hay resultados opuestos para el mismo tipo de registro.
+- Cada caso tiene un resultado por paso y ningún dato inventado.
+- Si el espacio no alcanza, acorta la redacción; nunca dejes un criterio sin cubrir ni un caso a medias.
 
-DISEÑO DE COBERTURA:
-1. Cubre cada regla atómica con al menos un caso que la ejecute y verifique explícitamente.
-2. Añade enfoque positivo, negativo, alterno o de borde solamente cuando aplique.
-3. Si una regla contiene varias subcondiciones independientes, crea los casos necesarios para verificarlas.
-4. Para visibilidad, habilitación o aparición condicional, cubre la condición que la activa y la que no la activa.
-5. Para secuencias obligatorias, cubre el flujo válido y una ruptura relevante de la secuencia.
-6. Para cardinalidad, cubre el valor permitido y el incumplimiento más representativo; usa bordes si hay límite explícito.
-7. Para formularios, no impongas un caso por campo: crea casos por validación o partición funcional relevante.
-8. Para bifurcaciones, no generes automáticamente 2^M casos. Usa tabla de decisión y cubre combinaciones que cambien resultados, riesgos o reglas.
-9. Prioriza reglas de negocio, validaciones, integraciones y datos sobre navegación cosmética.
-10. El número de casos se deriva de las reglas y particiones, no de cuotas fijas.
-
-VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
-- Pasada 1 — Solicitud y extracción: verifica userRequest, reglas atómicas y técnica adecuada por regla.
-- Pasada 2 — Cobertura: mapea casos, criterios y técnicas; agrega lo faltante o corrige técnicas forzadas.
-- Pasada 3 — Calidad: elimina duplicados, casos artificiales y resultados no ejercitados.
-- Detén el proceso antes si una pasada completa no detecta omisiones.
-- No muestres estas pasadas ni razonamiento interno en la respuesta.
-
-PRESUPUESTO DE SALIDA — OBLIGATORIO:
-1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
-2. Antes de escribir, estima cuántos casos caben y prioriza en este orden:
-   a) Reglas de negocio y validaciones con resultado observable.
-   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
-   c) Flujos alternos, errores y recuperación.
-   d) Navegación, textos informativos y verificaciones cosméticas.
-3. Si no caben todos los casos, agrupa reglas afines de la misma prioridad en un caso combinado antes que omitirlas.
-4. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
-5. Si tuviste que agrupar u omitir cobertura por espacio, indícalo brevemente al final de "scope".
-6. Sé conciso en title, preconditions y expectedResults; la exhaustividad va en la cobertura, no en la redacción.
-
-TRAZABILIDAD — OBLIGATORIA:
-1. Usa los identificadores CA-01, CA-02, ... asignados en la normalización interna.
-2. En cada caso, lista en "coveredCriteria" los identificadores que ese caso ejecuta y verifica realmente en sus pasos.
-3. No incluyas un criterio que solo se mencione en expectedResults sin ejercitarse en los pasos.
-4. En "technique" indica la técnica realmente aplicada al caso, no la solicitada en el formulario si difiere.
-5. En "criteriaMap" enumera cada identificador con el texto resumido de la regla, para permitir la auditoría.
-6. Todo criterio de "criteriaMap" debe aparecer al menos una vez en algún "coveredCriteria", salvo que no sea comprobable.
-
-REGLAS DE CALIDAD:
-- Título claro, sin identificadores técnicos como TC_001.
-- Entre 2 y 5 pasos; permite 6 solo cuando una secuencia crítica lo requiera.
-- Pasos concretos, ejecutables y ordenados.
-- Cada caso valida una intención principal y como máximo una validación secundaria estrechamente relacionada.
-- El resultado esperado debe ser observable, específico y corresponder a acciones ejecutadas.
-- No declares como validado algo mencionado únicamente en expectedResults.
-- Conserva textos, etiquetas, mensajes, columnas y formatos exactos solo cuando la entrada los defina.
-- title <= 90 caracteres, preconditions <= 180 y expectedResults <= 180 siempre que no se pierda precisión.
-
-SALIDA:
-- Devuelve exclusivamente JSON válido; sin markdown, comentarios, prefijos ni sufijos.
-- El primer carácter debe ser "{" y el último "}".
-- Usa exactamente esta estructura para mantener compatibilidad:
+SALIDA: solo JSON válido, sin markdown; el primer carácter es "{" y el último "}".
 {
   "scope": "Alcance breve de lo cubierto",
   "criteriaMap": [
-    {"id": "CA-01", "rule": "Resumen breve de la regla atómica"}
+    {"id": "CA-01", "rule": "Resumen breve de la regla"},
+    {"id": "CA-02", "rule": "Regla que es excepción de otra", "exceptionOf": "CA-01"}
   ],
   "testCases": [
     {
@@ -340,7 +278,7 @@ SALIDA:
       "steps": [
         {"numero_paso": 1, "accion": "Acción específica"}
       ],
-      "expectedResults": "Resultado esperado concreto",
+      "expectedResults": "Paso 1 → …\nPaso 2 → …",
       "coveredCriteria": ["CA-01"],
       "technique": "Técnica realmente aplicada"
     }
