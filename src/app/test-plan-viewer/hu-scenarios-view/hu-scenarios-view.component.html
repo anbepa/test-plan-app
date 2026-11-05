@@ -36,6 +36,11 @@
             <span class="icon-sparkle-white"></span>
             Editar / Refinar con IA
           </button>
+          <button type="button" (click)="openRefinePanel()" class="button-secondary"
+            [disabled]="isRefining || !hu.detailedTestCases || hu.detailedTestCases.length === 0"
+            title="Ajusta los escenarios con una indicación tuya; se conservan los que no la afectan">
+            ✦ Refinar escenarios con contexto
+          </button>
           <div class="export-menu" [class.open]="exportMenuOpen">
             <button type="button" class="button-secondary export-menu-trigger" (click)="toggleExportMenu($event)"
               [attr.aria-expanded]="exportMenuOpen" aria-haspopup="menu"
@@ -52,6 +57,25 @@
             </div>
           </div>
         </div>
+
+        <section class="refine-panel" *ngIf="isRefinePanelOpen" aria-labelledby="refinePanelTitle">
+          <h3 id="refinePanelTitle" class="refine-panel-title">Refinar escenarios con contexto</h3>
+          <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva los escenarios que no la afectan, cubriendo todos los criterios de la HU.</p>
+          <textarea class="refine-panel-textarea" rows="4" [(ngModel)]="refineContext" [disabled]="isRefining"
+            placeholder="Ej: Prioriza casos negativos de las validaciones de negocio y deja máximo 5 escenarios."></textarea>
+          <div class="refine-panel-tags">
+            <button type="button" *ngFor="let tag of refineQuickTags" class="refine-tag" (click)="addRefineTag(tag)" [disabled]="isRefining">+ {{ tag }}</button>
+          </div>
+          <p class="refine-panel-error" *ngIf="refineError" role="alert">{{ refineError }}</p>
+          <div class="refine-panel-actions">
+            <button type="button" class="button-secondary" (click)="closeRefinePanel()" [disabled]="isRefining">Cancelar</button>
+            <button type="button" class="button-ai-primary" (click)="refineWithContext()" [disabled]="isRefining || !refineContext.trim()">
+              <span class="icon-sparkle-white"></span>
+              {{ isRefining ? 'Refinando escenarios…' : 'Refinar y guardar' }}
+            </button>
+          </div>
+          <p class="refine-panel-progress" *ngIf="isRefining" aria-live="polite">La IA está ajustando los escenarios ({{ refineStreamChars }} caracteres recibidos)…</p>
+        </section>
 
         <!-- Loading state for scenarios -->
         <div *ngIf="isLoadingScenarios" class="loading-scenarios-container">

@@ -287,6 +287,75 @@ SALIDA: solo JSON válido, sin markdown; el primer carácter es "{" y el último
 `;
 }
 
+/** Refinamiento en "Solo criterios": el contexto del analista manda; se conserva lo correcto y la cobertura. */
+function criteriaOnlyRefinePrompt(originalRequirements: string, currentCases: string, userRequest: string, technique: string): string {
+  return `
+Actúa como QA Senior. Refina la matriz de casos de prueba de esta HU aplicando el contexto del analista. Todo en español.
+
+CONTEXTO DEL ANALISTA — PRIORIDAD MÁXIMA:
+${userRequest?.trim() || 'No se indicó contexto: revisa la matriz y corrige solo cobertura, duplicados o redacción.'}
+
+QUÉ SIGNIFICA CADA INDICACIÓN (aplícala aunque cambie casos que estaban bien):
+   - "Solo happy path": deja solo el camino exitoso; quita los casos negativos y, dentro de cada caso, los registros que no deben aparecer o que se rechazan.
+   - "Casos negativos": agrega casos o registros de rechazo, exclusión o error que la HU define, sin quitar los existentes.
+   - "Validaciones de frontera": agrega registros en el límite y justo por fuera de cada límite explícito de la HU.
+   - "Datos inválidos": agrega registros con datos que la HU indica como no válidos y su rechazo.
+   - "Flujo alternativo": agrega los caminos alternos que la HU define.
+   - "Creación de ruta crítica": deja solo los 2 a 4 casos del flujo principal de mayor impacto para el negocio, en el orden en que se ejecutan de punta a punta; elimina los demás.
+   - "Solo N escenarios": la matriz final tiene exactamente N casos; une los afines antes de quitar.
+
+REQUISITOS ORIGINALES (HU y criterios):
+${originalRequirements}
+
+CASOS ACTUALES:
+${currentCases}
+
+TÉCNICA PREFERIDA: ${technique || 'Automática'}
+
+CÓMO APLICAR EL CONTEXTO:
+1. El contexto del analista define qué cambiar: enfoque, cantidad, prioridad, tipo de casos, detalle, exclusiones o datos a usar. Aplícalo completo y de forma visible en la matriz resultante.
+2. Si pide una cantidad exacta, enfoque o tipo (p. ej. "solo 5 escenarios", "solo happy path", "casos negativos", "ruta crítica"), la matriz final lo cumple exactamente, aunque haya que unir, quitar o agregar casos.
+3. Si el contexto contradice un requisito, conserva el requisito y aplica solo la parte compatible; no inventes comportamientos.
+4. Lo que el contexto no toca se conserva igual; pero si la indicación cambia el enfoque o el alcance (happy path, ruta crítica, solo N), aplica ese cambio a toda la matriz.
+5. Mantén la cobertura: cada criterio sigue verificado en algún caso, salvo que el contexto reduzca el alcance (solo happy path, ruta crítica, solo N escenarios, excluir algo); ahí manda el analista.
+6. Si después de aplicar el contexto la matriz queda igual a la actual, no lo aplicaste: corrígelo.
+
+REGLAS DE LOS CASOS (las mismas de la generación):
+- Un caso agrupa las reglas que se verifican con la misma acción en la misma pantalla, consulta, reporte o proceso; máximo 5 reglas por caso. Variantes y valores de una lista van como registros (A, B, C…) del mismo caso.
+- Si una regla es excepción de otra, un caso las cruza con un registro que cae en la excepción y otro equivalente que no.
+- Negativos o alternos solo si la HU o el analista los piden; no inventes límites ni rechazos.
+- steps: entre 3 y 6. El paso 1 prepara los registros describiendo su condición, sin inventar NIT, montos, fechas exactas, usuarios, pantallas ni mensajes. El paso de verificación nombra cada registro y qué debe verse.
+- expectedResults: una línea por paso, "Paso 1 → …", "Paso 2 → …"; lo que aparece o se excluye va en el paso que lo muestra.
+- title claro y funcional (<= 90 caracteres); preconditions con entorno y permisos (<= 180 caracteres).
+
+AUTOCHEQUEO ANTES DE RESPONDER:
+- El contexto del analista quedó aplicado completo y "changeSummary" lo describe; si no cambiaste nada, revisa de nuevo la indicación.
+- Cada id de "criteriaMap" aparece en algún "coveredCriteria" (salvo exclusión pedida por el analista).
+- Cada caso tiene un resultado por paso, sin datos inventados ni resultados opuestos entre casos.
+- Devuelve la matriz completa (también los casos que no cambiaron) y nunca dejes un caso a medias.
+
+SALIDA: solo JSON válido, sin markdown; el primer carácter es "{" y el último "}".
+{
+  "changeSummary": "Qué cambiaste para aplicar el contexto (casos quitados, unidos, agregados o registros eliminados)",
+  "criteriaMap": [
+    {"id": "CA-01", "rule": "Resumen breve de la regla"}
+  ],
+  "testCases": [
+    {
+      "title": "Descripción clara del escenario",
+      "preconditions": "Condiciones previas necesarias",
+      "steps": [
+        {"numero_paso": 1, "accion": "Acción específica"}
+      ],
+      "expectedResults": "Paso 1 → …\nPaso 2 → …",
+      "coveredCriteria": ["CA-01"],
+      "technique": "Técnica realmente aplicada"
+    }
+  ]
+}
+`;
+}
+
 export const PROMPTS = {
   SCOPE: (description: string, acceptanceCriteria: string): string => `
 Actúa como analista QA Senior.
@@ -649,7 +718,9 @@ SALIDA:
     technique: string = 'Automática',
     codeContext: string = '',
     contextSource: ContextSource = 'criteria'
-  ): string => `
+  ): string => contextSource === 'criteria' || !codeContext.trim()
+    ? criteriaOnlyRefinePrompt(originalRequirements, currentCases, userRequest, technique)
+    : `
 Actúa como QA Senior especializado en refinamiento de matrices. Todo el contenido de salida debe estar en español.
 
 INSTRUCCIÓN DEL ANALISTA:

@@ -1479,3 +1479,15 @@ textarea.rf-control {
     max-width: calc(100vw - 2rem);
   }
 }
+
+/* Refinar escenarios con contexto */
+.refine-panel { border: 1px solid #d6dbe4; border-radius: 10px; padding: 1rem 1.25rem; margin: 0 0 1rem; background: #fafbfd; }
+.refine-panel-title { margin: 0 0 .25rem; font-size: 1rem; }
+.refine-panel-hint { margin: 0 0 .75rem; color: #5b6475; font-size: .875rem; }
+.refine-panel-textarea { width: 100%; box-sizing: border-box; padding: .6rem .75rem; border: 1px solid #c9cfda; border-radius: 8px; font: inherit; resize: vertical; }
+.refine-panel-tags { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0; }
+.refine-tag { border: 1px solid #c9cfda; background: #fff; border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; cursor: pointer; }
+.refine-tag:disabled { opacity: .6; cursor: default; }
+.refine-panel-error { color: #b42318; font-size: .875rem; margin: .25rem 0; }
+.refine-panel-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+.refine-panel-progress { margin: .5rem 0 0; color: #5b6475; font-size: .85rem; }
