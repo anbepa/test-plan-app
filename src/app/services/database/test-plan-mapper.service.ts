@@ -1,4 +1,5 @@
 import { buildPlanTitle } from '../../shared/utils/plan-title';
+import { compactNormalizedCriteria } from '../ai/criteria-normalizer';
 import { Injectable } from '@angular/core';
 import { HUData } from '../../models/hu-data.model';
 import { DbTestPlan, DbUserStoryWithRelations } from './database.service';
@@ -148,14 +149,21 @@ export class TestPlanMapperService {
                     .trim()
                 : '';
 
-            // Se separa por línea o viñeta, no por cualquier " - " dentro del texto
-            // (partía criterios como "Pagos - Transferencias" en dos).
-            const acceptanceCriteria = (hu.originalInput.acceptanceCriteria || '')
-                .split(/\r?\n|•/)
-                .map(line => line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, '').trim())
-                .filter(Boolean)
+            // Criterios limpios: se usan sus IDs reales (CA-01…) para que la IA cite
+            // los mismos IDs que los casos del plan. Antes se numeraba cada línea
+            // (títulos, opciones e interpretaciones incluidas) y aparecían IDs
+            // inexistentes como "CA-10" en una HU de 6 criterios.
+            const rawCriteria = hu.originalInput.acceptanceCriteria || '';
+            const normalized = compactNormalizedCriteria(rawCriteria);
+            const acceptanceCriteria = (normalized.length
+                ? normalized
+                : rawCriteria
+                    // Texto sin normalizar: se separa por línea o viñeta, no por cualquier " - ".
+                    .split(/\r?\n|•/)
+                    .map(line => line.replace(/^\s*(?:[-*#]+|\d+[.)])\s+/, '').trim())
+                    .filter(Boolean)
+                    .map((line, i) => `C${i + 1}: ${line}`))
                 .slice(0, maxCriteria)
-                .map((line, i) => `CA${i + 1}: ${line}`)
                 .join(' | ');
 
             let scenarios = '';

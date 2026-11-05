@@ -90,6 +90,22 @@ export function isNormalizedCriteria(text: string): boolean {
 }
 
 /** Ids CA-xx de una lista normalizada, en orden. */
+/**
+ * Criterios limpios en una línea cada uno ("CA-01: texto [Opciones: …]"), con
+ * sus IDs reales. Títulos, interpretaciones y definiciones no son criterios.
+ * Devuelve [] si el texto no está normalizado.
+ */
+export function compactNormalizedCriteria(text: string): string[] {
+  const out: string[] = [];
+  for (const line of (text || '').split('\n')) {
+    const crit = line.match(/^\s*-\s*\*\*(CA-\d{2,})\*\*\s+(.*)$/);
+    if (crit) { out.push(`${crit[1]}: ${crit[2].trim()}`); continue; }
+    const opts = line.match(/^\s+-\s*Opciones:\s*(.*)$/i);
+    if (opts && out.length) out[out.length - 1] += ` [Opciones: ${opts[1].trim()}]`;
+  }
+  return out;
+}
+
 export function criteriaIds(text: string): string[] {
   return (text || '').split('\n').map((line) => line.match(CRITERION_LINE)?.[1]).filter((id): id is string => !!id);
 }

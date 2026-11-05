@@ -1,5 +1,5 @@
 import { RouterLink } from '@angular/router';
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, HostListener, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
@@ -266,7 +266,43 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   onStepFocusOut(id: FlowStepId, event: FocusEvent): void {
     const section = event.currentTarget as HTMLElement | null;
     if (section?.contains(event.relatedTarget as Node | null)) return;
+    // Si el foco sale por un clic (p. ej. en "Generar"), contraer el paso ahora
+    // movería la página antes de soltar el botón y el clic se perdería: se
+    // contrae justo después de soltar, cuando el clic ya se registró.
+    if (this.pointerIsDown) {
+      this.pendingFocusOutStep = id;
+      return;
+    }
     if (this.focusedStep === id) this.focusedStep = null;
+  }
+
+  private pointerIsDown = false;
+  private pendingFocusOutStep: FlowStepId | null = null;
+
+  @HostListener('document:pointerdown')
+  onDocumentPointerDown(): void {
+    this.pointerIsDown = true;
+  }
+
+  @HostListener('document:pointerup')
+  @HostListener('document:pointercancel')
+  onDocumentPointerUp(): void {
+    this.pointerIsDown = false;
+    const step = this.pendingFocusOutStep;
+    if (!step) return;
+    this.pendingFocusOutStep = null;
+    // setTimeout: después del evento click que sigue a pointerup.
+    setTimeout(() => {
+      if (this.focusedStep === step && !this.isFocusInsideStep(step)) {
+        this.focusedStep = null;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  private isFocusInsideStep(id: FlowStepId): boolean {
+    const section = this.elRef.nativeElement.querySelector(`#flow-step-${id}`) as HTMLElement | null;
+    return !!section && section.contains(document.activeElement);
   }
 
   /** Qué falta para poder generar, en el mismo orden que valida isFormInvalidForGeneration(). */

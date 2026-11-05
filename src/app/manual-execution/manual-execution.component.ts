@@ -672,13 +672,8 @@ export class ManualExecutionComponent implements OnInit, OnDestroy {
       if (run.huId) {
         const fullHuDb = await this.databaseService.getUserStoryWithTestCases(run.huId);
         if (fullHuDb) {
-          const cases = [...(fullHuDb.test_cases || [])]
-            .sort((x: any, y: any) => (x.position ?? 0) - (y.position ?? 0) || String(x.created_at || '').localeCompare(String(y.created_at || '')))
-            .map((tc: any) => ({
-              ...tc,
-              test_case_steps: [...(tc.test_case_steps || [])].sort((x: any, y: any) => (x.step_number ?? 0) - (y.step_number ?? 0))
-            }));
-          huForExecution = this.mapperService.mapDbTestPlanToHUList({ user_stories: [{ ...fullHuDb, test_cases: cases }] })[0] || null;
+          // getUserStoryWithTestCases ya devuelve casos y pasos ordenados.
+          huForExecution = this.mapperService.mapDbTestPlanToHUList({ user_stories: [fullHuDb] })[0] || null;
         }
       }
 

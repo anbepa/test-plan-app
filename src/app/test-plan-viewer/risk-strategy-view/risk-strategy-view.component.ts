@@ -99,18 +99,21 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, Afte
   private async loadData(): Promise<void> {
     this.isLoading = true;
     try {
-      const plan = await this.databaseService.getTestPlanById(this.testPlanId);
+      // HUs desde la última versión cargada (si existe) y, en paralelo, el plan
+      // actual y el riesgo guardado: antes eran dos consultas una tras otra.
+      const cached = this.databaseService.getCachedTestPlan(this.testPlanId);
+      if (cached) this.applyPlan(cached);
+      const [plan, savedRisk] = await Promise.all([
+        this.databaseService.getTestPlanById(this.testPlanId),
+        this.databaseService.getRiskStrategyByTestPlanId(this.testPlanId)
+      ]);
       if (!plan) {
         this.toastService.error('No se pudo cargar el plan de pruebas');
         this.goBack();
         return;
       }
+      this.applyPlan(plan);
 
-      this.testPlanTitle = this.testPlanTitle || plan.title || '';
-      this.huList = this.mapper.mapDbTestPlanToHUList(plan);
-      this.riskScenarioOptions = this.buildScenarioOptions();
-
-      const savedRisk = await this.databaseService.getRiskStrategyByTestPlanId(this.testPlanId);
       if (savedRisk?.risk_data) {
         this.riskData = this.normalizeRisk(savedRisk.risk_data);
       } else {
@@ -124,6 +127,12 @@ export class RiskStrategyViewComponent implements OnInit, AfterViewChecked, Afte
       this.needsAutoResize = true;
       this.scheduleAutoResize();
     }
+  }
+
+  private applyPlan(plan: any): void {
+    this.testPlanTitle = this.testPlanTitle || plan.title || '';
+    this.huList = this.mapper.mapDbTestPlanToHUList(plan);
+    this.riskScenarioOptions = this.buildScenarioOptions();
   }
 
   // ── Persistencia ────────────────────────────────────────────────────────────

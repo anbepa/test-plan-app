@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { ApiError, getAuthenticatedUser, getAzureConnection, getSupabaseClients, updateAzureConnectionStatus } from './integrations/azure-devops/_shared';
+import { ApiError, getAuthenticatedUser, getSupabaseClients, markAzureConnectionExpired } from './integrations/azure-devops/_shared';
 import { AzureSerenityRuntimeConfig, resolveAzureSerenityRuntimeConfig } from './integrations/serenity/_shared';
 
 function azureGet(url: string, personalAccessToken: string): Promise<Response> {
@@ -184,17 +184,6 @@ async function triggerAzureRelease(
   return releaseId;
 }
 
-/** Marca como vencida la conexión principal de Azure DevOps del usuario (best-effort). */
-async function markUserAzureConnectionExpired(userId: string): Promise<void> {
-  try {
-    const connection = await getAzureConnection(userId, null);
-    if (connection?.organization && connection.status === 'connected') {
-      await updateAzureConnectionStatus(userId, connection.organization, 'expired');
-    }
-  } catch (err) {
-    console.warn('[serenity-report-azure] No se pudo marcar la conexión como vencida:', err);
-  }
-}
 
 /** Ubica bucket y ruta de un objeto de Supabase Storage a partir de su URL (firmada, pública o autenticada). */
 export function parseStorageObjectUrl(url: string): { bucket: string; path: string } | null {
@@ -329,7 +318,7 @@ async function handleStart(req: VercelRequest, res: VercelResponse) {
       }
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
         // Se marca la conexión para que Configuración muestre que hay que actualizar el PAT.
-        if (e.status === 401) await markUserAzureConnectionExpired(user.id);
+        if (e.status === 401) await markAzureConnectionExpired(user.id);
         // 424: falla una dependencia (el PAT), no la sesión de la app. Un 401 aquí
         // se confundiría con "sesión vencida" en el cliente.
         return res.status(424).json({ error: e.message, code: (e.debug as any)?.code });

@@ -116,16 +116,21 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
   ) { }
 
   async ngOnInit() {
-    await this.loadTestPlans();
+    // Con ?id= se abre el detalle directo: la lista de planes se carga por detrás
+    // en lugar de esperar a que termine antes de pedir el plan.
+    const initialId = this.route.snapshot.queryParamMap.get('id');
+    if (initialId) {
+      void this.loadTestPlans(false);
+      await this.selectTestPlan({ id: initialId });
+    } else {
+      await this.loadTestPlans();
+    }
 
     this.queryParamsSub = this.route.queryParams.subscribe(async params => {
       const id = params['id'];
-      if (id && this.testPlans.length > 0) {
-        const testPlan = this.testPlans.find(tp => tp.id === id);
-        if (testPlan) {
-          this.selectTestPlan(testPlan);
-        }
-      }
+      if (!id || id === this.selectedTestPlan?.id || id === this.loadingPlanId) return;
+      const testPlan = this.testPlans.find(tp => tp.id === id) || { id };
+      this.selectTestPlan(testPlan);
     });
 
     // Detectar cuando vuelves a esta ruta (ej: después de agregar HU desde generator)
@@ -473,54 +478,72 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** Plan que se está cargando, para no lanzar la misma carga dos veces. */
+  private loadingPlanId: string | null = null;
+
   async selectTestPlan(testPlan: Partial<DbTestPlanWithRelations>) {
-    this.isLoading = true;
+    const id = testPlan.id!;
+    this.loadingPlanId = id;
+    // Se muestra al instante la última versión cargada del plan (si existe) y se
+    // actualiza por detrás; plan y riesgo se consultan en paralelo.
+    const cached = this.databaseService.getCachedTestPlan(id);
+    if (cached) {
+      this.applyFullTestPlan(cached);
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    } else {
+      this.isLoading = true;
+    }
     try {
-      console.log('📋 Test plan seleccionado (header):', testPlan);
-
-      // Siempre obtener la versión completa desde la base de datos para garantizar que
-      // las secciones de detalle (alcance, estrategia, supuestos, etc.) estén presentes.
-      // Los headers traen información parcial y pueden dejar la vista vacía.
-      let fullTestPlan: DbTestPlanWithRelations | null = null;
-      try {
-        console.log('📥 Cargando detalles completos del test plan...');
-        fullTestPlan = await this.databaseService.getTestPlanById(testPlan.id!);
-      } catch (error) {
-        console.error('❌ No se pudo obtener el detalle desde la BD, usando header parcial:', error);
-        fullTestPlan = testPlan as DbTestPlanWithRelations;
-      }
-
-      if (!fullTestPlan) {
-        this.toastService.error('No se pudo cargar el detalle del plan de pruebas.');
-        return;
-      }
-
-      this.selectedTestPlan = fullTestPlan;
-      console.log('📋 Test plan completo cargado:', this.selectedTestPlan);
-
-      // Load editable data
-      this.testPlanTitle = fullTestPlan.title || '';
-      this.repositoryLink = fullTestPlan.repository_link || '';
-      this.outOfScopeContent = fullTestPlan.out_of_scope || '';
-      this.strategyContent = fullTestPlan.strategy || '';
-      this.limitationsContent = fullTestPlan.limitations || '';
-      this.assumptionsContent = fullTestPlan.assumptions || '';
-      this.teamContent = fullTestPlan.team || '';
-
-      // Convert user stories to HUData
-      this.convertDbTestPlanToHUList(fullTestPlan);
       this.riskStrategyData = this.createDefaultRiskStrategyData();
       this.errorRiskAI = null;
       this.loadingRiskAI = false;
-      await this.loadRiskStrategyFromDatabase(fullTestPlan.id || '');
 
-      // Generate preview
+      // Siempre obtener la versión completa desde la base de datos para garantizar que
+      // las secciones de detalle (alcance, estrategia, supuestos, etc.) estén presentes.
+      const [fullTestPlan] = await Promise.all([
+        this.databaseService.getTestPlanById(id).catch((error) => {
+          console.error('❌ No se pudo obtener el detalle desde la BD, usando header parcial:', error);
+          return cached || (testPlan as DbTestPlanWithRelations);
+        }),
+        this.loadRiskStrategyFromDatabase(id)
+      ]);
 
+      if (this.loadingPlanId !== id) return; // el usuario ya eligió otro plan
+
+      if (!fullTestPlan) {
+        if (!cached) this.toastService.error('No se pudo cargar el detalle del plan de pruebas.');
+        return;
+      }
+      this.applyFullTestPlan(fullTestPlan);
     } catch (error) {
       console.error('❌ Error al seleccionar test plan:', error);
       this.toastService.error('Ocurrió un error al cargar el plan de pruebas.');
     } finally {
-      this.isLoading = false;
+      if (this.loadingPlanId === id) {
+        this.loadingPlanId = null;
+        this.isLoading = false;
+      }
+      this.cdr.detectChanges();
+    }
+  }
+
+  private applyFullTestPlan(fullTestPlan: DbTestPlanWithRelations): void {
+    const samePlan = this.selectedTestPlan?.id === fullTestPlan.id;
+    const page = this.huCurrentPage;
+    this.selectedTestPlan = fullTestPlan;
+    this.testPlanTitle = fullTestPlan.title || '';
+    this.repositoryLink = fullTestPlan.repository_link || '';
+    this.outOfScopeContent = fullTestPlan.out_of_scope || '';
+    this.strategyContent = fullTestPlan.strategy || '';
+    this.limitationsContent = fullTestPlan.limitations || '';
+    this.assumptionsContent = fullTestPlan.assumptions || '';
+    this.teamContent = fullTestPlan.team || '';
+    this.convertDbTestPlanToHUList(fullTestPlan);
+    // Al refrescar el mismo plan se conserva la página en la que estaba el usuario.
+    if (samePlan && page > 1 && page <= this.huTotalPages) {
+      this.huCurrentPage = page;
+      this.updateHuPagination();
     }
   }
 

@@ -30,6 +30,24 @@ export type {
   providedIn: 'root'
 })
 export class DatabaseService {
+  /**
+   * Última versión cargada de cada plan, para mostrar al instante al navegar
+   * entre detalle, previsualización, secciones y riesgos mientras se consulta
+   * la versión actual. Cualquier escritura la invalida.
+   */
+  private readonly planCache = new Map<string, { plan: DbTestPlanWithRelations; at: number }>();
+  private readonly PLAN_CACHE_TTL_MS = 10 * 60 * 1000;
+
+  getCachedTestPlan(id: string): DbTestPlanWithRelations | null {
+    const entry = this.planCache.get(id);
+    if (!entry || Date.now() - entry.at > this.PLAN_CACHE_TTL_MS) return null;
+    return structuredClone(entry.plan);
+  }
+
+  invalidateTestPlanCache(id?: string): void {
+    if (id) this.planCache.delete(id); else this.planCache.clear();
+  }
+
 
   constructor(
     private supabaseClient: SupabaseClientService,
@@ -63,6 +81,7 @@ export class DatabaseService {
     testPlan: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
   ): Promise<string> {
+    this.invalidateTestPlanCache();
     console.log('💾 Iniciando guardado transaccional (RPC) en Supabase...');
 
     try {
@@ -86,6 +105,7 @@ export class DatabaseService {
   }
 
   async saveIndividualUserStory(userStory: DbUserStoryWithRelations): Promise<string> {
+    this.invalidateTestPlanCache();
     console.log('💾 Guardando HU individual en Supabase...');
 
     try {
@@ -393,7 +413,9 @@ export class DatabaseService {
       }
 
       console.log('✅ Test plan obtenido');
-      return data;
+      const sorted = sortPlanRelations(data);
+      if (sorted?.id) this.planCache.set(sorted.id, { plan: structuredClone(sorted), at: Date.now() });
+      return sorted;
 
     } catch (error) {
       console.error('❌ Error:', error);
@@ -423,6 +445,14 @@ export class DatabaseService {
         .single();
 
       if (error) throw error;
+      // Orden estable: casos por posición y pasos por número. Sin esto el orden
+      // dependía de la base de datos y cambiaba tras cada actualización.
+      if (data?.test_cases) {
+        data.test_cases = sortTestCasesByPosition(data.test_cases).map((tc: any) => ({
+          ...tc,
+          test_case_steps: [...(tc.test_case_steps || [])].sort((a: any, b: any) => (a.step_number ?? 0) - (b.step_number ?? 0))
+        }));
+      }
       return data;
     } catch (error) {
       console.error('❌ Error al obtener detalles de la HU:', error);
@@ -431,6 +461,7 @@ export class DatabaseService {
   }
 
   async updateTestPlan(id: string, updates: Partial<DbTestPlan>): Promise<boolean> {
+    this.invalidateTestPlanCache();
     console.log(`📝 Actualizando test plan ${id}...`);
 
     try {
@@ -504,6 +535,7 @@ export class DatabaseService {
     testPlanData: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
   ): Promise<void> {
+    this.invalidateTestPlanCache();
     console.log('🧠 Smart Update: Iniciando proceso optimizado...');
 
     try {
@@ -655,6 +687,7 @@ export class DatabaseService {
   }
 
   async smartUpdateUserStoryTestCases(userStoryId: string, testCases: DetailedTestCase[]): Promise<void> {
+    this.invalidateTestPlanCache();
     console.log(`🧠 Smart Update TCs para HU ${userStoryId}. Casos a sincronizar: ${testCases.length}`);
 
     if (!userStoryId) {
@@ -797,6 +830,7 @@ export class DatabaseService {
     testPlanData: DbTestPlan,
     userStories: DbUserStoryWithRelations[]
   ): Promise<void> {
+    this.invalidateTestPlanCache();
     try {
       const { error: planError } = await this.supabase
         .from('test_plans')
@@ -818,6 +852,7 @@ export class DatabaseService {
   }
 
   async deleteTestPlan(id: string): Promise<boolean> {
+    this.invalidateTestPlanCache();
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
       const { error } = await this.supabase
@@ -931,6 +966,7 @@ export class DatabaseService {
     }
   }
   async saveHuScenariosTransactional(userStoryId: string, testCases: DetailedTestCase[]): Promise<any> {
+    this.invalidateTestPlanCache();
     console.log(`🛡️ Guardado transaccional para HU ${userStoryId}...`);
     
     // Preparar el payload para el RPC
@@ -963,26 +999,45 @@ export class DatabaseService {
   /**
    * Guarda o actualiza un único caso de prueba y sus pasos sin afectar al resto.
    */
-  async saveSingleTestCase(userStoryId: string, testCase: DetailedTestCase, position: number): Promise<DetailedTestCase> {
+  /**
+   * Guarda un solo caso. Un caso existente conserva su posición (antes se
+   * sobrescribía con el índice en pantalla y podían quedar dos casos con la
+   * misma posición, lo que reordenaba la lista y hacía editar otro caso).
+   * Un caso nuevo va al final de la HU.
+   */
+  async saveSingleTestCase(userStoryId: string, testCase: DetailedTestCase, _displayIndex?: number): Promise<DetailedTestCase> {
+    this.invalidateTestPlanCache();
     try {
       let testCaseId = testCase.dbId;
+      const fields = {
+        title: testCase.title,
+        preconditions: testCase.preconditions || '',
+        expected_results: testCase.expectedResults || ''
+      };
 
-      // 1. Upsert test_case (si no tiene dbId, se insertará como nuevo)
-      const { data: tcData, error: tcError } = await this.supabase
-        .from('test_cases')
-        .upsert({
-          ...(testCaseId ? { id: testCaseId } : {}),
-          user_story_id: userStoryId,
-          title: testCase.title,
-          preconditions: testCase.preconditions || '',
-          expected_results: testCase.expectedResults || '',
-          position: position
-        })
-        .select('id')
-        .single();
-      
-      if (tcError) throw tcError;
-      testCaseId = tcData.id;
+      // 1. Actualizar el caso existente o insertarlo al final
+      if (testCaseId) {
+        const { error: tcError } = await this.supabase
+          .from('test_cases')
+          .update(fields)
+          .eq('id', testCaseId);
+        if (tcError) throw tcError;
+      } else {
+        const { data: last } = await this.supabase
+          .from('test_cases')
+          .select('position')
+          .eq('user_story_id', userStoryId)
+          .order('position', { ascending: false, nullsFirst: false })
+          .limit(1);
+        const nextPosition = ((last && last[0]?.position) ?? -1) + 1;
+        const { data: tcData, error: tcError } = await this.supabase
+          .from('test_cases')
+          .insert({ ...fields, user_story_id: userStoryId, position: nextPosition })
+          .select('id')
+          .single();
+        if (tcError) throw tcError;
+        testCaseId = tcData.id;
+      }
 
       // 2. Eliminar pasos anteriores (si existe)
       const { error: delError } = await this.supabase
@@ -1017,4 +1072,28 @@ export class DatabaseService {
       throw error;
     }
   }
+}
+
+/** Ordena casos por posición; los empates conservan el orden de creación. */
+export function sortTestCasesByPosition<T extends { position?: number | null; created_at?: string | null }>(cases: T[]): T[] {
+  return cases
+    .map((tc, index) => ({ tc, index }))
+    .sort((a, b) =>
+      (a.tc.position ?? Number.MAX_SAFE_INTEGER) - (b.tc.position ?? Number.MAX_SAFE_INTEGER)
+      || String(a.tc.created_at || '').localeCompare(String(b.tc.created_at || ''))
+      || a.index - b.index)
+    .map(({ tc }) => tc);
+}
+
+/** HUs, casos y pasos de un plan en orden estable (posición / número de paso). */
+export function sortPlanRelations<T extends { user_stories?: any[] }>(plan: T): T {
+  if (!plan?.user_stories) return plan;
+  plan.user_stories = sortTestCasesByPosition(plan.user_stories).map((us: any) => ({
+    ...us,
+    test_cases: sortTestCasesByPosition(us.test_cases || []).map((tc: any) => ({
+      ...tc,
+      test_case_steps: [...(tc.test_case_steps || [])].sort((a: any, b: any) => (a.step_number ?? 0) - (b.step_number ?? 0))
+    }))
+  }));
+  return plan;
 }

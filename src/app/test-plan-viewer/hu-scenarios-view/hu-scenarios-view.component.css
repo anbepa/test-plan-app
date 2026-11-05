@@ -187,8 +187,28 @@
 /* ── Per-row action column ── */
 .detailed-test-cases-table th.actions-col,
 .detailed-test-cases-table td.actions-col {
-  width: 88px;
+  width: 96px;
   text-align: center;
+  white-space: nowrap;
+}
+
+/* Acciones fija al borde derecho: en edición la tabla es más ancha que la
+   pantalla y los botones Guardar/Cancelar quedaban fuera de la vista. */
+@media (min-width: 769px) {
+  .detailed-test-cases-table th.actions-col,
+  .detailed-test-cases-table td.actions-col {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background: #ffffff;
+    box-shadow: -1px 0 0 var(--border-color), -8px 0 12px -10px rgba(15, 23, 42, 0.25);
+  }
+  .detailed-test-cases-table thead th.actions-col {
+    z-index: 3;
+    background: #f3f4f6;
+  }
+  .detailed-test-cases-table tbody tr.row-even td.actions-col { background: #f8fafc; }
+  .detailed-test-cases-table tbody tr.row-editing td.actions-col { background: #fafbff; }
 }
 
 .row-action-btn {

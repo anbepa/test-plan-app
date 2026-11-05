@@ -223,7 +223,9 @@ export class AzureDevOpsEvidenceService {
 
       if (!uploadResponse.ok) {
         if (uploadResponse.status === 401 || uploadResponse.status === 403) {
-          throw this.createError('UNAUTHORIZED', 'No tienes permisos para adjuntar archivos. Verifica el PAT.');
+          throw this.createError('UNAUTHORIZED', uploadResponse.status === 401
+            ? 'El PAT de Azure DevOps está vencido o fue revocado. Genera uno nuevo y actualízalo en Configuración > Azure DevOps.'
+            : 'El PAT de Azure DevOps no tiene permiso para adjuntar archivos. Revisa sus permisos en Configuración > Azure DevOps.');
         }
         throw this.createError('UNKNOWN', `Azure DevOps rechazó la carga (${uploadResponse.status}).`);
       }

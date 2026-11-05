@@ -7,7 +7,8 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   getAuthenticatedUser,
   toErrorResponse,
-  getAzureConnectionWithSecret
+  getAzureConnectionWithSecret,
+  respondAzureAuthFailure,
 } from './_shared';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -154,7 +155,7 @@ async function handleGetWorkItem(req: VercelRequest, res: VercelResponse, workIt
         return;
       }
       if (response.status === 401 || response.status === 403) {
-        res.status(401).json({ error: 'No autorizado' });
+        await respondAzureAuthFailure(res, response.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps error: ${response.status}`);
@@ -248,7 +249,7 @@ async function handleUploadAttachment(req: VercelRequest, res: VercelResponse, w
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        res.status(401).json({ error: 'No autorizado' });
+        await respondAzureAuthFailure(res, response.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps error: ${response.status}`);
@@ -361,7 +362,7 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
     const uploadData = await uploadRes.json().catch(() => ({}));
     if (!uploadRes.ok) {
       if (uploadRes.status === 401 || uploadRes.status === 403) {
-        res.status(401).json({ error: 'No autorizado para cargar adjuntos' });
+        await respondAzureAuthFailure(res, uploadRes.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps upload error: ${uploadRes.status}`);
@@ -396,7 +397,7 @@ async function handleUploadEvidence(req: VercelRequest, res: VercelResponse, wor
     const linkData = await linkRes.json().catch(() => ({}));
     if (!linkRes.ok) {
       if (linkRes.status === 401 || linkRes.status === 403) {
-        res.status(401).json({ error: 'No autorizado para vincular adjuntos' });
+        await respondAzureAuthFailure(res, linkRes.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps link error: ${linkRes.status}`);
@@ -470,7 +471,7 @@ async function handleLinkAttachment(req: VercelRequest, res: VercelResponse, wor
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        res.status(401).json({ error: 'No autorizado' });
+        await respondAzureAuthFailure(res, response.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps error: ${response.status}`);
@@ -548,7 +549,7 @@ async function handleUpdateFields(
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        res.status(401).json({ error: 'No autorizado' });
+        await respondAzureAuthFailure(res, response.status, user.id, connection.organization);
         return;
       }
       throw new Error(`Azure DevOps error: ${response.status}`);

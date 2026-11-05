@@ -3,7 +3,9 @@ import {
   ApiError,
   getAuthenticatedUser,
   getAzureConnectionWithSecret,
+  markAzureConnectionExpired,
   toErrorResponse,
+  AZURE_PAT_EXPIRED_MESSAGE,
 } from '../azure-devops/_shared';
 
 // Núcleo CommonJS compartido con local-api-server.js (ver _azure-repos-core.js).
@@ -19,6 +21,8 @@ const core = require('./_azure-repos-core.js');
  * nunca se acerca al maxDuration de Vercel.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  let userId: string | null = null;
+  let organization: string | null = null;
   try {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
 
@@ -31,7 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const user = await getAuthenticatedUser(req.headers);
+    userId = user.id;
     const connection = await getAzureConnectionWithSecret(user.id, null);
+    organization = connection?.organization ?? null;
     if (!connection || connection.status === 'disconnected') {
       throw new ApiError(404, 'Azure DevOps no está configurado para este usuario.');
     }
@@ -47,6 +53,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     res.status(200).json(result);
   } catch (error: unknown) {
+    // PAT rechazado por Azure: se marca la conexión como vencida (como en Serenity).
+    if (error instanceof core.CodeAgentError && (error as any).status === 401 && userId) {
+      await markAzureConnectionExpired(userId, organization);
+      res.status(424).json({ message: AZURE_PAT_EXPIRED_MESSAGE, code: 'AZURE_PAT_INVALID' });
+      return;
+    }
     const normalized = toErrorResponse(toApiError(error));
     res.status(normalized.status).json(normalized.body);
   }
