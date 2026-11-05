@@ -233,46 +233,8 @@
             <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
               <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
                 <!-- Consultando PRs/commits de la HU -->
-                <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
-                  <span class="spinner-inline"></span>
-                  Buscando el código de la HU {{ currentHuId }} (PRs y commits vinculados)…
-                </div>
-
-                <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
-                <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
-                  <div class="code-target-card-header">
-                    <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
-                    <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring">Usar otra rama</button>
-                  </div>
-                  <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
-                  <ul class="code-change-list">
-                    <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
-                      <label class="code-change-toggle">
-                        <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
-                        <span class="code-change-repo">{{ group.repositoryName }}</span>
-                      </label>
-                      <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
-                      <span class="code-change-meta">
-                        último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
-                        · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
-                        <ng-container *ngIf="group.extraOver"> · cambios adicionales a {{ group.extraOver }}</ng-container>
-                        <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
-                      </span>
-                    </li>
-                  </ul>
-                  <p *ngIf="!usesHuChangeset" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
-                  <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
-                    <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
-                    <ul>
-                      <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
-                      <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
-                    </ul>
-                  </details>
-                </div>
-
-                <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
-                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
-                  <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
+                <!-- Selectores de proyecto, repositorio y rama (se reutilizan al agregar ramas) -->
+                <ng-template #targetPicker>
                   <div class="code-target-grid">
                     <div class="form-group">
                       <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
@@ -299,9 +261,95 @@
                       </select>
                     </div>
                   </div>
-                  <p *ngIf="isManualCodeTargetReady" class="code-source-hint">
-                    Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="codeEffectiveBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ codeEffectiveBaseBranch }}</strong></ng-container>.
+                  <div *ngIf="isManualCodeTargetReady && extraBaseBranch" class="form-group code-base-branch">
+                    <label for="tcCodeBaseBranch">Comparar contra:</label>
+                    <select id="tcCodeBaseBranch" name="codeBaseBranch" class="form-control" [ngModel]="extraBaseBranch"
+                      (ngModelChange)="codeBaseBranchChoice = $event" [disabled]="codeExploring">
+                      <ng-container *ngFor="let branch of codeBranches"><option *ngIf="branch.name !== codeBranch" [value]="branch.name">{{ branch.name }}</option></ng-container>
+                    </select>
+                    <p class="code-source-hint">Se analizan los cambios de la rama desde que salió de esta. <ng-container *ngIf="extraBaseBranchIsSuggested">Sugerida por {{ codeHuChangeGroups.length ? 'la HU o el repositorio' : 'el repositorio' }}.</ng-container></p>
+                  </div>
+                </ng-template>
+
+                <!-- Ramas agregadas a mano: se analizan junto con los cambios de la HU -->
+                <ng-template #extraTargetsList>
+                  <ul *ngIf="codeExtraTargets.length" class="code-change-list code-extra-list">
+                    <li *ngFor="let target of codeExtraTargets; let i = index; trackBy: trackExtraTarget">
+                      <span class="code-change-toggle"><span class="code-change-repo">{{ target.repositoryName }}</span></span>
+                      <span class="code-change-branch">{{ target.branch }} → {{ target.baseBranch }}</span>
+                      <span class="code-change-meta">
+                        agregada por ti
+                        <button type="button" class="code-link-btn" (click)="removeExtraTarget(i)" [disabled]="codeExploring" [attr.aria-label]="'Quitar la rama ' + target.branch">Quitar</button>
+                      </span>
+                    </li>
+                  </ul>
+                </ng-template>
+
+                <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
+                  <span class="spinner-inline"></span>
+                  Buscando el código de la HU {{ currentHuId }} (PRs y commits vinculados)…
+                </div>
+
+                <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
+                <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
+                  <div class="code-target-card-header">
+                    <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
+                    <span class="code-target-card-actions">
+                      <button type="button" class="code-link-btn" (click)="startAddingTarget()" [disabled]="codeExploring || codeAddingTarget">+ Agregar otra rama</button>
+                      <button type="button" class="code-link-btn" (click)="useManualCodeTarget()" [disabled]="codeExploring" title="Ignora los cambios vinculados a la HU y analiza solo la rama que elijas">Usar solo otra rama</button>
+                    </span>
+                  </div>
+                  <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
+                  <ul class="code-change-list">
+                    <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
+                      <label class="code-change-toggle">
+                        <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
+                        <span class="code-change-repo">{{ group.repositoryName }}</span>
+                      </label>
+                      <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
+                      <span class="code-change-meta">
+                        último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
+                        · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
+                        <ng-container *ngIf="group.extraOver"> · cambios adicionales a {{ group.extraOver }}</ng-container>
+                        <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
+                      </span>
+                    </li>
+                  </ul>
+                  <ng-container *ngTemplateOutlet="extraTargetsList"></ng-container>
+                  <div *ngIf="codeAddingTarget" class="code-add-target">
+                    <p class="code-source-hint">Elige otra rama para analizarla <strong>junto con</strong> los cambios de la HU.</p>
+                    <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
+                    <p *ngIf="extraTargetProblem" class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
+                    <p *ngIf="canAddExtraTarget" class="code-source-hint">Se tomarán los cambios de <strong>{{ codeBranch }}</strong> desde que salió de <strong>{{ extraBaseBranch }}</strong>.</p>
+                    <div class="code-add-target-actions">
+                      <button type="button" class="button-primary compact-action" (click)="addExtraTarget()" [disabled]="!canAddExtraTarget || codeExploring">Agregar</button>
+                      <button type="button" class="code-link-btn" (click)="cancelAddingTarget()">Cancelar</button>
+                    </div>
+                  </div>
+                  <p *ngIf="!usesHuChangeset && !codeExtraTargets.length && !pendingExtraTarget" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
+                  <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
+                    <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
+                    <ul>
+                      <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
+                      <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
+                    </ul>
+                  </details>
+                </div>
+
+                <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
+                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
+                  <p *ngIf="huHasNoChangeset" class="code-source-hint">La HU no tiene PRs ni commits vinculados: elige el repositorio y la rama.</p>
+                  <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
+                  <p *ngIf="isManualCodeTargetReady && !codeExtraTargets.length" class="code-source-hint">
+                    Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="extraBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ extraBaseBranch }}</strong></ng-container>.
                   </p>
+                  <ng-container *ngTemplateOutlet="extraTargetsList"></ng-container>
+                  <p *ngIf="isManualCodeTargetReady && extraTargetProblem && codeExtraTargets.length" class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
+                  <div *ngIf="isManualCodeTargetReady" class="code-add-target-actions">
+                    <button type="button" class="code-link-btn" (click)="addExtraTarget()" [disabled]="!canAddExtraTarget || codeExploring"
+                            title="Suma esta rama a la lista para poder elegir otro repositorio y otra rama">+ Agregar otra rama</button>
+                  </div>
+                  <p *ngIf="codeExtraTargets.length && !isManualCodeTargetReady" class="code-source-hint">Elige otra rama para sumarla, o genera con las {{ codeExtraTargets.length }} de la lista.</p>
                   <div *ngIf="!hasHuChangeset && codeLinkedBranchHint" class="code-source-hint">{{ codeLinkedBranchHint }}</div>
                   <button *ngIf="hasHuChangeset" type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
                     ← Volver a los cambios de la HU
