@@ -60,7 +60,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   refineContext = '';
   isRefining = false;
   refineError: string | null = null;
-  refineStreamChars = 0;
   private refineSub?: Subscription;
   readonly refineQuickTags: string[] = [
     'Solo happy path', 'Casos negativos', 'Validaciones de frontera', 'Datos inválidos',
@@ -686,10 +685,26 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     this.refineError = null;
   }
 
-  /** Agrega el tag al contexto (sin duplicarlo) para combinar varias indicaciones. */
-  addRefineTag(tag: string): void {
+  toggleRefinePanel(): void {
+    if (this.isRefinePanelOpen) this.closeRefinePanel();
+    else this.openRefinePanel();
+  }
+
+  isRefineTagActive(tag: string): boolean {
+    return this.refineContext.toLowerCase().includes(tag.toLowerCase());
+  }
+
+  /** Agrega o quita el tag del contexto para combinar varias indicaciones. */
+  toggleRefineTag(tag: string): void {
+    if (this.isRefineTagActive(tag)) {
+      const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      this.refineContext = this.refineContext
+        .replace(new RegExp(`\\.?\\s*${escaped}`, 'i'), '')
+        .replace(/^\s*\.\s*/, '')
+        .trim();
+      return;
+    }
     const current = this.refineContext.trim();
-    if (current.toLowerCase().includes(tag.toLowerCase())) return;
     this.refineContext = current ? `${current}. ${tag}` : tag;
   }
 
@@ -707,7 +722,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     }
     this.refineError = null;
     this.isRefining = true;
-    this.refineStreamChars = 0;
     const technique = this.hu.refinementTechnique || this.hu.originalInput.selectedTechnique || 'Automática';
     const input = { ...this.hu.originalInput, contextSource: 'criteria' as const, codeContext: '' };
     let content = '';
@@ -716,7 +730,6 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     this.refineSub = this.aiService.refineTestCasesDirectStream(input, this.hu.detailedTestCases || [], technique, context).subscribe({
       next: (event: any) => {
         content = event.content || content;
-        this.refineStreamChars = content.length;
         this.cdr.detectChanges();
       },
       error: (error: any) => {

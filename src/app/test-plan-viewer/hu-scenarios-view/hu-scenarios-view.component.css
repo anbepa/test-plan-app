@@ -1491,3 +1491,16 @@ textarea.rf-control {
 .refine-panel-error { color: #b42318; font-size: .875rem; margin: .25rem 0; }
 .refine-panel-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
 .refine-panel-progress { margin: .5rem 0 0; color: #5b6475; font-size: .85rem; }
+.refine-panel-warning { margin: .25rem 0; color: #8a5a00; font-size: .85rem; }
+.refine-tag.is-active { border-color: var(--primary-color, #007AFF); background: color-mix(in srgb, var(--primary-color, #007AFF) 10%, #ffffff); color: var(--primary-color, #007AFF); }
+.button-secondary.is-active { border-color: var(--primary-color, #007AFF); background: color-mix(in srgb, var(--primary-color, #007AFF) 9%, #ffffff); }
+.button-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .78rem 1.45rem; min-height: 50px; border-radius: 24px; white-space: nowrap;
+  font-size: .95rem; font-weight: 700; cursor: pointer; transition: all .2s ease;
+  border: 2px solid var(--primary-color, #007AFF); background: var(--primary-color, #007AFF); color: #fff;
+}
+.button-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary-color, #007AFF) 85%, #000000); }
+.button-primary:disabled { opacity: .55; cursor: not-allowed; }
+.refine-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.5); border-top-color: #fff; border-radius: 50%; animation: refine-spin .8s linear infinite; }
+@keyframes refine-spin { to { transform: rotate(360deg); } }

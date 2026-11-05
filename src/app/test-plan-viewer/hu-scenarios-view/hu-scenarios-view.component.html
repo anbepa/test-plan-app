@@ -35,7 +35,8 @@
           <button (click)="editHuScenarios()" class="button-ai-primary">
             Editar Matriz
           </button>
-          <button type="button" (click)="openRefinePanel()" class="button-secondary"
+          <button type="button" (click)="toggleRefinePanel()" class="button-secondary"
+            [class.is-active]="isRefinePanelOpen" [attr.aria-expanded]="isRefinePanelOpen"
             [disabled]="isRefining || !hu.detailedTestCases || hu.detailedTestCases.length === 0"
             title="Ajusta los escenarios con una indicación tuya; se conservan los que no la afectan">
             ✦ Editar Matriz con IA y Contexto
@@ -59,21 +60,25 @@
 
         <section class="refine-panel" *ngIf="isRefinePanelOpen" aria-labelledby="refinePanelTitle">
           <h3 id="refinePanelTitle" class="refine-panel-title">Editar Matriz con IA y Contexto</h3>
-          <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva los escenarios que no la afectan, cubriendo todos los criterios de la HU.</p>
+          <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva lo que no la afecta.</p>
           <textarea class="refine-panel-textarea" rows="4" [(ngModel)]="refineContext" [disabled]="isRefining"
             placeholder="Ej: Prioriza casos negativos de las validaciones de negocio y deja máximo 5 escenarios."></textarea>
           <div class="refine-panel-tags">
-            <button type="button" *ngFor="let tag of refineQuickTags" class="refine-tag" (click)="addRefineTag(tag)" [disabled]="isRefining">+ {{ tag }}</button>
+            <button type="button" *ngFor="let tag of refineQuickTags" class="refine-tag" [class.is-active]="isRefineTagActive(tag)"
+              [attr.aria-pressed]="isRefineTagActive(tag)" (click)="toggleRefineTag(tag)" [disabled]="isRefining">
+              {{ isRefineTagActive(tag) ? '✓' : '+' }} {{ tag }}
+            </button>
           </div>
+          <p class="refine-panel-warning">Reemplazará los {{ hu.detailedTestCases?.length || 0 }} escenarios actuales de la matriz.</p>
           <p class="refine-panel-error" *ngIf="refineError" role="alert">{{ refineError }}</p>
           <div class="refine-panel-actions">
             <button type="button" class="button-secondary" (click)="closeRefinePanel()" [disabled]="isRefining">Cancelar</button>
-            <button type="button" class="button-ai-primary" (click)="refineWithContext()" [disabled]="isRefining || !refineContext.trim()">
-              <span class="icon-sparkle-white"></span>
-              {{ isRefining ? 'Refinando escenarios…' : 'Refinar y guardar' }}
+            <button type="button" class="button-primary" (click)="refineWithContext()" [disabled]="isRefining || !refineContext.trim()">
+              <span *ngIf="isRefining" class="refine-spinner" aria-hidden="true"></span>
+              {{ isRefining ? 'Aplicando…' : '✦ Aplicar con IA y guardar' }}
             </button>
           </div>
-          <p class="refine-panel-progress" *ngIf="isRefining" aria-live="polite">La IA está ajustando los escenarios ({{ refineStreamChars }} caracteres recibidos)…</p>
+          <p class="refine-panel-progress" *ngIf="isRefining" aria-live="polite">Aplicando tu indicación a los escenarios… puede tardar hasta un minuto.</p>
         </section>
 
         <!-- Loading state for scenarios -->
