@@ -5,7 +5,7 @@
       <span class="breadcrumb-separator">/</span>
       <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
       <span class="breadcrumb-separator">/</span>
-      <span class="breadcrumb-current-text">{{ isEditingMode ? 'Editar / Refinar con IA' : 'Ver escenarios de prueba' }}</span>
+      <span class="breadcrumb-current-text">{{ isEditingMode ? 'Editar Matriz' : 'Ver escenarios de prueba' }}</span>
     </div>
   </div>
 
@@ -33,8 +33,13 @@
       <ng-container *ngIf="!isEditingMode">
         <div class="actions table-actions">
           <button (click)="editHuScenarios()" class="button-ai-primary">
-            <span class="icon-sparkle-white"></span>
-            Editar / Refinar con IA
+            Editar Matriz
+          </button>
+          <button type="button" (click)="toggleRefinePanel()" class="button-secondary"
+            [class.is-active]="isRefinePanelOpen" [attr.aria-expanded]="isRefinePanelOpen"
+            [disabled]="isRefining || !hu.detailedTestCases || hu.detailedTestCases.length === 0"
+            title="Ajusta los escenarios con una indicación tuya; se conservan los que no la afectan">
+            ✦ Editar Matriz con IA y Contexto
           </button>
           <div class="export-menu" [class.open]="exportMenuOpen">
             <button type="button" class="button-secondary export-menu-trigger" (click)="toggleExportMenu($event)"
@@ -53,6 +58,29 @@
           </div>
         </div>
 
+        <section class="refine-panel" *ngIf="isRefinePanelOpen" aria-labelledby="refinePanelTitle">
+          <h3 id="refinePanelTitle" class="refine-panel-title">Editar Matriz con IA y Contexto</h3>
+          <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva lo que no la afecta.</p>
+          <textarea class="refine-panel-textarea" rows="4" [(ngModel)]="refineContext" [disabled]="isRefining"
+            placeholder="Ej: Prioriza casos negativos de las validaciones de negocio y deja máximo 5 escenarios."></textarea>
+          <div class="refine-panel-tags">
+            <button type="button" *ngFor="let tag of refineQuickTags" class="refine-tag" [class.is-active]="isRefineTagActive(tag)"
+              [attr.aria-pressed]="isRefineTagActive(tag)" (click)="toggleRefineTag(tag)" [disabled]="isRefining">
+              {{ isRefineTagActive(tag) ? '✓' : '+' }} {{ tag }}
+            </button>
+          </div>
+          <p class="refine-panel-warning">Reemplazará los {{ hu.detailedTestCases?.length || 0 }} escenarios actuales de la matriz.</p>
+          <p class="refine-panel-error" *ngIf="refineError" role="alert">{{ refineError }}</p>
+          <div class="refine-panel-actions">
+            <button type="button" class="button-secondary" (click)="closeRefinePanel()" [disabled]="isRefining">Cancelar</button>
+            <button type="button" class="button-primary" (click)="refineWithContext()" [disabled]="isRefining || !refineContext.trim()">
+              <span *ngIf="isRefining" class="refine-spinner" aria-hidden="true"></span>
+              {{ isRefining ? 'Aplicando…' : '✦ Aplicar con IA y guardar' }}
+            </button>
+          </div>
+          <p class="refine-panel-progress" *ngIf="isRefining" aria-live="polite">Aplicando tu indicación a los escenarios… puede tardar hasta un minuto.</p>
+        </section>
+
         <!-- Loading state for scenarios -->
         <div *ngIf="isLoadingScenarios" class="loading-scenarios-container">
           <div class="scenarios-spinner"></div>
@@ -60,7 +88,7 @@
         </div>
 
         <div *ngIf="!isLoadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="no-test-cases-state">
-          <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar / Refinar con IA</strong> para generarlos.</p>
+          <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar Matriz</strong> para agregarlos.</p>
         </div>
 
         <div *ngIf="!isLoadingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0">

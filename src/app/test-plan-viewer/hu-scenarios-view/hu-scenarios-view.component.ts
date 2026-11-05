@@ -11,6 +11,7 @@ import { HuSyncService } from '../../services/core/hu-sync.service';
 import { DatabaseService, sortTestCasesByPosition } from '../../services/database/database.service';
 import { TestPlanMapperService } from '../../services/database/test-plan-mapper.service';
 import { Subscription } from 'rxjs';
+import { AiUnifiedService } from '../../services/ai/ai-unified.service';
 
 @Component({
   selector: 'app-hu-scenarios-view',
@@ -54,6 +55,17 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   private componentLoadedAt = Date.now();
   private huSyncSubscription: Subscription | null = null;
 
+  // Refinamiento con contexto del analista (modo "Solo criterios")
+  isRefinePanelOpen = false;
+  refineContext = '';
+  isRefining = false;
+  refineError: string | null = null;
+  private refineSub?: Subscription;
+  readonly refineQuickTags: string[] = [
+    'Solo happy path', 'Casos negativos', 'Validaciones de frontera', 'Datos inválidos',
+    'Solo 5 escenarios', 'Flujo alternativo', 'Creación de ruta crítica'
+  ];
+
   constructor(
     private router: Router,
     private route: ActivatedRoute,
@@ -63,7 +75,8 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     private databaseService: DatabaseService,
     private mapper: TestPlanMapperService,
     private cdr: ChangeDetectorRef,
-    private hostRef: ElementRef<HTMLElement>
+    private hostRef: ElementRef<HTMLElement>,
+    private aiService: AiUnifiedService
   ) { }
 
   ngOnInit(): void {
@@ -249,6 +262,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.refineSub?.unsubscribe();
     this.huSyncSubscription?.unsubscribe();
   }
 
@@ -656,6 +670,124 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
   splitLines(text: string): string[] {
     return text ? text.split('\n').filter(line => line.trim()) : [];
+  }
+
+  openRefinePanel(): void {
+    if (!this.hu) return;
+    this.refineContext = this.hu.refinementContext || '';
+    this.refineError = null;
+    this.isRefinePanelOpen = true;
+  }
+
+  closeRefinePanel(): void {
+    if (this.isRefining) return;
+    this.isRefinePanelOpen = false;
+    this.refineError = null;
+  }
+
+  toggleRefinePanel(): void {
+    if (this.isRefinePanelOpen) this.closeRefinePanel();
+    else this.openRefinePanel();
+  }
+
+  isRefineTagActive(tag: string): boolean {
+    return this.refineContext.toLowerCase().includes(tag.toLowerCase());
+  }
+
+  /** Agrega o quita el tag del contexto para combinar varias indicaciones. */
+  toggleRefineTag(tag: string): void {
+    if (this.isRefineTagActive(tag)) {
+      const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      this.refineContext = this.refineContext
+        .replace(new RegExp(`\\.?\\s*${escaped}`, 'i'), '')
+        .replace(/^\s*\.\s*/, '')
+        .trim();
+      return;
+    }
+    const current = this.refineContext.trim();
+    this.refineContext = current ? `${current}. ${tag}` : tag;
+  }
+
+  /** Refina los escenarios de la HU con el contexto del analista y los guarda en la base de datos. */
+  refineWithContext(): void {
+    if (!this.hu || this.isRefining) return;
+    const context = this.refineContext.trim();
+    if (!context) {
+      this.refineError = 'Escribe qué quieres ajustar, ampliar o priorizar.';
+      return;
+    }
+    if (!this.hu.originalInput?.acceptanceCriteria?.trim()) {
+      this.refineError = 'La HU no tiene criterios de aceptación guardados para refinar.';
+      return;
+    }
+    this.refineError = null;
+    this.isRefining = true;
+    const technique = this.hu.refinementTechnique || this.hu.originalInput.selectedTechnique || 'Automática';
+    const input = { ...this.hu.originalInput, contextSource: 'criteria' as const, codeContext: '' };
+    let content = '';
+
+    this.refineSub?.unsubscribe();
+    this.refineSub = this.aiService.refineTestCasesDirectStream(input, this.hu.detailedTestCases || [], technique, context).subscribe({
+      next: (event: any) => {
+        content = event.content || content;
+        this.cdr.detectChanges();
+      },
+      error: (error: any) => {
+        console.error('[REFINE] Error al refinar con contexto:', error);
+        this.refineError = error?.userMessage || 'No fue posible refinar los escenarios. Intenta de nuevo.';
+        this.isRefining = false;
+        this.cdr.detectChanges();
+      },
+      complete: () => { void this.applyRefinedCases(content, context, technique); }
+    });
+  }
+
+  private async applyRefinedCases(content: string, context: string, technique: string): Promise<void> {
+    const testCases = this.parseRefineResult(content);
+    if (!testCases?.length || !this.hu) {
+      this.refineError = 'La IA no devolvió escenarios válidos. Intenta de nuevo.';
+      this.isRefining = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    const previous = this.hu.detailedTestCases;
+    this.hu.detailedTestCases = testCases;
+    this.hu.refinementContext = context;
+    this.hu.refinementTechnique = technique;
+    const saved = await this.saveData(`${testCases.length} escenarios refinados y guardados`);
+    if (!saved) {
+      this.hu.detailedTestCases = previous;
+    } else {
+      const userStoryId = this.hu.dbUuid || this.hu.id;
+      this.databaseService.updateUserStoryRefinement(userStoryId, context, technique)
+        .catch((error) => console.warn('[REFINE] No se pudo guardar el contexto de refinamiento:', error));
+      this.isRefinePanelOpen = false;
+    }
+    this.isRefining = false;
+    this.cdr.detectChanges();
+  }
+
+  private parseRefineResult(content: string): DetailedTestCase[] | null {
+    const clean = (content || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+    try {
+      const parsed = JSON.parse(clean.slice(start, end + 1));
+      return (parsed?.testCases || []).map((tc: any) => ({
+        title: tc.title || '',
+        preconditions: tc.preconditions || '',
+        expectedResults: tc.expectedResults || '',
+        steps: (Array.isArray(tc.steps) ? tc.steps : []).map((step: any, index: number) => ({
+          numero_paso: index + 1,
+          accion: typeof step === 'string' ? step : (step?.accion || step?.action || '')
+        })),
+        coveredCriteria: tc.coveredCriteria,
+        technique: tc.technique
+      }));
+    } catch {
+      return null;
+    }
   }
 
   private async saveData(successMessage?: string): Promise<boolean> {

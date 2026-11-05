@@ -167,26 +167,18 @@
       <!-- PASO: CRITERIOS -->
       <section class="flow-step" id="flow-step-criteria" [ngClass]="'is-' + flowStep('criteria').status"
         [class.is-collapsed]="isStepCollapsed('criteria')" (focusin)="onStepFocusIn('criteria', $event)" (focusout)="onStepFocusOut('criteria', $event)">
-        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Se separan en una lista CA-01, CA-02…: cada criterio tendrá al menos un escenario.' }"></ng-container>
+        <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Importa o escribe los criterios de aceptación de la HU.' }"></ng-container>
         <div class="flow-step-body" id="flow-body-criteria" [hidden]="isStepCollapsed('criteria')">
           <div class="form-group full-width">
             <label for="tcCurrentAcceptanceCriteria">Criterios de aceptación de la HU<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
                 *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
-            <div *ngIf="normalizedCriteria && !criteriaEditing && currentAcceptanceCriteria.trim()" class="criteria-original-bar">
-              <button type="button" class="criteria-original-toggle" (click)="showOriginalCriteria = !showOriginalCriteria"
-                [attr.aria-expanded]="showOriginalCriteria" aria-controls="tcCriteriaOriginalPreview">
-                <span class="criteria-original-caret" [class.is-open]="showOriginalCriteria" aria-hidden="true">›</span>
-                Texto original de la HU
-              </button>
-              <button type="button" class="code-link-btn" (click)="editCriteria()">Editar</button>
-            </div>
-            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim() && (!normalizedCriteria || criteriaEditing)">
+            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
               <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
                 <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
                 <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
               </div>
             </div>
-            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim() && (!normalizedCriteria || showOriginalCriteria)"
+            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()"
               id="tcCriteriaOriginalPreview" class="form-control md-preview"
               [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
               title="Doble clic para editar"></div>
@@ -200,25 +192,6 @@
               Criterios de Aceptación son requeridos.
             </div>
 
-            <div *ngIf="currentAcceptanceCriteria.trim() && (normalizingCriteria || normalizedCriteria)" class="criteria-normalized" aria-live="polite">
-              <div class="md-box-header criteria-normalized-header">
-                <span class="criteria-normalized-title">
-                  Criterios a cubrir<span *ngIf="normalizedCriteriaCount"> ({{ normalizedCriteriaCount }})</span>
-                  <span *ngIf="normalizingCriteria" class="criteria-normalized-status">· interpretando…</span>
-                </span>
-                <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios a cubrir" *ngIf="normalizedCriteria && !normalizingCriteria">
-                  <button type="button" [class.is-active]="!normalizedCriteriaEditing" (click)="normalizedCriteriaEditing = false">Vista</button>
-                  <button type="button" [class.is-active]="normalizedCriteriaEditing" (click)="editNormalizedCriteria()">Editar</button>
-                </div>
-              </div>
-              <p class="criteria-normalized-hint" *ngIf="normalizedCriteria">Cada CA tendrá al menos un escenario{{ usesCodeContext ? ' y se contrastará con el código' : '' }}. Corrígela si la interpretación no es correcta.</p>
-              <p class="criteria-normalized-hint flow-inline-warning" *ngIf="flowStep('criteria').status === 'stale'">Editaste los criterios originales: al salir del campo se volverá a interpretar esta lista.</p>
-              <div *ngIf="normalizedCriteria && !normalizedCriteriaEditing" class="form-control md-preview"
-                [innerHTML]="normalizedCriteria | markdownLite" (dblclick)="editNormalizedCriteria()" title="Doble clic para editar"></div>
-              <textarea *ngIf="normalizedCriteriaEditing" id="tcNormalizedCriteria" name="normalizedCriteria"
-                [(ngModel)]="normalizedCriteria" class="form-control code-context-textarea"
-                (input)="autoGrowTextarea($event.target)"></textarea>
-            </div>
           </div>
 
         </div>
@@ -544,9 +517,6 @@
 
         <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
           ⚠ {{ criteriaCoverageGap.length }} criterio{{ criteriaCoverageGap.length > 1 ? 's' : '' }} sin escenario: {{ criteriaCoverageGap.join(', ') }}. Revísalo{{ criteriaCoverageGap.length > 1 ? 's' : '' }} antes de añadir la HU al plan.
-        </p>
-        <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && scenarioMatrixGap.length">
-          ⚠ Matriz incompleta: {{ scenarioMatrixGap.join('; ') }}. Revísalo antes de añadir la HU al plan.
         </p>
 
         <!-- Acciones arriba de la tabla -->

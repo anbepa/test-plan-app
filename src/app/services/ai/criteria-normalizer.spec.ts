@@ -1,4 +1,4 @@
-import { criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, scenarioMatrixGaps, scenarioType, uncoveredChangeBehaviorIds, uncoveredCriteria } from './criteria-normalizer';
+import { criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, uncoveredChangeBehaviorIds, uncoveredCriteria } from './criteria-normalizer';
 
 describe('criteria-normalizer', () => {
   const raw = '```json\n' + JSON.stringify({
@@ -32,7 +32,7 @@ describe('criteria-normalizer', () => {
     const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
     expect(text).toContain('### Al ingresar al menú Devoluciones, el sistema deberá\n- **CA-01** Devolución DPP: solo registros en COP');
     expect(text).toContain('  - Opciones: COP → DPP, Giro; USD → Devoluciones ME');
-    expect(text).toContain('  - ⚠ Interpretación: Se tomó como un solo criterio.');
+    expect(text).not.toContain('Interpretación');
     expect(text).toContain('- Resumen (se verifica en CA-01, CA-03): Cada módulo muestra solo su moneda');
     expect(isNormalizedCriteria(text)).toBeTrue();
     expect(criteriaIds(text)).toEqual(['CA-01', 'CA-02', 'CA-03']);
@@ -60,25 +60,6 @@ describe('criteria-normalizer', () => {
     expect(uncoveredChangeBehaviorIds(context)).toEqual(['RT-03', 'RT-08']);
     const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
     expect(uncoveredCriteria(text, [{ coveredCriteria: ['CA-01', 'CA-02', 'CA-03', 'RT-03'] }], context)).toEqual(['RT-08']);
-  });
-  it('clasifica el tipo de escenario por el prefijo del título', () => {
-    expect(scenarioType('Positivo – Lista solo COP')).toBe('Positivo');
-    expect(scenarioType('negativo - USD rechazado')).toBe('Negativo');
-    expect(scenarioType('Regresion – default COP')).toBe('Regresión');
-    expect(scenarioType('Lista solo COP')).toBeNull();
-  });
-
-  it('exige positivo y negativo evaluado por criterio, y regresión por cada CAMBIO HU', () => {
-    const text = '- **CA-01** A\n- **CA-02** B';
-    const context = '## Comportamientos del código no cubiertos por los criterios\n- [RT-01] (CAMBIO HU) Default COP. Fuente: X.java:1\n- [RT-02] (EXISTENTE) Y. Fuente: Y.java:1';
-    const cases = [
-      { title: 'Positivo – A', coveredCriteria: ['CA-01'] },
-      { title: 'Negativo – A excluido', coveredCriteria: ['CA-01'] },
-      { title: 'Positivo – B', coveredCriteria: ['CA-02', 'CA-01'] },
-    ];
-    expect(scenarioMatrixGaps(text, cases, [], context)).toEqual(['CA-02 sin negativo evaluado', 'RT-01 sin regresión']);
-    const complete = [...cases, { title: 'Regresión – default COP', coveredCriteria: ['RT-01'] }];
-    expect(scenarioMatrixGaps(text, complete, [{ id: 'CA-02', negative: 'N/A: solo consulta' }], context)).toEqual([]);
   });
 });
 

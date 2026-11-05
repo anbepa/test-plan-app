@@ -965,6 +965,15 @@ export class DatabaseService {
       await this.dbHelper.chunkedInsert('test_case_steps', stepsPayload);
     }
   }
+  /** Guarda el contexto y la técnica con que el analista refinó los escenarios de la HU. */
+  async updateUserStoryRefinement(userStoryId: string, refinementContext: string, refinementTechnique: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('user_stories')
+      .update({ refinement_context: refinementContext, refinement_technique: refinementTechnique, updated_at: new Date().toISOString() })
+      .eq('id', userStoryId);
+    if (error) throw error;
+  }
+
   async saveHuScenariosTransactional(userStoryId: string, testCases: DetailedTestCase[]): Promise<any> {
     this.invalidateTestPlanCache();
     console.log(`🛡️ Guardado transaccional para HU ${userStoryId}...`);
