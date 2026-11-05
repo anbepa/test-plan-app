@@ -5,7 +5,7 @@ import { AiProvidersService } from './ai-providers.service';
 import { AzureReposService } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import { TRANSIENT_RETRY_DELAYS_MS, isTransientError } from '../core/transient-retry';
-import { CodeAgentEvent, CodeExplorationInput, WorkItemChanges, changeGroupKey } from '../../models/code-agent.model';
+import { CodeAgentEvent, CodeExplorationInput, ExtraCodeTarget, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../../models/code-agent.model';
 import { ChatMessage, CodeAgentGateway, CodeAgentRunner, LlmUsage } from './code-agent-runner';
 
 /**
@@ -57,9 +57,21 @@ export class CodeExplorerAgentService {
     // Los repos que el usuario desmarcó no se analizan.
     const excluded = new Set(input.excludedGroups || []);
     let workItemChanges: Promise<WorkItemChanges> | null = null;
+    const extraTargets = input.extraTargets || [];
     const getWorkItemChanges = (workItemId: number) =>
-      workItemChanges ??= firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId))
-        .then((changes) => ({ ...changes, groups: changes.groups.filter((group) => !excluded.has(changeGroupKey(group))) }));
+      workItemChanges ??= (async () => {
+        // Cambios vinculados a la HU (menos los repos desmarcados) + ramas que el usuario agregó.
+        let changes: WorkItemChanges = { workItemId, groups: [] };
+        try {
+          changes = await firstValueFrom(this.azureRepos.getWorkItemChanges(workItemId));
+        } catch (error) {
+          if (!extraTargets.length) throw error;
+          emit({ type: 'tool', message: '⚠️ No se pudieron leer los PRs de la HU; se analizan solo las ramas agregadas.' });
+        }
+        const groups = input.ignoreWorkItemGroups ? [] : changes.groups.filter((group) => !excluded.has(changeGroupKey(group)));
+        const extraGroups = await this.buildExtraGroups(extraTargets, emit);
+        return { ...changes, groups: [...groups, ...extraGroups] };
+      })();
 
     const gateway: CodeAgentGateway = {
       llm: (messages, options) => this.callLlm(providerId, messages, options.tools, options.forceFinish, options.finishTool),
@@ -83,6 +95,56 @@ export class CodeExplorerAgentService {
       filesReviewed: result.filesReviewed,
     });
 
+  }
+
+  /** Tope de seguridad de archivos por rama agregada; el recorte por relevancia lo hace el agente. */
+  private static readonly MAX_EXTRA_FILES = 400;
+
+  /**
+   * Convierte cada rama agregada a mano en un grupo de cambios igual a los de la
+   * HU: sus archivos son los que la rama modificó desde que salió de la principal.
+   */
+  private async buildExtraGroups(targets: ExtraCodeTarget[], emit: (event: CodeAgentEvent) => void): Promise<WorkItemChangeGroup[]> {
+    const groups = await Promise.all(targets.map(async (target): Promise<WorkItemChangeGroup | null> => {
+      const label = `${target.repositoryName}:${target.branch}`;
+      try {
+        emit({ type: 'progress', message: `Comparando ${label} contra ${target.baseBranch}…` });
+        const diff = await firstValueFrom(this.azureRepos.getBranchDiff(
+          { project: target.project, repositoryId: target.repositoryId, branch: target.branch }, target.baseBranch));
+        if (!diff.commonCommit || !diff.targetCommit || !diff.changes.length) {
+          emit({ type: 'tool', message: `⚠️ ${label} no tiene cambios propios respecto a ${target.baseBranch}: se omite.` });
+          return null;
+        }
+        const max = CodeExplorerAgentService.MAX_EXTRA_FILES;
+        const changes = diff.changes.slice(0, max);
+        if (diff.changes.length > max) {
+          emit({ type: 'tool', message: `⚠️ ${label} modificó ${diff.changes.length} archivos; se consideran los primeros ${max}.` });
+        }
+        return {
+          kind: 'branch',
+          projectId: target.project,
+          repositoryId: target.repositoryId,
+          repositoryName: target.repositoryName,
+          targetBranch: target.branch,
+          sourceBranches: [target.branch],
+          prs: [],
+          commits: [],
+          lastDate: null,
+          lastCommit: diff.targetCommit,
+          alsoMergedInto: [],
+          files: changes.map((change) => ({
+            path: change.path,
+            changeType: change.changeType,
+            baseCommit: diff.commonCommit as string,
+            targetCommit: diff.targetCommit as string,
+          })),
+        };
+      } catch (error: any) {
+        emit({ type: 'tool', message: `⚠️ No se pudo leer ${label}: ${error?.error?.message || error?.message || 'error'}.` });
+        return null;
+      }
+    }));
+    return groups.filter((group): group is WorkItemChangeGroup => !!group);
   }
 
   // ---------------------------------------------------------------------------

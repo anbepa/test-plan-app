@@ -17,7 +17,7 @@ import { AzureReposService } from '../services/integrations/azure-repos.service'
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
 import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
 
 interface CoverageRow {
   id: string;
@@ -105,6 +105,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeLoadingHuChanges: boolean = false;
   /** El usuario prefiere elegir otra rama aunque la HU tenga PRs/commits vinculados. */
   codeManualOverride: boolean = false;
+  /** Ramas que el usuario agregó a mano: se analizan junto con los cambios de la HU. */
+  codeExtraTargets: ExtraCodeTarget[] = [];
+  /** Se está eligiendo (en la tarjeta de la HU) una rama más para agregar. */
+  codeAddingTarget: boolean = false;
+  /** Rama contra la que se comparan los cambios de la rama elegida ('' = la sugerida). */
+  codeBaseBranchChoice: string = '';
   codeTargetError: string | null = null;
   codeLinkedBranchHint: string | null = null;
   /** PRs/commits vinculados a la HU: si existen, el agente analiza exactamente esos cambios. */
@@ -179,14 +185,18 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       case 'code': {
         const loading = this.codeLoadingHuChanges || this.codeLoadingTarget;
         let summary = 'Elige el código a analizar';
+        const extras = this.codeExtraTargets.length + (this.pendingExtraTarget ? 1 : 0);
         if (this.usesHuChangeset) {
           const groups = this.codeHuChangeGroups.filter((group) => this.isChangeGroupSelected(group));
-          summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`;
+          summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`
+            + (extras ? ` · +${extras} rama(s) agregada(s)` : '');
+        } else if (extras > 0) {
+          summary = `${extras} rama(s) elegida(s)` + (this.hasHuChangeset && !this.codeManualOverride ? ' · sin repos de la HU' : '');
         } else if (this.isManualCodeTargetReady) {
           const repo = this.codeRepositories.find((r) => r.id === this.codeRepositoryId)?.name;
           summary = repo ? `${repo} · rama ${this.codeBranch}` : `Rama ${this.codeBranch}`;
         }
-        return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? 'Buscando PRs y commits…' : summary };
+        return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? (this.codeLoadingHuChanges ? 'Buscando PRs y commits…' : 'Cargando repositorios…') : summary };
       }
       case 'context': {
         if (this.codeExploring) return { title: 'Contexto técnico', status: 'running', summary: 'El agente está explorando…' };
@@ -479,7 +489,120 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   get isCodeTargetReady(): boolean {
-    return this.usesHuChangeset || this.isManualCodeTargetReady;
+    return this.usesHuChangeset || this.isManualCodeTargetReady || this.codeExtraTargets.length > 0;
+  }
+
+  // ── Ramas agregadas a mano (se suman a los cambios de la HU) ──
+
+  /** Rama principal del repositorio elegido (contra la que se comparan las ramas agregadas). */
+  get codeDefaultBranchName(): string {
+    return this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId)?.defaultBranch || '';
+  }
+
+  /**
+   * Rama contra la que se toman los cambios de la rama elegida: la que el usuario
+   * indique; si no, la rama destino que la HU ya usa en ese repositorio (p. ej.
+   * "current"); y si no, la principal del repositorio.
+   */
+  get extraBaseBranch(): string {
+    const exists = (name: string | undefined) => !!name && name !== this.codeBranch && this.codeBranches.some((b) => b.name === name);
+    if (exists(this.codeBaseBranchChoice)) return this.codeBaseBranchChoice;
+    const huBase = this.codeHuChangeGroups.find((group) => group.repositoryId === this.codeRepositoryId)?.targetBranch;
+    if (exists(huBase)) return huBase as string;
+    return this.codeEffectiveBaseBranch;
+  }
+
+  /** La base la define la HU o el repositorio (no el usuario). */
+  get extraBaseBranchIsSuggested(): boolean {
+    return !this.codeBaseBranchChoice || this.codeBaseBranchChoice !== this.extraBaseBranch;
+  }
+
+  private isExtraTargetDuplicate(repositoryId: string, branch: string): boolean {
+    return this.codeExtraTargets.some((t) => t.repositoryId === repositoryId && t.branch === branch);
+  }
+
+  /** Por qué la selección actual no se puede agregar (null si se puede o aún está incompleta). */
+  get extraTargetProblem(): string | null {
+    if (!this.isManualCodeTargetReady) return null;
+    if (!this.extraBaseBranch) {
+      const main = this.codeDefaultBranchName;
+      return main
+        ? `Elige una rama distinta de la principal (${main}): se toman los cambios de la rama desde que salió de ella.`
+        : 'Elige una rama distinta de la principal del repositorio.';
+    }
+    if (this.isExtraTargetDuplicate(this.codeRepositoryId, this.codeBranch)) return 'Esa rama ya está agregada.';
+    return null;
+  }
+
+  get canAddExtraTarget(): boolean {
+    return this.isManualCodeTargetReady && !this.extraTargetProblem;
+  }
+
+  private currentSelectionAsExtraTarget(): ExtraCodeTarget {
+    const repository = this.codeRepositories.find((repo) => repo.id === this.codeRepositoryId);
+    return {
+      project: this.codeProject,
+      repositoryId: this.codeRepositoryId,
+      repositoryName: repository?.name || this.codeRepositoryId,
+      branch: this.codeBranch,
+      baseBranch: this.extraBaseBranch,
+    };
+  }
+
+  /** Selección completa y válida que aún no se agregó a la lista: también se analiza. */
+  get pendingExtraTarget(): ExtraCodeTarget | null {
+    if (!this.canAddExtraTarget) return null;
+    // Con cambios de la HU a la vista, una selección sobrante solo cuenta si se está agregando.
+    if (this.showsHuChangeset && !this.codeAddingTarget) return null;
+    return this.currentSelectionAsExtraTarget();
+  }
+
+  async startAddingTarget(): Promise<void> {
+    this.codeAddingTarget = true;
+    this.keepStepOpen('code');
+    if (this.codeProjects.length === 0) {
+      this.codeLoadingTarget = true;
+      this.cdr.markForCheck();
+      this.codeProjects = await firstValueFrom(this.azureReposService.listProjects()).catch(() => []);
+      this.codeLoadingTarget = false;
+    }
+    // Se sugiere el proyecto donde se desarrolló la HU (lo más común es agregar otro repositorio del mismo).
+    if (!this.codeProject) {
+      const primary = this.codeHuChangeGroups[0];
+      const project = this.codeProjects.find((p) => p.id === primary?.projectId) || (this.codeProjects.length === 1 ? this.codeProjects[0] : undefined);
+      if (project) this.onCodeProjectChange(project.name);
+    }
+    this.cdr.markForCheck();
+  }
+
+  cancelAddingTarget(): void {
+    this.codeAddingTarget = false;
+    this.codeBaseBranchChoice = '';
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.codeBranches = [];
+  }
+
+  /** Suma la rama elegida a la lista y deja los selectores listos para otra. */
+  addExtraTarget(): void {
+    if (!this.canAddExtraTarget) return;
+    this.codeExtraTargets = [...this.codeExtraTargets, this.currentSelectionAsExtraTarget()];
+    this.codeBaseBranchChoice = '';
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.codeBranches = [];
+    this.codeAddingTarget = false;
+    this.clearCodeContext('agregaste una rama');
+    this.cdr.markForCheck();
+  }
+
+  removeExtraTarget(index: number): void {
+    this.codeExtraTargets = this.codeExtraTargets.filter((_, i) => i !== index);
+    this.clearCodeContext('quitaste una rama');
+  }
+
+  trackExtraTarget(_: number, target: ExtraCodeTarget): string {
+    return `${target.repositoryId}|${target.branch}`;
   }
 
   /** La HU se consultó y no tiene PRs/commits con archivos. */
@@ -1083,6 +1206,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.codeHuChanges = null;
     this.codeExcludedGroups = new Set<string>();
     this.codeManualOverride = false;
+    this.codeExtraTargets = [];
+    this.codeAddingTarget = false;
     this.codeLinkedBranchHint = null;
     this.codeRepositoryId = '';
     this.codeBranch = '';
@@ -1092,6 +1217,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** Elegir otra rama aunque la HU tenga PRs: arranca con el repo/rama de la HU. */
   useManualCodeTarget(): void {
     this.codeManualOverride = true;
+    this.codeExtraTargets = [];
+    this.codeAddingTarget = false;
     this.clearCodeContext('cambiaste el origen del código');
     const primary = this.codeHuChangeGroups[0];
     if (primary && !this.isManualCodeTargetReady) {
@@ -1170,6 +1297,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   onCodeRepositoryChange(repositoryId: string, preferredBranch?: string): void {
+    this.codeBaseBranchChoice = '';
     this.codeRepositoryId = repositoryId;
     this.codeBranches = [];
     this.codeBranch = '';
@@ -1258,17 +1386,26 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
 
     const workItemId = Number(this.currentHuId);
+    const validHuId = Number.isInteger(workItemId) && workItemId > 0;
+    // Ramas agregadas a mano (más la selección completa que aún no se pulsó "Agregar").
+    const pending = this.pendingExtraTarget;
+    const extraTargets = [...this.codeExtraTargets, ...(pending && !this.isExtraTargetDuplicate(pending.repositoryId, pending.branch) ? [pending] : [])];
+    // Con ramas agregadas se analiza el conjunto; una sola rama manual sin vínculos sigue el flujo clásico.
+    const combined = validHuId && (this.codeExtraTargets.length > 0 || (this.usesHuChangeset && extraTargets.length > 0));
+    const useHuChanges = this.hasHuChangeset && !this.codeManualOverride;
     this.codeAgentSub = this.codeExplorerAgent.explore({
-      workItemId: this.usesHuChangeset && Number.isInteger(workItemId) ? workItemId : undefined,
-      excludedGroups: this.usesHuChangeset ? Array.from(this.codeExcludedGroups) : undefined,
-      target: this.usesHuChangeset || !this.isManualCodeTargetReady ? null : {
+      workItemId: (this.usesHuChangeset || combined) && validHuId ? workItemId : undefined,
+      excludedGroups: useHuChanges && (this.usesHuChangeset || combined) ? Array.from(this.codeExcludedGroups) : undefined,
+      extraTargets: combined ? extraTargets : undefined,
+      ignoreWorkItemGroups: combined && !useHuChanges ? true : undefined,
+      target: this.usesHuChangeset || combined || !this.isManualCodeTargetReady ? null : {
         project: this.codeProject,
         repositoryId: this.codeRepositoryId,
         repositoryName: repository?.name || this.codeRepositoryId,
         branch: this.codeBranch,
         commitId: this.codeSelectedCommit,
         scopePath: '/',
-        baseBranch: this.codeEffectiveBaseBranch
+        baseBranch: this.extraBaseBranch
       },
       mode: this.contextSource,
       description: this.currentDescription,

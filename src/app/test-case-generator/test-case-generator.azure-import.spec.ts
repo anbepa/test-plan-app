@@ -55,7 +55,8 @@ describe('TestCaseGeneratorComponent Azure import', () => {
       cellsConfigStub,
       azureReposStub,
       codeAgentStub,
-      criteriaNormalizerStub
+      criteriaNormalizerStub,
+      { run: (fn: () => unknown) => fn(), runOutsideAngular: (fn: () => unknown) => fn() } as any
     );
 
     component.azureUserStoryIdInput = '7632264';
@@ -86,7 +87,8 @@ describe('TestCaseGeneratorComponent Azure import', () => {
       cellsConfigStub,
       azureReposStub,
       codeAgentStub,
-      criteriaNormalizerStub
+      criteriaNormalizerStub,
+      { run: (fn: () => unknown) => fn(), runOutsideAngular: (fn: () => unknown) => fn() } as any
     );
 
     component.currentHuTitle = 'Dato manual';

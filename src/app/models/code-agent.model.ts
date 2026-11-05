@@ -167,6 +167,16 @@ export interface CodeExplorationTarget {
   baseBranch: string;
 }
 
+/** Rama que el usuario agrega a mano para analizarla junto con los cambios de la HU. */
+export interface ExtraCodeTarget {
+  project: string;
+  repositoryId: string;
+  repositoryName: string;
+  branch: string;
+  /** Rama principal del repositorio: se toman los cambios de `branch` desde que salió de ella. */
+  baseBranch: string;
+}
+
 export interface CodeExplorationInput {
   /** Rama elegida en el formulario. Puede ser null si la HU tiene PRs/commits vinculados. */
   target: CodeExplorationTarget | null;
@@ -174,6 +184,10 @@ export interface CodeExplorationInput {
   workItemId?: number;
   /** Grupos de cambios de la HU que el usuario excluyó del análisis (changeGroupKey). */
   excludedGroups?: string[];
+  /** Ramas agregadas a mano: se suman a los cambios de la HU (o los reemplazan si la HU no tiene). */
+  extraTargets?: ExtraCodeTarget[];
+  /** El usuario eligió ramas a mano en lugar de los cambios vinculados a la HU: estos no se analizan. */
+  ignoreWorkItemGroups?: boolean;
   mode: ContextSource;
   description: string;
   acceptanceCriteria: string;

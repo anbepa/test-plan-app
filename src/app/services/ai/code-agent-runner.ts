@@ -211,7 +211,7 @@ export class CodeAgentRunner {
     const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
 
     // 1) Fuente de evidencia más precisa disponible: PRs/commits de la HU → diff de rama → rama completa.
-    const workspaces = await this.loadWorkItemWorkspaces(input.workItemId, emit);
+    const workspaces = await this.loadWorkItemWorkspaces(input.workItemId, emit, keywords);
     let source: CodeEvidenceSource;
     let primaryRef: RepoRef;
     let repoLabel: string;
@@ -404,7 +404,10 @@ export class CodeAgentRunner {
   // Fuentes de evidencia
   // ---------------------------------------------------------------------------
 
-  private async loadWorkItemWorkspaces(workItemId: number | undefined, emit: (event: CodeAgentEvent) => void): Promise<Workspace[]> {
+  /** Máximo de archivos que se analizan de una rama elegida a mano (suele traer trabajo de otras HUs). */
+  private static readonly MAX_BRANCH_FILES = 60;
+
+  private async loadWorkItemWorkspaces(workItemId: number | undefined, emit: (event: CodeAgentEvent) => void, keywords: string[] = []): Promise<Workspace[]> {
     if (!workItemId || !Number.isInteger(workItemId) || workItemId <= 0) return [];
     emit({ type: 'progress', message: `Buscando PRs y commits vinculados a la HU ${workItemId}…` });
     try {
@@ -412,7 +415,7 @@ export class CodeAgentRunner {
       const workspaces = changes.groups.map((group: WorkItemChangeGroup) => ({
         name: group.repositoryName,
         ref: { project: group.projectId, repositoryId: group.repositoryId, commit: group.lastCommit },
-        files: group.files,
+        files: this.limitBranchFiles(group, keywords, emit),
         group,
       }));
       if (workspaces.length === 0) {
@@ -427,7 +430,8 @@ export class CodeAgentRunner {
         emit({ type: 'progress', message: `Ramas de la HU sin código para analizar: ${list}.` });
       }
       for (const ws of workspaces) {
-        const prs = ws.group.prs.map((pr) => `PR ${pr.id}`).join(', ') || `${ws.group.commits.length} commit(s)`;
+        const prs = ws.group.prs.map((pr) => `PR ${pr.id}`).join(', ')
+          || (ws.group.kind === 'branch' ? 'cambios de la rama' : `${ws.group.commits.length} commit(s)`);
         const also = (ws.group.extraOver ? ` (cambios adicionales a ${ws.group.extraOver})` : '')
           + (ws.group.alsoMergedInto.length ? ` (también en ${ws.group.alsoMergedInto.join(', ')})` : '');
         emit({ type: 'progress', message: `${ws.name} → ${ws.group.targetBranch}${also}: ${prs}, ${ws.files.length} archivo(s).` });
@@ -437,6 +441,19 @@ export class CodeAgentRunner {
       emit({ type: 'tool', message: `⚠️ No se pudieron leer los PRs de la HU: ${error?.error?.message || error?.message || 'error'}.` });
       return [];
     }
+  }
+
+  /**
+   * Una rama elegida a mano puede traer cientos de archivos de otras HUs: se
+   * conservan los más parecidos a la HU (descripción y criterios). Los grupos
+   * de PRs/commits vinculados nunca se recortan.
+   */
+  private limitBranchFiles(group: WorkItemChangeGroup, keywords: string[], emit: (event: CodeAgentEvent) => void): WorkItemChangeGroup['files'] {
+    const max = CodeAgentRunner.MAX_BRANCH_FILES;
+    if (group.kind !== 'branch' || group.files.length <= max) return group.files;
+    const keep = new Set(this.rankFiles(group.files.map((file) => file.path), keywords).slice(0, max));
+    emit({ type: 'tool', message: `⚠️ ${group.repositoryName}:${group.targetBranch} tiene ${group.files.length} archivos cambiados: se analizan los ${max} más relacionados con la HU.` });
+    return group.files.filter((file) => keep.has(file.path));
   }
 
   /** Precarga los diffs del conjunto de cambios (código primero, luego pruebas, build al final). */
