@@ -78,6 +78,14 @@ La matriz la ejecuta y la lee una persona funcional con poco conocimiento técni
 
 /** Con criterios ya interpretados (CA-xx), cada uno tiene su escenario propio. */
 /** Definición de cada sección general para que la IA no mezcle su contenido. */
+/** Matriz de escenarios: reemplaza las reglas dispersas de negativos y regresión. Se valida en código (scenarioMatrixGaps). */
+const SCENARIO_MATRIX_RULES = `MATRIZ DE ESCENARIOS (prevalece sobre cualquier otra regla de agrupación o límite):
+- Positivo: cada CA tiene su caso "Positivo – …" con el CA primero en "coveredCriteria".
+- Negativo: evalúa cada CA. Si existe una entrada inválida, un dato excluido, un rechazo o un bloqueo con resultado observable distinto, crea su caso "Negativo – …" con el CA primero en "coveredCriteria". Si no aplica, en "criteriaMap" pon "negative": "N/A: <motivo>"; si lo creaste, "negative": "caso".
+- Regresión: cada comportamiento (CAMBIO HU) que el código cambia y ningún CA cubre tiene su caso "Regresión – …" con su RT-xx primero en "coveredCriteria" y prioridad al inicio de preconditions ("Prioridad Alta|Media|Baja."). Sin límite de cantidad. Dos RT van en un caso solo si comparten disparo y resultado observable. Los (EXISTENTE) nunca generan casos.
+- Todo título inicia con "Positivo – ", "Negativo – " o "Regresión – ".
+`;
+
 function staticSectionDefinition(sectionName: string): { include: string; exclude: string } {
   const n = (sectionName || '').toLowerCase();
   if (n.includes('fuera')) {
@@ -126,8 +134,8 @@ CRITERIOS NUMERADOS — MÍNIMO UN CASO PROPIO POR CRITERIO (obligatorio, preval
    - Si la duda es de formato o texto (p. ej. decimales de un patrón que no coincide con su ejemplo), verifica lo que el criterio fija sin ambigüedad y deja la parte dudosa como observación a registrar, con la misma ⚠.
    - Si el caso ya lleva otra advertencia ⚠ (estado del código), la de la duda va a continuación, en la misma línea.
    - Autochequeo: cada CA con "Interpretación" tiene su ⚠ de duda y ningún caso existe solo para una duda.
-4. Negativos, alternos y bordes van dentro del caso de su CA (registros etiquetados que deben incluirse y excluirse, valor en el límite y fuera de él). Un CA tiene un caso adicional solo si su resultado alterno exige otra ejecución (p. ej. un formulario que rechaza y otro que acepta, o un mensaje de error).${behaviors.length ? `
-5. Comportamientos (CAMBIO HU) que el código agrega y ningún criterio cubre: ${behaviors.join(', ')}. Cada uno debe aparecer en algún "coveredCriteria": dentro del caso de un CA con el mismo disparo (listado después del CA, con su registro etiquetado y su resultado esperado) o en un caso propio si es un riesgo de regresión que necesita otro disparo u otros datos (respeta el límite de casos propios de RT). Los (EXISTENTE) nunca generan casos.` : ''}
+${SCENARIO_MATRIX_RULES}${behaviors.length ? `
+- Comportamientos (CAMBIO HU) de esta HU sin criterio: ${behaviors.join(', ')}. Cada uno tiene su caso "Regresión – …".` : ''}
 `;
 }
 
@@ -172,12 +180,10 @@ ESTRATEGIA CRITERIOS + CÓDIGO — CALIDAD SOBRE CANTIDAD (amplía la jerarquía
    - La advertencia ⚠ es OBLIGATORIA en todo caso de un CA PARCIAL, DIFERENTE o SIN EVIDENCIA; para PARCIAL usa "⚠ Implementación parcial: <qué falta>.". Va al inicio de preconditions, antes de los datos.
 4. Comportamientos adicionales [RT-xx]:
    - (EXISTENTE): NUNCA generan casos propios; ya existían antes de la HU. Úsalos solo como datos de prueba o precondición (p. ej. un filtro que condiciona qué registros preparar).
-   - (CAMBIO HU): primero intenta integrarlo como validación secundaria en un caso de criterio que use el mismo disparo y datos compatibles. Crea un caso propio solo si es un riesgo de regresión concreto que exige datos incompatibles.
-   - Límite: los casos propios de RT no superan un tercio de los casos de criterios (mínimo 1, máximo 3). Prioriza los de mayor riesgo de defecto en producción.
-   - Un caso propio de RT no tiene criterio que lo respalde: preconditions inicia con "⚠ Riesgo de regresión sin criterio: confirmar con el funcional." y el resultado esperado es el comportamiento correcto para el negocio según la HU (si no se puede inferir, el del código).
-   - Regístralos en "criteriaMap" solo si generan o comparten un caso, con su id RT-xx y "rule" iniciando con "[Código] ".
+   - (CAMBIO HU): cada uno tiene su caso "Regresión – …" según "MATRIZ DE ESCENARIOS". Su preconditions inicia con "Prioridad <Alta|Media|Baja>. ⚠ Riesgo de regresión sin criterio: confirmar con el funcional." y el resultado esperado es el comportamiento correcto para el negocio según la HU (si no se puede inferir, el del código).
+   - Regístralos en "criteriaMap" con su id RT-xx y "rule" iniciando con "[Código] ".
 5. Agrupación por disparo: en reportes, procesos batch o consultas (un disparo procesa muchos registros) los registros de distintas reglas son compatibles. Integra en un mismo caso las reglas IMPLEMENTADO de la misma familia (p. ej. inclusión/exclusión por corte) preparando registros etiquetados (A, B, C; máximo 4), cada uno con su resultado esperado, respetando que cada CA tenga su caso propio según "DISEÑO DE COBERTURA". No mezcles en un caso un CA con ⚠ con CAs IMPLEMENTADO: el posible defecto debe fallar en su propio caso.
-6. Deduplicación obligatoria: un RT que expone el mismo hallazgo que un CA PARCIAL o DIFERENTE no genera caso propio; su verificación va dentro del caso de ese CA. Agrupa por (condición probada + resultado esperado). Un único caso por grupo; si viene de un CA y un RT lista ambos en "coveredCriteria". No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
+6. Deduplicación: un RT que expone exactamente el mismo hallazgo que un CA PARCIAL o DIFERENTE se lista después del CA en el caso de ese CA, sin caso propio. No dupliques límites equivalentes (p. ej. mes de 30 y de 31 días) salvo que el código los trate distinto.
 7. Advertencias: una sola frase de máximo 140 caracteres al inicio de preconditions, seguida de los datos a preparar.
 8. Criterio general vs. específicos: si un CA general (p. ej. "validar todas las partes") choca con lo que CAs específicos declaran "no aplica" (p. ej. tablas por modalidad), prevalecen los específicos. El caso del general verifica solo lo que los específicos confirman, y preconditions inicia con "⚠ Ambigüedad: <general> vs <específico>; confirmar con el funcional." Nunca generes dos casos que esperen resultados opuestos para el mismo dato.
 ${STEPS_FROM_REAL_FLOW}${buildUnconfirmedCodesRule(codeContext)}
@@ -187,7 +193,7 @@ AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 - Ningún caso de criterio DIFERENTE usa en sus datos los campos de la implementación en lugar de los del criterio.
 - Cada registro etiquetado (A, B, C) tiene un único resultado esperado coherente con SUS datos, y el resultado nombra los registros con la misma etiqueta y valores que el paso Preparar.
 - Si el criterio describe una pantalla, el caso se dispara y se verifica en esa pantalla.
-- Los casos propios de RT respetan el límite y ningún (EXISTENTE) tiene caso propio.
+- Cada CA tiene su "Positivo – …" y su "Negativo – …" o "negative": "N/A: …"; cada (CAMBIO HU) tiene su "Regresión – …"; ningún (EXISTENTE) tiene caso propio.
 - Cada monto, saldo o conteo esperado se obtiene aplicando los criterios a los datos del caso, no las fórmulas del código.
 - El resultado esperado de cada caso respeta TODOS los criterios (si un criterio excluye un dato, p. ej. pagos desde el día 1, ningún caso espera que se aplique). Ningún par de casos espera resultados opuestos sobre los mismos datos, y ningún caso usa "filas de control" para validar que el código hace MENOS de lo que pide el criterio.
 - Ningún resultado esperado describe el defecto como lo correcto (p. ej. "queda huérfano", "no se muestra"): siempre es el comportamiento correcto para el negocio.
@@ -519,7 +525,7 @@ VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 PRESUPUESTO DE SALIDA — OBLIGATORIO:
 1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
 2. La cobertura NO se recorta para ahorrar espacio: si los criterios vienen numerados (CA-xx), cada uno conserva su caso propio, también los últimos de la lista. Para que quepan, recorta la redacción, nunca los casos.
-3. Antes de escribir, estima el espacio. Si es justo, en este orden: acorta title, preconditions y expectedResults; usa 3 pasos en los casos simples; quita casos adicionales de negativos, alternos o bordes (llévalos como registro etiquetado dentro del caso de su CA). Nunca elimines el caso propio de un CA.
+3. Antes de escribir, estima el espacio. Si es justo, en este orden: acorta title, preconditions y expectedResults; usa 3 pasos en los casos simples; lleva alternos o bordes como registro etiquetado dentro del caso de su CA. Nunca elimines un caso Positivo, Negativo o Regresión exigido por "MATRIZ DE ESCENARIOS".
 4. Solo si los criterios NO vienen numerados y aun así no cabe todo, agrupa reglas afines en un caso combinado antes que omitirlas, priorizando: a) reglas de negocio y validaciones con resultado observable; b) datos, formatos, límites y habilitación; c) alternos, errores y recuperación; d) navegación y textos cosméticos.
 5. Nunca dejes un caso a medias: termina cada caso y cierra el JSON.
 6. Si tuviste que agrupar cobertura por espacio, indícalo brevemente al final de "scope". En "scope" no cuentes criterios: descríbelos.
@@ -550,11 +556,11 @@ SALIDA:
 {
   "scope": "Alcance breve de lo cubierto",
   "criteriaMap": [
-    {"id": "CA-01", "rule": "Resumen breve de la regla atómica"}
+    {"id": "CA-01", "rule": "Resumen breve de la regla atómica", "negative": "caso | N/A: motivo"}
   ],
   "testCases": [
     {
-      "title": "Descripción clara del escenario",
+      "title": "Positivo – Descripción clara del escenario",
       "preconditions": "Condiciones previas necesarias",
       "steps": [
         {"numero_paso": 1, "accion": "Acción específica"}
