@@ -273,7 +273,23 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.pendingFocusOutStep = id;
       return;
     }
-    if (this.focusedStep === id) this.focusedStep = null;
+    // En pantallas táctiles el foco sale con el "mousedown" de compatibilidad,
+    // que llega DESPUÉS de soltar el dedo y justo antes del click: contraer de
+    // inmediato movía el botón y el toque se perdía. Se espera un instante.
+    this.scheduleStepCollapse(id, 300);
+  }
+
+  private stepCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleStepCollapse(step: FlowStepId, delayMs: number): void {
+    if (this.stepCollapseTimer) clearTimeout(this.stepCollapseTimer);
+    this.stepCollapseTimer = setTimeout(() => {
+      this.stepCollapseTimer = null;
+      if (this.focusedStep === step && !this.isFocusInsideStep(step)) {
+        this.focusedStep = null;
+        this.cdr.markForCheck();
+      }
+    }, delayMs);
   }
 
   private pointerIsDown = false;
@@ -291,13 +307,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     const step = this.pendingFocusOutStep;
     if (!step) return;
     this.pendingFocusOutStep = null;
-    // setTimeout: después del evento click que sigue a pointerup.
-    setTimeout(() => {
-      if (this.focusedStep === step && !this.isFocusInsideStep(step)) {
-        this.focusedStep = null;
-        this.cdr.markForCheck();
-      }
-    });
+    // Después del click que sigue a pointerup (con margen para táctil).
+    this.scheduleStepCollapse(step, 300);
   }
 
   private isFocusInsideStep(id: FlowStepId): boolean {
