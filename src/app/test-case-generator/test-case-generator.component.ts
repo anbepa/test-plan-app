@@ -1,5 +1,5 @@
 import { RouterLink } from '@angular/router';
-import { Component, HostListener, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, HostListener, NgZone, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
@@ -307,15 +307,41 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   private pointerIsDown = false;
   private pendingFocusOutStep: FlowStepId | null = null;
 
-  @HostListener('document:pointerdown')
-  onDocumentPointerDown(): void {
-    this.pointerIsDown = true;
+  /**
+   * Escuchas globales de puntero FUERA de la detección de cambios de Angular:
+   * con @HostListener cada toque disparaba una revisión que reconstruía parte
+   * del DOM, y Safari en iOS descarta el toque cuando la página cambia durante
+   * él (los radios y botones "no hacían nada"). Solo se vuelve a la zona de
+   * Angular cuando hay que contraer un paso.
+   */
+  private readonly onPointerDownOutside = () => { this.pointerIsDown = true; };
+  private readonly onPointerUpOutside = () => {
+    this.pointerIsDown = false;
+    if (this.pendingFocusOutStep) this.ngZone.run(() => this.onDocumentPointerUp());
+  };
+
+  private bindPointerTracking(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('pointerdown', this.onPointerDownOutside, true);
+      document.addEventListener('pointerup', this.onPointerUpOutside, true);
+      document.addEventListener('pointercancel', this.onPointerUpOutside, true);
+    });
   }
 
-  @HostListener('document:pointerup')
-  @HostListener('document:pointercancel')
-  onDocumentPointerUp(): void {
-    this.pointerIsDown = false;
+  private unbindPointerTracking(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    document.removeEventListener('pointerdown', this.onPointerDownOutside, true);
+    document.removeEventListener('pointerup', this.onPointerUpOutside, true);
+    document.removeEventListener('pointercancel', this.onPointerUpOutside, true);
+  }
+
+  /** trackBy por etiqueta: evita que listas calculadas en getters se reconstruyan en cada revisión. */
+  trackByLabel(_: number, item: { label?: string }): string | undefined {
+    return item?.label;
+  }
+
+  private onDocumentPointerUp(): void {
     const step = this.pendingFocusOutStep;
     if (!step) return;
     this.pendingFocusOutStep = null;
@@ -631,10 +657,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private cellsConfigService: CellsConfigService,
     private azureReposService: AzureReposService,
     private codeExplorerAgent: CodeExplorerAgentService,
-    private criteriaNormalizer: CriteriaNormalizerService
+    private criteriaNormalizer: CriteriaNormalizerService,
+    private ngZone: NgZone
   ) { }
 
   ngOnInit(): void {
+    this.bindPointerTracking();
     this.currentGenerationMode = this.initialGenerationMode;
     this.currentSprint = this.initialSprint;
     this.cellName = this.initialCellName;
@@ -652,6 +680,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unbindPointerTracking();
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();

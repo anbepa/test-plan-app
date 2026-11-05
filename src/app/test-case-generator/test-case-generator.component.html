@@ -369,7 +369,7 @@
                 <div class="coverage-editor-title">
                   <span>Cobertura de criterios en el código</span>
                   <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
-                    <button type="button" *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css"
+                    <button type="button" *ngFor="let item of codeCoverageSummary; trackBy: trackByLabel" class="code-coverage-chip" [ngClass]="item.css"
                       [class.is-selected]="coverageFilter === item.key" [attr.aria-pressed]="coverageFilter === item.key"
                       (click)="toggleCoverageFilter(item.key)" [title]="coverageFilter === item.key ? 'Mostrar todos' : 'Mostrar solo ' + item.label.toLowerCase()">{{ item.label }}: {{ item.count }}</button>
                     <button *ngIf="coverageFilter" type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
@@ -443,7 +443,7 @@
           <p class="flow-actionbar-status" aria-live="polite">
             <ng-container *ngIf="generateBlockers.length; else readyToGenerate">
               <span class="flow-actionbar-label">Falta:</span>
-              <ng-container *ngFor="let blocker of generateBlockers; let last = last">
+              <ng-container *ngFor="let blocker of generateBlockers; let last = last; trackBy: trackByLabel">
                 <button type="button" class="code-link-btn" (click)="scrollToFlowStep(blocker.step)">{{ blocker.label }}</button><span *ngIf="!last">, </span>
               </ng-container>
             </ng-container>
