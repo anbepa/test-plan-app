@@ -5,7 +5,7 @@
       <span class="breadcrumb-separator">/</span>
       <button type="button" class="breadcrumb-button breadcrumb-link" (click)="goToPlanDetail()">Detalle del Plan</button>
       <span class="breadcrumb-separator">/</span>
-      <span class="breadcrumb-current-text">{{ isEditingMode ? 'Editar / Refinar con IA' : 'Ver escenarios de prueba' }}</span>
+      <span class="breadcrumb-current-text">{{ isEditingMode ? 'Editar Matriz' : 'Ver escenarios de prueba' }}</span>
     </div>
   </div>
 
@@ -33,13 +33,12 @@
       <ng-container *ngIf="!isEditingMode">
         <div class="actions table-actions">
           <button (click)="editHuScenarios()" class="button-ai-primary">
-            <span class="icon-sparkle-white"></span>
-            Editar / Refinar con IA
+            Editar Matriz
           </button>
           <button type="button" (click)="openRefinePanel()" class="button-secondary"
             [disabled]="isRefining || !hu.detailedTestCases || hu.detailedTestCases.length === 0"
             title="Ajusta los escenarios con una indicación tuya; se conservan los que no la afectan">
-            ✦ Refinar escenarios con contexto
+            ✦ Editar Matriz con IA y Contexto
           </button>
           <div class="export-menu" [class.open]="exportMenuOpen">
             <button type="button" class="button-secondary export-menu-trigger" (click)="toggleExportMenu($event)"
@@ -59,7 +58,7 @@
         </div>
 
         <section class="refine-panel" *ngIf="isRefinePanelOpen" aria-labelledby="refinePanelTitle">
-          <h3 id="refinePanelTitle" class="refine-panel-title">Refinar escenarios con contexto</h3>
+          <h3 id="refinePanelTitle" class="refine-panel-title">Editar Matriz con IA y Contexto</h3>
           <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva los escenarios que no la afectan, cubriendo todos los criterios de la HU.</p>
           <textarea class="refine-panel-textarea" rows="4" [(ngModel)]="refineContext" [disabled]="isRefining"
             placeholder="Ej: Prioriza casos negativos de las validaciones de negocio y deja máximo 5 escenarios."></textarea>
@@ -84,7 +83,7 @@
         </div>
 
         <div *ngIf="!isLoadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="no-test-cases-state">
-          <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar / Refinar con IA</strong> para generarlos.</p>
+          <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar Matriz</strong> para agregarlos.</p>
         </div>
 
         <div *ngIf="!isLoadingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0">
