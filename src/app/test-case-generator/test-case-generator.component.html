@@ -545,9 +545,6 @@
         <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
           ⚠ {{ criteriaCoverageGap.length }} criterio{{ criteriaCoverageGap.length > 1 ? 's' : '' }} sin escenario: {{ criteriaCoverageGap.join(', ') }}. Revísalo{{ criteriaCoverageGap.length > 1 ? 's' : '' }} antes de añadir la HU al plan.
         </p>
-        <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && scenarioMatrixGap.length">
-          ⚠ Matriz incompleta: {{ scenarioMatrixGap.join('; ') }}. Revísalo antes de añadir la HU al plan.
-        </p>
 
         <!-- Acciones arriba de la tabla -->
         <div class="preview-top-actions" *ngIf="!loadingScenarios && (generatedHUData.detailedTestCases.length || 0) > 0 && !errorScenarios">
