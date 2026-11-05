@@ -81,7 +81,7 @@ La matriz la ejecuta y la lee una persona funcional con poco conocimiento técni
 /** Matriz de escenarios: reemplaza las reglas dispersas de negativos y regresión. Se valida en código (scenarioMatrixGaps). */
 const SCENARIO_MATRIX_RULES = `MATRIZ DE ESCENARIOS (prevalece sobre cualquier otra regla de agrupación o límite):
 - Positivo: cada CA tiene su caso "Positivo – …" con el CA primero en "coveredCriteria".
-- Negativo: evalúa cada CA. Si existe una entrada inválida, un dato excluido, un rechazo o un bloqueo con resultado observable distinto, crea su caso "Negativo – …" con el CA primero en "coveredCriteria". Si no aplica, en "criteriaMap" pon "negative": "N/A: <motivo>"; si lo creaste, "negative": "caso".
+- Negativo: evalúa cada CA. Crea "Negativo – …" (CA primero en "coveredCriteria") solo si prueba una entrada o condición distinta a la del Positivo con un resultado observable propio (rechazo, mensaje, bloqueo, dato excluido que el Positivo no prepara). Si el Positivo ya verifica esa exclusión, o el negativo sería solo el opuesto del mismo dato, NO lo crees: pon en "criteriaMap" "negative": "N/A: <motivo>". Si lo creaste, "negative": "caso".
 - Regresión: cada comportamiento (CAMBIO HU) que el código cambia y ningún CA cubre tiene su caso "Regresión – …" con su RT-xx primero en "coveredCriteria" y prioridad al inicio de preconditions ("Prioridad Alta|Media|Baja."). Sin límite de cantidad. Dos RT van en un caso solo si comparten disparo y resultado observable. Los (EXISTENTE) nunca generan casos.
 - Todo título inicia con "Positivo – ", "Negativo – " o "Regresión – ".
 `;
