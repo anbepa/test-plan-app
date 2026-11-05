@@ -8,7 +8,7 @@ import { HUData, DetailedTestCase, TestCaseStep } from '../../models/hu-data.mod
 import { ToastService } from '../../services/core/toast.service';
 import { ExportService } from '../../services/export/export.service';
 import { HuSyncService } from '../../services/core/hu-sync.service';
-import { DatabaseService } from '../../services/database/database.service';
+import { DatabaseService, sortTestCasesByPosition } from '../../services/database/database.service';
 import { TestPlanMapperService } from '../../services/database/test-plan-mapper.service';
 import { Subscription } from 'rxjs';
 
@@ -181,6 +181,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
             preconditions,
             expected_results,
             position,
+            created_at,
             test_case_steps!test_case_steps_test_case_id_fkey (
               id,
               step_number,
@@ -202,7 +203,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
       if (error) throw error;
       if (!data) return;
 
-      const testCases = (data.test_cases || []).map((tc: any) => ({
+      const testCases = sortTestCasesByPosition(data.test_cases || []).map((tc: any) => ({
         dbId: tc.id,
         title: tc.title,
         preconditions: tc.preconditions,
@@ -359,7 +360,7 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
     try {
       // Usar la función optimizada para guardar solo este caso
-      const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, caseToSave, saveIndex);
+      const updatedCase = await this.databaseService.saveSingleTestCase(userStoryId, caseToSave);
 
       // Actualizar el modelo en memoria con el ID (por si era nuevo) y pasos limpios
       this.hu.detailedTestCases[saveIndex] = {

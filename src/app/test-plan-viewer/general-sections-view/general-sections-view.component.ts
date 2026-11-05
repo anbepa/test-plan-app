@@ -72,7 +72,10 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy, AfterVie
   }
 
   private async loadData(): Promise<void> {
-    this.isLoading = true;
+    // Muestra al instante la última versión cargada del plan y la actualiza por detrás.
+    const cached = this.databaseService.getCachedTestPlan(this.testPlanId);
+    if (cached) this.applyPlan(cached);
+    this.isLoading = !cached;
     try {
       const plan = await this.databaseService.getTestPlanById(this.testPlanId);
       if (!plan) {
@@ -80,15 +83,7 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy, AfterVie
         this.goBack();
         return;
       }
-
-      this.testPlanTitle = this.testPlanTitle || plan.title || '';
-      this.huList = this.mapper.mapDbTestPlanToHUList(plan);
-
-      this.setSectionValue('outOfScope', plan.out_of_scope || '');
-      this.setSectionValue('strategy', plan.strategy || '');
-      this.setSectionValue('limitations', plan.limitations || '');
-      this.setSectionValue('assumptions', plan.assumptions || '');
-
+      this.applyPlan(plan);
     } catch (error) {
       console.error('❌ Error cargando secciones generales:', error);
       this.toastService.error('Error al cargar secciones generales del plan');
@@ -96,6 +91,15 @@ export class GeneralSectionsViewComponent implements OnInit, OnDestroy, AfterVie
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private applyPlan(plan: any): void {
+    this.testPlanTitle = this.testPlanTitle || plan.title || '';
+    this.huList = this.mapper.mapDbTestPlanToHUList(plan);
+    this.setSectionValue('outOfScope', plan.out_of_scope || '');
+    this.setSectionValue('strategy', plan.strategy || '');
+    this.setSectionValue('limitations', plan.limitations || '');
+    this.setSectionValue('assumptions', plan.assumptions || '');
   }
 
   goBack(): void {

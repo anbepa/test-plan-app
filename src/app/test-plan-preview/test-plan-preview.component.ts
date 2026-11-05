@@ -52,22 +52,14 @@ export class TestPlanPreviewComponent implements OnInit {
     }
 
     async loadTestPlan(id: string) {
-        this.isLoading = true;
+        // Muestra al instante la última versión cargada del plan y la actualiza por detrás.
+        const cached = this.databaseService.getCachedTestPlan(id);
+        if (cached) await this.applyPlan(cached);
+        this.isLoading = !cached;
         try {
             const plan = await this.databaseService.getTestPlanById(id);
             if (plan) {
-                this.testPlan = plan;
-                // Convertir UserStories a HUData usando el mapper centralizado
-                this.huList = this.mapper.mapDbTestPlanToHUList(plan);
-
-                // Cargar configuración global con fallback
-                const config = await this.generalSectionsConfig.ready();
-
-                // Preferir config global, caer a plan solo si config global está vacía
-                this.repositoryLink = config.repositoryLink || plan.repository_link || '';
-                this.teamContent = config.teamContent || plan.team || '';
-
-                this.generatePreview();
+                await this.applyPlan(plan);
             } else {
                 this.errorMessage = 'Plan de pruebas no encontrado.';
             }
@@ -77,6 +69,17 @@ export class TestPlanPreviewComponent implements OnInit {
         } finally {
             this.isLoading = false;
         }
+    }
+
+    private async applyPlan(plan: any): Promise<void> {
+        this.testPlan = plan;
+        // Convertir UserStories a HUData usando el mapper centralizado
+        this.huList = this.mapper.mapDbTestPlanToHUList(plan);
+        // Preferir config global, caer a plan solo si config global está vacía
+        const config = await this.generalSectionsConfig.ready();
+        this.repositoryLink = config.repositoryLink || plan.repository_link || '';
+        this.teamContent = config.teamContent || plan.team || '';
+        this.generatePreview();
     }
 
     generatePreview(): void {

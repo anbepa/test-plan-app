@@ -4,6 +4,8 @@ import {
   getAuthenticatedUser,
   getAzureConnectionWithSecret,
   importAzureUserStory,
+  isAzurePatRejection,
+  respondAzureAuthFailure,
   toErrorResponse,
 } from '../_shared';
 
@@ -26,11 +28,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       throw new ApiError(404, 'Azure DevOps no está configurado para este usuario.');
     }
 
-    const imported = await importAzureUserStory(
-      connection.organization,
-      connection.personal_access_token,
-      userStoryId
-    );
+    let imported;
+    try {
+      imported = await importAzureUserStory(
+        connection.organization,
+        connection.personal_access_token,
+        userStoryId
+      );
+    } catch (error) {
+      if (isAzurePatRejection(error)) {
+        await respondAzureAuthFailure(res, 401, user.id, connection.organization);
+        return;
+      }
+      throw error;
+    }
 
     res.status(200).json(imported);
   } catch (error: unknown) {

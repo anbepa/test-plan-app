@@ -419,3 +419,45 @@ export function toErrorResponse(error: unknown): { status: number; body: { messa
     body: { message: 'Error interno del servidor.' }
   };
 }
+
+export const AZURE_PAT_EXPIRED_MESSAGE =
+  'El PAT de Azure DevOps está vencido o fue revocado. Genera uno nuevo y actualízalo en Configuración > Azure DevOps.';
+export const AZURE_PAT_FORBIDDEN_MESSAGE =
+  'El PAT de Azure DevOps no tiene permiso para esta acción. Revisa sus permisos y actualízalo en Configuración > Azure DevOps.';
+
+/** Marca como vencida la conexión de Azure DevOps del usuario (best-effort). */
+export async function markAzureConnectionExpired(userId: string, organization?: string | null): Promise<void> {
+  try {
+    const connection = await getAzureConnection(userId, organization ?? null);
+    if (connection?.organization && connection.status === 'connected') {
+      await updateAzureConnectionStatus(userId, connection.organization, 'expired');
+    }
+  } catch (err) {
+    console.warn('[azure-devops] No se pudo marcar la conexión como vencida:', err);
+  }
+}
+
+/**
+ * Respuesta uniforme cuando Azure DevOps rechaza el PAT. 401 = vencido o
+ * revocado (marca la conexión para que Configuración lo muestre); 403 = sin
+ * permiso. Se responde 424 y no 401 para que la app no lo confunda con su
+ * propia sesión vencida.
+ */
+export async function respondAzureAuthFailure(
+  res: { status: (code: number) => { json: (body: unknown) => unknown } },
+  azureStatus: number,
+  userId: string,
+  organization?: string | null
+): Promise<void> {
+  if (azureStatus === 401) {
+    await markAzureConnectionExpired(userId, organization);
+    res.status(424).json({ error: AZURE_PAT_EXPIRED_MESSAGE, message: AZURE_PAT_EXPIRED_MESSAGE, code: 'AZURE_PAT_INVALID' });
+    return;
+  }
+  res.status(424).json({ error: AZURE_PAT_FORBIDDEN_MESSAGE, message: AZURE_PAT_FORBIDDEN_MESSAGE, code: 'AZURE_PAT_FORBIDDEN' });
+}
+
+/** true si el error es el rechazo del PAT por Azure (401 lanzado por las utilidades de Azure). */
+export function isAzurePatRejection(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401 && /\bPAT\b/.test(error.message);
+}

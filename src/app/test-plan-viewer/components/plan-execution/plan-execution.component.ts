@@ -710,7 +710,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     });
   }
 
-  private addEvidenceAndOpenEditor(base64: string, source: 'archivo' | 'portapapeles'): Promise<void> {
+  private addEvidenceAndOpenEditor(base64: string, _source: 'archivo' | 'portapapeles'): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       if (!this.currentStep || !this.execution) {
         this.toastService.warning('No hay un paso activo para guardar la evidencia');
@@ -751,7 +751,8 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           this.showImageEditor = true;
 
           await this.updateStats();
-          this.toastService.success(`Imagen guardada automáticamente desde ${source}`);
+          // Sin aviso aquí: la imagen ya quedó guardada y el editor se abre de
+          // inmediato; el aviso llega al pulsar Guardar (antes salían dos seguidos).
           resolve();
         } catch (err) {
           console.error('Error saving image:', err);
