@@ -1,5 +1,5 @@
 import { RouterLink } from '@angular/router';
-import { Component, HostListener, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
+import { Component, HostListener, NgZone, OnInit, OnDestroy, ViewChild, ElementRef, Inject, PLATFORM_ID, Output, EventEmitter, Input, ChangeDetectorRef } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
@@ -183,7 +183,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           const groups = this.codeHuChangeGroups.filter((group) => this.isChangeGroupSelected(group));
           summary = `${groups.length} repo(s) · ${groups.reduce((total, group) => total + group.files.length, 0)} archivos`;
         } else if (this.isManualCodeTargetReady) {
-          summary = this.codeBranch;
+          const repo = this.codeRepositories.find((r) => r.id === this.codeRepositoryId)?.name;
+          summary = repo ? `${repo} · rama ${this.codeBranch}` : `Rama ${this.codeBranch}`;
         }
         return { title: 'Código de la HU', status: loading ? 'running' : this.isCodeTargetReady ? 'done' : 'pending', summary: loading ? 'Buscando PRs y commits…' : summary };
       }
@@ -246,6 +247,17 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return COLLAPSIBLE_STEPS.includes(id) && this.flowStep(id)?.status === 'done';
   }
 
+  /**
+   * Mientras el usuario elige proyecto, repositorio y rama, el paso no debe
+   * cerrarse solo: al elegir el repositorio se autoselecciona la rama principal,
+   * el paso quedaba "completo" y se contraía (en móvil los selectores nativos no
+   * retienen el foco), sin dejar elegir la rama de la HU. Queda abierto hasta
+   * que el usuario pulse Contraer.
+   */
+  keepStepOpen(id: FlowStepId): void {
+    this.openedSteps.add(id);
+  }
+
   /** Editar / Contraer: depende solo de si el usuario abrió el paso, no del foco. */
   toggleStep(id: FlowStepId): void {
     if (!this.openedSteps.has(id)) {
@@ -273,31 +285,68 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.pendingFocusOutStep = id;
       return;
     }
-    if (this.focusedStep === id) this.focusedStep = null;
+    // En pantallas táctiles el foco sale con el "mousedown" de compatibilidad,
+    // que llega DESPUÉS de soltar el dedo y justo antes del click: contraer de
+    // inmediato movía el botón y el toque se perdía. Se espera un instante.
+    this.scheduleStepCollapse(id, 300);
+  }
+
+  private stepCollapseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleStepCollapse(step: FlowStepId, delayMs: number): void {
+    if (this.stepCollapseTimer) clearTimeout(this.stepCollapseTimer);
+    this.stepCollapseTimer = setTimeout(() => {
+      this.stepCollapseTimer = null;
+      if (this.focusedStep === step && !this.isFocusInsideStep(step)) {
+        this.focusedStep = null;
+        this.cdr.markForCheck();
+      }
+    }, delayMs);
   }
 
   private pointerIsDown = false;
   private pendingFocusOutStep: FlowStepId | null = null;
 
-  @HostListener('document:pointerdown')
-  onDocumentPointerDown(): void {
-    this.pointerIsDown = true;
+  /**
+   * Escuchas globales de puntero FUERA de la detección de cambios de Angular:
+   * con @HostListener cada toque disparaba una revisión que reconstruía parte
+   * del DOM, y Safari en iOS descarta el toque cuando la página cambia durante
+   * él (los radios y botones "no hacían nada"). Solo se vuelve a la zona de
+   * Angular cuando hay que contraer un paso.
+   */
+  private readonly onPointerDownOutside = () => { this.pointerIsDown = true; };
+  private readonly onPointerUpOutside = () => {
+    this.pointerIsDown = false;
+    if (this.pendingFocusOutStep) this.ngZone.run(() => this.onDocumentPointerUp());
+  };
+
+  private bindPointerTracking(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.ngZone.runOutsideAngular(() => {
+      document.addEventListener('pointerdown', this.onPointerDownOutside, true);
+      document.addEventListener('pointerup', this.onPointerUpOutside, true);
+      document.addEventListener('pointercancel', this.onPointerUpOutside, true);
+    });
   }
 
-  @HostListener('document:pointerup')
-  @HostListener('document:pointercancel')
-  onDocumentPointerUp(): void {
-    this.pointerIsDown = false;
+  private unbindPointerTracking(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    document.removeEventListener('pointerdown', this.onPointerDownOutside, true);
+    document.removeEventListener('pointerup', this.onPointerUpOutside, true);
+    document.removeEventListener('pointercancel', this.onPointerUpOutside, true);
+  }
+
+  /** trackBy por etiqueta: evita que listas calculadas en getters se reconstruyan en cada revisión. */
+  trackByLabel(_: number, item: { label?: string }): string | undefined {
+    return item?.label;
+  }
+
+  private onDocumentPointerUp(): void {
     const step = this.pendingFocusOutStep;
     if (!step) return;
     this.pendingFocusOutStep = null;
-    // setTimeout: después del evento click que sigue a pointerup.
-    setTimeout(() => {
-      if (this.focusedStep === step && !this.isFocusInsideStep(step)) {
-        this.focusedStep = null;
-        this.cdr.markForCheck();
-      }
-    });
+    // Después del click que sigue a pointerup (con margen para táctil).
+    this.scheduleStepCollapse(step, 300);
   }
 
   private isFocusInsideStep(id: FlowStepId): boolean {
@@ -608,10 +657,12 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     private cellsConfigService: CellsConfigService,
     private azureReposService: AzureReposService,
     private codeExplorerAgent: CodeExplorerAgentService,
-    private criteriaNormalizer: CriteriaNormalizerService
+    private criteriaNormalizer: CriteriaNormalizerService,
+    private ngZone: NgZone
   ) { }
 
   ngOnInit(): void {
+    this.bindPointerTracking();
     this.currentGenerationMode = this.initialGenerationMode;
     this.currentSprint = this.initialSprint;
     this.cellName = this.initialCellName;
@@ -629,6 +680,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unbindPointerTracking();
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
     this.cellsSub?.unsubscribe();

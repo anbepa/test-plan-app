@@ -277,7 +277,7 @@
                     <div class="form-group">
                       <label for="tcCodeProject">Proyecto:<span class="required-indicator">*</span></label>
                       <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
-                        (ngModelChange)="onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
+                        (ngModelChange)="keepStepOpen('code'); onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione un proyecto' }}</option>
                         <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
                       </select>
@@ -285,7 +285,7 @@
                     <div class="form-group">
                       <label for="tcCodeRepository">Repositorio:<span class="required-indicator">*</span></label>
                       <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
-                        (ngModelChange)="onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
+                        (ngModelChange)="keepStepOpen('code'); onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && codeProject && !codeRepositories.length ? 'Cargando...' : 'Seleccione un repositorio' }}</option>
                         <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
                       </select>
@@ -293,7 +293,7 @@
                     <div class="form-group">
                       <label for="tcCodeBranch">Rama:<span class="required-indicator">*</span></label>
                       <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
-                        (ngModelChange)="onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
+                        (ngModelChange)="keepStepOpen('code'); onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && codeRepositoryId && !codeBranches.length ? 'Cargando...' : 'Seleccione una rama' }}</option>
                         <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
                       </select>
@@ -369,7 +369,7 @@
                 <div class="coverage-editor-title">
                   <span>Cobertura de criterios en el código</span>
                   <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
-                    <button type="button" *ngFor="let item of codeCoverageSummary" class="code-coverage-chip" [ngClass]="item.css"
+                    <button type="button" *ngFor="let item of codeCoverageSummary; trackBy: trackByLabel" class="code-coverage-chip" [ngClass]="item.css"
                       [class.is-selected]="coverageFilter === item.key" [attr.aria-pressed]="coverageFilter === item.key"
                       (click)="toggleCoverageFilter(item.key)" [title]="coverageFilter === item.key ? 'Mostrar todos' : 'Mostrar solo ' + item.label.toLowerCase()">{{ item.label }}: {{ item.count }}</button>
                     <button *ngIf="coverageFilter" type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
@@ -443,7 +443,7 @@
           <p class="flow-actionbar-status" aria-live="polite">
             <ng-container *ngIf="generateBlockers.length; else readyToGenerate">
               <span class="flow-actionbar-label">Falta:</span>
-              <ng-container *ngFor="let blocker of generateBlockers; let last = last">
+              <ng-container *ngFor="let blocker of generateBlockers; let last = last; trackBy: trackByLabel">
                 <button type="button" class="code-link-btn" (click)="scrollToFlowStep(blocker.step)">{{ blocker.label }}</button><span *ngIf="!last">, </span>
               </ng-container>
             </ng-container>
