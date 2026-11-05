@@ -1,4 +1,4 @@
-import { criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, uncoveredChangeBehaviorIds, uncoveredCriteria } from './criteria-normalizer';
+import { criteriaGroups, criteriaIds, formatNormalizedCriteria, isNormalizedCriteria, parseNormalizedCriteria, uncoveredChangeBehaviorIds, uncoveredCriteria } from './criteria-normalizer';
 
 describe('criteria-normalizer', () => {
   const raw = '```json\n' + JSON.stringify({
@@ -32,7 +32,7 @@ describe('criteria-normalizer', () => {
     const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
     expect(text).toContain('### Al ingresar al menú Devoluciones, el sistema deberá\n- **CA-01** Devolución DPP: solo registros en COP');
     expect(text).toContain('  - Opciones: COP → DPP, Giro; USD → Devoluciones ME');
-    expect(text).toContain('  - ⚠ Interpretación: Se tomó como un solo criterio.');
+    expect(text).not.toContain('Interpretación');
     expect(text).toContain('- Resumen (se verifica en CA-01, CA-03): Cada módulo muestra solo su moneda');
     expect(isNormalizedCriteria(text)).toBeTrue();
     expect(criteriaIds(text)).toEqual(['CA-01', 'CA-02', 'CA-03']);
@@ -60,6 +60,13 @@ describe('criteria-normalizer', () => {
     expect(uncoveredChangeBehaviorIds(context)).toEqual(['RT-03', 'RT-08']);
     const text = formatNormalizedCriteria(parseNormalizedCriteria(raw));
     expect(uncoveredCriteria(text, [{ coveredCriteria: ['CA-01', 'CA-02', 'CA-03', 'RT-03'] }], context)).toEqual(['RT-08']);
+  });
+  it('agrupa los criterios por sección y divide las secciones grandes', () => {
+    const text = ['- **CA-01** suelto', '### Reporte A', '- **CA-02** a', '- **CA-03** b',
+      '### Tabla', ...[4, 5, 6, 7, 8].map((n) => `- **CA-0${n}** t${n}`), '### Definiciones (no son criterios)', '- Definición — x: y'].join('\n');
+    expect(criteriaGroups(text).map((group) => group.ids)).toEqual([
+      ['CA-01'], ['CA-02', 'CA-03'], ['CA-04', 'CA-05', 'CA-06'], ['CA-07', 'CA-08'],
+    ]);
   });
 });
 

@@ -180,7 +180,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         if (this.normalizingCriteria) return { title: 'Criterios', status: 'running', summary: 'Interpretando criterios…' };
         if (!raw) return { title: 'Criterios', status: this.contextSource === 'code' ? 'optional' : 'pending', summary: this.contextSource === 'code' ? 'El código define las reglas' : 'Sin criterios' };
         if (this.needsCriteriaNormalization) return { title: 'Criterios', status: this.normalizedCriteria ? 'stale' : 'pending', summary: 'Se interpretan al salir del campo' };
-        return { title: 'Criterios', status: 'done', summary: this.normalizedCriteriaCount ? `${this.normalizedCriteriaCount} criterios (CA)` : 'Se usan tal cual' };
+        return { title: 'Criterios', status: 'done', summary: this.normalizedCriteriaCount ? `${this.normalizedCriteriaCount} criterios` : 'Listos' };
       }
       case 'code': {
         const loading = this.codeLoadingHuChanges || this.codeLoadingTarget;

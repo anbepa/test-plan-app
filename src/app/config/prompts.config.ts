@@ -1,4 +1,4 @@
-import { criteriaIds, uncoveredChangeBehaviorIds } from '../services/ai/criteria-normalizer';
+import { criteriaGroups, criteriaIds, uncoveredChangeBehaviorIds } from '../services/ai/criteria-normalizer';
 import type { ContextSource } from '../models/code-agent.model';
 import { getStaticSectionLimits } from '../shared/utils/static-section-text';
 
@@ -213,6 +213,155 @@ AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 - Cada dato se crea en la parte (rol) que el flujo valida para esa opción, y ningún código se usa con un significado que no esté en "Equivalencias de códigos".
 - Cada expectedResults termina con "Evidencia: …".
 - Ningún caso existe solo para una "Definición".
+`;
+}
+
+/** Modo "Solo criterios": prompt corto basado en 03b844c + agrupación por funcionalidad y resultado por paso. */
+function criteriaGroupsRule(acceptanceCriteria: string): string {
+  const groups = criteriaGroups(acceptanceCriteria);
+  if (!groups.length) return '';
+  const list = groups.map((group, i) => `   - Escenario ${i + 1}: ${group.ids.join(', ')}${group.title ? ` (${group.title})` : ''}`).join('\n');
+  return `1. Escenarios ya agrupados (obligatorio): crea exactamente un escenario por grupo, en este orden, con esos CA en "coveredCriteria":
+${list}
+   Solo puedes agregar un escenario extra a un grupo si uno de sus CA define un rechazo, error o desenlace distinto que exige otra ejecución (máximo uno por grupo).`;
+}
+
+function criteriaOnlyGenerationPrompt(description: string, acceptanceCriteria: string, technique: string, userRequest: string): string {
+  const groupsRule = criteriaGroupsRule(acceptanceCriteria);
+  return `
+Actúa como QA Senior especializado en diseño de pruebas. Genera una matriz suficiente, trazable y sin redundancias. Todo el contenido de salida debe estar en español.
+
+HISTORIA DE USUARIO:
+${description}
+
+CRITERIOS DE ACEPTACIÓN — PUEDEN ESTAR DESORDENADOS:
+${acceptanceCriteria}
+
+TÉCNICA SOLICITADA:
+${technique || 'Automática'}
+
+INSTRUCCIÓN ESPECÍFICA DEL ANALISTA — PRIORIDAD ALTA:
+${userRequest?.trim() || 'No se proporcionó una instrucción adicional.'}
+
+JERARQUÍA DE INSTRUCCIONES:
+1. Aplica primero la instrucción específica del analista cuando exista.
+2. La instrucción puede definir enfoque, cantidad, prioridad, exclusiones, detalle o tipos de escenarios.
+3. La instrucción no puede inventar ni contradecir requisitos funcionales de la HU o los criterios.
+4. Si una parte contradice los requisitos, aplica únicamente la parte compatible.
+5. Usa exclusivamente la HU y los criterios como fuente funcional.
+6. Considera la técnica del formulario como PREFERENCIA INICIAL, no como imposición absoluta.
+7. Evalúa cada regla y usa la técnica que realmente corresponda según su estructura.
+8. Mantén la técnica seleccionada donde sea aplicable; compleméntala con otras cuando no cubra todo.
+9. Si la técnica seleccionada no aplica a ningún criterio, sustitúyela internamente por la adecuada.
+10. No fuerces límites, particiones, decisiones o estados inexistentes para cumplir la selección.
+11. Si userRequest está vacío, continúa sin asumir instrucciones adicionales.
+12. La prioridad del analista no autoriza omitir cobertura obligatoria ni alterar el JSON.
+
+NORMALIZACIÓN INTERNA OBLIGATORIA:
+1. Lee el contenido completo, sin asumir que el orden recibido representa el flujo.
+2. Si los criterios vienen numerados (líneas "- **CA-xx**"), usa esos ids y textos sin renumerar; las líneas "Opciones" son variantes del CA de arriba y "Resumen", "Interpretación" y "Definición" no son criterios. Si no vienen numerados, separa internamente cada regla atómica y asígnale CA-01, CA-02, CA-03, etc.
+3. Para cada regla identifica, cuando exista: condición, acción, resultado, dato, límite, estado, dependencia, excepción y texto exacto.
+4. Une duplicados semánticos, pero conserva diferencias de condición, resultado o restricción.
+5. Relaciona reglas dependientes aunque estén separadas en el texto.
+6. Detecta contradicciones y ambigüedades. No elijas una interpretación arbitraria: crea casos solo para lo comprobable y registra el supuesto mínimo en preconditions cuando sea imprescindible.
+7. No alteres la intención funcional al reorganizar los criterios.
+
+SELECCIÓN ADAPTATIVA DE TÉCNICA — OBLIGATORIA:
+1. Clasifica internamente cada regla atómica según su estructura, no solo por la técnica del formulario.
+2. Usa Partición Equivalente para clases válidas/inválidas, tipos de datos, opciones y reglas de aceptación.
+3. Usa Análisis de Valor Límite únicamente para mínimos, máximos, rangos, fechas, tamaños, cantidades o cardinalidades explícitas.
+4. Usa Tabla de Decisión cuando varias condiciones o combinaciones produzcan acciones o resultados distintos.
+5. Usa Pruebas de Transición de Estados cuando existan estados, eventos, cambios o restricciones dependientes del estado.
+6. Usa escenarios funcionales para secuencias sin estructura suficiente para las técnicas anteriores.
+7. La técnica del formulario es la técnica inicial preferida y debe conservarse en los criterios compatibles.
+8. Combina técnicas cuando distintos criterios necesiten tratamientos diferentes.
+9. Sustituye internamente la técnica seleccionada solo en criterios donde sea inaplicable o insuficiente.
+10. Elige el conjunto mínimo de técnicas que logre cobertura real y evite redundancias.
+
+APLICACIÓN DE TÉCNICAS:
+- Partición equivalente: representa cada clase relevante una vez, salvo que otra combinación cambie el resultado.
+- Valores límite: prueba debajo, en y encima del límite cuando esos puntos sean válidos y estén sustentados.
+- Tabla de decisión: cubre reglas y combinaciones materialmente distintas; elimina combinaciones imposibles o equivalentes.
+- Transición de estados: cubre transiciones válidas clave, inválidas relevantes y restricciones dependientes del estado.
+- No fuerces límites, estados, particiones o combinaciones que no estén respaldados por la entrada.
+
+DISEÑO DE COBERTURA:
+1. Cubre cada regla atómica dentro de algún escenario que la ejecute y verifique explícitamente; una regla no necesita escenario propio.
+2. Añade enfoque positivo, negativo, alterno o de borde solamente cuando aplique.
+3. Si una regla contiene varias subcondiciones, verifícalas como registros del mismo escenario cuando comparten salida; crea otro escenario solo si necesitan otra pantalla o ejecución.
+4. Para visibilidad, habilitación o aparición condicional, cubre la condición que la activa y la que no la activa como dos registros del mismo escenario.
+5. Para secuencias obligatorias, cubre el flujo válido y una ruptura relevante (escenario aparte solo si la ruptura requiere otra ejecución).
+6. Para cardinalidad, cubre el valor permitido y el incumplimiento más representativo como registros del escenario; usa bordes si hay límite explícito.
+7. Para formularios, no impongas un caso por campo: crea casos por validación o partición funcional relevante.
+8. Para bifurcaciones, no generes automáticamente 2^M casos. Usa tabla de decisión y cubre combinaciones que cambien resultados, riesgos o reglas.
+9. Prioriza reglas de negocio, validaciones, integraciones y datos sobre navegación cosmética.
+10. El número de casos se deriva de las reglas y particiones, no de cuotas fijas.
+
+ESCENARIOS POR FUNCIONALIDAD (prevalece sobre las reglas anteriores de cantidad):
+${groupsRule || `1. Agrupa: antes de escribir, lista internamente los grupos de CA que comparten pantalla, proceso o salida (p. ej. un mismo reporte, un mismo desembolso, una misma pantalla de parametrización) y crea un escenario por grupo; si te quedan más escenarios que grupos, únelos; lo usual son 2 a 5 por HU y máximo 4 CA por escenario. No metas toda la HU en un solo escenario si tiene grupos distintos. Cambiar solo fechas, mes, clientes o valores, o repetir un ejemplo del criterio (p. ej. "día 30 o 31"), no crea un escenario nuevo.`}
+2. Datos por condición: el paso 1 prepara los registros del escenario (A, B, C…; máximo 4) describiendo la condición que los hace relevantes (tipo, producto, moneda, estado, momento relativo como "creada el día 1 del mes siguiente al corte"). No inventes NIT, nombres, montos, fechas exactas, usuarios, pantallas ni estados que no estén en la HU. Cada registro tiene un solo resultado: si un CA es excepción de otro (p. ej. retrofecha frente a corte), la excepción prevalece y la regla general se prueba con un registro que no cumple la excepción.
+3. Resultado por paso: "expectedResults" tiene una línea por cada paso, en orden: "Paso 1 → …", "Paso 2 → …". Cada resultado es observable y dice qué registro y qué ver (aparece / no aparece, saldo sin descontar ese pago, una sola fila, estado que corresponde). Ningún paso queda sin resultado y ningún paso es solo "revisar". El resultado de un paso de preparación es que el registro queda creado con su condición; lo que debe aparecer, excluirse o calcularse se escribe en el paso donde se ejecuta la consulta, proceso o pantalla que lo muestra.
+4. Dudas: si un CA trae "Interpretación", preconditions inicia con "⚠ Duda sin resolver: <duda>; confirmar con el funcional." y solo la parte dudosa se registra como comportamiento observado.
+
+VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
+- Pasada 1 — Solicitud y extracción: verifica userRequest, reglas atómicas y técnica adecuada por regla.
+- Pasada 2 — Cobertura: mapea casos, criterios y técnicas; agrega lo faltante o corrige técnicas forzadas.
+- Pasada 3 — Calidad: elimina duplicados, casos artificiales y resultados no ejercitados.
+- Detén el proceso antes si una pasada completa no detecta omisiones.
+- No muestres estas pasadas ni razonamiento interno en la respuesta.
+
+PRESUPUESTO DE SALIDA — OBLIGATORIO:
+1. Dispones de un presupuesto limitado de tokens. Un JSON truncado es inservible y se descarta por completo.
+2. Antes de escribir, estima cuántos casos caben y prioriza en este orden:
+   a) Reglas de negocio y validaciones con resultado observable.
+   b) Restricciones de datos, formatos, límites y condiciones de habilitación.
+   c) Flujos alternos, errores y recuperación.
+   d) Navegación, textos informativos y verificaciones cosméticas.
+3. Si no caben todos los casos, agrupa reglas afines de la misma prioridad en un caso combinado antes que omitirlas.
+4. Nunca dejes un caso a medias: prefiere menos casos completos que muchos incompletos.
+5. Si tuviste que agrupar u omitir cobertura por espacio, indícalo brevemente al final de "scope".
+6. Sé conciso en title, preconditions y expectedResults; la exhaustividad va en la cobertura, no en la redacción.
+
+TRAZABILIDAD — OBLIGATORIA:
+1. Usa los identificadores CA-01, CA-02, ... asignados en la normalización interna.
+2. En cada caso, lista en "coveredCriteria" los identificadores que ese caso ejecuta y verifica realmente en sus pasos.
+3. No incluyas un criterio que solo se mencione en expectedResults sin ejercitarse en los pasos.
+4. En "technique" indica la técnica realmente aplicada al caso, no la solicitada en el formulario si difiere.
+5. En "criteriaMap" enumera cada identificador con el texto resumido de la regla, para permitir la auditoría.
+6. Todo criterio de "criteriaMap" debe aparecer al menos una vez en algún "coveredCriteria", salvo que no sea comprobable.
+
+REGLAS DE CALIDAD:
+- Título claro, sin identificadores técnicos como TC_001.
+- Entre 3 y 6 pasos.
+- Pasos concretos, ejecutables y ordenados.
+- Cada escenario valida un grupo de CA que comparten salida.
+- El resultado esperado debe ser observable, específico y corresponder a acciones ejecutadas.
+- No declares como validado algo mencionado únicamente en expectedResults.
+- Conserva textos, etiquetas, mensajes, columnas y formatos exactos solo cuando la entrada los defina.
+- title <= 90 caracteres y preconditions <= 220; expectedResults con una línea corta por paso.
+
+SALIDA:
+- Devuelve exclusivamente JSON válido; sin markdown, comentarios, prefijos ni sufijos.
+- El primer carácter debe ser "{" y el último "}".
+- Usa exactamente esta estructura para mantener compatibilidad:
+{
+  "scope": "Alcance breve de lo cubierto",
+  "criteriaMap": [
+    {"id": "CA-01", "rule": "Resumen breve de la regla atómica"}
+  ],
+  "testCases": [
+    {
+      "title": "Descripción clara del escenario",
+      "preconditions": "Condiciones previas necesarias",
+      "steps": [
+        {"numero_paso": 1, "accion": "Acción específica"}
+      ],
+      "expectedResults": "Paso 1 → resultado del paso 1\nPaso 2 → resultado del paso 2",
+      "coveredCriteria": ["CA-01"],
+      "technique": "Técnica realmente aplicada"
+    }
+  ]
+}
 `;
 }
 
@@ -440,7 +589,9 @@ El primer carácter debe ser "{" y el último "}". Respeta las extensiones indic
     userRequest: string = '',
     codeContext: string = '',
     contextSource: ContextSource = 'criteria'
-  ): string => `
+  ): string => contextSource === 'criteria'
+    ? criteriaOnlyGenerationPrompt(description, acceptanceCriteria, technique, userRequest)
+    : `
 Actúa como QA Senior especializado en diseño de pruebas. Genera una matriz suficiente, trazable y sin redundancias. Todo el contenido de salida debe estar en español.
 
 FECHA DE HOY: ${new Date().toISOString().slice(0, 10)} (solo para decidir si algo es vigente o vencido; no escribas fechas exactas en los escenarios: usa fechas relativas al corte o al evento).

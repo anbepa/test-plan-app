@@ -152,11 +152,37 @@ export function formatNormalizedCriteria(groups: NormalizedGroup[]): string {
     ...group.criteria.flatMap((criterion) => [
       `- **${criterion.id}** ${criterion.text}`,
       criterion.options.length ? `  - Opciones: ${criterion.options.join('; ')}` : '',
-      criterion.note ? `  - ⚠ Interpretación: ${criterion.note}` : '',
     ]),
     ...group.summaries.map((summary) => `- Resumen${summary.covers.length ? ` (se verifica en ${summary.covers.join(', ')})` : ''}: ${summary.text}`),
     ...(group.definitions || []).map((item) => `- Definición${item.term ? ` — ${item.term}` : ''}: ${item.text}`),
   ].filter(Boolean).join('\n')).join('\n\n');
+}
+
+/**
+ * Grupos de criterios para armar escenarios: uno por sección "###" de la lista normalizada
+ * (los CA sin sección forman su propio grupo). Una sección con más de `maxPerGroup` CA se
+ * divide en partes parejas para que ningún escenario quede sobrecargado.
+ */
+export function criteriaGroups(text: string, maxPerGroup = 4): { title: string; ids: string[] }[] {
+  const sections: { title: string; ids: string[] }[] = [];
+  let current: { title: string; ids: string[] } | null = null;
+  for (const line of (text || '').split('\n')) {
+    const heading = line.match(/^\s*#{2,}\s*(.+?)\s*$/);
+    if (heading) {
+      current = /definici/i.test(heading[1]) ? null : { title: heading[1], ids: [] };
+      if (current) sections.push(current);
+      continue;
+    }
+    const id = line.match(CRITERION_LINE)?.[1];
+    if (!id) continue;
+    if (!current) { current = { title: '', ids: [] }; sections.push(current); }
+    current.ids.push(id);
+  }
+  return sections.filter((section) => section.ids.length).flatMap((section) => {
+    const parts = Math.ceil(section.ids.length / maxPerGroup);
+    const size = Math.ceil(section.ids.length / parts);
+    return Array.from({ length: parts }, (_, i) => ({ title: section.title, ids: section.ids.slice(i * size, (i + 1) * size) }));
+  });
 }
 
 /** Comportamientos (CAMBIO HU) que el código agrega y ningún criterio cubre: también requieren cobertura. */
