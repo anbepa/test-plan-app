@@ -5,7 +5,20 @@ import { PlanExecution, TestRun, TestCaseExecution } from '../../models/hu-data.
 /** A single step inside a Gherkin scenario. */
 interface BundleStep { keyword: string; text: string; }
 /** A Gherkin scenario derived from a manual test case. */
-interface BundleScenario { name: string; type: string; tags: string[]; steps: BundleStep[]; }
+interface BundleScenario { name: string; type: string; tags: string[]; description?: string[]; steps: BundleStep[]; }
+
+/**
+ * Advertencias que la IA antepone a las precondiciones ("⚠ Implementación
+ * parcial: …"). No son precondiciones: van como etiqueta filtrable en el
+ * reporte y como descripción/nota del escenario.
+ */
+const WARNING_TAGS: { pattern: RegExp; tag: string }[] = [
+  { pattern: /^implementaci[oó]n parcial/i, tag: '@implementacion-parcial' },
+  { pattern: /^discrepancia/i, tag: '@discrepancia' },
+  { pattern: /^sin evidencia/i, tag: '@sin-evidencia' },
+  { pattern: /^duda/i, tag: '@duda' },
+  { pattern: /^riesgo de regresi[oó]n/i, tag: '@regresion' },
+];
 /** One evidence file carried inline as a base64 data URL. */
 interface BundleEvidence { name: string; base64: string; }
 /** Lightweight evidence ref (no base64) for the metadata-only bundle. */
@@ -19,6 +32,9 @@ interface BundleEvidenceRef { name: string; ext: string; }
  *
  * Nothing about Gherkin/TSV conversion is exposed to the user: they only click
  * "Descargar reporte Serenity" and get a .json file.
+ *
+ * Las advertencias de la IA en precondiciones (⚠ …) viajan como etiquetas y
+ * descripción del escenario, y las evidencias tabulares (CSV) como imagen.
  */
 @Injectable({ providedIn: 'root' })
 export class SerenityExportService {
@@ -220,8 +236,9 @@ export class SerenityExportService {
       let outIdx = 0;
       const scenarioStatus = this.mapStatus(tc.status);
 
-      // 1) Precondición → uno o varios Given (soporta múltiples líneas).
-      const preconditionLines = this.splitLines(tc.preconditions);
+      // 1) Precondición → uno o varios Given (soporta múltiples líneas). Las
+      //    advertencias "⚠ …" se separan: van como etiqueta y descripción.
+      const { warnings, lines: preconditionLines } = this.extractWarnings(this.splitLines(tc.preconditions));
       preconditionLines.forEach((line, pIdx) => {
         steps.push({ keyword: pIdx === 0 ? 'Given' : 'And', text: line });
         stepResults[String(outIdx)] = {
@@ -244,15 +261,19 @@ export class SerenityExportService {
 
         const evNames: string[] = [];
         (step.evidences || []).forEach((ev, evIdx) => {
-          const dataUrl = ev.base64Data || ev.originalBase64;
-          if (ev.type === 'image' && dataUrl) {
+          // Las tablas (CSV) se dibujan como imagen: así aparecen en el reporte
+          // como cualquier captura, sin depender de que el convertidor del
+          // pipeline soporte tablas de datos de Gherkin.
+          const dataUrl = ev.type === 'csv'
+            ? this.renderTableImage(ev.tabularData, ev.csvConfig?.hasHeader !== false, ev.rowColors, ev.description)
+            : (ev.base64Data || ev.originalBase64);
+          if (dataUrl && (ev.type === 'image' || ev.type === 'csv')) {
             const ext = this.extFromDataUrl(dataUrl);
             const name = `ev-${sIdx}-${i}-${evIdx}.${ext}`;
             evidences.push({ name, base64: dataUrl });
             evNames.push(name);
           } else {
-            // CSV/tabular or evidences without an image payload are not
-            // representable as Serenity screenshots; skip and count them.
+            // Evidencia sin contenido representable (imagen no cargada o tabla vacía).
             skippedEvidence++;
           }
         });
@@ -285,8 +306,14 @@ export class SerenityExportService {
       }
 
       const scenarioTags = this.buildScenarioTags(tc, execution);
-      scenarios.push({ name: scenarioName, type: 'Scenario', tags: scenarioTags, steps });
-      results[scenarioName] = { steps: stepResults, notes: tc.notes || '' };
+      for (const w of warnings) {
+        if (!scenarioTags.includes(w.tag)) scenarioTags.push(w.tag);
+      }
+      const scenario: BundleScenario = { name: scenarioName, type: 'Scenario', tags: scenarioTags, steps };
+      if (warnings.length) scenario.description = warnings.map(w => w.text);
+      scenarios.push(scenario);
+      const warningNote = warnings.map(w => w.text).join(' ');
+      results[scenarioName] = { steps: stepResults, notes: [warningNote, tc.notes || ''].filter(Boolean).join(' · ') };
     });
 
 
@@ -324,6 +351,86 @@ export class SerenityExportService {
       .map(l => l.replace(/^\s*[-*•·]\s*/, '')) // quitar viñetas al inicio
       .map(l => this.oneLine(l))
       .filter(l => l.length > 0);
+  }
+
+  /**
+   * Separa las advertencias "⚠ …" del inicio de cada línea de precondición.
+   * Una advertencia termina en el primer punto seguido de mayúscula, de otra
+   * "⚠" o del final, para no cortar en "p. ej." ni en cifras como 1.000.
+   */
+  private extractWarnings(lines: string[]): { warnings: { text: string; tag: string }[]; lines: string[] } {
+    const warnings: { text: string; tag: string }[] = [];
+    const rest: string[] = [];
+    for (const original of lines) {
+      let line = original.trim();
+      while (line.startsWith('⚠')) {
+        const body = line.replace(/^⚠\s*/, '');
+        const end = body.search(/\.(?=\s+(?:[A-ZÁÉÍÓÚÑ¿¡]|⚠)|\s*$)/);
+        const text = (end >= 0 ? body.slice(0, end + 1) : body).trim();
+        line = (end >= 0 ? body.slice(end + 1) : '').trim();
+        if (!text) break;
+        const tag = WARNING_TAGS.find(w => w.pattern.test(text))?.tag || '@advertencia';
+        warnings.push({ text: `⚠ ${text}`, tag });
+      }
+      if (line) rest.push(line);
+    }
+    return { warnings, lines: rest };
+  }
+
+  /**
+   * Dibuja una evidencia tabular como PNG (encabezado, colores de fila y hasta
+   * 40 filas). Devuelve '' si no hay datos o no hay canvas (fuera del navegador).
+   */
+  private renderTableImage(rows: any[][] | undefined, hasHeader: boolean, rowColors?: string[], title?: string): string {
+    if (!rows?.length || typeof document === 'undefined') return '';
+    const MAX_ROWS = 40, MAX_CELL = 48, FONT = 13, PAD = 8, ROW_H = 24;
+    const cell = (v: unknown) => {
+      const t = String(v ?? '').replace(/\s+/g, ' ').trim();
+      return t.length > MAX_CELL ? t.slice(0, MAX_CELL - 1) + '…' : t;
+    };
+    const shown = rows.slice(0, MAX_ROWS).map(r => (Array.isArray(r) ? r : [r]).map(cell));
+    const hidden = rows.length - shown.length;
+    const cols = Math.max(...shown.map(r => r.length));
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.font = `${FONT}px Arial, sans-serif`;
+    const widths = Array.from({ length: cols }, (_, c) =>
+      Math.min(360, Math.max(48, ...shown.map(r => ctx.measureText(r[c] || '').width + PAD * 2))));
+    const titleH = title ? 30 : 0;
+    const footH = hidden > 0 ? 26 : 0;
+    canvas.width = Math.ceil(widths.reduce((a, b) => a + b, 0)) + 2;
+    canvas.height = titleH + shown.length * ROW_H + footH + 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.textBaseline = 'middle';
+    if (title) {
+      ctx.font = `bold ${FONT + 1}px Arial, sans-serif`;
+      ctx.fillStyle = '#111827';
+      ctx.fillText(cell(title), PAD, titleH / 2);
+    }
+    shown.forEach((r, ri) => {
+      const y = titleH + ri * ROW_H;
+      const isHeader = hasHeader && ri === 0;
+      const bg = isHeader ? '#1f6f43' : (rowColors?.[ri] || (ri % 2 ? '#f9fafb' : '#ffffff'));
+      ctx.fillStyle = bg;
+      ctx.fillRect(1, y, canvas.width - 2, ROW_H);
+      let x = 1;
+      for (let c = 0; c < cols; c++) {
+        ctx.strokeStyle = '#d1d5db';
+        ctx.strokeRect(x, y, widths[c], ROW_H);
+        ctx.font = `${isHeader ? 'bold ' : ''}${FONT}px Arial, sans-serif`;
+        ctx.fillStyle = isHeader ? '#ffffff' : '#111827';
+        ctx.fillText(r[c] || '', x + PAD, y + ROW_H / 2, widths[c] - PAD * 2);
+        x += widths[c];
+      }
+    });
+    if (hidden > 0) {
+      ctx.font = `italic ${FONT}px Arial, sans-serif`;
+      ctx.fillStyle = '#6b7280';
+      ctx.fillText(`… ${hidden} fila(s) más en la evidencia original`, PAD, titleH + shown.length * ROW_H + footH / 2);
+    }
+    return canvas.toDataURL('image/png');
   }
 
   /** Genera tags automáticos para el escenario (@passed/@failed, @HU-xxx). */
