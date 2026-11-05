@@ -408,6 +408,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** Criterios que reciben el agente y la generación: la lista numerada si existe. */
   get effectiveCriteria(): string {
+    if (this.contextSource === 'criteria') return this.currentAcceptanceCriteria;
     const raw = this.currentAcceptanceCriteria.trim();
     return raw && this.normalizedCriteriaFor === raw && this.normalizedCriteria.trim() ? this.normalizedCriteria.trim() : this.currentAcceptanceCriteria;
   }
@@ -416,7 +417,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     return criteriaIds(this.normalizedCriteria).length;
   }
 
+  /** En "Solo criterios" los criterios se envían tal cual; solo se organizan cuando se usa código. */
   private get needsCriteriaNormalization(): boolean {
+    if (this.contextSource === 'criteria') return false;
     const raw = this.currentAcceptanceCriteria.trim();
     return !!raw && this.normalizedCriteriaFor !== raw;
   }

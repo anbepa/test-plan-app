@@ -433,8 +433,8 @@ export class DeepSeekService {
         const payload: DeepSeekRequest = {
             model: this.STREAM_MODEL,
             messages: [{ role: 'user', content: promptText }],
-            // Temperatura baja: la agrupación de escenarios debe ser estable entre corridas.
-            temperature: 0.2,
+            // Con contexto de código la matriz debe ser estable entre corridas.
+            temperature: codeContext.trim() ? 0.2 : 0.5,
             max_tokens: this.STREAM_MAX_TOKENS,
             stream: true,
             stream_options: { include_usage: true },

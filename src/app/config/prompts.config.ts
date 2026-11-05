@@ -1,4 +1,4 @@
-import { criteriaGroups, criteriaIds, uncoveredChangeBehaviorIds } from '../services/ai/criteria-normalizer';
+import { criteriaIds, uncoveredChangeBehaviorIds } from '../services/ai/criteria-normalizer';
 import type { ContextSource } from '../models/code-agent.model';
 import { getStaticSectionLimits } from '../shared/utils/static-section-text';
 
@@ -216,18 +216,8 @@ AUTOCHEQUEO ANTES DE RESPONDER (corrige si falla):
 `;
 }
 
-/** Modo "Solo criterios": prompt corto basado en 03b844c + agrupación por funcionalidad y resultado por paso. */
-function criteriaGroupsRule(acceptanceCriteria: string): string {
-  const groups = criteriaGroups(acceptanceCriteria);
-  if (!groups.length) return '';
-  const list = groups.map((group, i) => `   - Escenario ${i + 1}: ${group.ids.join(', ')}${group.title ? ` (${group.title})` : ''}`).join('\n');
-  return `1. Escenarios ya agrupados (obligatorio): crea exactamente un escenario por grupo, en este orden, con esos CA en "coveredCriteria":
-${list}
-   Solo puedes agregar un escenario extra a un grupo si uno de sus CA define un rechazo, error o desenlace distinto que exige otra ejecución (máximo uno por grupo).`;
-}
-
+/** Modo "Solo criterios": prompt original del commit 03b844c, sin cambios. */
 function criteriaOnlyGenerationPrompt(description: string, acceptanceCriteria: string, technique: string, userRequest: string): string {
-  const groupsRule = criteriaGroupsRule(acceptanceCriteria);
   return `
 Actúa como QA Senior especializado en diseño de pruebas. Genera una matriz suficiente, trazable y sin redundancias. Todo el contenido de salida debe estar en español.
 
@@ -259,7 +249,7 @@ JERARQUÍA DE INSTRUCCIONES:
 
 NORMALIZACIÓN INTERNA OBLIGATORIA:
 1. Lee el contenido completo, sin asumir que el orden recibido representa el flujo.
-2. Si los criterios vienen numerados (líneas "- **CA-xx**"), usa esos ids y textos sin renumerar; las líneas "Opciones" son variantes del CA de arriba y "Resumen", "Interpretación" y "Definición" no son criterios. Si no vienen numerados, separa internamente cada regla atómica y asígnale CA-01, CA-02, CA-03, etc.
+2. Separa internamente cada regla atómica y asígnale CA-01, CA-02, CA-03, etc.
 3. Para cada regla identifica, cuando exista: condición, acción, resultado, dato, límite, estado, dependencia, excepción y texto exacto.
 4. Une duplicados semánticos, pero conserva diferencias de condición, resultado o restricción.
 5. Relaciona reglas dependientes aunque estén separadas en el texto.
@@ -286,22 +276,16 @@ APLICACIÓN DE TÉCNICAS:
 - No fuerces límites, estados, particiones o combinaciones que no estén respaldados por la entrada.
 
 DISEÑO DE COBERTURA:
-1. Cubre cada regla atómica dentro de algún escenario que la ejecute y verifique explícitamente; una regla no necesita escenario propio.
+1. Cubre cada regla atómica con al menos un caso que la ejecute y verifique explícitamente.
 2. Añade enfoque positivo, negativo, alterno o de borde solamente cuando aplique.
-3. Si una regla contiene varias subcondiciones, verifícalas como registros del mismo escenario cuando comparten salida; crea otro escenario solo si necesitan otra pantalla o ejecución.
-4. Para visibilidad, habilitación o aparición condicional, cubre la condición que la activa y la que no la activa como dos registros del mismo escenario.
-5. Para secuencias obligatorias, cubre el flujo válido y una ruptura relevante (escenario aparte solo si la ruptura requiere otra ejecución).
-6. Para cardinalidad, cubre el valor permitido y el incumplimiento más representativo como registros del escenario; usa bordes si hay límite explícito.
+3. Si una regla contiene varias subcondiciones independientes, crea los casos necesarios para verificarlas.
+4. Para visibilidad, habilitación o aparición condicional, cubre la condición que la activa y la que no la activa.
+5. Para secuencias obligatorias, cubre el flujo válido y una ruptura relevante de la secuencia.
+6. Para cardinalidad, cubre el valor permitido y el incumplimiento más representativo; usa bordes si hay límite explícito.
 7. Para formularios, no impongas un caso por campo: crea casos por validación o partición funcional relevante.
 8. Para bifurcaciones, no generes automáticamente 2^M casos. Usa tabla de decisión y cubre combinaciones que cambien resultados, riesgos o reglas.
 9. Prioriza reglas de negocio, validaciones, integraciones y datos sobre navegación cosmética.
 10. El número de casos se deriva de las reglas y particiones, no de cuotas fijas.
-
-ESCENARIOS POR FUNCIONALIDAD (prevalece sobre las reglas anteriores de cantidad):
-${groupsRule || `1. Agrupa: antes de escribir, lista internamente los grupos de CA que comparten pantalla, proceso o salida (p. ej. un mismo reporte, un mismo desembolso, una misma pantalla de parametrización) y crea un escenario por grupo; si te quedan más escenarios que grupos, únelos; lo usual son 2 a 5 por HU y máximo 4 CA por escenario. No metas toda la HU en un solo escenario si tiene grupos distintos. Cambiar solo fechas, mes, clientes o valores, o repetir un ejemplo del criterio (p. ej. "día 30 o 31"), no crea un escenario nuevo.`}
-2. Datos por condición: el paso 1 prepara los registros del escenario (A, B, C…; máximo 4) describiendo la condición que los hace relevantes (tipo, producto, moneda, estado, momento relativo como "creada el día 1 del mes siguiente al corte"). No inventes NIT, nombres, montos, fechas exactas, usuarios, pantallas ni estados que no estén en la HU. Cada registro tiene un solo resultado: si un CA es excepción de otro (p. ej. retrofecha frente a corte), la excepción prevalece y la regla general se prueba con un registro que no cumple la excepción.
-3. Resultado por paso: "expectedResults" tiene una línea por cada paso, en orden: "Paso 1 → …", "Paso 2 → …". Cada resultado es observable y dice qué registro y qué ver (aparece / no aparece, saldo sin descontar ese pago, una sola fila, estado que corresponde). Ningún paso queda sin resultado y ningún paso es solo "revisar". El resultado de un paso de preparación es que el registro queda creado con su condición; lo que debe aparecer, excluirse o calcularse se escribe en el paso donde se ejecuta la consulta, proceso o pantalla que lo muestra.
-4. Dudas: si un CA trae "Interpretación", preconditions inicia con "⚠ Duda sin resolver: <duda>; confirmar con el funcional." y solo la parte dudosa se registra como comportamiento observado.
 
 VALIDACIÓN EN HASTA 3 PASADAS INTERNAS:
 - Pasada 1 — Solicitud y extracción: verifica userRequest, reglas atómicas y técnica adecuada por regla.
@@ -332,13 +316,13 @@ TRAZABILIDAD — OBLIGATORIA:
 
 REGLAS DE CALIDAD:
 - Título claro, sin identificadores técnicos como TC_001.
-- Entre 3 y 6 pasos.
+- Entre 2 y 5 pasos; permite 6 solo cuando una secuencia crítica lo requiera.
 - Pasos concretos, ejecutables y ordenados.
-- Cada escenario valida un grupo de CA que comparten salida.
+- Cada caso valida una intención principal y como máximo una validación secundaria estrechamente relacionada.
 - El resultado esperado debe ser observable, específico y corresponder a acciones ejecutadas.
 - No declares como validado algo mencionado únicamente en expectedResults.
 - Conserva textos, etiquetas, mensajes, columnas y formatos exactos solo cuando la entrada los defina.
-- title <= 90 caracteres y preconditions <= 220; expectedResults con una línea corta por paso.
+- title <= 90 caracteres, preconditions <= 180 y expectedResults <= 180 siempre que no se pierda precisión.
 
 SALIDA:
 - Devuelve exclusivamente JSON válido; sin markdown, comentarios, prefijos ni sufijos.
@@ -356,7 +340,7 @@ SALIDA:
       "steps": [
         {"numero_paso": 1, "accion": "Acción específica"}
       ],
-      "expectedResults": "Paso 1 → resultado del paso 1\nPaso 2 → resultado del paso 2",
+      "expectedResults": "Resultado esperado concreto",
       "coveredCriteria": ["CA-01"],
       "technique": "Técnica realmente aplicada"
     }
