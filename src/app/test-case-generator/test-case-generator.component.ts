@@ -5,7 +5,7 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { DetailedTestCase as OriginalDetailedTestCase, TestCaseStep, HUData as OriginalHUData, GenerationMode } from '../models/hu-data.model';
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
 import { ToastService } from '../services/core/toast.service';
-import { catchError, finalize, tap } from 'rxjs/operators';
+import { catchError, filter, finalize, tap } from 'rxjs/operators';
 import { Observable, of, forkJoin, Subscription, firstValueFrom } from 'rxjs';
 import { saveAs } from 'file-saver';
 import { TestCaseEditorComponent, UIDetailedTestCase as EditorUIDetailedTestCase } from '../test-case-editor/test-case-editor.component';
@@ -1546,6 +1546,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
       console.log('[GENERATION] Iniciando generación con STREAMING...');
 
+      let coverageRepair: Promise<void> | null = null;
       this.aiStreamSub = this.aiService.generateTestCasesSmartStream(
         huData.originalInput.description!,
         huData.originalInput.acceptanceCriteria!,
@@ -1567,21 +1568,15 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
               this.generatedHUData.generatedScope = result.scope || 'Scope no generado';
 
               const rawTestCases = result.testCases || [];
-              this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => {
-                const detailedTc: UIDetailedTestCase = {
-                  ...tc,
-                  steps: this.normalizeSteps(
-                    tc.steps ?? tc.stepByStep ?? tc.step_by_step ?? tc.pasoAPaso ?? tc.pasos ?? tc.procedure
-                  ),
-                  isExpanded: index === 0
-                };
-                return detailedTc;
-              });
+              this.generatedHUData.detailedTestCases = rawTestCases.map((tc: any, index: number) => this.toUiTestCase(tc, index === 0));
 
               this.generatedHUData.generatedTestCaseTitles = this.formatSimpleScenarioTitles(
                 rawTestCases.map((tc: any) => tc.title)
               );
               this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', rawTestCases, codeContext);
+              if (this.criteriaCoverageGap.length && this.contextSource !== 'criteria') {
+                coverageRepair = this.repairCoverage(huData, codeContext);
+              }
             } else {
               console.error('[GENERATION] Stream finalizado sin casos parseables. Longitud content:', (event.content || '').length);
               this.errorScenarios = 'La respuesta de la IA llegó incompleta o con formato inválido. Vuelve a intentar la generación.';
@@ -1598,7 +1593,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.stopAiProgress();
           this.cdr.detectChanges();
         },
-        complete: () => {
+        complete: async () => {
+          if (coverageRepair) await coverageRepair;
           this.stopAiProgress();
           this.isAcceptancePhase = true;
           this.acceptedScenarioIndices = [];
@@ -1624,6 +1620,54 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           }
         }
       });
+    }
+  }
+
+  /**
+   * Caso de la IA → caso de la pantalla. En "Criterios + código" la referencia técnica llega en
+   * campos aparte (executionLayer/technicalReference) y solo se agrega a precondiciones si es de back.
+   */
+  private toUiTestCase(tc: any, isExpanded = false): UIDetailedTestCase {
+    const { executionLayer, technicalReference, ...rest } = tc || {};
+    const reference = String(technicalReference || '').trim();
+    let preconditions = String(rest.preconditions || '').trim();
+    if (this.contextSource !== 'criteria' && String(executionLayer || '').toLowerCase() === 'back' && reference
+      && !/referencia técnica/i.test(preconditions)) {
+      preconditions = `${preconditions}${preconditions && !/[.]$/.test(preconditions) ? '.' : ''} Referencia técnica: ${reference}`.trim();
+    }
+    return {
+      ...rest,
+      preconditions,
+      steps: this.normalizeSteps(rest.steps ?? rest.stepByStep ?? rest.step_by_step ?? rest.pasoAPaso ?? rest.pasos ?? rest.procedure),
+      isExpanded
+    };
+  }
+
+  /**
+   * Si la IA dejó criterios (o cambios de la HU) sin escenario, pide en una llamada aparte solo los
+   * casos que faltan y los agrega. No aplica en "Solo criterios".
+   */
+  private async repairCoverage(huData: OriginalHUData, codeContext: string): Promise<void> {
+    const gap = [...this.criteriaCoverageGap];
+    const current = this.generatedHUData?.detailedTestCases || [];
+    if (!gap.length || !this.generatedHUData) return;
+    console.log('[GENERATION] Completando cobertura de:', gap.join(', '));
+    const request = `Completa la cobertura de la matriz: genera SOLO casos nuevos que cubran ${gap.join(', ')}. `
+      + `Ya existen estos casos (no los repitas): ${current.map((tc) => tc.title).join(' | ')}.`;
+    try {
+      const event: any = await firstValueFrom(this.aiService.generateTestCasesSmartStream(
+        huData.originalInput.description!, huData.originalInput.acceptanceCriteria!,
+        this.currentSelectedTechnique || this.AUTO_TECHNIQUE, request, codeContext, this.contextSource
+      ).pipe(filter((e: any) => !!e?.done)));
+      const result = this.parseStreamResult(event?.content || '');
+      const added = (result?.testCases || []).filter((tc: any) =>
+        (tc.coveredCriteria || []).some((id: string) => gap.includes(id)));
+      if (!added.length || !this.generatedHUData) return;
+      this.generatedHUData.detailedTestCases = [...current, ...added.map((tc: any) => this.toUiTestCase(tc))];
+      this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', this.generatedHUData.detailedTestCases, codeContext);
+      console.log(`[GENERATION] Cobertura completada con ${added.length} caso(s). Pendientes:`, this.criteriaCoverageGap);
+    } catch (error) {
+      console.warn('[GENERATION] No se pudo completar la cobertura automáticamente:', error);
     }
   }
 
