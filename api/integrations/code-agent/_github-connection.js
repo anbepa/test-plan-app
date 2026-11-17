@@ -31,8 +31,8 @@ function toView(row, extra = {}) {
 async function getGithubConnectionWithSecret(adminClient, userId) {
   const { data, error } = await adminClient.rpc('github_repos_get_connection_secret', { p_user_id: userId });
   if (error) {
-    console.error('[GITHUB_REPOS][GET_SECRET]', error.message);
-    throw new CodeAgentError(500, 'No se pudo consultar la conexión de GitHub (¿falta aplicar la migración github_repos_connections.sql?).');
+    console.error('[GITHUB_REPOS][GET_SECRET]', error.code, error.message, error.details, error.hint);
+    throw new CodeAgentError(500, `No se pudo consultar la conexión de GitHub en la BD: ${error.message || error.code}${error.hint ? ` (${error.hint})` : ''}.`);
   }
   const row = Array.isArray(data) ? data[0] : data;
   return row || null;
@@ -83,8 +83,8 @@ async function handleConnectionRoute(adminClient, userId, method, body) {
       p_status: 'connected',
     });
     if (error) {
-      console.error('[GITHUB_REPOS][UPSERT]', error.message);
-      throw new CodeAgentError(500, 'No se pudo guardar la conexión de GitHub (¿falta aplicar la migración github_repos_connections.sql?).');
+      console.error('[GITHUB_REPOS][UPSERT]', error.code, error.message, error.details, error.hint);
+      throw new CodeAgentError(500, `No se pudo guardar la conexión de GitHub en la BD: ${error.message || error.code}${error.hint ? ` (${error.hint})` : ''}.`);
     }
     const row = Array.isArray(data) ? data[0] : data;
     return toView(row, { login: summary.login, repositories: summary.repositories, sample: summary.sample });
