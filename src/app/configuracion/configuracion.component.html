@@ -138,7 +138,7 @@
           <input id="githubCodeOwner" name="githubCodeOwner" class="form-control" type="text"
                  [(ngModel)]="githubCodeOwner" [disabled]="githubCodeBusy" aria-describedby="githubCodeOwner-hint"
                  placeholder="cib-bancolombia o https://github.com/cib-bancolombia/NU0139001_SAF_ms_maintenance">
-          <p class="field-hint" id="githubCodeOwner-hint">Si pegas la URL de un repositorio, se toma la organización y el repo como filtro.</p>
+          <p class="field-hint" id="githubCodeOwner-hint">Basta con la organización (p. ej. https://github.com/cib-bancolombia). Si pegas la URL de un repositorio, ese repo queda como filtro.</p>
         </div>
 
         <div class="form-group">
@@ -146,7 +146,7 @@
           <input id="githubCodeFilter" name="githubCodeFilter" class="form-control" type="text"
                  [(ngModel)]="githubCodeFilter" [disabled]="githubCodeBusy" aria-describedby="githubCodeFilter-hint"
                  placeholder="NU0139001_SAF">
-          <p class="field-hint" id="githubCodeFilter-hint">Opcional. Separa varios con coma. Acota la búsqueda de ramas de la HU y la lista de repositorios.</p>
+          <p class="field-hint" id="githubCodeFilter-hint">Opcional: déjalo vacío para ver todos los repositorios de la organización. Con un prefijo (separa varios con coma) también se revisan las ramas con el ID de la HU que aún no tienen PR, pero la búsqueda tarda más.</p>
         </div>
 
         <div class="form-group">

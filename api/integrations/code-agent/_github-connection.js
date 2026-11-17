@@ -66,6 +66,9 @@ async function handleConnectionRoute(adminClient, userId, method, body) {
 
     const summary = await github.validateGithubConnection(token, parsed.owner, repoFilter);
     if (!summary.repositories) {
+      if (!repoFilter) {
+        throw new CodeAgentError(400, `El token (usuario ${summary.login}) no ve repositorios de ${parsed.owner}. Usa un token con alcance "repo", autorizado para la organización (SSO), de una cuenta con acceso a esos repositorios.`);
+      }
       throw new CodeAgentError(400, repoFilter
         ? `El token no ve repositorios de ${parsed.owner} que empiecen por "${repoFilter}". Revisa el filtro, el acceso del token o la autorización SSO.`
         : `El token no ve repositorios de ${parsed.owner}.`);

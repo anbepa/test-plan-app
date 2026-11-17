@@ -20,7 +20,8 @@ const { CodeAgentError, LIMITS, isReadableFile, redactSecrets, requireString, no
 
 const API = 'https://api.github.com';
 const DEFAULT_TIMEOUT_MS = 15000;
-const MAX_REPO_PAGES = 10;      // 1000 repos
+const MAX_REPO_PAGES = 5;       // sin filtro: los 500 repos con actividad más reciente
+const MAX_SEARCH_REPOS = 100;
 const MAX_BRANCH_PAGES = 10;    // 1000 ramas
 const MAX_COMPARE_FILE_PAGES = 4; // compare devuelve 300 archivos por página
 const MAX_HU_PRS = 30;
@@ -57,7 +58,13 @@ async function githubRequest(token, path, { raw = false, allow404 = false } = {}
       if (response.status === 422) throw new CodeAgentError(422, detail || 'GitHub rechazó la consulta.');
       throw new CodeAgentError(502, 'No fue posible consultar GitHub en este momento.');
     }
-    return raw ? response.text() : response.json();
+    if (raw) return response.text();
+    const json = await response.json();
+    if (path === '/user' && json && typeof json === 'object') {
+      json.__scopes = response.headers.get('x-oauth-scopes');
+      json.__classic = /^ghp_/.test(token);
+    }
+    return json;
   } catch (error) {
     if (error instanceof CodeAgentError) throw error;
     const message = error && error.message ? error.message : String(error);
@@ -132,11 +139,13 @@ async function listRepositories(token, owner, repoFilter) {
     }
   }
   if (!prefixes.length || !repos.length) {
+    // Sin filtro: en organizaciones con miles de repos se listan los de actividad más reciente;
+    // el resto se encuentra con el buscador (searchRepositories).
     try {
-      repos = await paginate(token, `/orgs/${enc(owner)}/repos?type=all&sort=full_name`, MAX_REPO_PAGES);
+      repos = await paginate(token, `/orgs/${enc(owner)}/repos?type=all&sort=pushed&direction=desc`, MAX_REPO_PAGES);
     } catch (error) {
       if (!(error instanceof CodeAgentError) || error.status !== 404) throw error;
-      repos = await paginate(token, `/users/${enc(owner)}/repos?type=all&sort=full_name`, MAX_REPO_PAGES);
+      repos = await paginate(token, `/users/${enc(owner)}/repos?type=all&sort=pushed&direction=desc`, MAX_REPO_PAGES);
     }
   }
   const byName = new Map();
@@ -145,6 +154,22 @@ async function listRepositories(token, owner, repoFilter) {
     byName.set(repo.name, { id: repo.name, name: repo.name, defaultBranch: repo.default_branch || 'main', projectId: owner });
   }
   return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Busca repositorios de la organización por nombre (para orgs con miles de repos). */
+async function searchRepositories(token, owner, text) {
+  const term = String(text || '').trim();
+  if (term.length < 2) throw new CodeAgentError(400, 'Escribe al menos 2 caracteres para buscar repositorios.');
+  const data = await githubRequest(token, `/search/repositories?per_page=${MAX_SEARCH_REPOS}&q=${enc(`${term} in:name org:${owner}`)}`);
+  const found = (data.items || []).filter((repo) => !repo.archived && !repo.disabled);
+  // Nombre exacto (o URL pegada) aunque la búsqueda no lo indexe.
+  const exactName = term.replace(/^.*github\.com\/[^/]+\//i, '').replace(/[/?#].*$/, '');
+  if (!found.some((repo) => repo.name.toLowerCase() === exactName.toLowerCase())) {
+    const exact = await githubRequest(token, repoPath(owner, exactName), { allow404: true }).catch(() => null);
+    if (exact && !exact.archived) found.unshift(exact);
+  }
+  return found.map((repo) => ({ id: repo.name, name: repo.name, defaultBranch: repo.default_branch || 'main', projectId: owner }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function listBranches(token, owner, repo) {
@@ -439,7 +464,9 @@ async function handleGithubRoute({ route, method, query, body, owner, repoFilter
       case 'projects':
         return [{ id: owner, name: owner }];
       case 'repositories':
-        return listRepositories(token, projectOf(q.project), repoFilter);
+        return q.search
+          ? searchRepositories(token, projectOf(q.project), q.search)
+          : listRepositories(token, projectOf(q.project), repoFilter);
       case 'branches':
         return listBranches(token, projectOf(q.project), requireString(q.repositoryId, 'repositoryId'));
       case 'work-item-links':
@@ -477,6 +504,10 @@ async function handleGithubRoute({ route, method, query, body, owner, repoFilter
 /** Valida token + owner (y que el filtro encuentre repos). Devuelve un resumen para la UI. */
 async function validateGithubConnection(token, owner, repoFilter) {
   const user = await githubRequest(token, '/user');
+  const scopes = user.__scopes;
+  if (scopes !== undefined && scopes !== null && scopes.trim() === '' && user.__classic) {
+    throw new CodeAgentError(400, 'El token no tiene alcances: créalo de nuevo marcando "repo" (y "read:org"), y autorízalo para la organización si usa SSO.');
+  }
   const repos = await listRepositories(token, owner, repoFilter);
   return { login: user.login, repositories: repos.length, sample: repos.slice(0, 5).map((repo) => repo.name) };
 }
