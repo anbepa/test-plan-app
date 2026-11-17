@@ -1,8 +1,8 @@
 import { ChangeDetectorRef, ElementRef } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { TestCaseGeneratorComponent } from './test-case-generator.component';
 
-describe('TestCaseGeneratorComponent · origen del código (GitHub / Azure Repos)', () => {
+describe('TestCaseGeneratorComponent · código de la HU desde GitHub', () => {
   const cdrStub = { markForCheck: () => {}, detach: () => {}, detectChanges: () => {} } as unknown as ChangeDetectorRef;
   const elementRefStub = { nativeElement: document.createElement('div') } as ElementRef;
   const zoneStub = { run: (fn: () => unknown) => fn(), runOutsideAngular: (fn: () => unknown) => fn() } as any;
@@ -23,44 +23,24 @@ describe('TestCaseGeneratorComponent · origen del código (GitHub / Azure Repos
     );
   }
 
-  function reposStub() {
-    return {
-      provider: 'azure',
-      listProjects: jasmine.createSpy('listProjects').and.returnValue(of([{ id: 'cib-bancolombia', name: 'cib-bancolombia' }])),
-      listRepositories: jasmine.createSpy('listRepositories').and.returnValue(of([])),
-      getWorkItemChanges: jasmine.createSpy('getWorkItemChanges').and.returnValue(of({ workItemId: 7743787, groups: [], omitted: [], emptyBranches: [] })),
-      getLinkedBranches: jasmine.createSpy('getLinkedBranches').and.returnValue(of([])),
-    } as any;
-  }
-
-  it('cambia a GitHub, limpia la selección de Azure y vuelve a buscar el código de la HU', () => {
-    const repos = reposStub();
+  it('consulta siempre GitHub y no avisa si la conexión existe', () => {
+    const repos = { provider: 'azure', getGithubConnection: () => of({ owner: 'cib-bancolombia', status: 'connected' }) } as any;
     const component = createComponent(repos);
-    component.contextSource = 'criteria-code';
-    component.currentHuId = '7743787';
-    component.codeProject = 'Vicepresidencia Servicios de Tecnología';
-    component.codeRepositoryId = 'azure-guid';
-    component.codeBranch = 'trunk';
-    component.codeProjects = [{ id: 'p1', name: 'Vicepresidencia Servicios de Tecnología' }];
-
-    component.setCodeProvider('github');
-
+    (component as any).loadCodeProvider();
     expect(repos.provider).toBe('github');
     expect(component.codeProjectLabel).toBe('Organización');
-    expect(component.codeRepositoryId).toBe('');
-    expect(component.codeBranch).toBe('');
-    expect(repos.listProjects).toHaveBeenCalled();
-    expect(repos.getWorkItemChanges).toHaveBeenCalledWith(7743787);
-    // Una sola organización: queda preseleccionada.
-    expect(component.codeProject).toBe('cib-bancolombia');
+    expect(component.githubCodeMissing).toBeFalse();
   });
 
-  it('no cambia de origen mientras el agente explora', () => {
-    const repos = reposStub();
-    const component = createComponent(repos);
-    component.codeExploring = true;
-    component.setCodeProvider('github');
-    expect(component.codeProvider).toBe('azure');
-    expect(repos.provider).toBe('azure');
+  it('avisa que falta configurar GitHub cuando no hay conexión', () => {
+    const component = createComponent({ provider: 'github', getGithubConnection: () => of(null) } as any);
+    (component as any).loadCodeProvider();
+    expect(component.githubCodeMissing).toBeTrue();
+  });
+
+  it('avisa también si la consulta de la conexión falla', () => {
+    const component = createComponent({ provider: 'github', getGithubConnection: () => throwError(() => new Error('500')) } as any);
+    (component as any).loadCodeProvider();
+    expect(component.githubCodeMissing).toBeTrue();
   });
 });

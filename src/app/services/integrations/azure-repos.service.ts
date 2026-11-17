@@ -37,8 +37,8 @@ import { RepoRef } from '../ai/code-agent-runner';
 export class AzureReposService {
   private readonly baseUrl = '/api/integrations/code-agent';
 
-  /** Origen del código para las siguientes consultas. */
-  provider: CodeProvider = 'azure';
+  /** Origen del código: GitHub (Azure Repos queda solo como respaldo del backend). */
+  provider: CodeProvider = 'github';
 
   constructor(
     private http: HttpClient,

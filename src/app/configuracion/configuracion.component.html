@@ -165,12 +165,6 @@
           <p class="field-hint" id="githubCodeToken-hint">Solo lectura: alcance "repo" (clásico) o Contents y Pull requests: Read (fine-grained). Si la organización usa SSO, autoriza el token para ella.</p>
         </div>
 
-        <div class="form-group">
-          <label class="checkbox-inline" for="githubCodeEnabled">
-            <input id="githubCodeEnabled" name="githubCodeEnabled" type="checkbox" [(ngModel)]="githubCodeEnabled" [disabled]="githubCodeBusy">
-            Usar GitHub como origen del código (en lugar de Azure Repos)
-          </label>
-        </div>
       </div>
 
       <p *ngIf="githubCodeInfo" class="message success" role="status">{{ githubCodeInfo }}</p>

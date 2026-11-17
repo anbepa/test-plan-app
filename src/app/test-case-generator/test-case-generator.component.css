@@ -2163,24 +2163,3 @@ button.code-coverage-chip.is-selected {
   margin-top: 0.5rem;
 }
 
-/* Origen del código (GitHub / Azure Repos) */
-.code-provider-switch {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.75rem;
-}
-.code-provider-label { font-size: 0.85rem; color: #4b5563; margin-right: 0.15rem; }
-.code-provider-option {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
-  border-radius: 999px;
-  padding: 0.3rem 0.8rem;
-  font-size: 0.82rem;
-  cursor: pointer;
-  min-height: 32px;
-}
-.code-provider-option.is-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 600; }
-.code-provider-option:disabled { opacity: 0.6; cursor: default; }

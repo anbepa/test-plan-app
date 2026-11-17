@@ -201,22 +201,14 @@
         <!-- PASO: CÓDIGO DE LA HU -->
         <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status"
         [class.is-collapsed]="isStepCollapsed('code')" (focusin)="onStepFocusIn('code', $event)" (focusout)="onStepFocusOut('code', $event)">
-          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas de los PRs y commits vinculados a la HU.' }"></ng-container>
+          <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Repositorios y ramas de GitHub con los PRs y ramas de la HU.' }"></ng-container>
           <div class="flow-step-body" id="flow-body-code" [hidden]="isStepCollapsed('code')">
             <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
               <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
-                <!-- Origen del código: GitHub (si está configurado) o Azure Repos -->
-                <div *ngIf="canSwitchCodeProvider" class="code-provider-switch" role="radiogroup" aria-label="Origen del código">
-                  <span class="code-provider-label">Origen del código:</span>
-                  <button type="button" role="radio" class="code-provider-option" [class.is-active]="codeProvider === 'github'"
-                    [attr.aria-checked]="codeProvider === 'github'" (click)="keepStepOpen('code'); setCodeProvider('github')" [disabled]="codeExploring">
-                    GitHub · {{ githubCodeConnection?.owner }}
-                  </button>
-                  <button type="button" role="radio" class="code-provider-option" [class.is-active]="codeProvider === 'azure'"
-                    [attr.aria-checked]="codeProvider === 'azure'" (click)="keepStepOpen('code'); setCodeProvider('azure')" [disabled]="codeExploring">
-                    Azure Repos
-                  </button>
-                </div>
+                <p *ngIf="githubCodeMissing" class="code-source-hint code-change-warning" role="status">
+                  El código de la HU se lee de GitHub y aún no tienes la conexión: configúrala en
+                  <a routerLink="/configuracion">Configuración → GitHub (código de la HU)</a>.
+                </p>
                 <!-- Consultando PRs/commits de la HU -->
                 <!-- Selectores de proyecto, repositorio y rama (se reutilizan al agregar ramas) -->
                 <ng-template #targetPicker>
@@ -225,7 +217,7 @@
                       <label for="tcCodeProject">{{ codeProjectLabel }}:<span class="required-indicator">*</span></label>
                       <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
                         (ngModelChange)="keepStepOpen('code'); onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
-                        <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : (codeProvider === 'github' ? 'Seleccione la organización' : 'Seleccione un proyecto') }}</option>
+                        <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione la organización' }}</option>
                         <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
                       </select>
                     </div>
@@ -272,7 +264,7 @@
 
                 <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
                   <span class="spinner-inline"></span>
-                  Buscando el código de la HU {{ currentHuId }} {{ codeProvider === 'github' ? 'en GitHub (PRs y ramas con su ID)' : '(PRs y commits vinculados)' }}…
+                  Buscando el código de la HU {{ currentHuId }} en GitHub (PRs y ramas con su ID)…
                 </div>
 
                 <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
@@ -323,7 +315,7 @@
 
                 <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
                 <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
-                  <p *ngIf="huHasNoChangeset" class="code-source-hint">{{ codeProvider === 'github' ? 'No se encontraron en GitHub PRs ni ramas con el ID de la HU' : 'La HU no tiene PRs ni commits vinculados' }}: elige el repositorio y la rama.</p>
+                  <p *ngIf="huHasNoChangeset" class="code-source-hint">No se encontraron en GitHub PRs ni ramas con el ID de la HU: elige el repositorio y la rama.</p>
                   <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
                   <p *ngIf="isManualCodeTargetReady && !codeExtraTargets.length" class="code-source-hint">
                     Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="extraBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ extraBaseBranch }}</strong></ng-container>.

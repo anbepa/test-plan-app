@@ -98,7 +98,6 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   githubCodeOwner = '';
   githubCodeFilter = '';
   githubCodeToken = '';
-  githubCodeEnabled = true;
   showGithubCodeToken = false;
   githubCodeBusy = false;
   githubCodeInfo: string | null = null;
@@ -185,7 +184,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
         return this.connection ? this.connection.organization : 'Sin configurar';
       case 'githubCode':
         return this.githubCode
-          ? `${this.githubCode.owner}${this.githubCode.enabled ? ' · origen del código' : ' · inactivo'}`
+          ? this.githubCode.owner
           : 'Sin configurar';
       case 'github':
         return this.githubConnection
@@ -211,19 +210,18 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     this.githubCode = connection;
     this.githubCodeOwner = connection?.owner || this.githubCodeOwner;
     this.githubCodeFilter = connection ? connection.repoFilter : this.githubCodeFilter;
-    this.githubCodeEnabled = connection ? connection.enabled : true;
   }
 
   get githubCodeStatusLabel(): string {
     if (!this.githubCode) return 'Sin conectar';
     if (this.githubCode.status === 'expired' || this.githubCode.status === 'invalid') return 'Token rechazado';
-    return this.githubCode.enabled ? 'Origen del código' : 'Conectado (inactivo)';
+    return 'Conectado';
   }
 
   get githubCodeStatusTone(): string {
     if (!this.githubCode) return 'neutral';
     if (this.githubCode.status === 'expired' || this.githubCode.status === 'invalid') return 'error';
-    return this.githubCode.enabled ? 'success' : 'neutral';
+    return 'success';
   }
 
   saveGithubCode(): void {
@@ -243,7 +241,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       owner,
       repoFilter: this.githubCodeFilter.trim(),
       token: this.githubCodeToken.trim() || undefined,
-      enabled: this.githubCodeEnabled,
+      enabled: true,
     }).pipe(finalize(() => { this.githubCodeBusy = false; }))
       .subscribe({
         next: (connection) => {
@@ -268,7 +266,7 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
         next: () => {
           this.githubCode = null;
           this.githubCodeToken = '';
-          this.githubCodeInfo = 'Conexión de GitHub eliminada. El código se volverá a leer de Azure Repos.';
+          this.githubCodeInfo = 'Conexión de GitHub eliminada: el generador no podrá leer el código de las HU hasta que la configures de nuevo.';
         },
         error: (error) => { this.githubCodeError = error?.error?.message || 'No se pudo desconectar GitHub.'; }
       });
