@@ -71,10 +71,12 @@ BEGIN
   SELECT id INTO v_secret_id FROM vault.secrets WHERE name = v_secret_name;
 
   IF p_token IS NOT NULL AND length(trim(p_token)) > 0 THEN
+    -- vault.create_secret / update_secret: el INSERT directo en vault.secrets falla
+    -- en Supabase actual (permission denied for function _crypto_aead_det_noncegen).
     IF v_secret_id IS NULL THEN
-      INSERT INTO vault.secrets (name, secret) VALUES (v_secret_name, p_token);
+      PERFORM vault.create_secret(p_token, v_secret_name, 'Token GitHub (código de la HU)');
     ELSE
-      UPDATE vault.secrets SET secret = p_token WHERE id = v_secret_id;
+      PERFORM vault.update_secret(v_secret_id, p_token);
     END IF;
     v_token_hint := '••••' || right(p_token, 4);
   END IF;
