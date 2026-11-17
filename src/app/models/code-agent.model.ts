@@ -10,6 +10,32 @@
  */
 export type ContextSource = 'criteria' | 'criteria-code' | 'code';
 
+/** Dónde vive el código de la HU: Azure Repos o GitHub. */
+export type CodeProvider = 'azure' | 'github';
+
+/** Conexión de GitHub (origen del código), sin el token. */
+export interface GithubCodeConnection {
+  id: string;
+  owner: string;
+  repoFilter: string;
+  enabled: boolean;
+  status: 'connected' | 'invalid' | 'expired' | 'disconnected';
+  tokenHint: string;
+  lastValidatedAt: string | null;
+  updatedAt?: string | null;
+  /** Solo al guardar: resultado de la validación. */
+  login?: string;
+  repositories?: number;
+  sample?: string[];
+}
+
+export interface GithubCodeConnectionPayload {
+  owner: string;
+  repoFilter?: string;
+  token?: string;
+  enabled?: boolean;
+}
+
 export interface AzureRepoProject {
   id: string;
   name: string;

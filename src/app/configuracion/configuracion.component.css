@@ -933,3 +933,11 @@ button:disabled {
     text-align: center;
   }
 }
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}

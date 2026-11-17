@@ -17,6 +17,8 @@ import { AiProvidersService } from '../services/ai/ai-providers.service';
 import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfig, GeneralSectionsConfigService, GeneralSectionsMeta } from '../services/core/general-sections-config.service';
 import { CellsConfigService } from '../services/core/cells-config.service';
+import { AzureReposService } from '../services/integrations/azure-repos.service';
+import { GithubCodeConnection } from '../models/code-agent.model';
 
 @Component({
   selector: 'app-configuracion',
@@ -82,13 +84,25 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   disconnectConfirmTitle = 'Confirmar desconexión';
   disconnectConfirmMessage = '¿Estás seguro de que deseas desconectar esta integración?';
 
-  accordionOpen: Record<'azure' | 'github' | 'global' | 'status' | 'cells', boolean> = {
+  accordionOpen: Record<'azure' | 'githubCode' | 'github' | 'global' | 'status' | 'cells', boolean> = {
     azure: true,
+    githubCode: false,
     github: false,
     global: false,
     status: false,
     cells: false,
   };
+
+  // ── GitHub como origen del código de la HU ──
+  githubCode: GithubCodeConnection | null = null;
+  githubCodeOwner = '';
+  githubCodeFilter = '';
+  githubCodeToken = '';
+  githubCodeEnabled = true;
+  showGithubCodeToken = false;
+  githubCodeBusy = false;
+  githubCodeInfo: string | null = null;
+  githubCodeError: string | null = null;
 
   // ── Estado exclusivo de UI (no afecta la lógica de negocio) ──
   showPat = false;
@@ -107,12 +121,14 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     private aiProvidersService: AiProvidersService,
     private toastService: ToastService,
     private generalSectionsConfigService: GeneralSectionsConfigService,
-    private cellsConfigService: CellsConfigService
+    private cellsConfigService: CellsConfigService,
+    private codeReposService: AzureReposService
   ) {}
 
   ngOnInit(): void {
     this.fetchConnection();
     this.fetchGithubConnection();
+    this.fetchGithubCode();
     this.loadGeneralSectionsConfig();
     this.loadCellsConfig();
   }
@@ -122,10 +138,10 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     this.generalSubs.forEach((sub) => sub.unsubscribe());
   }
 
-  toggleSection(section: 'azure' | 'github' | 'global' | 'status' | 'cells'): void {
+  toggleSection(section: 'azure' | 'githubCode' | 'github' | 'global' | 'status' | 'cells'): void {
     const shouldOpen = !this.accordionOpen[section];
 
-    (Object.keys(this.accordionOpen) as Array<'azure' | 'github' | 'global' | 'status' | 'cells'>)
+    (Object.keys(this.accordionOpen) as Array<'azure' | 'githubCode' | 'github' | 'global' | 'status' | 'cells'>)
       .forEach((key) => this.accordionOpen[key] = false);
 
     this.accordionOpen[section] = shouldOpen;
@@ -163,10 +179,14 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   }
 
   /** Resumen corto que se muestra en la cabecera de cada sección. */
-  sectionSummary(section: 'azure' | 'github' | 'global' | 'cells'): string {
+  sectionSummary(section: 'azure' | 'githubCode' | 'github' | 'global' | 'cells'): string {
     switch (section) {
       case 'azure':
         return this.connection ? this.connection.organization : 'Sin configurar';
+      case 'githubCode':
+        return this.githubCode
+          ? `${this.githubCode.owner}${this.githubCode.enabled ? ' · origen del código' : ' · inactivo'}`
+          : 'Sin configurar';
       case 'github':
         return this.githubConnection
           ? (this.githubEnabled ? 'Activo como proveedor' : 'Inactivo')
@@ -178,6 +198,80 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
       default:
         return '';
     }
+  }
+
+  fetchGithubCode(): void {
+    this.codeReposService.getGithubConnection().subscribe({
+      next: (connection) => this.applyGithubCode(connection),
+      error: () => { this.githubCode = null; }
+    });
+  }
+
+  private applyGithubCode(connection: GithubCodeConnection | null): void {
+    this.githubCode = connection;
+    this.githubCodeOwner = connection?.owner || this.githubCodeOwner;
+    this.githubCodeFilter = connection ? connection.repoFilter : this.githubCodeFilter;
+    this.githubCodeEnabled = connection ? connection.enabled : true;
+  }
+
+  get githubCodeStatusLabel(): string {
+    if (!this.githubCode) return 'Sin conectar';
+    if (this.githubCode.status === 'expired' || this.githubCode.status === 'invalid') return 'Token rechazado';
+    return this.githubCode.enabled ? 'Origen del código' : 'Conectado (inactivo)';
+  }
+
+  get githubCodeStatusTone(): string {
+    if (!this.githubCode) return 'neutral';
+    if (this.githubCode.status === 'expired' || this.githubCode.status === 'invalid') return 'error';
+    return this.githubCode.enabled ? 'success' : 'neutral';
+  }
+
+  saveGithubCode(): void {
+    this.githubCodeInfo = null;
+    this.githubCodeError = null;
+    const owner = this.githubCodeOwner.trim();
+    if (!owner) {
+      this.githubCodeError = 'Indica la organización de GitHub o la URL de un repositorio.';
+      return;
+    }
+    if (!this.githubCode && !this.githubCodeToken.trim()) {
+      this.githubCodeError = 'El token de GitHub es obligatorio.';
+      return;
+    }
+    this.githubCodeBusy = true;
+    this.codeReposService.saveGithubConnection({
+      owner,
+      repoFilter: this.githubCodeFilter.trim(),
+      token: this.githubCodeToken.trim() || undefined,
+      enabled: this.githubCodeEnabled,
+    }).pipe(finalize(() => { this.githubCodeBusy = false; }))
+      .subscribe({
+        next: (connection) => {
+          this.applyGithubCode(connection);
+          this.githubCodeToken = '';
+          const sample = connection.sample?.length ? ` (p. ej. ${connection.sample.slice(0, 3).join(', ')})` : '';
+          this.githubCodeInfo = `Conexión validada como ${connection.login || 'usuario de GitHub'}: ${connection.repositories ?? 0} repositorio(s) visibles${sample}.`;
+          this.toastService.success('Conexión de GitHub guardada.');
+        },
+        error: (error) => {
+          this.githubCodeError = error?.error?.message || 'No se pudo validar la conexión de GitHub.';
+        }
+      });
+  }
+
+  disconnectGithubCode(): void {
+    this.githubCodeInfo = null;
+    this.githubCodeError = null;
+    this.githubCodeBusy = true;
+    this.codeReposService.disconnectGithub().pipe(finalize(() => { this.githubCodeBusy = false; }))
+      .subscribe({
+        next: () => {
+          this.githubCode = null;
+          this.githubCodeToken = '';
+          this.githubCodeInfo = 'Conexión de GitHub eliminada. El código se volverá a leer de Azure Repos.';
+        },
+        error: (error) => { this.githubCodeError = error?.error?.message || 'No se pudo desconectar GitHub.'; }
+      });
   }
 
   get hasTeamRows(): boolean {

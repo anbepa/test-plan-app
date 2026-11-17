@@ -17,7 +17,7 @@ import { AzureReposService } from '../services/integrations/azure-repos.service'
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
 import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, CodeProvider, ContextSource, GithubCodeConnection, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
 
 interface CoverageRow {
   id: string;
@@ -115,6 +115,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeLinkedBranchHint: string | null = null;
   /** PRs/commits vinculados a la HU: si existen, el agente analiza exactamente esos cambios. */
   codeHuChanges: WorkItemChanges | null = null;
+  /** Origen del código: GitHub si el usuario lo configuró y activó; si no, Azure Repos. */
+  codeProvider: CodeProvider = 'azure';
+  githubCodeConnection: GithubCodeConnection | null = null;
   /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
   codeExcludedGroups = new Set<string>();
   codeExploring: boolean = false;
@@ -789,6 +792,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.bindPointerTracking();
+    this.loadCodeProvider();
     this.currentGenerationMode = this.initialGenerationMode;
     this.currentSprint = this.initialSprint;
     this.cellName = this.initialCellName;
@@ -1200,6 +1204,56 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   // Contexto desde código fuente (Azure Repos + agente de exploración)
   // ---------------------------------------------------------------------------
 
+  get codeProviderLabel(): string {
+    return this.codeProvider === 'github' ? 'GitHub' : 'Azure Repos';
+  }
+
+  /** En GitHub el primer selector es la organización (owner); en Azure, el proyecto. */
+  get codeProjectLabel(): string {
+    return this.codeProvider === 'github' ? 'Organización' : 'Proyecto';
+  }
+
+  get canSwitchCodeProvider(): boolean {
+    return !!this.githubCodeConnection && this.githubCodeConnection.status !== 'disconnected';
+  }
+
+  /** GitHub es el origen por defecto cuando el usuario lo configuró y lo dejó activo. */
+  private loadCodeProvider(): void {
+    this.azureReposService.getGithubConnection().subscribe({
+      next: (connection) => {
+        this.githubCodeConnection = connection;
+        if (connection?.enabled && connection.status === 'connected' && this.codeProvider !== 'github') {
+          this.setCodeProvider('github');
+        }
+        this.cdr.markForCheck();
+      },
+      // Sin conexión o sin la migración aplicada: se sigue con Azure Repos.
+      error: () => { }
+    });
+  }
+
+  setCodeProvider(provider: CodeProvider): void {
+    if (provider === this.codeProvider || this.codeExploring) return;
+    this.codeProvider = provider;
+    this.azureReposService.provider = provider;
+    // Proyectos, repos y ramas de un origen no sirven en el otro (sin el aviso de "cambiaste de HU").
+    this.clearCodeContext('cambiaste el origen del código');
+    this.codeHuChanges = null;
+    this.codeRepositoryId = '';
+    this.codeBranch = '';
+    this.resetCodeTargetForNewHu();
+    this.codeProjects = [];
+    this.codeProject = '';
+    this.codeRepositories = [];
+    this.codeTargetError = null;
+    if (this.usesCodeContext) {
+      this.loadCodeProjects();
+      const huId = Number(this.currentHuId);
+      if (Number.isInteger(huId) && huId > 0) this.loadHuCodeChanges(huId);
+    }
+    this.cdr.markForCheck();
+  }
+
   /** Al cambiar de HU, la rama y los cambios de la HU anterior no deben quedar seleccionados. */
   private resetCodeTargetForNewHu(): void {
     if (this.codeHuChanges || this.isManualCodeTargetReady) {
@@ -1359,8 +1413,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         const link = links[0];
         await this.preselectCodeTarget(link.projectId, link.repositoryId, link.branch);
         this.codeLinkedBranchHint = links.length > 1
-          ? `La HU tiene ${links.length} ramas vinculadas; se preseleccionó "${link.branch}".`
-          : `Rama vinculada a la HU preseleccionada: "${link.branch}".`;
+          ? `La HU tiene ${links.length} ramas ${this.codeProvider === 'github' ? 'con su ID en GitHub' : 'vinculadas'}; se preseleccionó "${link.branch}".`
+          : `Rama ${this.codeProvider === 'github' ? 'con el ID de la HU en GitHub' : 'vinculada a la HU'} preseleccionada: "${link.branch}".`;
         this.cdr.markForCheck();
       },
       // Sugerencia opcional: si falla, el usuario elige manualmente.

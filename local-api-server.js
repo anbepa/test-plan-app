@@ -738,22 +738,37 @@ app.post('/api/integrations/azure-devops/work-items/import', async (req, res) =>
 
 // Agente de exploración de código (Azure Repos). Mismo núcleo que la función de Vercel.
 const codeAgentCore = require('./api/integrations/code-agent/_azure-repos-core.js');
+const githubCodeSource = require('./api/integrations/code-agent/_github-connection.js');
 
 app.all('/api/integrations/code-agent/*', async (req, res) => {
     try {
         const method = String(req.method || 'GET').toUpperCase();
-        if (method !== 'GET' && method !== 'POST') {
+        const route = String(req.params[0] || '').split('/').filter(Boolean).join('/');
+        if (method !== 'GET' && method !== 'POST' && !(route === 'github/connection' && method === 'DELETE')) {
             return res.status(405).json({ message: 'Método no permitido.' });
         }
 
         const user = await getAuthenticatedUser(req);
+        const githubResult = await githubCodeSource.maybeHandleGithub({
+            adminClient: getSupabaseClients().adminClient,
+            userId: user.id,
+            route,
+            method,
+            query: req.query,
+            body: req.body,
+            headers: req.headers,
+        });
+        if (githubResult.handled) {
+            return res.status(200).json(githubResult.result);
+        }
+
         const connection = await getAzureConnectionWithSecret(user.id, null);
         if (!connection || connection.status === 'disconnected') {
             throw apiError(404, 'Azure DevOps no está configurado para este usuario.');
         }
 
         const result = await codeAgentCore.handleCodeAgentRoute({
-            route: String(req.params[0] || '').split('/').filter(Boolean).join('/'),
+            route,
             method,
             query: req.query,
             body: req.body,

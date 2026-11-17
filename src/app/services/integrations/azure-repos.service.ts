@@ -16,15 +16,20 @@ import {
   AzureRepoSearchResult,
   AzureRepoTree,
   AzureRepository,
+  CodeProvider,
   ContextSource,
+  GithubCodeConnection,
+  GithubCodeConnectionPayload,
   FileDiffSegments,
   WorkItemChanges,
 } from '../../models/code-agent.model';
 import { RepoRef } from '../ai/code-agent-runner';
 
 /**
- * Cliente HTTP del backend de Azure Repos (solo lectura) usado por el agente
- * de exploración de código. Reutiliza la conexión (PAT) de Azure DevOps.
+ * Cliente HTTP del backend de código (solo lectura) usado por el agente de
+ * exploración de código. El origen es Azure Repos (conexión de Azure DevOps)
+ * o GitHub (conexión de GitHub): se elige con `provider` y viaja en la
+ * cabecera X-Code-Provider; las rutas y respuestas son las mismas.
  */
 @Injectable({
   providedIn: 'root'
@@ -32,10 +37,31 @@ import { RepoRef } from '../ai/code-agent-runner';
 export class AzureReposService {
   private readonly baseUrl = '/api/integrations/code-agent';
 
+  /** Origen del código para las siguientes consultas. */
+  provider: CodeProvider = 'azure';
+
   constructor(
     private http: HttpClient,
     private supabaseClient: SupabaseClientService
   ) {}
+
+  getGithubConnection(): Observable<GithubCodeConnection | null> {
+    return defer(() => this.buildAuthHeaders('azure')).pipe(
+      switchMap((headers) => this.http.get<GithubCodeConnection | null>(`${this.baseUrl}/github/connection`, { headers }))
+    );
+  }
+
+  saveGithubConnection(payload: GithubCodeConnectionPayload): Observable<GithubCodeConnection> {
+    return defer(() => this.buildAuthHeaders('azure')).pipe(
+      switchMap((headers) => this.http.post<GithubCodeConnection>(`${this.baseUrl}/github/connection`, payload, { headers }))
+    );
+  }
+
+  disconnectGithub(): Observable<{ success: boolean }> {
+    return defer(() => this.buildAuthHeaders('azure')).pipe(
+      switchMap((headers) => this.http.delete<{ success: boolean }>(`${this.baseUrl}/github/connection`, { headers }))
+    );
+  }
 
   listProjects(): Observable<AzureRepoProject[]> {
     return this.authorizedGet<AzureRepoProject[]>(`${this.baseUrl}/projects`);
@@ -108,7 +134,7 @@ export class AzureReposService {
     );
   }
 
-  private async buildAuthHeaders(): Promise<HttpHeaders> {
+  private async buildAuthHeaders(provider: CodeProvider = this.provider): Promise<HttpHeaders> {
     let { data, error } = await this.supabaseClient.supabase.auth.getSession();
     let session = data.session;
 
@@ -123,6 +149,6 @@ export class AzureReposService {
       throw new Error('Sesión inválida o expirada. Inicia sesión nuevamente.');
     }
 
-    return new HttpHeaders({ Authorization: `Bearer ${session.access_token}` });
+    return new HttpHeaders({ Authorization: `Bearer ${session.access_token}`, 'X-Code-Provider': provider });
   }
 }

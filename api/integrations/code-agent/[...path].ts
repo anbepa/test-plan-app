@@ -3,6 +3,7 @@ import {
   ApiError,
   getAuthenticatedUser,
   getAzureConnectionWithSecret,
+  getSupabaseClients,
   markAzureConnectionExpired,
   toErrorResponse,
   AZURE_PAT_EXPIRED_MESSAGE,
@@ -11,9 +12,11 @@ import {
 // Núcleo CommonJS compartido con local-api-server.js (ver _azure-repos-core.js).
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const core = require('./_azure-repos-core.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const githubSource = require('./_github-connection.js');
 
 /**
- * Router catch-all del Agente de exploración de código (Azure Repos).
+ * Router catch-all del Agente de exploración de código (Azure Repos o GitHub).
  * Una sola Serverless Function para todas las rutas (límite Hobby: 12).
  *
  * El ciclo del agente (LLM + herramientas) se orquesta desde el frontend:
@@ -29,13 +32,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const route = normalizePath(req.query['path']).join('/');
     const method = String(req.method || 'GET').toUpperCase();
 
-    if (method !== 'GET' && method !== 'POST') {
+    const isGithubConnection = route === 'github/connection';
+    if (method !== 'GET' && method !== 'POST' && !(isGithubConnection && method === 'DELETE')) {
       res.status(405).json({ message: 'Método no permitido.' });
       return;
     }
 
     const user = await getAuthenticatedUser(req.headers);
     userId = user.id;
+
+    // Origen GitHub (cabecera X-Code-Provider: github) y su conexión.
+    const githubResult = await githubSource.maybeHandleGithub({
+      adminClient: getSupabaseClients().adminClient,
+      userId: user.id,
+      route,
+      method,
+      query: req.query,
+      body: req.body,
+      headers: req.headers,
+    });
+    if (githubResult.handled) {
+      res.status(200).json(githubResult.result);
+      return;
+    }
+
     const connection = await getAzureConnectionWithSecret(user.id, null);
     organization = connection?.organization ?? null;
     if (!connection || connection.status === 'disconnected') {
@@ -54,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(200).json(result);
   } catch (error: unknown) {
     // PAT rechazado por Azure: se marca la conexión como vencida (como en Serenity).
-    if (error instanceof core.CodeAgentError && (error as any).status === 401 && userId) {
+    if (error instanceof core.CodeAgentError && (error as any).status === 401 && userId && String(req.headers['x-code-provider'] || '').toLowerCase() !== 'github') {
       await markAzureConnectionExpired(userId, organization);
       res.status(424).json({ message: AZURE_PAT_EXPIRED_MESSAGE, code: 'AZURE_PAT_INVALID' });
       return;

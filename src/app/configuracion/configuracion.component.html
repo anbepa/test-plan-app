@@ -94,6 +94,99 @@
     </div>
   </div>
 
+  <!-- SECCIÓN: GitHub como origen del código de la HU -->
+  <div class="config-section">
+    <button class="section-toggle" type="button" (click)="toggleSection('githubCode')"
+            [attr.aria-expanded]="accordionOpen.githubCode" aria-controls="panel-githubCode" id="toggle-githubCode">
+      <span class="section-label">GitHub (código de la HU)
+        <span class="section-summary">{{ sectionSummary('githubCode') }}</span>
+      </span>
+      <span class="section-arrow" [class.open]="accordionOpen.githubCode" aria-hidden="true">▾</span>
+    </button>
+    <div class="config-card" *ngIf="accordionOpen.githubCode" id="panel-githubCode" role="region" aria-labelledby="toggle-githubCode" [attr.aria-busy]="githubCodeBusy">
+      <div class="card-header">
+        <h3 class="card-title">GitHub (código de la HU)</h3>
+        <span class="connection-badge" [attr.data-tone]="githubCodeStatusTone">{{ githubCodeStatusLabel }}</span>
+      </div>
+      <p class="field-hint">
+        El generador busca el código de la HU en GitHub: PRs que mencionan el ID de la HU (título, descripción o "AB#id")
+        y ramas con el ID en el nombre. Si no encuentra nada, eliges el repositorio y la rama a mano.
+      </p>
+
+      <div class="inline-status-grid" *ngIf="githubCode">
+        <div class="inline-status-item">
+          <span class="inline-status-label">Organización</span>
+          <strong class="inline-status-value">{{ githubCode.owner }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Repositorios</span>
+          <strong class="inline-status-value">{{ githubCode.repoFilter ? 'Empiezan por ' + githubCode.repoFilter : 'Todos' }}</strong>
+        </div>
+        <div class="inline-status-item">
+          <span class="inline-status-label">Token</span>
+          <strong class="inline-status-value">{{ githubCode.tokenHint }}</strong>
+        </div>
+      </div>
+
+      <p *ngIf="githubCode?.status === 'expired' || githubCode?.status === 'invalid'" class="message error" role="alert">
+        GitHub rechazó el token {{ githubCode?.tokenHint }}: está vencido o fue revocado. Pega uno nuevo y guarda.
+      </p>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="githubCodeOwner">Organización o URL del repositorio</label>
+          <input id="githubCodeOwner" name="githubCodeOwner" class="form-control" type="text"
+                 [(ngModel)]="githubCodeOwner" [disabled]="githubCodeBusy" aria-describedby="githubCodeOwner-hint"
+                 placeholder="cib-bancolombia o https://github.com/cib-bancolombia/NU0139001_SAF_ms_maintenance">
+          <p class="field-hint" id="githubCodeOwner-hint">Si pegas la URL de un repositorio, se toma la organización y el repo como filtro.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="githubCodeFilter">Repositorios del aplicativo (prefijo)</label>
+          <input id="githubCodeFilter" name="githubCodeFilter" class="form-control" type="text"
+                 [(ngModel)]="githubCodeFilter" [disabled]="githubCodeBusy" aria-describedby="githubCodeFilter-hint"
+                 placeholder="NU0139001_SAF">
+          <p class="field-hint" id="githubCodeFilter-hint">Opcional. Separa varios con coma. Acota la búsqueda de ramas de la HU y la lista de repositorios.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="githubCodeToken">Token de GitHub</label>
+          <div class="input-with-action">
+            <input id="githubCodeToken" name="githubCodeToken" class="form-control"
+                   [type]="showGithubCodeToken ? 'text' : 'password'" [(ngModel)]="githubCodeToken"
+                   [disabled]="githubCodeBusy" autocomplete="new-password" aria-describedby="githubCodeToken-hint"
+                   [placeholder]="githubCode ? 'Déjalo vacío para conservar ' + githubCode.tokenHint : 'ghp_… o github_pat_…'">
+            <button type="button" class="input-action-btn" (click)="showGithubCodeToken = !showGithubCodeToken"
+                    [attr.aria-pressed]="showGithubCodeToken"
+                    [attr.aria-label]="showGithubCodeToken ? 'Ocultar token' : 'Mostrar token'">
+              {{ showGithubCodeToken ? '🙈' : '👁️' }}
+            </button>
+          </div>
+          <p class="field-hint" id="githubCodeToken-hint">Solo lectura: alcance "repo" (clásico) o Contents y Pull requests: Read (fine-grained). Si la organización usa SSO, autoriza el token para ella.</p>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-inline" for="githubCodeEnabled">
+            <input id="githubCodeEnabled" name="githubCodeEnabled" type="checkbox" [(ngModel)]="githubCodeEnabled" [disabled]="githubCodeBusy">
+            Usar GitHub como origen del código (en lugar de Azure Repos)
+          </label>
+        </div>
+      </div>
+
+      <p *ngIf="githubCodeInfo" class="message success" role="status">{{ githubCodeInfo }}</p>
+      <p *ngIf="githubCodeError" class="message error" role="alert">{{ githubCodeError }}</p>
+
+      <div class="actions-row">
+        <button class="btn-primary" type="button" (click)="saveGithubCode()" [disabled]="githubCodeBusy">
+          {{ githubCodeBusy ? 'Validando...' : 'Guardar y validar' }}
+        </button>
+        <button class="btn-danger" type="button" (click)="disconnectGithubCode()" [disabled]="githubCodeBusy || !githubCode">
+          Desconectar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- SECCIÓN 2: GitHub Models (Copilot) -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('github')"

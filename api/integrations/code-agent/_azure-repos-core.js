@@ -225,6 +225,21 @@ function repoBase(organization, project, repositoryId) {
   return `${buildBaseUrl(organization)}/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repositoryId)}`;
 }
 
+/**
+ * Acceso mínimo al repositorio que necesitan las funciones genéricas (diffs,
+ * búsqueda, agrupación de cambios). Azure y GitHub implementan el mismo contrato.
+ *   content(projectId, repositoryId, commit, path) -> texto del archivo en ese commit
+ *   treeFiles(projectId, repositoryId, commit)     -> rutas legibles del árbol en ese commit
+ */
+function azureSource(organization, pat) {
+  return {
+    content: (project, repositoryId, version, path, versionType = 'commit') =>
+      fetchFileContent(organization, pat, project, repositoryId, version, path, versionType),
+    treeFiles: (project, repositoryId, commit) =>
+      getTree(organization, pat, project, repositoryId, { version: commit, versionType: 'commit' }, '/').then((tree) => tree.files),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Operaciones de Azure Repos
 // ---------------------------------------------------------------------------
@@ -295,7 +310,7 @@ async function fetchFileContent(organization, pat, project, repositoryId, versio
  * Lee archivos (con rango de líneas opcional). El contenido se devuelve con
  * número de línea para que la IA pueda citar archivo:línea.
  */
-async function readFiles(organization, pat, project, repositoryId, ver, requests) {
+async function readFiles(source, project, repositoryId, ver, requests) {
   const list = Array.isArray(requests) ? requests.slice(0, LIMITS.maxFilesPerRead) : [];
   if (list.length === 0) throw new CodeAgentError(400, 'Debes indicar al menos un archivo.');
 
@@ -306,7 +321,7 @@ async function readFiles(organization, pat, project, repositoryId, ver, requests
     }
 
     try {
-      const raw = await fetchFileContent(organization, pat, project, repositoryId, ver.version, path, ver.versionType);
+      const raw = await source.content(project, repositoryId, ver.version, path, ver.versionType);
       const lines = redactSecrets(raw).split(/\r?\n/);
       const startLine = Math.max(1, Number(request.startLine) || 1);
       const endLine = Math.min(lines.length, Number(request.endLine) || lines.length);
@@ -394,7 +409,7 @@ async function searchApplication(organization, pat, body) {
 }
 
 /** Búsqueda de texto (grep) sobre un conjunto acotado de archivos candidatos. */
-async function searchInFiles(organization, pat, project, repositoryId, ver, terms, paths) {
+async function searchInFiles(source, project, repositoryId, ver, terms, paths) {
   const cleanTerms = (Array.isArray(terms) ? terms : [terms])
     .map((term) => String(term || '').trim().toLowerCase())
     .filter((term) => term.length >= 2)
@@ -413,7 +428,7 @@ async function searchInFiles(organization, pat, project, repositoryId, ver, term
     while (index < candidates.length && matches.length < LIMITS.maxSearchMatches) {
       const path = candidates[index++];
       try {
-        const lines = redactSecrets(await fetchFileContent(organization, pat, project, repositoryId, ver.version, path, ver.versionType)).split(/\r?\n/);
+        const lines = redactSecrets(await source.content(project, repositoryId, ver.version, path, ver.versionType)).split(/\r?\n/);
         for (let i = 0; i < lines.length && matches.length < LIMITS.maxSearchMatches; i++) {
           const lower = lines[i].toLowerCase();
           if (cleanTerms.some((term) => lower.includes(term))) {
@@ -590,13 +605,13 @@ function normalizeSegments(list, path) {
  * tramo solo si nadie más tocó el archivo entre ellos (el target del primero es igual a la base del segundo);
  * si no, quedan separados y los cambios intermedios de otras HUs no se atribuyen a esta.
  */
-async function fileChains(organization, pat, project, repositoryId, path, segments) {
+async function fileChains(source, project, repositoryId, path, segments) {
   const cache = new Map();
   const content = (filePath, commit) => {
     if (!commit) return Promise.resolve('');
     const key = `${commit}|${filePath}`;
     if (!cache.has(key)) {
-      cache.set(key, fetchFileContent(organization, pat, project, repositoryId, commit, filePath, 'commit')
+      cache.set(key, source.content(project, repositoryId, commit, filePath, 'commit')
         .then(redactSecrets).catch(() => ''));
     }
     return cache.get(key);
@@ -639,7 +654,7 @@ function chainsChangedLines(chains) {
  * con `exclude` (tramos del mismo archivo en otra rama destino) solo lo que no esté ya en esa rama.
  * Sin ellos: diff entre baseCommit y targetCommit.
  */
-async function getFileDiff(organization, pat, project, repositoryId, body) {
+async function getFileDiff(source, project, repositoryId, body) {
   const path = normalizeRepoPath(body.path);
   if (!isReadableFile(path)) {
     return { path, error: 'Archivo no permitido (binario, generado o potencialmente con secretos).' };
@@ -653,8 +668,8 @@ async function getFileDiff(organization, pat, project, repositoryId, body) {
   const exclude = normalizeSegments(body.exclude, path);
 
   const [chains, excluded] = await Promise.all([
-    fileChains(organization, pat, project, repositoryId, path, segments),
-    exclude ? fileChains(organization, pat, project, repositoryId, path, exclude) : Promise.resolve(null),
+    fileChains(source, project, repositoryId, path, segments),
+    exclude ? fileChains(source, project, repositoryId, path, exclude) : Promise.resolve(null),
   ]);
   const known = excluded ? chainsChangedLines(excluded) : null;
 
@@ -809,11 +824,16 @@ async function getWorkItemChanges(organization, pat, workItemId) {
     }
   });
 
+  return finalizeWorkItemChanges(azureSource(organization, pat), id, segments, omitted, emptyBranches);
+}
+
+/** Paso común (Azure y GitHub): agrupa los tramos de la HU y quita lo repetido entre ramas. */
+async function finalizeWorkItemChanges(source, id, segments, omitted, emptyBranches) {
   const built = buildGroups(segments.filter((item) => item.baseCommit && item.targetCommit));
-  const { groups, covered } = selectGroups(await resolvePreviousDefinitions(organization, pat, built));
+  const { groups, covered } = selectGroups(await resolvePreviousDefinitions(source, built));
   return {
     workItemId: id,
-    groups: await dropRedundantBranchFiles(organization, pat, await refineCoveredGroups(organization, pat, groups, covered)),
+    groups: await dropRedundantBranchFiles(source, await refineCoveredGroups(source, groups, covered)),
     omitted,
     emptyBranches,
   };
@@ -1072,17 +1092,16 @@ function sqlObjectOf(content) {
  * código nuevo: se compara con la definición anterior del objeto en el repo para mostrar solo lo que cambió la
  * HU y no la vista/función completa (que incluye la lógica de otras HUs).
  */
-async function resolvePreviousDefinitions(organization, pat, groups) {
+async function resolvePreviousDefinitions(source, groups) {
   const trees = new Map();
   const treeAt = (group, commit) => {
     const key = `${group.repositoryId}|${commit}`;
     if (!trees.has(key)) {
-      trees.set(key, getTree(organization, pat, group.projectId, group.repositoryId, { version: commit, versionType: 'commit' }, '/')
-        .then((tree) => tree.files).catch(() => []));
+      trees.set(key, source.treeFiles(group.projectId, group.repositoryId, commit).catch(() => []));
     }
     return trees.get(key);
   };
-  const read = (group, commit, path) => fetchFileContent(organization, pat, group.projectId, group.repositoryId, commit, path, 'commit').catch(() => '');
+  const read = (group, commit, path) => source.content(group.projectId, group.repositoryId, commit, path, 'commit').catch(() => '');
   const baseName = (path) => path.split('/').pop().toLowerCase();
 
   for (const group of groups) {
@@ -1121,9 +1140,9 @@ function comparableContent(path, content) {
  * (copias, scripts renombrados). Esos archivos se descartan si su contenido ya está en un PR del mismo repo;
  * si no queda ninguno, la rama se informa como "también en".
  */
-async function dropRedundantBranchFiles(organization, pat, groups) {
+async function dropRedundantBranchFiles(source, groups) {
   const read = (group, file) => (file.changeType.includes('delete') ? Promise.resolve('')
-    : fetchFileContent(organization, pat, group.projectId, group.repositoryId, file.targetCommit, file.path, 'commit')
+    : source.content(group.projectId, group.repositoryId, file.targetCommit, file.path, 'commit')
       .then((content) => comparableContent(file.path, content)).catch(() => ''));
   const result = [];
   for (const group of groups) {
@@ -1177,9 +1196,9 @@ function selectGroups(groups) {
  * Un grupo cubierto (p. ej. el port a trunk) solo se descarta si no trae líneas nuevas frente a su grupo
  * preferido; si las trae, se conserva con esos archivos y `exclude` para que el diff muestre solo lo adicional.
  */
-async function refineCoveredGroups(organization, pat, groups, covered) {
+async function refineCoveredGroups(source, groups, covered) {
   const changedLines = async (group, file) => chainsChangedLines(
-    await fileChains(organization, pat, group.projectId, group.repositoryId, file.path, file.segments),
+    await fileChains(source, group.projectId, group.repositoryId, file.path, file.segments),
   );
   const isSubset = (a, b) => [...a].every((item) => b.has(item));
   for (const { group, keeper } of covered) {
@@ -1276,15 +1295,15 @@ async function handleCodeAgentRoute({ route, method, query, body, organization, 
       case 'tree':
         return getTree(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.scopePath);
       case 'files':
-        return readFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.files);
+        return readFiles(azureSource(organization, pat), requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.files);
       case 'branch-diff':
         return getBranchDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), normalizeBranch(b.baseBranch), normalizeBranch(b.branch));
       case 'file-diff':
-        return getFileDiff(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), b);
+        return getFileDiff(azureSource(organization, pat), requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), b);
       case 'app-search':
         return searchApplication(organization, pat, b);
       case 'search':
-        return searchInFiles(organization, pat, requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
+        return searchInFiles(azureSource(organization, pat), requireString(b.project, 'project'), requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
       default:
         break;
     }
@@ -1297,6 +1316,20 @@ module.exports = {
   CodeAgentError,
   LIMITS,
   handleCodeAgentRoute,
+  // Reutilizados por el núcleo de GitHub (_github-repos-core.js)
+  ALLOWED_EXTENSIONS,
+  requireString,
+  requireCommit,
+  normalizeBranch,
+  resolveVersion,
+  stripHeads,
+  mapLimit,
+  getFileDiff,
+  readFiles,
+  searchInFiles,
+  finalizeWorkItemChanges,
+  INTEGRATION_BRANCH,
+  BASE_BRANCH_CANDIDATES,
   // Exportados para pruebas unitarias
   isReadableFile,
   redactSecrets,
