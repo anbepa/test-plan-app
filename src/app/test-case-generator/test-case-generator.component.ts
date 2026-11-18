@@ -122,6 +122,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   githubCodeChecked = false;
   /** GitHub limitó la búsqueda del código de la HU: el resultado puede estar incompleto. */
   codeHuLimitedUntil: string | null = null;
+  /** Exploración automática: se arma al cambiar la HU o el código a analizar (no se repite tras cancelar o fallar). */
+  private autoExploreArmed = true;
+  private autoExploreTimer: ReturnType<typeof setTimeout> | null = null;
   /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
   codeExcludedGroups = new Set<string>();
   codeExploring: boolean = false;
@@ -391,7 +394,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     if (this.usesCodeContext) {
       parts.push(this.flowStep('code').summary);
       parts.push(this.codeExploring ? 'el agente está explorando el código…'
-        : this.codeContextText.trim() ? 'contexto técnico listo' : 'el código se explora al generar (1–3 min)');
+        : this.codeContextText.trim() ? 'contexto técnico listo' : 'el código se explora automáticamente (1–3 min)');
     }
     return parts.join(' · ');
   }
@@ -819,6 +822,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.autoExploreTimer) clearTimeout(this.autoExploreTimer);
     this.unbindPointerTracking();
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
@@ -1370,6 +1374,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           this.codeBranches = branches;
           const wanted = [preferredBranch, repository?.defaultBranch].find((name) => name && branches.some((b) => b.name === name));
           this.codeBranch = wanted || '';
+          this.scheduleAutoExplore();
         },
         error: (error) => this.codeTargetError = this.getCodeErrorMessage(error)
       });
@@ -1395,6 +1400,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
           if (!isCurrent()) return;
           this.codeHuChanges = changes;
           this.codeHuLimitedUntil = changes.limitedUntil || null;
+          this.scheduleAutoExplore();
           // Índice del aplicativo de los repos de la HU, en segundo plano (no bloquea).
           this.azureReposService.warmAppIndex(changes.groups.map((group) => group.repositoryName));
           // Con PRs/commits no hace falta cargar repositorios ni ramas: se analizan esos cambios.
@@ -1427,6 +1433,25 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       // Sugerencia opcional: si falla, el usuario elige manualmente.
       error: () => { }
     });
+  }
+
+  /**
+   * El contexto técnico se arma solo en cuanto hay HU con descripción y código listo; la generación de
+   * escenarios sigue siendo a pedido. Se agrupan los cambios seguidos (selección de repo, rama, grupos)
+   * y no se reintenta la misma combinación si el usuario canceló o falló.
+   */
+  scheduleAutoExplore(): void {
+    if (this.autoExploreTimer) clearTimeout(this.autoExploreTimer);
+    this.autoExploreTimer = setTimeout(() => {
+      this.autoExploreTimer = null;
+      if (!this.usesCodeContext || !this.isCodeTargetReady || this.codeContextText.trim() || this.loadingScenarios || this.loadingScope) return;
+      if (!this.currentDescription.trim() || !this.currentHuId.trim()) return;
+      if (!this.autoExploreArmed) return;
+      // Si cambió el código a analizar mientras exploraba, se reinicia con la nueva selección.
+      if (this.codeExploring) this.cancelCodeExploration();
+      this.autoExploreArmed = false;
+      this.exploreCode();
+    }, 800);
   }
 
   exploreCode(onDone?: () => void): void {
@@ -1514,8 +1539,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   /** reason: por qué se descarta, para explicarlo en el paso "Contexto técnico". */
   clearCodeContext(reason?: string): void {
+    this.autoExploreArmed = true;
+    this.scheduleAutoExplore();
     if (reason && this.codeContextText.trim()) {
-      this.setFlowNotice('context', `Se descartó el contexto técnico porque ${reason}. Vuelve a explorar o se explorará al generar.`);
+      this.setFlowNotice('context', `Se descartó el contexto técnico porque ${reason}. Se vuelve a explorar automáticamente.`);
     }
     this.codeContextBasis = '';
     this.codeContextText = '';

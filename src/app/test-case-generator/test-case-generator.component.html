@@ -355,7 +355,7 @@
                   Contrasta cada criterio con el código: Implementado, Parcial, Diferente o Sin evidencia.
                 </ng-container>
                 <ng-template #codeOnlyHint>Reconstruye las reglas observables desde el código.</ng-template>
-                <span class="code-agent-optional">Puedes explorar ahora y revisar el contexto antes de generar, o dejar que se haga al generar (1–3 min).</span>
+                <span class="code-agent-optional">Se explora automáticamente en cuanto la HU y su código están listos (1–3 min); revisa el contexto y luego genera los casos.</span>
               </p>
               <p *ngIf="codeExploring" class="code-source-hint code-agent-meta">El agente está revisando el código de la HU; suele tardar entre 1 y 3 minutos.</p>
               <p *ngIf="codeContextText && !codeExploring" class="code-source-hint code-agent-meta">
@@ -368,10 +368,10 @@
                 </ng-container>
               </p>
               <div class="code-agent-actions">
-                <button *ngIf="!codeExploring" type="button" class="btn-flow-secondary" (click)="exploreCode()"
+                <button *ngIf="!codeExploring && (codeContextText || codeAgentError)" type="button" class="btn-flow-secondary" (click)="exploreCode()"
                   [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios"
                   title="Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.">
-                  {{ codeContextText ? '↻ Volver a explorar' : 'Explorar y revisar antes de generar' }}
+                  {{ codeContextText ? '↻ Volver a explorar' : 'Reintentar exploración' }}
                 </button>
                 <button *ngIf="codeExploring" type="button" class="btn-flow-secondary" (click)="cancelCodeExploration()">Cancelar exploración</button>
               </div>

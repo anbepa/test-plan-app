@@ -62,4 +62,41 @@ describe('TestCaseGeneratorComponent · código de la HU desde GitHub', () => {
     (component as any).loadCodeProvider();
     expect(component.githubCodeMissing).toBeTrue();
   });
+  describe('exploración automática del contexto técnico', () => {
+    beforeEach(() => jasmine.clock().install());
+    afterEach(() => jasmine.clock().uninstall());
+
+    function ready(component: TestCaseGeneratorComponent) {
+      spyOnProperty(component, 'usesCodeContext').and.returnValue(true);
+      spyOnProperty(component, 'isCodeTargetReady').and.returnValue(true);
+      component.currentDescription = 'Como usuario quiero…';
+      component.currentHuId = '7743787';
+      return spyOn(component, 'exploreCode');
+    }
+
+    it('explora sola una vez cuando la HU y su código están listos (sin generar)', () => {
+      const component = createComponent({} as any);
+      const explore = ready(component);
+      component.scheduleAutoExplore();
+      component.scheduleAutoExplore();
+      jasmine.clock().tick(900);
+      expect(explore).toHaveBeenCalledTimes(1);
+      // No se repite (p. ej. tras cancelar o fallar) hasta que cambie la HU o el código.
+      component.scheduleAutoExplore();
+      jasmine.clock().tick(900);
+      expect(explore).toHaveBeenCalledTimes(1);
+      component.clearCodeContext('cambiaste la rama');
+      jasmine.clock().tick(900);
+      expect(explore).toHaveBeenCalledTimes(2);
+    });
+
+    it('no explora si ya hay contexto o si el modo es "Solo criterios"', () => {
+      const component = createComponent({} as any);
+      const explore = ready(component);
+      component.codeContextText = 'contexto';
+      component.scheduleAutoExplore();
+      jasmine.clock().tick(900);
+      expect(explore).not.toHaveBeenCalled();
+    });
+  });
 });
