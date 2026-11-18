@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostListener, Input, OnDestroy, QueryList, ViewChildren } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
-import { MarkdownLitePipe, inline, sourceCell } from '../../pipes/markdown-lite.pipe';
+import { MarkdownLitePipe, sourceCell } from '../../pipes/markdown-lite.pipe';
 import { TechContextModel, parseTechContext } from '../../utils/tech-context-parser';
 
 /**
@@ -73,8 +73,9 @@ export class TechContextViewComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  /** Texto con formato en línea y rutas largas abreviadas (carpeta/…/archivo, ruta completa en el title). */
   html(text: string): string {
-    return inline(text);
+    return sourceCell(text);
   }
 
   source(text: string): string {
