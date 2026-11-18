@@ -2433,3 +2433,13 @@ button svg,
   .plans-table:not(.hu-table) tbody td[data-label="Número de casos"]::after { content: ' casos'; }
   .plans-table:not(.hu-table) tbody td[data-label="Número de pasos"]::after { content: ' pasos'; }
 }
+@media (max-width: 640px) {
+  .plans-table:not(.hu-table) tbody td {
+    display: inline-block;
+    width: auto;
+    min-width: 0;
+    grid-template-columns: none;
+  }
+  .plans-table:not(.hu-table) tbody td.plan-title-cell { display: block; width: 100%; }
+  .plans-table:not(.hu-table) tbody td[data-label="Seleccionar"] { left: auto; width: auto; }
+}

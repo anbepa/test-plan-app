@@ -1565,3 +1565,16 @@
   .filters-bar .filter-group { flex-direction: column; width: 100%; }
   .filters-bar .filter-select { width: 100%; }
 }
+@media (max-width: 640px) {
+  .plans-table tbody td { width: auto; min-width: 0; }
+  .plans-table tbody td[data-label="Nombre"],
+  .plans-table tbody td[data-label="HU"] { width: 100%; }
+  .plans-table tbody td[data-label="Seleccionar"] { left: auto; width: auto; }
+  .plans-table tbody td[data-label="Nombre"] .plan-title-link,
+  .plans-table tbody td[data-label="HU"] .cell-meta { text-align: left; }
+  /* Estado, etiquetas y antigüedad en una línea; progreso abajo a todo el ancho */
+  .plans-table tbody td[data-label="Progreso"] { flex: 1 1 100%; order: 5; }
+  .plans-table tbody td[data-label="Progreso"] .progress-cell { width: 100%; }
+  .plans-table tbody td[data-label="Etiquetas"] .row-tags { justify-content: flex-start; }
+  .filters-bar .filter-group { display: grid; grid-template-columns: 1fr; }
+}
