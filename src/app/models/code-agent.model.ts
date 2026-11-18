@@ -29,6 +29,19 @@ export interface GithubCodeConnection {
   sample?: string[];
 }
 
+/** Estado del índice de código del aplicativo y repos que faltan o cambiaron. */
+export interface CodeIndexPlan {
+  repos: number;
+  indexedRepos: number;
+  files: number;
+  lastIndexedAt: string | null;
+  pending: { repo: string; reason: string }[];
+}
+
+export interface CodeIndexRefreshResult {
+  results: { repo: string; branch: string; sha?: string; files?: number; ms?: number; skipped?: string }[];
+}
+
 export interface GithubCodeConnectionPayload {
   owner: string;
   repoFilter?: string;
