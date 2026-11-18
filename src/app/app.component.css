@@ -1293,3 +1293,8 @@
     right: 10px;
   }
 }
+
+/* Móvil: botón de cerrar sesión con área táctil de 40 px */
+@media (max-width: 640px) {
+  .logout-btn { width: 40px !important; height: 40px !important; min-height: 40px !important; }
+}

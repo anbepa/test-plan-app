@@ -1441,3 +1441,8 @@
   height: 32px; min-height: 32px; margin: 0;
 }
 .btn-group-segmented > * + * { border-left: 1.5px solid var(--border-color, #D1D1D6) !important; }
+
+/* Móvil: flecha del caso con área táctil de 40 px (el icono no cambia de tamaño) */
+@media (max-width: 640px) {
+  .tc-chevron { width: 40px !important; height: 40px !important; min-height: 40px !important; }
+}
