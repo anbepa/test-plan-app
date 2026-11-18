@@ -50,7 +50,7 @@ async function githubRequest(token, path, { raw = false, allow404 = false } = {}
       if (response.status === 403 && /saml|sso/i.test(detail)) {
         throw new CodeAgentError(403, 'La organización exige SSO: autoriza el token para la organización en GitHub (Settings → Tokens → Configure SSO).');
       }
-      if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
+      if (response.status === 429 || (response.status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(detail)))) {
         throw new CodeAgentError(429, 'Se alcanzó el límite de consultas de GitHub. Intenta de nuevo en unos minutos.');
       }
       if (response.status === 403) throw new CodeAgentError(403, 'El token de GitHub no tiene permiso para leer este repositorio (alcance "repo" / Contents: Read).');
@@ -246,9 +246,14 @@ async function searchApplication(token, owner, body) {
   const terms = (Array.isArray(body.terms) ? body.terms : []).map((term) => String(term).trim()).filter((term) => term.length >= 3).slice(0, 4);
   if (!prefixes.length || !terms.length) throw new CodeAgentError(400, 'Indica prefijos de repositorio y términos (mín. 3 caracteres).');
 
+  // Un término que GitHub no dejó buscar (límite de búsquedas de código) NO es "sin coincidencias": se informa aparte.
+  const limitedTerms = [];
   const results = await Promise.all(terms.map((term) => githubRequest(token,
     `/search/code?per_page=${LIMITS.maxAppSearchFiles}&q=${enc(`${term.includes(' ') ? `"${term}"` : term} org:${owner}`)}`)
-    .catch(() => ({ items: [], total_count: 0 }))));
+    .catch((error) => {
+      if (error instanceof CodeAgentError && error.status === 429) limitedTerms.push(term);
+      return { items: [], total_count: 0 };
+    })));
 
   const files = new Map();
   let totalCount = 0;
@@ -279,7 +284,7 @@ async function searchApplication(token, owner, body) {
   const isTest = (path) => /(^|\/)(test|tests|__tests__)(\/|$)|\.(spec|test)\.|Test\.java$/i.test(path);
   matches.sort((a, b) => Number(isTest(a.path)) - Number(isTest(b.path))
     || a.repositoryName.localeCompare(b.repositoryName) || a.path.localeCompare(b.path) || a.line - b.line);
-  return { totalCount, matches: matches.slice(0, LIMITS.maxAppSearchMatches) };
+  return { totalCount, matches: matches.slice(0, LIMITS.maxAppSearchMatches), limitedTerms };
 }
 
 // ---------------------------------------------------------------------------

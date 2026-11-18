@@ -190,6 +190,8 @@ interface RepoTree {
 export class CodeAgentRunner {
   /** Diffs vistos en la corrida (precargados o pedidos con diff_file), por ruta. */
   private seenDiffs = new Map<string, string>();
+  /** Búsquedas en el aplicativo ya hechas en esta corrida, por término (agente y receta las comparten). */
+  private appSearchCache = new Map<string, AzureAppSearchResult['matches']>();
   private changedPaths: string[] = [];
   /** Archivos de pantalla (front) que cambió la HU: el agente debe revisarlos antes de terminar. */
   private frontScreenPaths: string[] = [];
@@ -214,6 +216,7 @@ export class CodeAgentRunner {
   ): Promise<CodeAgentResult | null> {
     const startedAt = Date.now();
     this.seenDiffs.clear();
+    this.appSearchCache.clear();
     const stats = { llmCalls: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, durationMs: 0 };
     const keywords = this.extractKeywords(`${input.description}\n${input.acceptanceCriteria}\n${input.userRequest}`);
 
@@ -651,11 +654,12 @@ export class CodeAgentRunner {
               result = 'Esos términos ya se buscaron o son muy cortos: usa otros o llama a finish_recipe.';
             } else {
               emit({ type: 'tool', message: `🧪 Buscando “${terms.join(', ')}”` });
-              const found = await this.gateway.searchApp(scope.projectId, scope.repoPrefixes, terms);
+              const found = await this.searchAppCached(scope.projectId, scope.repoPrefixes, terms);
               found.matches.forEach((match) => match.branch && branches.set(match.repositoryName, match.branch));
-              result = found.matches.length
+              result = (found.matches.length
                 ? found.matches.map((match) => `${match.repositoryName}:${match.path}:${match.line}: ${match.text}`).join('\n')
-                : 'Sin coincidencias en los repos del aplicativo.';
+                : found.limitedTerms.length < terms.length ? 'Sin coincidencias en los repos del aplicativo.' : '')
+                + limitedNotice(found.limitedTerms);
             }
           } else if (call.function.name === 'read_app_file') {
             const repo = String(args.repo || '');
@@ -818,11 +822,13 @@ export class CodeAgentRunner {
             return 'Límite de búsquedas en el aplicativo alcanzado. Lo que no encontraste márcalo "no verificable en el repositorio" y llama a finish.';
           }
           emit({ type: 'tool', message: `🌐 Buscando “${terms.join(', ')}” en los repos ${ctx.appScope.repoPrefixes.join(', ')}*` });
-          const result = await this.gateway.searchApp(ctx.appScope.projectId, ctx.appScope.repoPrefixes, terms);
-          return result.matches.length
+          const result = await this.searchAppCached(ctx.appScope.projectId, ctx.appScope.repoPrefixes, terms);
+          if (result.limitedTerms.length) emit({ type: 'tool', message: `⏳ GitHub limitó la búsqueda de: ${result.limitedTerms.join(', ')}` });
+          return (result.matches.length
             ? `${result.totalCount} coincidencia(s) en el aplicativo (rama principal de cada repo); se muestran ${result.matches.length}:\n`
               + result.matches.map((match) => `${match.repositoryName}:${match.path}:${match.line}: ${match.text}`).join('\n')
-            : 'Sin coincidencias en los repos del aplicativo.';
+            : result.limitedTerms.length < terms.length ? 'Sin coincidencias en los repos del aplicativo.' : '')
+            + limitedNotice(result.limitedTerms);
         }
 
         default:
@@ -833,6 +839,37 @@ export class CodeAgentRunner {
       emit({ type: 'tool', message: `⚠️ ${name}: ${message}` });
       return `ERROR al ejecutar ${name}: ${message}`;
     }
+  }
+
+  /**
+   * search_app con memoria por término dentro de la corrida: un término ya buscado (por el agente o la receta)
+   * no se vuelve a pedir a GitHub. Los términos que GitHub no dejó buscar no se guardan, para reintentarlos.
+   */
+  private async searchAppCached(projectId: string, repoPrefixes: string[], terms: string[]): Promise<{ totalCount: number; matches: AzureAppSearchResult['matches']; limitedTerms: string[] }> {
+    const key = (term: string) => `${projectId}|${repoPrefixes.join(',')}|${term.trim().toLowerCase()}`;
+    const pending = terms.filter((term) => !this.appSearchCache.has(key(term)));
+    let totalCount = 0;
+    let limitedTerms: string[] = [];
+    if (pending.length && this.gateway.searchApp) {
+      const found = await this.gateway.searchApp(projectId, repoPrefixes, pending);
+      totalCount = found.totalCount;
+      limitedTerms = found.limitedTerms || [];
+      const limited = new Set(limitedTerms.map((term) => term.toLowerCase()));
+      for (const term of pending) {
+        if (limited.has(term.toLowerCase())) continue;
+        const lower = term.trim().toLowerCase();
+        this.appSearchCache.set(key(term), found.matches.filter((match) => match.text.toLowerCase().includes(lower)));
+      }
+    }
+    const seen = new Set<string>();
+    const matches: AzureAppSearchResult['matches'] = [];
+    for (const term of terms) {
+      for (const match of this.appSearchCache.get(key(term)) || []) {
+        const id = `${match.repositoryName}|${match.path}|${match.line}`;
+        if (!seen.has(id)) { seen.add(id); matches.push(match); }
+      }
+    }
+    return { totalCount: Math.max(totalCount, matches.length), matches: matches.slice(0, CODE_AGENT_BUDGET.maxSearchMatches), limitedTerms };
   }
 
   /** Árbol de cada repo de la HU (el principal ya descargado; los demás en paralelo). */
@@ -1221,4 +1258,12 @@ function resolveAppScope(primaryRef: RepoRef, repoNames: string[]): AppScope | n
   const prefixes = Array.from(new Set(repoNames.map((name) => name.match(/^([A-Za-z0-9]+)_/)?.[1]).filter((prefix): prefix is string => !!prefix)))
     .map((prefix) => `${prefix}_`);
   return primaryRef.project && prefixes.length ? { projectId: primaryRef.project, repoPrefixes: prefixes } : null;
+}
+
+/** Aviso para la IA cuando GitHub no dejó buscar algunos términos: no son "no encontrados". */
+export function limitedNotice(limitedTerms: string[]): string {
+  if (!limitedTerms.length) return '';
+  return `\nBÚSQUEDA NO DISPONIBLE para: ${limitedTerms.join(', ')} (GitHub limitó las búsquedas de código por minuto). `
+    + 'NO concluyas que no existen ni los marques "no verificable en el repositorio": anótalos como "pendiente de verificar (búsqueda limitada)" '
+    + 'o búscalos con otros términos más adelante.';
 }

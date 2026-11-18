@@ -174,6 +174,8 @@ export function changeGroupKey(group: Pick<WorkItemChangeGroup, 'repositoryId' |
 export interface AzureAppSearchResult {
   totalCount: number;
   matches: { repositoryName: string; branch?: string; path: string; line: number; text: string }[];
+  /** Términos que no se pudieron buscar (límite de búsquedas de GitHub): no significa que no existan. */
+  limitedTerms?: string[];
 }
 
 export interface AzureRepoSearchResult {
