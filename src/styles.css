@@ -1041,3 +1041,48 @@ textarea::placeholder {
     top: calc(56px + env(safe-area-inset-top)) !important;
   }
 }
+
+/* =====================================================================
+   AJUSTES MÓVILES COMUNES (solo presentación; ≤ 640 px)
+   ===================================================================== */
+@media (max-width: 640px) {
+  /* Migas de pan: con tres pasos se oculta "Lista de Planes" (el paso intermedio ya
+     lleva de vuelta) y la página actual se recorta con "…" para que quepa en una línea. */
+  .breadcrumb-row { flex-wrap: nowrap !important; min-width: 0; overflow: hidden; }
+  .breadcrumb-row:has(> :nth-child(5)) > :nth-child(1),
+  .breadcrumb-row:has(> :nth-child(5)) > :nth-child(2) { display: none !important; }
+  .breadcrumb-row:has(> :nth-child(5)) > :nth-child(3)::before { content: '← '; }
+  .breadcrumb-row > * { flex-shrink: 0; white-space: nowrap; }
+  .breadcrumb-row > :last-child {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .breadcrumb-button { min-height: 40px; }
+
+  /* Barras fijas de página: debajo de la cabecera fija de la app, no detrás */
+  .page-topbar,
+  .scenarios-header,
+  .exec-header { top: calc(56px + env(safe-area-inset-top)) !important; }
+
+  /* Objetivos táctiles de al menos 40 px */
+  .tc-chevron,
+  .act-kebab-btn,
+  .row-menu-btn,
+  .close-btn,
+  .icon-btn,
+  .logout-btn,
+  [aria-label="Copiar"],
+  [aria-label="Copiado"] {
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+  .flow-actionbar-compact { min-height: 40px; padding: 0.4rem 0; }
+  input[type="checkbox"].tc-checkbox,
+  .plans-table input[type="checkbox"],
+  .check-col input[type="checkbox"] {
+    width: 22px !important;
+    height: 22px !important;
+  }
+}
