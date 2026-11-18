@@ -315,7 +315,7 @@
                 </div>
 
                 <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
-                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset">
+                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset && showsManualPicker">
                   <p *ngIf="huHasNoChangeset" class="code-source-hint">No se encontraron en GitHub PRs ni ramas con el ID de la HU: elige el repositorio y la rama.</p>
                   <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
                   <p *ngIf="isManualCodeTargetReady && !codeExtraTargets.length" class="code-source-hint">

@@ -24,12 +24,31 @@ describe('TestCaseGeneratorComponent · código de la HU desde GitHub', () => {
   }
 
   it('consulta siempre GitHub y no avisa si la conexión existe', () => {
-    const repos = { provider: 'azure', getGithubConnection: () => of({ owner: 'cib-bancolombia', status: 'connected' }) } as any;
+    const repos = {
+      provider: 'azure',
+      getGithubConnection: () => of({ owner: 'cib-bancolombia', status: 'connected' }),
+      listProjects: () => of([{ id: 'cib-bancolombia', name: 'cib-bancolombia' }]),
+      listRepositories: () => of([]),
+    } as any;
     const component = createComponent(repos);
     (component as any).loadCodeProvider();
     expect(repos.provider).toBe('github');
     expect(component.codeProjectLabel).toBe('Organización');
     expect(component.githubCodeMissing).toBeFalse();
+    // Con GitHub configurado, "Criterios + código" queda por defecto.
+    expect(component.contextSource).toBe('criteria-code');
+  });
+
+  it('no cambia el modo si el usuario ya eligió "Solo criterios"', () => {
+    const repos = {
+      provider: 'github',
+      getGithubConnection: () => of({ owner: 'cib-bancolombia', status: 'connected' }),
+      listProjects: () => of([]),
+    } as any;
+    const component = createComponent(repos);
+    component.onContextSourceChange('criteria');
+    (component as any).loadCodeProvider();
+    expect(component.contextSource).toBe('criteria');
   });
 
   it('avisa que falta configurar GitHub cuando no hay conexión', () => {

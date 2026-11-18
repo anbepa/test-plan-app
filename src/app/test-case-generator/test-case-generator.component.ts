@@ -616,6 +616,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   /** La HU se consultó y no tiene PRs/commits con archivos. */
+  /** Repo y rama a mano: solo después de buscar el código de la HU (sin resultado) o si el usuario lo eligió. */
+  get showsManualPicker(): boolean {
+    return this.huHasNoChangeset || this.codeManualOverride || this.isManualCodeTargetReady || this.codeExtraTargets.length > 0;
+  }
+
   get huHasNoChangeset(): boolean {
     return String(this.codeHuChanges?.workItemId) === String(this.currentHuId).trim() && !this.hasHuChangeset;
   }
