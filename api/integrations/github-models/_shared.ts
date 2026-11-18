@@ -308,6 +308,9 @@ export async function validateGithubToken(token: string): Promise<void> {
   }
 }
 
+/** DIAGNÓSTICO TEMPORAL. */
+export let lastOmittedModels: any[] = [];
+
 export async function listGithubModels(token: string): Promise<GithubModelInfo[]> {
   // Si hay un catálogo custom configurado, respétalo.
   const catalogUrl = process.env['GITHUB_MODELS_CATALOG_URL'];
@@ -342,6 +345,10 @@ export async function listGithubModels(token: string): Promise<GithubModelInfo[]
     });
     const raw = data?.data || data?.models;
     if (ok && Array.isArray(raw)) {
+      // DIAGNÓSTICO TEMPORAL (preview): entradas que el filtro de chat descarta.
+      lastOmittedModels = raw
+        .filter((m: any) => !(m?.model_picker_enabled !== false && (!m?.capabilities?.type || m.capabilities.type === 'chat')))
+        .map((m: any) => ({ id: m.id, name: m.name, vendor: m.vendor, type: m?.capabilities?.type, picker: m?.model_picker_enabled, category: m?.model_picker_category, policy: m?.policy?.state }));
       const seen = new Set<string>();
       const models = raw
         .filter((m: any) => {

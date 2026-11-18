@@ -10,6 +10,7 @@ import {
   githubModelsChatCompletion,
   githubModelsChatCompletionStream,
   listGithubModels,
+  lastOmittedModels,
   toConnectionView,
   toErrorResponse,
   updateGithubConnectionStatus,
@@ -153,7 +154,7 @@ async function handleModels(req: VercelRequest, res: VercelResponse): Promise<vo
     throw new ApiError(404, 'Conecta primero con GitHub para listar los modelos.');
   }
   const models = await listGithubModels(secret.token);
-  res.status(200).json({ models });
+  res.status(200).json({ models, ...(req.query['debug'] === '1' ? { omitted: lastOmittedModels } : {}) });
 }
 
 // ---- /device/start --------------------------------------------------------
