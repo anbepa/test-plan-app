@@ -2175,3 +2175,10 @@ button.code-coverage-chip.is-selected {
 @media (max-width: 640px) {
   .code-context-visual { padding: 0.5rem; }
 }
+
+/* Barra de generar: lista completa en escritorio, resumen corto en móvil */
+.flow-actionbar-compact { display: none; }
+@media (max-width: 640px) {
+  .flow-actionbar-full { display: none; }
+  .flow-actionbar-compact { display: inline; }
+}

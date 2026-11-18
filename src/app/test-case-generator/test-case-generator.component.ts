@@ -90,10 +90,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   // ---- Fuente de contexto: criterios y/o código fuente (Azure Repos) ----
   readonly contextSourceOptions: { value: ContextSource; label: string; hint: string }[] = [
-    { value: 'criteria', label: 'Solo criterios', hint: 'Genera con la HU y los criterios de aceptación (flujo actual).' },
-    { value: 'criteria-code', label: 'Criterios + código', hint: 'Los criterios mandan; el agente explora la rama para complementar con reglas del código.' },
-    { value: 'code', label: 'Repositorio + rama', hint: 'El código es la fuente principal; los criterios son opcionales.' }
+    { value: 'criteria-code', label: 'Criterios + código', hint: 'Usa los criterios y el código de la HU para casos más precisos.' },
+    { value: 'criteria', label: 'Solo criterios', hint: 'Usa solo la HU y sus criterios de aceptación.' },
   ];
+  /** El usuario eligió el modo a mano: no se cambia solo. */
+  private contextSourceTouched = false;
   contextSource: ContextSource = 'criteria';
   codeProjects: AzureRepoProject[] = [];
   codeRepositories: AzureRepository[] = [];
@@ -119,6 +120,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** El código de la HU vive en GitHub (conexión en Configuración → GitHub). */
   githubCodeConnection: GithubCodeConnection | null = null;
   githubCodeChecked = false;
+  /** GitHub limitó la búsqueda del código de la HU: el resultado puede estar incompleto. */
+  codeHuLimitedUntil: string | null = null;
   /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
   codeExcludedGroups = new Set<string>();
   codeExploring: boolean = false;
@@ -1206,6 +1209,13 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   // ---------------------------------------------------------------------------
 
   /** En GitHub el primer selector es la organización (owner). */
+  get codeHuLimitedNote(): string {
+    if (!this.codeHuLimitedUntil) return '';
+    const date = new Date(this.codeHuLimitedUntil);
+    const when = isNaN(date.getTime()) ? 'en unos minutos' : `hacia las ${date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+    return `GitHub limitó algunas consultas: puede faltar código de la HU. Vuelve a importarla ${when}.`;
+  }
+
   get codeProjectLabel(): string {
     return 'Organización';
   }
@@ -1221,6 +1231,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       next: (connection) => {
         this.githubCodeConnection = connection;
         this.githubCodeChecked = true;
+        // Con GitHub configurado, el flujo principal es "Criterios + código".
+        if (connection && connection.status === 'connected' && !this.contextSourceTouched && this.contextSource === 'criteria') {
+          this.onContextSourceChange('criteria-code', false);
+        }
         this.cdr.markForCheck();
       },
       error: () => {
@@ -1237,6 +1251,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
     this.clearCodeContext('cambiaste de HU');
     this.codeHuChanges = null;
+    this.codeHuLimitedUntil = null;
+    this.codeTargetError = null;
     this.codeExcludedGroups = new Set<string>();
     this.codeManualOverride = false;
     this.codeExtraTargets = [];
@@ -1274,7 +1290,8 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }
   }
 
-  onContextSourceChange(source: ContextSource): void {
+  onContextSourceChange(source: ContextSource, byUser = true): void {
+    if (byUser) this.contextSourceTouched = true;
     this.contextSource = source;
     this.codeAgentError = null;
     if (this.usesCodeContext && this.codeProjects.length === 0 && !this.codeLoadingTarget) {
@@ -1371,12 +1388,18 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         next: (changes) => {
           if (!isCurrent()) return;
           this.codeHuChanges = changes;
+          this.codeHuLimitedUntil = changes.limitedUntil || null;
           // Con PRs/commits no hace falta cargar repositorios ni ramas: se analizan esos cambios.
           if (!changes.groups.some((group) => group.files.length > 0)) {
             this.suggestLinkedBranch(workItemId);
           }
         },
-        error: () => { if (isCurrent()) this.suggestLinkedBranch(workItemId); }
+        error: (error) => {
+          if (!isCurrent()) return;
+          // Límite de GitHub: no es "la HU no tiene código"; se avisa y no se reintenta.
+          if (error?.status === 429) { this.codeTargetError = this.getCodeErrorMessage(error); return; }
+          this.suggestLinkedBranch(workItemId);
+        }
       });
   }
 

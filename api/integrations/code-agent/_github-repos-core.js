@@ -51,7 +51,10 @@ async function githubRequest(token, path, { raw = false, allow404 = false } = {}
         throw new CodeAgentError(403, 'La organización exige SSO: autoriza el token para la organización en GitHub (Settings → Tokens → Configure SSO).');
       }
       if (response.status === 429 || (response.status === 403 && (response.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(detail)))) {
-        throw new CodeAgentError(429, 'Se alcanzó el límite de consultas de GitHub. Intenta de nuevo en unos minutos.');
+        const error = new CodeAgentError(429, 'Se alcanzó el límite de consultas de GitHub. Intenta de nuevo en unos minutos.');
+        const reset = Number(response.headers.get('x-ratelimit-reset'));
+        error.resetAt = reset ? reset * 1000 : null;
+        throw error;
       }
       if (response.status === 403) throw new CodeAgentError(403, 'El token de GitHub no tiene permiso para leer este repositorio (alcance "repo" / Contents: Read).');
       if (response.status === 404) throw new CodeAgentError(404, 'No se encontró el recurso en GitHub (organización, repositorio, rama o archivo), o el token no tiene acceso.');
@@ -297,11 +300,11 @@ function mentionsId(text, id) {
 }
 
 /** PRs de la organización que mencionan la HU en título, descripción o rama. */
-async function findHuPullRequests(token, owner, id, prefixes) {
+async function findHuPullRequests(token, owner, id, prefixes, onError = () => undefined) {
   const queries = [`${id} org:${owner} is:pr`, `AB#${id} org:${owner} is:pr`];
   const found = new Map();
   for (const query of queries) {
-    const data = await githubRequest(token, `/search/issues?per_page=50&q=${enc(query)}`).catch(() => ({ items: [] }));
+    const data = await githubRequest(token, `/search/issues?per_page=50&q=${enc(query)}`).catch((error) => { onError(error); return { items: [] }; });
     for (const item of data.items || []) {
       const repo = String(item.repository_url || '').split('/').pop();
       if (!repo || !matchesFilter(repo, prefixes)) continue;
@@ -321,14 +324,17 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
   const segments = [];
   const omitted = [];
   const emptyBranches = [];
+  // Un límite de GitHub no es "la HU no tiene código": se recuerda para avisarlo.
+  const limits = [];
+  const noteLimit = (error) => { if (error instanceof CodeAgentError && error.status === 429) limits.push(error.resetAt || 0); };
 
   // 1) PRs que mencionan la HU (búsqueda) y ramas con el ID de la HU en los repos del aplicativo.
-  const prRefs = new Map((await findHuPullRequests(token, owner, id, prefixes)).map((ref) => [`${ref.repo}#${ref.number}`, ref]));
+  const prRefs = new Map((await findHuPullRequests(token, owner, id, prefixes, noteLimit)).map((ref) => [`${ref.repo}#${ref.number}`, ref]));
   const pulls = new Map();
   const loadPull = async (ref) => {
     const key = `${ref.repo}#${ref.number}`;
     if (!pulls.has(key)) {
-      pulls.set(key, githubRequest(token, `${repoPath(owner, ref.repo)}/pulls/${ref.number}`).catch(() => null));
+      pulls.set(key, githubRequest(token, `${repoPath(owner, ref.repo)}/pulls/${ref.number}`).catch((error) => { noteLimit(error); return null; }));
     }
     return pulls.get(key);
   };
@@ -336,11 +342,11 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
 
   const repos = new Set(Array.from(prRefs.values()).map((ref) => ref.repo));
   if (prefixes.length) {
-    (await listRepositories(token, owner, repoFilter).catch(() => [])).forEach((repo) => repos.add(repo.name));
+    (await listRepositories(token, owner, repoFilter).catch((error) => { noteLimit(error); return []; })).forEach((repo) => repos.add(repo.name));
   }
   const branches = [];
   await mapLimit(Array.from(repos).slice(0, MAX_HU_REPOS), 6, async (repo) => {
-    const list = await listBranches(token, owner, repo).catch(() => []);
+    const list = await listBranches(token, owner, repo).catch((error) => { noteLimit(error); return []; });
     for (const branch of list) {
       if (core.workItemIdsInBranch(branch.name).includes(id) && !core.isPromotionBranch(branch.name)) {
         branches.push({ projectId: owner, repositoryId: repo, branch: branch.name, tip: branch.commitId });
@@ -357,7 +363,7 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
     if (ref && repo && core.workItemIdsInBranch(ref).includes(id)) huBranches.set(`${repo}|${ref}`, { repo, branch: ref });
   }
   await mapLimit(Array.from(huBranches.values()), 6, async ({ repo, branch }) => {
-    const list = await githubRequest(token, `${repoPath(owner, repo)}/pulls?state=all&per_page=50&head=${enc(`${owner}:${branch}`)}`).catch(() => []);
+    const list = await githubRequest(token, `${repoPath(owner, repo)}/pulls?state=all&per_page=50&head=${enc(`${owner}:${branch}`)}`).catch((error) => { noteLimit(error); return []; });
     for (const pull of Array.isArray(list) ? list : []) {
       const key = `${repo}#${pull.number}`;
       if (!prRefs.has(key) && prRefs.size < MAX_HU_PRS) {
@@ -395,6 +401,7 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
         baseCommit: diff.commonCommit, targetCommit: head, files: fileChangesOf(diff.files),
       });
     } catch (error) {
+      noteLimit(error);
       console.warn('[CODE_AGENT][GITHUB][WORK_ITEM_CHANGES] PR omitido:', ref.repo, ref.number, error && error.message);
     }
   });
@@ -409,11 +416,29 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
       }
       segments.push({ projectId: owner, repositoryId: branch.repositoryId, repositoryName: branch.repositoryId, ...segment });
     } catch (error) {
+      noteLimit(error);
       console.warn('[CODE_AGENT][GITHUB][WORK_ITEM_CHANGES] rama omitida:', branch.branch, error && error.message);
     }
   });
 
-  return core.finalizeWorkItemChanges(source, id, segments, omitted, emptyBranches);
+  const result = await core.finalizeWorkItemChanges(source, id, segments, omitted, emptyBranches);
+  if (limits.length) {
+    const resetAt = Math.max(...limits) || null;
+    // Sin nada encontrado no se puede afirmar que la HU no tenga código: se informa el límite.
+    if (!result.groups.length) throw limitError(resetAt);
+    return { ...result, limitedUntil: resetAt ? new Date(resetAt).toISOString() : 'pronto' };
+  }
+  return result;
+}
+
+/** Error para la pantalla cuando GitHub limitó las consultas: hasta cuándo, en hora de Colombia. */
+function limitError(resetAt) {
+  const when = resetAt
+    ? `hacia las ${new Date(resetAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })} (hora de Colombia)`
+    : 'en unos minutos';
+  const error = new CodeAgentError(429, `GitHub alcanzó el límite de consultas de tu token: no se pudo buscar el código de la HU. Se libera ${when}; vuelve a importar la HU entonces.`);
+  error.resetAt = resetAt;
+  return error;
 }
 
 /** Commits de una rama de la HU que no llegaron por un PR ya analizado. */
