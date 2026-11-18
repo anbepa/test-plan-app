@@ -941,10 +941,3 @@ button:disabled {
   font-weight: 500;
   cursor: pointer;
 }
-
-/* Índice de código del aplicativo */
-.code-index-box { margin-top: 1rem; padding: 0.85rem 1rem; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; }
-.code-index-title { margin: 0 0 0.25rem; font-size: 0.95rem; }
-.code-index-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
-.code-index-row .form-control { flex: 1 1 12rem; min-width: 0; }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }

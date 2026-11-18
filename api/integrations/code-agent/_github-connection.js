@@ -110,7 +110,7 @@ async function maybeHandleGithub({ adminClient, userId, route, method, query, bo
   }
   try {
     const result = await github.handleGithubRoute({
-      route, method, query, body, owner: connection.owner, repoFilter: connection.repo_filter, token: connection.token, db: adminClient,
+      route, method, query, body, owner: connection.owner, repoFilter: connection.repo_filter, token: connection.token,
     });
     return { handled: true, result };
   } catch (error) {

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { defer, firstValueFrom, Observable, switchMap } from 'rxjs';
+import { defer, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import { retryTransient } from '../core/transient-retry';
 import {
@@ -16,8 +16,6 @@ import {
   AzureRepoSearchResult,
   AzureRepoTree,
   AzureRepository,
-  CodeIndexPlan,
-  CodeIndexRefreshResult,
   CodeProvider,
   ContextSource,
   GithubCodeConnection,
@@ -42,10 +40,6 @@ export class AzureReposService {
   /** Origen del código: GitHub (Azure Repos queda solo como respaldo del backend). */
   provider: CodeProvider = 'github';
 
-  /** Última revisión del índice por prefijo de aplicativo (en memoria: como mucho una cada 30 min). */
-  private indexWarmedAt = new Map<string, number>();
-  private indexWarming = false;
-
   constructor(
     private http: HttpClient,
     private supabaseClient: SupabaseClientService
@@ -67,45 +61,6 @@ export class AzureReposService {
     return defer(() => this.buildAuthHeaders('azure')).pipe(
       switchMap((headers) => this.http.delete<{ success: boolean }>(`${this.baseUrl}/github/connection`, { headers }))
     );
-  }
-
-  /** Repos del aplicativo (prefijos) que faltan o cambiaron en el índice de código. */
-  getIndexPlan(prefixes: string[]): Observable<CodeIndexPlan> {
-    return this.authorizedPost<CodeIndexPlan>(`${this.baseUrl}/index/plan`, { prefixes });
-  }
-
-  /** Indexa un repo (sus ramas indexadas). Una llamada por repo. */
-  refreshIndexRepo(repo: string): Observable<CodeIndexRefreshResult> {
-    return defer(() => this.buildAuthHeaders()).pipe(
-      switchMap((headers) => this.http.post<CodeIndexRefreshResult>(`${this.baseUrl}/index/refresh`, { repo }, { headers }))
-    );
-  }
-
-  /**
-   * En segundo plano: indexa los repos del aplicativo que faltan o cambiaron, deducidos de los repos de la
-   * HU (prefijo antes del primer "_", p. ej. NU0139001_). No bloquea ni avisa errores: la búsqueda usa
-   * GitHub mientras el índice no esté listo.
-   */
-  warmAppIndex(repoNames: string[]): void {
-    if (this.provider !== 'github' || this.indexWarming) return;
-    const prefixes = Array.from(new Set(repoNames.map((name) => name.match(/^([A-Za-z0-9]+)_/)?.[1]).filter((p): p is string => !!p)))
-      .map((prefix) => `${prefix}_`)
-      .filter((prefix) => Date.now() - (this.indexWarmedAt.get(prefix) || 0) > 30 * 60_000);
-    if (!prefixes.length) return;
-    prefixes.forEach((prefix) => this.indexWarmedAt.set(prefix, Date.now()));
-    this.indexWarming = true;
-    (async () => {
-      try {
-        const plan = await firstValueFrom(this.getIndexPlan(prefixes));
-        for (const item of plan.pending) {
-          await firstValueFrom(this.refreshIndexRepo(item.repo)).catch(() => undefined);
-        }
-      } catch {
-        // Opcional: sin índice, search_app sigue con la búsqueda de GitHub.
-      } finally {
-        this.indexWarming = false;
-      }
-    })();
   }
 
   listProjects(): Observable<AzureRepoProject[]> {

@@ -1338,7 +1338,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     if (!repositoryId) return;
 
     const repository = this.codeRepositories.find((repo) => repo.id === repositoryId);
-    if (repository) this.azureReposService.warmAppIndex([repository.name]);
     this.codeLoadingTarget = true;
     this.codeTargetError = null;
     this.azureReposService.listBranches(this.codeProject, repositoryId)
@@ -1372,8 +1371,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         next: (changes) => {
           if (!isCurrent()) return;
           this.codeHuChanges = changes;
-          // Índice del aplicativo de los repos de la HU, en segundo plano (no bloquea).
-          this.azureReposService.warmAppIndex(changes.groups.map((group) => group.repositoryName));
           // Con PRs/commits no hace falta cargar repositorios ni ramas: se analizan esos cambios.
           if (!changes.groups.some((group) => group.files.length > 0)) {
             this.suggestLinkedBranch(workItemId);
