@@ -255,7 +255,7 @@ export class CodeAgentRunner {
     emit({ type: 'progress', message: 'Descargando árbol de archivos…' });
     const tree = await this.gateway.getTree(primaryRef, scopePath);
     // Con cambios en varios repos, list_files y search_code recorren el árbol de cada uno (no solo el principal).
-    const repoTrees = await this.loadRepoTrees(workspaces, tree.files, keywords);
+    const repoTrees = await this.loadRepoTrees(workspaces, tree.files, keywords, primaryRef);
     const changedPaths = new Set<string>([
       ...workspaces.flatMap((ws) => ws.files.map((file) => file.path)),
       ...(branchDiff?.changes || []).map((change) => change.path),
@@ -873,12 +873,13 @@ export class CodeAgentRunner {
   }
 
   /** Árbol de cada repo de la HU (el principal ya descargado; los demás en paralelo). */
-  private async loadRepoTrees(workspaces: Workspace[], primaryFiles: string[], keywords: string[]): Promise<RepoTree[]> {
+  private async loadRepoTrees(workspaces: Workspace[], primaryFiles: string[], keywords: string[], primaryRef: RepoRef): Promise<RepoTree[]> {
     const byName = new Map<string, Workspace>();
     workspaces.forEach((ws) => { if (!byName.has(ws.name)) byName.set(ws.name, ws); });
     const list = Array.from(byName.values());
     if (list.length <= 1) {
-      return [{ name: list[0]?.name || '', ref: list[0]?.ref as RepoRef, files: primaryFiles }];
+      // Sin cambios de la HU (repo y rama elegidos a mano) se busca en el repo principal.
+      return [{ name: list[0]?.name || '', ref: list[0]?.ref || primaryRef, files: primaryFiles }];
     }
     return Promise.all(list.map(async (ws, index) => ({
       name: ws.name,

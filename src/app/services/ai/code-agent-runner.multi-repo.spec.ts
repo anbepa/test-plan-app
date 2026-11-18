@@ -27,7 +27,7 @@ describe('CodeAgentRunner · varios repos de la HU', () => {
   }
 
   async function ctxFor(runner: any, workspaces: any[]) {
-    const repoTrees = await runner.loadRepoTrees(workspaces, trees['NU0139001_SAF_ms_maintenance'], []);
+    const repoTrees = await runner.loadRepoTrees(workspaces, trees['NU0139001_SAF_ms_maintenance'], [], maintenance);
     return { primaryRef: maintenance, workspaces, branchDiff: null, treeFiles: trees['NU0139001_SAF_ms_maintenance'], rankedFiles: trees['NU0139001_SAF_ms_maintenance'], repoTrees, filesReviewed: new Set<string>(), emit: () => {}, appScope: null };
   }
 
@@ -72,5 +72,13 @@ describe('CodeAgentRunner · varios repos de la HU', () => {
     const ctx = await ctxFor(runner, single);
     const result: string = await runner.executeTool('list_files', { contains: 'holiday' }, ctx);
     expect(result).toBe('/domain/usecase/ValidateHolidayUseCase.java');
+  });
+
+  it('con repo y rama elegidos a mano (sin cambios de la HU) busca en el repo principal', async () => {
+    const { runner, gateway } = setup();
+    const ctx = await ctxFor(runner, []);
+    await runner.executeTool('search_code', { terms: ['holiday'] }, ctx);
+    const [ref] = gateway.search.calls.mostRecent().args;
+    expect(ref).toEqual(maintenance);
   });
 });
