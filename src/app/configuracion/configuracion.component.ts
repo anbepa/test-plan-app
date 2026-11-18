@@ -18,7 +18,8 @@ import { ToastService } from '../services/core/toast.service';
 import { GeneralSectionsConfig, GeneralSectionsConfigService, GeneralSectionsMeta } from '../services/core/general-sections-config.service';
 import { CellsConfigService } from '../services/core/cells-config.service';
 import { AzureReposService } from '../services/integrations/azure-repos.service';
-import { GithubCodeConnection } from '../models/code-agent.model';
+import { CodeIndexPlan, GithubCodeConnection } from '../models/code-agent.model';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-configuracion',
@@ -102,6 +103,13 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
   githubCodeBusy = false;
   githubCodeInfo: string | null = null;
   githubCodeError: string | null = null;
+
+  // ── Índice de código del aplicativo (búsqueda sin el límite de GitHub) ──
+  indexPrefix = '';
+  indexPlan: CodeIndexPlan | null = null;
+  indexBusy = false;
+  indexProgress: string | null = null;
+  indexError: string | null = null;
 
   // ── Estado exclusivo de UI (no afecta la lógica de negocio) ──
   showPat = false;
@@ -210,6 +218,10 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     this.githubCode = connection;
     this.githubCodeOwner = connection?.owner || this.githubCodeOwner;
     this.githubCodeFilter = connection ? connection.repoFilter : this.githubCodeFilter;
+    if (!this.indexPrefix && connection?.repoFilter) {
+      const app = connection.repoFilter.split(',')[0].trim().match(/^([A-Za-z0-9]+)_/);
+      if (app) this.indexPrefix = `${app[1]}_`;
+    }
   }
 
   get githubCodeStatusLabel(): string {
@@ -255,6 +267,48 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
           this.githubCodeError = error?.error?.message || 'No se pudo validar la conexión de GitHub.';
         }
       });
+  }
+
+  private get indexPrefixes(): string[] {
+    return this.indexPrefix.split(',').map((prefix) => prefix.trim()).filter(Boolean);
+  }
+
+  async checkCodeIndex(): Promise<void> {
+    if (!this.indexPrefixes.length) { this.indexError = 'Indica el prefijo de los repos del aplicativo (p. ej. NU0139001_).'; return; }
+    this.indexBusy = true;
+    this.indexError = null;
+    this.indexProgress = 'Revisando el índice…';
+    try {
+      this.indexPlan = await firstValueFrom(this.codeReposService.getIndexPlan(this.indexPrefixes));
+      this.indexProgress = null;
+    } catch (error: any) {
+      this.indexError = error?.error?.message || 'No se pudo revisar el índice.';
+      this.indexProgress = null;
+    } finally {
+      this.indexBusy = false;
+    }
+  }
+
+  /** Indexa (o actualiza) los repos pendientes, uno por llamada, mostrando el avance. */
+  async buildCodeIndex(): Promise<void> {
+    await this.checkCodeIndex();
+    const pending = this.indexPlan?.pending || [];
+    if (!pending.length || this.indexError) return;
+    this.indexBusy = true;
+    const failed: string[] = [];
+    const started = Date.now();
+    for (const [index, item] of pending.entries()) {
+      this.indexProgress = `Indexando ${item.repo} (${index + 1} de ${pending.length})…`;
+      try {
+        await firstValueFrom(this.codeReposService.refreshIndexRepo(item.repo));
+      } catch {
+        failed.push(item.repo);
+      }
+    }
+    this.indexBusy = false;
+    await this.checkCodeIndex();
+    this.indexProgress = `Listo en ${Math.round((Date.now() - started) / 1000)} s: ${pending.length - failed.length} repo(s) indexado(s)`
+      + (failed.length ? `; con error: ${failed.join(', ')}` : '') + '.';
   }
 
   disconnectGithubCode(): void {

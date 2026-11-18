@@ -167,6 +167,28 @@
 
       </div>
 
+      <div *ngIf="githubCode" class="code-index-box" aria-live="polite">
+        <h4 class="code-index-title">Índice de código del aplicativo</h4>
+        <p class="field-hint">
+          El agente busca en el índice en vez de la búsqueda de código de GitHub (que permite ~10 búsquedas por minuto).
+          Se actualiza solo al usar el generador; aquí puedes construirlo o revisarlo.
+        </p>
+        <div class="code-index-row">
+          <label for="indexPrefix" class="sr-only">Prefijo de los repos del aplicativo</label>
+          <input id="indexPrefix" name="indexPrefix" class="form-control" type="text" [(ngModel)]="indexPrefix"
+                 [disabled]="indexBusy" placeholder="NU0139001_" aria-label="Prefijo de los repos del aplicativo">
+          <button type="button" class="btn-secondary" (click)="checkCodeIndex()" [disabled]="indexBusy">Revisar</button>
+          <button type="button" class="btn-primary" (click)="buildCodeIndex()" [disabled]="indexBusy">Indexar ahora</button>
+        </div>
+        <p *ngIf="indexPlan" class="field-hint">
+          {{ indexPlan.indexedRepos }} de {{ indexPlan.repos }} repos indexados · {{ indexPlan.files }} archivos
+          <ng-container *ngIf="indexPlan.lastIndexedAt"> · última actualización {{ indexPlan.lastIndexedAt | date:'dd/MM/yyyy HH:mm' }}</ng-container>
+          <ng-container *ngIf="indexPlan.pending.length"> · {{ indexPlan.pending.length }} pendiente(s)</ng-container>
+        </p>
+        <p *ngIf="indexProgress" class="field-hint" role="status">{{ indexProgress }}</p>
+        <p *ngIf="indexError" class="message error" role="alert">{{ indexError }}</p>
+      </div>
+
       <p *ngIf="githubCodeInfo" class="message success" role="status">{{ githubCodeInfo }}</p>
       <p *ngIf="githubCodeError" class="message error" role="alert">{{ githubCodeError }}</p>
 

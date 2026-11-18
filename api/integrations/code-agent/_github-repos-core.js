@@ -15,6 +15,7 @@
  */
 const fetch = require('node-fetch');
 const core = require('./_azure-repos-core.js');
+const codeIndex = require('./_code-index.js');
 
 const { CodeAgentError, LIMITS, isReadableFile, redactSecrets, requireString, normalizeBranch, resolveVersion, mapLimit } = core;
 
@@ -241,12 +242,22 @@ async function getBranchDiff(token, owner, repo, baseBranch, branch) {
 }
 
 /** Code search de GitHub en los repos del aplicativo (los que empiezan por los prefijos). */
-async function searchApplication(token, owner, body) {
+async function searchApplication(token, owner, body, db) {
   const prefixes = (Array.isArray(body.repoPrefixes) ? body.repoPrefixes : []).map((item) => String(item).toLowerCase()).filter(Boolean).slice(0, 5);
   const terms = (Array.isArray(body.terms) ? body.terms : []).map((term) => String(term).trim()).filter((term) => term.length >= 3).slice(0, 4);
   if (!prefixes.length || !terms.length) throw new CodeAgentError(400, 'Indica prefijos de repositorio y términos (mín. 3 caracteres).');
 
-  // Un término que GitHub no dejó buscar (límite de búsquedas de código) NO es "sin coincidencias": se informa aparte.
+  // 1) Índice de símbolos del aplicativo (sin límite). Si no hay índice para estos repos, búsqueda de GitHub.
+  const fromIndex = db ? await codeIndex.searchIndex(db, owner, prefixes, terms).catch((error) => {
+    console.warn('[CODE_INDEX][SEARCH]', error && error.message);
+    return null;
+  }) : null;
+  if (fromIndex) {
+    const result = await linesFromFiles(token, owner, fromIndex.slice(0, LIMITS.maxAppSearchFiles * 2), terms);
+    return { totalCount: fromIndex.length, matches: result, limitedTerms: [], source: 'index' };
+  }
+
+  // 2) Búsqueda de código de GitHub. Un término que GitHub no dejó buscar NO es "sin coincidencias": se informa aparte.
   const limitedTerms = [];
   const results = await Promise.all(terms.map((term) => githubRequest(token,
     `/search/code?per_page=${LIMITS.maxAppSearchFiles}&q=${enc(`${term.includes(' ') ? `"${term}"` : term} org:${owner}`)}`)
@@ -268,9 +279,18 @@ async function searchApplication(token, owner, body) {
     }
   }
 
+  const matches = await linesFromFiles(token, owner, Array.from(files.values()).slice(0, LIMITS.maxAppSearchFiles), terms);
+  return { totalCount, matches, limitedTerms, source: 'github' };
+}
+
+/**
+ * Lee de GitHub (con el token del usuario: sin acceso, no ve nada) los archivos candidatos y devuelve
+ * las líneas que contienen los términos, con 1 línea de contexto. Código productivo primero.
+ */
+async function linesFromFiles(token, owner, files, terms) {
   const lowered = terms.map((term) => term.toLowerCase());
   const matches = [];
-  await mapLimit(Array.from(files.values()).slice(0, LIMITS.maxAppSearchFiles), 6, async (file) => {
+  await mapLimit(files, 6, async (file) => {
     const content = await fetchFileContent(token, owner, file.repo, file.branch || 'HEAD', file.path).catch(() => '');
     const lines = redactSecrets(content).split(/\r?\n/);
     let found = 0;
@@ -284,7 +304,7 @@ async function searchApplication(token, owner, body) {
   const isTest = (path) => /(^|\/)(test|tests|__tests__)(\/|$)|\.(spec|test)\.|Test\.java$/i.test(path);
   matches.sort((a, b) => Number(isTest(a.path)) - Number(isTest(b.path))
     || a.repositoryName.localeCompare(b.repositoryName) || a.path.localeCompare(b.path) || a.line - b.line);
-  return { totalCount, matches: matches.slice(0, LIMITS.maxAppSearchMatches), limitedTerms };
+  return matches.slice(0, LIMITS.maxAppSearchMatches);
 }
 
 // ---------------------------------------------------------------------------
@@ -458,7 +478,7 @@ async function getWorkItemLinkedBranches(token, owner, repoFilter, workItemId) {
 // Router (mismas rutas que Azure)
 // ---------------------------------------------------------------------------
 
-async function handleGithubRoute({ route, method, query, body, owner, repoFilter, token }) {
+async function handleGithubRoute({ route, method, query, body, owner, repoFilter, token, db }) {
   const q = query || {};
   const b = body || {};
   const source = githubSource(token);
@@ -495,7 +515,20 @@ async function handleGithubRoute({ route, method, query, body, owner, repoFilter
       case 'file-diff':
         return core.getFileDiff(source, project, requireString(b.repositoryId, 'repositoryId'), b);
       case 'app-search':
-        return searchApplication(token, owner, b);
+        return searchApplication(token, owner, b, db);
+      case 'index/plan': {
+        // Repos del aplicativo (prefijos) que faltan o cambiaron en el índice.
+        const prefixes = (Array.isArray(b.prefixes) ? b.prefixes : []).map(String).filter(Boolean).slice(0, 5);
+        if (!prefixes.length) throw new CodeAgentError(400, 'Indica el prefijo de los repos del aplicativo.');
+        if (!db) throw new CodeAgentError(500, 'El índice no está disponible.');
+        const repos = await listRepositories(token, owner, prefixes.join(','));
+        return { ...(await codeIndex.indexPlan(db, token, owner, prefixes, repos.map((repo) => repo.name))), repos: repos.length };
+      }
+      case 'index/refresh': {
+        // Un repo por llamada (todas sus ramas indexadas) para no pasar los 60 s de Vercel.
+        if (!db) throw new CodeAgentError(500, 'El índice no está disponible.');
+        return { results: await codeIndex.indexRepo(db, token, owner, requireString(b.repo, 'repo')) };
+      }
       case 'search':
         return core.searchInFiles(source, project, requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
       default:
