@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostListener, Input, OnDestroy, QueryList, ViewChildren } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { MarkdownLitePipe, inline, sourceCell } from '../../pipes/markdown-lite.pipe';
-import { TechContextModel, TechFlowStep, parseTechContext } from '../../utils/tech-context-parser';
+import { TechContextModel, parseTechContext } from '../../utils/tech-context-parser';
 
 /**
  * Vista visual del contexto técnico del agente: resumen, flujo de ejecución
@@ -16,18 +17,60 @@ import { TechContextModel, TechFlowStep, parseTechContext } from '../../utils/te
   styleUrls: ['./tech-context-view.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TechContextViewComponent {
+export class TechContextViewComponent implements AfterViewInit, OnDestroy {
   model: TechContextModel = parseTechContext('');
   raw = '';
-  private openSteps = new Set<number>();
+  /** Bloques recortados que el usuario abrió ("Ver más"). */
+  private opened = new Set<string>();
+  /** Bloques cuyo texto no cabe en las líneas visibles: solo esos muestran "Ver más". */
+  overflowing = new Set<string>();
+  private clampSub?: Subscription;
 
-  /** Texto a partir del cual un paso del flujo se muestra recortado con "Ver más". */
-  readonly longStep = 220;
+  @ViewChildren('clampEl') clampEls!: QueryList<ElementRef<HTMLElement>>;
+
+  constructor(private cdr: ChangeDetectorRef) {}
 
   @Input() set context(value: string | null | undefined) {
     this.raw = value || '';
     this.model = parseTechContext(this.raw);
-    this.openSteps.clear();
+    this.opened.clear();
+    this.overflowing = new Set<string>();
+    setTimeout(() => this.measure());
+  }
+
+  ngAfterViewInit(): void {
+    this.measure();
+    this.clampSub = this.clampEls.changes.subscribe(() => this.measure());
+  }
+
+  ngOnDestroy(): void {
+    this.clampSub?.unsubscribe();
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    this.measure();
+  }
+
+  /** Mide en pantalla qué bloques recortados tienen más texto del que se ve. */
+  private measure(): void {
+    requestAnimationFrame(() => {
+      if (!this.clampEls) return;
+      const next = new Set<string>();
+      this.clampEls.forEach(({ nativeElement: el }) => {
+        const key = el.dataset['key'] || '';
+        if (this.opened.has(key)) {
+          if (this.overflowing.has(key)) next.add(key);
+        } else if (el.scrollHeight > el.clientHeight + 2) {
+          next.add(key);
+        }
+      });
+      const changed = next.size !== this.overflowing.size || Array.from(next).some((key) => !this.overflowing.has(key));
+      if (changed) {
+        this.overflowing = next;
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   html(text: string): string {
@@ -38,17 +81,13 @@ export class TechContextViewComponent {
     return sourceCell(text);
   }
 
-  isLong(step: TechFlowStep): boolean {
-    return step.text.length > this.longStep;
+  isOpen(key: string): boolean {
+    return this.opened.has(key);
   }
 
-  isOpen(index: number): boolean {
-    return this.openSteps.has(index);
-  }
-
-  toggleStep(index: number): void {
-    if (this.openSteps.has(index)) this.openSteps.delete(index);
-    else this.openSteps.add(index);
+  toggle(key: string): void {
+    if (this.opened.has(key)) this.opened.delete(key);
+    else this.opened.add(key);
   }
 
   get ruleCount(): number {

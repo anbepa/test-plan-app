@@ -1,7 +1,13 @@
 <div class="tcv" *ngIf="model.structured; else plain">
   <div *ngIf="model.summary" class="tcv-summary">
     <span class="tcv-summary-icon" aria-hidden="true">💡</span>
-    <div class="tcv-summary-text" [innerHTML]="model.summary | markdownLite"></div>
+    <div class="tcv-summary-body">
+      <div #clampEl data-key="summary" class="tcv-summary-text tcv-clamp-4" [class.is-clamped]="!isOpen('summary')"
+        [innerHTML]="model.summary | markdownLite"></div>
+      <button *ngIf="overflowing.has('summary')" type="button" class="tcv-more" (click)="toggle('summary')" [attr.aria-expanded]="isOpen('summary')">
+        {{ isOpen('summary') ? 'Ver menos' : 'Ver más' }}
+      </button>
+    </div>
   </div>
 
   <!-- Flujo de ejecución como diagrama -->
@@ -12,9 +18,9 @@
         <span class="tcv-step-icon" aria-hidden="true">{{ step.icon }}</span>
         <div class="tcv-step-body">
           <span class="tcv-step-label">{{ step.label }}</span>
-          <div class="tcv-step-text" [class.is-clamped]="isLong(step) && !isOpen(i)" [innerHTML]="html(step.text)"></div>
-          <button *ngIf="isLong(step)" type="button" class="tcv-more" (click)="toggleStep(i)" [attr.aria-expanded]="isOpen(i)">
-            {{ isOpen(i) ? 'Ver menos' : 'Ver más' }}
+          <div #clampEl [attr.data-key]="'step-' + i" class="tcv-step-text tcv-clamp-3" [class.is-clamped]="!isOpen('step-' + i)" [innerHTML]="html(step.text)"></div>
+          <button *ngIf="overflowing.has('step-' + i)" type="button" class="tcv-more" (click)="toggle('step-' + i)" [attr.aria-expanded]="isOpen('step-' + i)">
+            {{ isOpen('step-' + i) ? 'Ver menos' : 'Ver más' }}
           </button>
         </div>
       </li>

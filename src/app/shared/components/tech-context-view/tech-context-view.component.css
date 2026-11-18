@@ -33,9 +33,15 @@
 }
 .tcv-step-label { display: block; font-weight: 700; font-size: 0.8rem; color: #4338ca; margin-bottom: 0.15rem; }
 .tcv-step-text { overflow-wrap: anywhere; }
-.tcv-step-text.is-clamped {
-  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
+/* Recorte a N líneas; "Ver más" aparece solo si el texto no cabe */
+.is-clamped { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.tcv-clamp-3.is-clamped { -webkit-line-clamp: 3; line-clamp: 3; }
+.tcv-clamp-4.is-clamped { -webkit-line-clamp: 4; line-clamp: 4; }
+.tcv-summary-body { min-width: 0; flex: 1; }
+.tcv-summary-text.is-clamped ::ng-deep p { display: inline; }
+.tcv-summary-text.is-clamped ::ng-deep p + p::before { content: ' '; }
+/* Código en línea más discreto (rutas y tablas largas) */
+.tcv ::ng-deep code { font-size: 0.82em; padding: 0 0.2em; border-radius: 4px; background: rgba(15, 23, 42, 0.06); overflow-wrap: anywhere; }
 .tcv-more { margin-top: 0.2rem; padding: 0; border: 0; background: none; color: #2563eb; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: 28px; }
 
 /* Secciones plegables */
@@ -100,3 +106,4 @@
   .tcv-section > summary { padding: 0.55rem 0.65rem; }
   .tcv-section > :not(summary) { margin-left: 0.6rem; margin-right: 0.6rem; }
 }
+.tcv .tcv-code ::ng-deep code { background: none; color: inherit; font-size: inherit; padding: 0; }
