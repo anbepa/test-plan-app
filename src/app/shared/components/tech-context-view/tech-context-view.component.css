@@ -107,3 +107,4 @@
   .tcv-section > :not(summary) { margin-left: 0.6rem; margin-right: 0.6rem; }
 }
 .tcv .tcv-code ::ng-deep code { background: none; color: inherit; font-size: inherit; padding: 0; }
+.tcv ::ng-deep .md-path { border-bottom: 1px dotted #9ca3af; cursor: help; }
