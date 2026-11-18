@@ -28,6 +28,7 @@ interface CoverageRow {
   detail: string;
 }
 import { MarkdownLitePipe } from '../shared/pipes/markdown-lite.pipe';
+import { TechContextViewComponent } from '../shared/components/tech-context-view/tech-context-view.component';
 
 interface UIDetailedTestCase extends OriginalDetailedTestCase {
   isExpanded?: boolean;
@@ -62,7 +63,7 @@ const COLLAPSIBLE_STEPS: FlowStepId[] = ['hu', 'criteria', 'code'];
 @Component({
   selector: 'app-test-case-generator',
   standalone: true,
-  imports: [FormsModule, CommonModule, RouterLink, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe],
+  imports: [FormsModule, CommonModule, RouterLink, TestCaseEditorComponent, ConfirmationModalComponent, MarkdownLitePipe, TechContextViewComponent],
   templateUrl: './test-case-generator.component.html',
   styleUrls: ['./test-case-generator.component.css']
 })

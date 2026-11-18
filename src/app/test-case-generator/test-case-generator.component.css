@@ -2163,3 +2163,15 @@ button.code-coverage-chip.is-selected {
   margin-top: 0.5rem;
 }
 
+
+/* Contexto técnico visual (resumen + diagrama del flujo + secciones plegables) */
+.code-context-visual {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+@media (max-width: 640px) {
+  .code-context-visual { padding: 0.5rem; }
+}

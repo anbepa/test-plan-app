@@ -1,0 +1,96 @@
+<div class="tcv" *ngIf="model.structured; else plain">
+  <div *ngIf="model.summary" class="tcv-summary">
+    <span class="tcv-summary-icon" aria-hidden="true">💡</span>
+    <div class="tcv-summary-text" [innerHTML]="model.summary | markdownLite"></div>
+  </div>
+
+  <!-- Flujo de ejecución como diagrama -->
+  <section *ngIf="model.flow.length" class="tcv-block" aria-label="Flujo de ejecución real">
+    <h4 class="tcv-title">Flujo de ejecución</h4>
+    <ol class="tcv-flow">
+      <li *ngFor="let step of model.flow; let i = index; trackBy: trackByIndex" class="tcv-step">
+        <span class="tcv-step-icon" aria-hidden="true">{{ step.icon }}</span>
+        <div class="tcv-step-body">
+          <span class="tcv-step-label">{{ step.label }}</span>
+          <div class="tcv-step-text" [class.is-clamped]="isLong(step) && !isOpen(i)" [innerHTML]="html(step.text)"></div>
+          <button *ngIf="isLong(step)" type="button" class="tcv-more" (click)="toggleStep(i)" [attr.aria-expanded]="isOpen(i)">
+            {{ isOpen(i) ? 'Ver menos' : 'Ver más' }}
+          </button>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- Reglas del código -->
+  <details *ngIf="ruleCount" class="tcv-section">
+    <summary>
+      <span class="tcv-section-title">Reglas del código</span>
+      <span class="tcv-badge">{{ ruleCount }}</span>
+      <span *ngIf="changedRules" class="tcv-badge is-change">{{ changedRules }} de la HU</span>
+    </summary>
+    <div *ngFor="let group of model.ruleGroups; trackBy: trackByIndex" class="tcv-group">
+      <p *ngIf="model.ruleGroups.length > 1" class="tcv-group-title">{{ group.title }}</p>
+      <article *ngFor="let rule of group.rules; trackBy: trackByIndex" class="tcv-rule">
+        <div class="tcv-rule-head">
+          <span class="tcv-id">{{ rule.id }}</span>
+          <span *ngIf="rule.change" class="tcv-tag" [class.is-change]="rule.change === 'CAMBIO HU'">{{ rule.change === 'CAMBIO HU' ? 'Cambio de la HU' : 'Existente' }}</span>
+        </div>
+        <p class="tcv-rule-text" [innerHTML]="html(rule.text)"></p>
+        <div *ngIf="rule.code" class="tcv-code" [innerHTML]="html(rule.code)"></div>
+        <p *ngIf="rule.source" class="tcv-source" [innerHTML]="source(rule.source)"></p>
+      </article>
+    </div>
+  </details>
+
+  <!-- Receta de datos -->
+  <details *ngIf="model.recipe.length" class="tcv-section">
+    <summary>
+      <span class="tcv-section-title">Receta de datos</span>
+      <span class="tcv-badge">{{ model.recipe.length }}</span>
+      <span *ngIf="unverifiedRecipe" class="tcv-badge is-warn">{{ unverifiedRecipe }} con pasos no verificables</span>
+    </summary>
+    <article *ngFor="let item of model.recipe; trackBy: trackByIndex" class="tcv-recipe">
+      <p class="tcv-recipe-title" [innerHTML]="html(item.title)"></p>
+      <dl class="tcv-fields">
+        <ng-container *ngFor="let field of item.fields; trackBy: trackByIndex">
+          <div class="tcv-field" [class.is-unverified]="field.unverified">
+            <dt>{{ field.label || 'Detalle' }}</dt>
+            <dd [innerHTML]="field.label === 'Fuente' ? source(field.value) : html(field.value)"></dd>
+          </div>
+        </ng-container>
+      </dl>
+    </article>
+  </details>
+
+  <!-- Equivalencias de códigos -->
+  <details *ngIf="model.equivalences.length" class="tcv-section">
+    <summary>
+      <span class="tcv-section-title">Equivalencias de códigos</span>
+      <span class="tcv-badge">{{ model.equivalences.length }}</span>
+      <span *ngIf="unconfirmed" class="tcv-badge is-warn">{{ unconfirmed }} sin confirmar</span>
+    </summary>
+    <ul class="tcv-equivalences">
+      <li *ngFor="let item of model.equivalences; trackBy: trackByIndex" [class.is-unconfirmed]="!item.confirmed">
+        <span class="tcv-eq-code" [innerHTML]="html(item.code)"></span>
+        <span class="tcv-eq-arrow" aria-hidden="true">→</span>
+        <span class="tcv-eq-meaning" [innerHTML]="html(item.meaning)"></span>
+        <span *ngIf="item.source" class="tcv-source" [innerHTML]="source(item.source)"></span>
+      </li>
+    </ul>
+  </details>
+
+  <!-- Resto de secciones -->
+  <details *ngFor="let list of model.lists; trackBy: trackByIndex" class="tcv-section">
+    <summary>
+      <span class="tcv-section-title">{{ list.title }}</span>
+      <span class="tcv-badge">{{ list.items.length }}</span>
+    </summary>
+    <ul class="tcv-list" [class.is-files]="list.files">
+      <li *ngFor="let item of list.items; trackBy: trackByIndex" [innerHTML]="list.files ? source(item) : html(item)"></li>
+    </ul>
+  </details>
+</div>
+
+<ng-template #plain>
+  <div class="tcv-plain" [innerHTML]="raw | markdownLite:'no-coverage'"></div>
+</ng-template>

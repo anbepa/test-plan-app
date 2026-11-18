@@ -436,9 +436,9 @@
                 </div>
               </div>
               <div *ngIf="!codeContextEditing && (showCodeContextText || !codeCoverageRows.length)" id="tcCodeContextPreview"
-                class="form-control md-preview code-context-preview"
-                [innerHTML]="codeContextText | markdownLite:'no-coverage'" (dblclick)="editCodeContext()"
-                title="Doble clic para editar"></div>
+                class="code-context-visual" (dblclick)="editCodeContext()" title="Doble clic para editar">
+                <app-tech-context-view [context]="codeContextText"></app-tech-context-view>
+              </div>
               <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
                 class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
                 [disabled]="codeExploring"></textarea>

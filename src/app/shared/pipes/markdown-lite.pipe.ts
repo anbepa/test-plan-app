@@ -142,14 +142,16 @@ function escapeHtml(text: string): string {
 }
 
 /** Columna Fuente: rutas largas como carpeta/…/archivo, con la ruta completa en el tooltip. */
-function sourceCell(source: string): string {
+/** Ruta de archivo larga abreviada (carpeta/…/archivo) con la ruta completa en el title. */
+export function sourceCell(source: string): string {
   return inline(source).replace(/[\w.@-]+(?:\/[\w.@-]+){3,}/g, (path) => {
     const parts = path.split('/');
     return `<span class="md-path" title="${path}">${parts[0]}/…/${parts[parts.length - 1]}</span>`;
   });
 }
 
-function inline(text: string): string {
+/** Formato en línea seguro: escapa el texto y aplica `código` y **negrita**. */
+export function inline(text: string): string {
   return escapeHtml(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
