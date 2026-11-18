@@ -84,7 +84,7 @@ describe('CodeAgentRunner · varios repos de la HU', () => {
 
   it('con GitHub (searchLimits) busca en una sola llamada por repo con todas sus rutas', async () => {
     const { runner, workspaces, gateway } = setup();
-    gateway.searchLimits = () => ({ batchSize: 5000, maxFiles: 5000 });
+    gateway.searchLimits = () => ({ batchSize: 5000, maxFiles: 150 });
     const ctx = await ctxFor(runner, workspaces);
     const result: string = await runner.executeTool('search_code', { terms: ['conciliation'] }, ctx);
     const calls = gateway.search.calls.allArgs();

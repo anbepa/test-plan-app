@@ -160,9 +160,13 @@ export class AzureReposService {
     });
   }
 
-  /** GitHub busca sobre una sola descarga del repo: todas las rutas en una llamada. Azure: lotes de 30 (por defecto). */
+  /**
+   * GitHub busca sobre una sola descarga del repo: las rutas van en una llamada (Azure: lotes de 30).
+   * Se mantienen los 150 archivos más afines: buscar en todo el repo llenaba el tope de coincidencias
+   * con archivos menos relevantes (p. ej. versiones viejas de una vista) y empeoraba la cobertura.
+   */
   searchLimits(): { batchSize: number; maxFiles: number } | null {
-    return this.provider === 'github' ? { batchSize: 5000, maxFiles: 5000 } : null;
+    return this.provider === 'github' ? { batchSize: 5000, maxFiles: 150 } : null;
   }
 
   search(ref: RepoRef, terms: string[], paths: string[]): Observable<AzureRepoSearchResult> {
