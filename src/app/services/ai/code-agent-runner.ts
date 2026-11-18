@@ -180,6 +180,13 @@ interface Workspace {
   group: WorkItemChangeGroup;
 }
 
+/** Árbol de archivos de un repo de la HU (rutas ordenadas por relevancia). */
+interface RepoTree {
+  name: string;
+  ref: RepoRef;
+  files: string[];
+}
+
 export class CodeAgentRunner {
   /** Diffs vistos en la corrida (precargados o pedidos con diff_file), por ruta. */
   private seenDiffs = new Map<string, string>();
@@ -244,6 +251,8 @@ export class CodeAgentRunner {
     const scopePath = (source !== 'changeset' && input.target?.scopePath) || '/';
     emit({ type: 'progress', message: 'Descargando árbol de archivos…' });
     const tree = await this.gateway.getTree(primaryRef, scopePath);
+    // Con cambios en varios repos, list_files y search_code recorren el árbol de cada uno (no solo el principal).
+    const repoTrees = await this.loadRepoTrees(workspaces, tree.files, keywords);
     const changedPaths = new Set<string>([
       ...workspaces.flatMap((ws) => ws.files.map((file) => file.path)),
       ...(branchDiff?.changes || []).map((change) => change.path),
@@ -331,7 +340,7 @@ export class CodeAgentRunner {
 
         const result = overBudget
           ? 'Presupuesto agotado. Llama a finish ahora.'
-          : await this.executeTool(call.function.name, args, { primaryRef, workspaces, branchDiff, treeFiles: tree.files, rankedFiles, filesReviewed, emit, appScope });
+          : await this.executeTool(call.function.name, args, { primaryRef, workspaces, branchDiff, treeFiles: tree.files, rankedFiles, repoTrees, filesReviewed, emit, appScope });
 
         const clipped = result.length > CODE_AGENT_BUDGET.maxToolResultChars
           ? `${result.slice(0, CODE_AGENT_BUDGET.maxToolResultChars)}\n…[resultado truncado]`
@@ -512,7 +521,8 @@ export class CodeAgentRunner {
 
     const header = workspaces.map((ws) => {
       const group = ws.group;
-      const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`);
+      const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`
+        + (pr.description ? `\n      Descripción del PR: ${pr.description}` : ''));
       const commits = group.commits.map((commit) => `commit ${commit.sha.slice(0, 8)} "${commit.comment || ''}"`);
       const extra = group.extraOver ? ` (trae cambios adicionales a los de ${group.extraOver}; sus diffs muestran solo lo adicional)` : '';
       return `Repositorio ${ws.name} → ${group.targetBranch}${extra}${group.alsoMergedInto.length ? ` (también integrado en ${group.alsoMergedInto.join(', ')})` : ''}:\n${[...prs, ...commits].map((line) => `  - ${line}`).join('\n')}`;
@@ -688,13 +698,16 @@ export class CodeAgentRunner {
       branchDiff: AzureBranchDiff | null;
       treeFiles: string[];
       rankedFiles: string[];
+      repoTrees: RepoTree[];
       filesReviewed: Set<string>;
       emit: (event: CodeAgentEvent) => void;
       appScope: AppScope | null;
     }
   ): Promise<string> {
     const { emit, filesReviewed } = ctx;
-    const workspace = this.resolveWorkspace(ctx.workspaces, args.repo);
+    // Rutas con el repo delante ("REPO:/ruta", como las muestran list_files/search_code con varios repos).
+    const repoFromPath = this.splitRepoPaths(args, ctx.workspaces);
+    const workspace = this.resolveWorkspace(ctx.workspaces, args.repo || repoFromPath);
     const ref = workspace ? workspace.ref : ctx.primaryRef;
 
     try {
@@ -725,9 +738,12 @@ export class CodeAgentRunner {
         case 'list_files': {
           const prefix = this.normalizePrefix(args.path_prefix);
           const contains = String(args.contains || '').toLowerCase();
-          const matches = ctx.treeFiles.filter((path) =>
-            (!prefix || path.toLowerCase().startsWith(prefix)) && (!contains || path.toLowerCase().includes(contains)));
-          emit({ type: 'tool', message: `📂 Listando ${prefix || '/'}${contains ? ` (“${contains}”)` : ''}: ${matches.length} archivos` });
+          const trees = this.treesFor(ctx.repoTrees, args.repo || repoFromPath);
+          const multi = ctx.repoTrees.length > 1;
+          const matches = trees.flatMap((repoTree) => repoTree.files
+            .filter((path) => (!prefix || path.toLowerCase().startsWith(prefix)) && (!contains || path.toLowerCase().includes(contains)))
+            .map((path) => (multi ? `${repoTree.name}:${path}` : path)));
+          emit({ type: 'tool', message: `📂 Listando ${prefix || '/'}${contains ? ` (“${contains}”)` : ''}${trees.length > 1 ? ` en ${trees.length} repos` : multi ? ` en ${trees[0]?.name}` : ''}: ${matches.length} archivos` });
           const shown = matches.slice(0, 150);
           return shown.length
             ? `${shown.join('\n')}${matches.length > shown.length ? `\n…y ${matches.length - shown.length} más (acota con path_prefix/contains)` : ''}`
@@ -737,21 +753,34 @@ export class CodeAgentRunner {
         case 'search_code': {
           const terms: string[] = (Array.isArray(args.terms) ? args.terms : [args.terms]).map(String).filter(Boolean).slice(0, 8);
           const prefix = this.normalizePrefix(args.path_prefix);
-          const pool = prefix ? ctx.rankedFiles.filter((path) => path.toLowerCase().startsWith(prefix)) : ctx.rankedFiles;
-          const candidates = this.rankFiles(pool, terms.map((term) => this.normalizeText(term))).slice(0, CODE_AGENT_BUDGET.maxSearchFiles);
-          emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidates.length} archivos` });
-          if (candidates.length === 0) return 'No hay archivos candidatos para buscar.';
+          const trees = this.treesFor(ctx.repoTrees, args.repo || repoFromPath);
+          const multi = ctx.repoTrees.length > 1;
+          const normalizedTerms = terms.map((term) => this.normalizeText(term));
+          // El cupo de archivos se reparte entre los repos de la HU, por afinidad de nombre con los términos.
+          const pools = trees.map((repoTree) => ({
+            repoTree,
+            pool: prefix ? repoTree.files.filter((path) => path.toLowerCase().startsWith(prefix)) : repoTree.files,
+          }));
+          const poolSize = pools.reduce((sum, item) => sum + item.pool.length, 0);
+          const perRepo = Math.max(CODE_AGENT_BUDGET.searchBatchSize, Math.floor(CODE_AGENT_BUDGET.maxSearchFiles / Math.max(1, pools.length)));
+          const plan = pools.map(({ repoTree, pool }) => ({ repoTree, files: this.rankFiles(pool, normalizedTerms).slice(0, perRepo) }));
+          const candidateCount = plan.reduce((sum, item) => sum + item.files.length, 0);
+          emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidateCount} archivos${plan.length > 1 ? ` de ${plan.length} repos` : ''}` });
+          if (candidateCount === 0) return 'No hay archivos candidatos para buscar.';
           // El backend lee hasta 30 archivos por llamada: se reparte en lotes paralelos.
-          const batches: string[][] = [];
-          for (let i = 0; i < candidates.length; i += CODE_AGENT_BUDGET.searchBatchSize) {
-            batches.push(candidates.slice(i, i + CODE_AGENT_BUDGET.searchBatchSize));
+          const batches: { ref: RepoRef; name: string; files: string[] }[] = [];
+          for (const { repoTree, files } of plan) {
+            for (let i = 0; i < files.length; i += CODE_AGENT_BUDGET.searchBatchSize) {
+              batches.push({ ref: repoTree.ref, name: repoTree.name, files: files.slice(i, i + CODE_AGENT_BUDGET.searchBatchSize) });
+            }
           }
-          const results = await Promise.all(batches.map((batch) => this.gateway.search(ctx.primaryRef, terms, batch)
-            .catch(() => ({ searchedFiles: 0, matches: [] }))));
+          const results = await Promise.all(batches.map((batch) => this.gateway.search(batch.ref, terms, batch.files)
+            .then((result) => ({ ...result, matches: result.matches.map((match) => ({ ...match, path: multi ? `${batch.name}:${match.path}` : match.path })) }))
+            .catch(() => ({ searchedFiles: 0, matches: [] as AzureRepoSearchResult['matches'] }))));
           const searched = results.reduce((sum, result) => sum + result.searchedFiles, 0);
           const matches = results.flatMap((result) => result.matches).slice(0, CODE_AGENT_BUDGET.maxSearchMatches);
-          const coverage = searched < pool.length
-            ? `Búsqueda PARCIAL: ${searched} de ${pool.length} archivos (los más afines por nombre); que no aparezca no prueba que no exista.`
+          const coverage = searched < poolSize
+            ? `Búsqueda PARCIAL: ${searched} de ${poolSize} archivos (los más afines por nombre); que no aparezca no prueba que no exista.`
             : `Búsqueda completa: ${searched} archivos.`;
           return matches.length
             ? `${coverage}\n${matches.map((match) => `${match.path}:${match.line}: ${match.text}`).join('\n')}`
@@ -805,6 +834,49 @@ export class CodeAgentRunner {
       emit({ type: 'tool', message: `⚠️ ${name}: ${message}` });
       return `ERROR al ejecutar ${name}: ${message}`;
     }
+  }
+
+  /** Árbol de cada repo de la HU (el principal ya descargado; los demás en paralelo). */
+  private async loadRepoTrees(workspaces: Workspace[], primaryFiles: string[], keywords: string[]): Promise<RepoTree[]> {
+    const byName = new Map<string, Workspace>();
+    workspaces.forEach((ws) => { if (!byName.has(ws.name)) byName.set(ws.name, ws); });
+    const list = Array.from(byName.values());
+    if (list.length <= 1) {
+      return [{ name: list[0]?.name || '', ref: list[0]?.ref as RepoRef, files: primaryFiles }];
+    }
+    return Promise.all(list.map(async (ws, index) => ({
+      name: ws.name,
+      ref: ws.ref,
+      files: this.rankFiles(index === 0 ? primaryFiles : (await this.gateway.getTree(ws.ref, '/').catch(() => ({ files: [] as string[] }))).files, keywords),
+    })));
+  }
+
+  private treesFor(trees: RepoTree[], repo: unknown): RepoTree[] {
+    const wanted = String(repo || '').trim().toLowerCase();
+    const match = wanted ? trees.filter((tree) => tree.name.toLowerCase() === wanted) : [];
+    return match.length ? match : trees;
+  }
+
+  /**
+   * Quita el prefijo "REPO:" de path/path_prefix/files[].path (así los muestran list_files y search_code
+   * con varios repos) y devuelve ese repo para resolver el espacio de trabajo.
+   */
+  private splitRepoPaths(args: any, workspaces: Workspace[]): string {
+    if (!args || workspaces.length < 2) return '';
+    let found = '';
+    const strip = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value;
+      const match = value.match(/^([A-Za-z0-9_.-]+):(\/.*)$/);
+      if (match && workspaces.some((ws) => ws.name.toLowerCase() === match[1].toLowerCase())) {
+        found = found || match[1];
+        return match[2];
+      }
+      return value;
+    };
+    args.path = strip(args.path);
+    args.path_prefix = strip(args.path_prefix);
+    if (Array.isArray(args.files)) args.files = args.files.map((file: any) => (file && typeof file === 'object' ? { ...file, path: strip(file.path) } : file));
+    return found;
   }
 
   private resolveWorkspace(workspaces: Workspace[], repo: unknown): Workspace | undefined {

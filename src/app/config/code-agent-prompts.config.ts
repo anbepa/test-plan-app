@@ -388,12 +388,13 @@ export const CODE_AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'search_code',
-      description: 'Busca términos dentro del contenido de los archivos más relevantes (máx. 30 archivos). Devuelve ruta:línea y texto.',
+      description: 'Busca términos dentro del contenido de los archivos más relevantes de los repos de la HU (máx. 150 archivos, repartidos entre los repos). Devuelve ruta:línea y texto; con varios repos, REPO:ruta.',
       parameters: {
         type: 'object',
         properties: {
           terms: { type: 'array', items: { type: 'string' }, description: 'Términos a buscar (identificadores, mensajes, nombres de campos). Máx. 8.' },
           path_prefix: { type: 'string', description: 'Restringe la búsqueda a esta carpeta. Opcional.' },
+          repo: { type: 'string', description: 'Busca solo en este repositorio de la HU. Opcional: sin él busca en todos.' },
         },
         required: ['terms'],
       },
@@ -417,12 +418,13 @@ export const CODE_AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'list_files',
-      description: 'Lista rutas de archivos del árbol de la rama. Úsalo para descubrir estructura.',
+      description: 'Lista rutas de archivos del árbol de los repos de la HU (con varios repos, como REPO:ruta). Úsalo para descubrir estructura.',
       parameters: {
         type: 'object',
         properties: {
           path_prefix: { type: 'string', description: 'Carpeta inicial, ej. /src/modules/pagos. Opcional.' },
           contains: { type: 'string', description: 'Texto que debe contener la ruta (sin distinguir mayúsculas). Opcional.' },
+          repo: { type: 'string', description: 'Lista solo este repositorio de la HU. Opcional: sin él lista todos.' },
         },
       },
     },

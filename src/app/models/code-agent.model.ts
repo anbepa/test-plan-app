@@ -146,7 +146,8 @@ export interface WorkItemChangeGroup {
   repositoryName: string;
   targetBranch: string;
   sourceBranches: string[];
-  prs: { id: number; title: string; status: string; sourceBranch: string; targetBranch: string }[];
+  /** description: lo que el desarrollador explicó en el PR (sin repetir el título), si aporta. */
+  prs: { id: number; title: string; description?: string; status: string; sourceBranch: string; targetBranch: string }[];
   commits: { sha: string; comment?: string }[];
   lastDate: string | null;
   lastCommit: string;
