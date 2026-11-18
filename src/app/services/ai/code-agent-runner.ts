@@ -521,8 +521,7 @@ export class CodeAgentRunner {
 
     const header = workspaces.map((ws) => {
       const group = ws.group;
-      const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`
-        + (pr.description ? `\n      Descripción del PR: ${pr.description}` : ''));
+      const prs = group.prs.map((pr) => `PR ${pr.id} "${pr.title}" (${pr.status}, ${pr.sourceBranch} → ${pr.targetBranch})`);
       const commits = group.commits.map((commit) => `commit ${commit.sha.slice(0, 8)} "${commit.comment || ''}"`);
       const extra = group.extraOver ? ` (trae cambios adicionales a los de ${group.extraOver}; sus diffs muestran solo lo adicional)` : '';
       return `Repositorio ${ws.name} → ${group.targetBranch}${extra}${group.alsoMergedInto.length ? ` (también integrado en ${group.alsoMergedInto.join(', ')})` : ''}:\n${[...prs, ...commits].map((line) => `  - ${line}`).join('\n')}`;

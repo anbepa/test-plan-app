@@ -756,8 +756,6 @@ async function getWorkItemChanges(organization, pat, workItemId) {
       const info = {
         id: Number(ref.prId),
         title: String(pr.title || '').slice(0, 160),
-        description: String(pr.description || '').replace(/\s+/g, ' ').trim().toLowerCase() === String(pr.title || '').trim().toLowerCase()
-          ? '' : String(pr.description || '').replace(/\s+/g, ' ').trim().slice(0, 500),
         status: pr.status,
         sourceBranch: stripHeads(pr.sourceRefName),
         targetBranch: stripHeads(pr.targetRefName),

@@ -286,21 +286,6 @@ async function searchApplication(token, owner, body) {
 // Código de la HU (por el ID de la HU de Azure Boards)
 // ---------------------------------------------------------------------------
 
-/**
- * Descripción útil del PR para el agente: sin el pie de "work items vinculados" que agrega la migración
- * desde Azure, sin repetir el título y acotada. Vacía si no aporta nada.
- */
-function prDescription(body, title) {
-  const text = String(body || '')
-    .split(/\n-{3,}\s*\n/)[0]
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\r/g, '')
-    .trim();
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (!clean || clean.toLowerCase() === String(title || '').trim().toLowerCase()) return '';
-  return clean.slice(0, 500);
-}
-
 /** El ID aparece como número suelto (no dentro de otro número): "HU7743787", "AB#7743787", "7743787". */
 function mentionsId(text, id) {
   return new RegExp(`(^|\\D)${id}(?!\\d)`).test(String(text || ''));
@@ -385,7 +370,6 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
       const info = {
         id: pr.number,
         title: String(pr.title || '').slice(0, 160),
-        description: prDescription(pr.body, pr.title),
         status: pr.merged_at ? 'completed' : pr.state === 'open' ? 'active' : 'abandoned',
         sourceBranch: pr.head && pr.head.ref,
         targetBranch: pr.base && pr.base.ref,
@@ -549,7 +533,6 @@ module.exports = {
   parseOwnerInput,
   // pruebas
   mentionsId,
-  prDescription,
   parseFilter,
   changeTypeOf,
 };
