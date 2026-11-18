@@ -1525,3 +1525,43 @@
   .plan-tree-main { min-height: 260px; }
   .tc-list { max-height: 50vh; }
 }
+
+/* ===== Móvil: tarjeta compacta de ejecución y filtros legibles ===== */
+@media (max-width: 640px) {
+  .plans-table tbody tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.6rem;
+    padding: 0.8rem 2.6rem 0.8rem 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+  .plans-table tbody td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .plans-table tbody td::before { content: none; }
+  .plans-table tbody td[data-label="Seleccionar"] { position: absolute; top: 0.8rem; right: 0.8rem; }
+  /* Nombre y HU arriba, a todo el ancho */
+  .plans-table tbody td[data-label="Nombre"] { flex-basis: 100%; order: -2; }
+  .plans-table tbody td[data-label="Nombre"] .plan-title-link { font-size: 0.95rem; font-weight: 600; text-align: left; padding: 0; }
+  .plans-table tbody td[data-label="HU"] { flex-basis: 100%; order: -1; }
+  .plans-table tbody td[data-label="HU"] .cell-meta {
+    display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 0.8rem; color: #6b7280; text-align: left;
+  }
+  /* Una línea: estado · progreso · hace N días */
+  .plans-table tbody td[data-label="Progreso"] { flex: 1 1 8rem; min-width: 0; }
+  .plans-table tbody td[data-label="Progreso"] .progress-cell { align-items: flex-start; }
+  .plans-table tbody td[data-label="Fecha"] .date-main { display: none; }
+  .plans-table tbody td[data-label="Fecha"] .date-ago { font-size: 0.78rem; color: #6b7280; }
+  .plans-table tbody td[data-label="Etiquetas"]:empty,
+  .plans-table tbody td[data-label="Etiquetas"] .row-tags:empty { display: none; }
+}
+@media (max-width: 640px) {
+  .filters-bar .filter-group { flex-direction: column; width: 100%; }
+  .filters-bar .filter-select { width: 100%; }
+}

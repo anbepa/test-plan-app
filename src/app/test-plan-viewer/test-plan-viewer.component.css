@@ -2379,3 +2379,57 @@ button svg,
   color: var(--text-secondary);
   margin: 0;
 }
+/* ===== Móvil: tarjeta compacta de plan (nombre + una línea de datos) ===== */
+@media (max-width: 640px) {
+  .plans-table:not(.hu-table) tbody tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0;
+    padding: 0.8rem 2.6rem 0.8rem 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+  .plans-table:not(.hu-table) tbody td {
+    display: inline;
+    padding: 0;
+    border: 0;
+    font-size: 0.82rem;
+    color: #6b7280;
+    text-align: left;
+  }
+  .plans-table:not(.hu-table) tbody td::before { content: none; }
+  /* Casilla en la esquina, sin la fila "Seleccionar" */
+  .plans-table:not(.hu-table) tbody td[data-label="Seleccionar"] {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.8rem;
+  }
+  /* Nombre arriba, en una línea completa */
+  .plans-table:not(.hu-table) tbody td.plan-title-cell {
+    flex-basis: 100%;
+    order: -1;
+    margin-bottom: 0.25rem;
+  }
+  .plans-table:not(.hu-table) tbody td.plan-title-cell .plan-title-link {
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    padding: 0;
+  }
+  /* Datos en una línea: 04/11/2026 · Sprint 252 · 1 HU · 5 casos · 15 pasos */
+  .plans-table:not(.hu-table) tbody td[data-label="Sprint"]::before,
+  .plans-table:not(.hu-table) tbody td[data-label="Número de HU"]::before,
+  .plans-table:not(.hu-table) tbody td[data-label="Número de casos"]::before,
+  .plans-table:not(.hu-table) tbody td[data-label="Número de pasos"]::before {
+    content: '·';
+    margin: 0 0.4rem;
+    color: #d1d5db;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .plans-table:not(.hu-table) tbody td[data-label="Número de HU"]::after { content: ' HU'; }
+  .plans-table:not(.hu-table) tbody td[data-label="Número de casos"]::after { content: ' casos'; }
+  .plans-table:not(.hu-table) tbody td[data-label="Número de pasos"]::after { content: ' pasos'; }
+}

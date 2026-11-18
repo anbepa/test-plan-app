@@ -941,3 +941,43 @@ button:disabled {
   font-weight: 500;
   cursor: pointer;
 }
+
+/* ===== Configuración más limpia ===== */
+.config-group-title {
+  margin: 1.4rem 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.config-group-title:first-of-type { margin-top: 0.5rem; }
+
+/* El panel abierto queda unido a su encabezado (una sola tarjeta) */
+.section-toggle[aria-expanded="true"] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-color: #f3f4f6;
+  background: #fafafa;
+}
+.section-toggle[aria-expanded="true"] + .config-card {
+  margin-top: 0;
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Sin el título repetido, la cabecera del panel solo lleva el estado y acciones, alineados a la derecha */
+.config-card > .card-header:has(> .card-title.sr-only) { justify-content: flex-end; margin-bottom: 0.5rem; }
+
+/* Estado de la conexión en una franja compacta */
+.inline-status-grid { gap: 0.25rem 1.5rem; padding: 0.6rem 0.85rem; }
+.inline-status-grid .inline-status-label { font-size: 0.72rem; }
+.inline-status-grid .inline-status-value { font-size: 0.85rem; }
+
+@media (max-width: 640px) {
+  .section-toggle { padding: 12px 14px; }
+  .section-label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+  .section-summary { font-size: 0.72rem; }
+  .inline-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

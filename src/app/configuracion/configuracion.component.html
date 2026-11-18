@@ -4,6 +4,8 @@
     <p class="header-subtitle">Administra parámetros globales y conexiones de tu cuenta</p>
   </header>
 
+  <h3 class="config-group-title">Conexiones</h3>
+
   <!-- SECCIÓN 1: Azure DevOps -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('azure')"
@@ -15,7 +17,7 @@
     </button>
     <div class="config-card" *ngIf="accordionOpen.azure" id="panel-azure" role="region" aria-labelledby="toggle-azure" [attr.aria-busy]="isBusy">
       <div class="card-header">
-        <h3 class="card-title">Azure DevOps</h3>
+        <h3 class="card-title sr-only">Azure DevOps</h3>
         <span class="connection-badge" [attr.data-tone]="azureStatusTone">{{ azureStatusLabel }}</span>
       </div>
 
@@ -30,7 +32,7 @@
         </div>
         <div class="inline-status-item">
           <span class="inline-status-label">Última validación</span>
-          <strong class="inline-status-value">{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'medium') : 'Sin validación reciente' }}</strong>
+          <strong class="inline-status-value">{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'dd/MM/yyyy HH:mm') : 'Sin validación reciente' }}</strong>
         </div>
       </div>
 
@@ -105,7 +107,7 @@
     </button>
     <div class="config-card" *ngIf="accordionOpen.githubCode" id="panel-githubCode" role="region" aria-labelledby="toggle-githubCode" [attr.aria-busy]="githubCodeBusy">
       <div class="card-header">
-        <h3 class="card-title">GitHub (código de la HU)</h3>
+        <h3 class="card-title sr-only">GitHub (código de la HU)</h3>
         <span class="connection-badge" [attr.data-tone]="githubCodeStatusTone">{{ githubCodeStatusLabel }}</span>
       </div>
       <p class="field-hint">
@@ -192,7 +194,7 @@
     </button>
     <div class="config-card" *ngIf="accordionOpen.github" id="panel-github" role="region" aria-labelledby="toggle-github" [attr.aria-busy]="isGithubBusy">
       <div class="card-header">
-        <h3 class="card-title">GitHub Models (Copilot)</h3>
+        <h3 class="card-title sr-only">GitHub Models (Copilot)</h3>
         <div class="card-header-actions">
           <!-- Toggle global de activación, junto al título -->
           <div class="header-toggle" *ngIf="githubConnection">
@@ -327,6 +329,8 @@
     </div>
   </div>
 
+  <h3 class="config-group-title">Datos de los planes</h3>
+
   <!-- SECCIÓN 4: Parámetros Globales -->
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('global')"
@@ -445,13 +449,13 @@
   <div class="config-section">
     <button class="section-toggle" type="button" (click)="toggleSection('cells')"
             [attr.aria-expanded]="accordionOpen.cells" aria-controls="panel-cells" id="toggle-cells">
-      <span class="section-label">Nombre Célula
+      <span class="section-label">Células
         <span class="section-summary">{{ sectionSummary('cells') }}</span>
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.cells" aria-hidden="true">▾</span>
     </button>
     <div class="config-card" *ngIf="accordionOpen.cells" id="panel-cells" role="region" aria-labelledby="toggle-cells" [attr.aria-busy]="savingCells">
-      <h3 class="card-title">Lista de "Nombre Célula"</h3>
+      <h3 class="card-title">Células</h3>
       <p class="card-description">Opciones del campo <strong>Nombre Célula</strong> al crear un plan. Se guardan en tu cuenta.</p>
       <div class="form-grid">
         <div class="form-group full-width">
