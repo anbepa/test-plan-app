@@ -183,7 +183,7 @@
           <button type="button" class="btn-primary" (click)="buildCodeIndex()" [disabled]="indexBusy">Indexar ahora</button>
         </div>
         <p *ngIf="indexPlan" class="field-hint">
-          {{ indexPlan.indexedRepos }} de {{ indexPlan.repos }} repos indexados · {{ indexPlan.files }} archivos
+          {{ indexPlan.indexedRepos }} de {{ indexPlan.repos }} repos indexados · {{ indexPlan.files }} líneas
           <ng-container *ngIf="indexPlan.lastIndexedAt"> · última actualización {{ indexPlan.lastIndexedAt | date:'dd/MM/yyyy HH:mm' }}</ng-container>
           <ng-container *ngIf="indexPlan.pending.length"> · {{ indexPlan.pending.length }} pendiente(s)</ng-container>
         </p>

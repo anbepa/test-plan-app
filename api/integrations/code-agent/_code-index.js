@@ -131,6 +131,9 @@ function classify(line, e) {
     if ((m = /routerLink\s*=\s*"([^"]+)"/.exec(t))) return { kind: 'endpoint', object: m[1] };
     if ((m = /formControlName\s*=\s*"([^"]+)"/.exec(t))) return { kind: 'def', object: m[1] };
     if ((m = />\s*([^<>{}]*[A-Za-zÁÉÍÓÚáéíóúñÑ]{3}[^<>{}]{0,77})\s*</.exec(t))) return { kind: 'const', object: m[1].trim().slice(0, 80) };
+    // Texto visible en su propia línea (entre etiquetas de varias líneas): botones, títulos, etiquetas.
+    if (/^[^<>{}=]*[A-Za-zÁÉÍÓÚáéíóúñÑ]{3}[^<>{}=]*$/.test(t) && t.length <= 100) return { kind: 'const', object: t.slice(0, 80) };
+    if ((m = /(?:placeholder|title|aria-label|label)\s*=\s*"([^"{}]*[A-Za-zÁÉÍÓÚáéíóúñÑ]{3}[^"{}]*)"/.exec(t))) return { kind: 'const', object: m[1].slice(0, 80) };
     return null;
   }
   if (e === 'yaml' || e === 'yml' || e === 'properties') {
