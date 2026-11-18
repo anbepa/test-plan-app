@@ -160,6 +160,11 @@ export class AzureReposService {
     });
   }
 
+  /** GitHub busca sobre una sola descarga del repo: todas las rutas en una llamada. Azure: lotes de 30 (por defecto). */
+  searchLimits(): { batchSize: number; maxFiles: number } | null {
+    return this.provider === 'github' ? { batchSize: 5000, maxFiles: 5000 } : null;
+  }
+
   search(ref: RepoRef, terms: string[], paths: string[]): Observable<AzureRepoSearchResult> {
     return this.authorizedPost<AzureRepoSearchResult>(`${this.baseUrl}/search`, { ...ref, terms, paths });
   }

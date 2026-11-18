@@ -81,4 +81,16 @@ describe('CodeAgentRunner · varios repos de la HU', () => {
     const [ref] = gateway.search.calls.mostRecent().args;
     expect(ref).toEqual(maintenance);
   });
+
+  it('con GitHub (searchLimits) busca en una sola llamada por repo con todas sus rutas', async () => {
+    const { runner, workspaces, gateway } = setup();
+    gateway.searchLimits = () => ({ batchSize: 5000, maxFiles: 5000 });
+    const ctx = await ctxFor(runner, workspaces);
+    const result: string = await runner.executeTool('search_code', { terms: ['conciliation'] }, ctx);
+    const calls = gateway.search.calls.allArgs();
+    expect(calls.length).toBe(2);
+    const sqlCall = calls.find((args: any[]) => args[0].repositoryId === 'NU0139001_SAF_SQL');
+    expect(sqlCall[2].length).toBe(3);
+    expect(result).toContain('Búsqueda completa');
+  });
 });

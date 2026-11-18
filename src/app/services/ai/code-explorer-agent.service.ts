@@ -79,6 +79,7 @@ export class CodeExplorerAgentService {
       getTree: (ref, scopePath) => firstValueFrom(this.azureRepos.getTree(ref, scopePath)),
       readFiles: (ref, files) => firstValueFrom(this.azureRepos.readFiles(ref, files)),
       search: (ref, terms, paths) => firstValueFrom(this.azureRepos.search(ref, terms, paths)),
+      searchLimits: () => this.azureRepos.searchLimits(),
       getBranchDiff: (ref, baseBranch) => firstValueFrom(this.azureRepos.getBranchDiff(ref, baseBranch)),
       getFileDiff: (ref, change, baseCommit, targetCommit, segments) => firstValueFrom(this.azureRepos.getFileDiff(ref, change, baseCommit, targetCommit, segments)),
       searchApp: (projectId, repoPrefixes, terms) => firstValueFrom(this.azureRepos.searchApplication(projectId, repoPrefixes, terms)),

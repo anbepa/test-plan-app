@@ -16,6 +16,7 @@
 const fetch = require('node-fetch');
 const core = require('./_azure-repos-core.js');
 const codeIndex = require('./_code-index.js');
+const snapshots = require('./_repo-snapshot.js');
 
 const { CodeAgentError, LIMITS, isReadableFile, redactSecrets, requireString, normalizeBranch, resolveVersion, mapLimit } = core;
 
@@ -118,7 +119,12 @@ function changeTypeOf(status) {
 
 function githubSource(token) {
   return {
-    content: (owner, repo, ref, path) => fetchFileContent(token, owner, repo, ref, path),
+    // Si el repo@versión ya se descargó completo (search_code), se lee de ahí sin consultar GitHub.
+    content: (owner, repo, ref, path) => {
+      const files = snapshots.peek(owner, repo, ref);
+      const key = toRepoPath(path);
+      return files && files.has(key) ? Promise.resolve(files.get(key)) : fetchFileContent(token, owner, repo, ref, path);
+    },
     treeFiles: (owner, repo, commit) => getTree(token, owner, repo, { version: commit }, '/').then((tree) => tree.files),
   };
 }
@@ -467,6 +473,30 @@ async function getWorkItemChanges(token, owner, repoFilter, workItemId) {
   return result;
 }
 
+/**
+ * search_code sobre una sola descarga del repo (en vez de leer archivo por archivo): busca en las rutas
+ * pedidas o, si no vienen, en todo el repo. Hasta LIMITS.maxSearchMatches coincidencias.
+ */
+const MAX_SEARCH_PATHS = 5000;
+async function searchInRepo(token, owner, repo, ver, terms, paths) {
+  const cleanTerms = (Array.isArray(terms) ? terms : [terms]).map((term) => String(term || '').trim().toLowerCase())
+    .filter((term) => term.length >= 2).slice(0, 8);
+  if (!cleanTerms.length) throw new CodeAgentError(400, 'Debes indicar al menos un término de búsqueda.');
+  const files = await snapshots.getSnapshot(token, owner, repo, ver.version);
+  const wanted = (Array.isArray(paths) ? paths : []).slice(0, MAX_SEARCH_PATHS).map(toRepoPath);
+  const candidates = wanted.length ? wanted.filter((path) => files.has(path)) : Array.from(files.keys());
+  const matches = [];
+  for (const path of candidates) {
+    const lines = redactSecrets(files.get(path)).split(/\r?\n/);
+    for (let i = 0; i < lines.length && matches.length < LIMITS.maxSearchMatches; i++) {
+      const lower = lines[i].toLowerCase();
+      if (cleanTerms.some((term) => lower.includes(term))) matches.push({ path, line: i + 1, text: lines[i].trim().slice(0, 220) });
+    }
+    if (matches.length >= LIMITS.maxSearchMatches) break;
+  }
+  return { searchedFiles: candidates.length, matches };
+}
+
 /** Error para la pantalla cuando GitHub limitó las consultas: hasta cuándo, en hora de Colombia. */
 function limitError(resetAt) {
   const when = resetAt
@@ -571,7 +601,7 @@ async function handleGithubRoute({ route, method, query, body, owner, repoFilter
         return codeIndex.indexRepo(db, token, owner, requireString(b.repo, 'repo'));
       }
       case 'search':
-        return core.searchInFiles(source, project, requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
+        return searchInRepo(token, project, requireString(b.repositoryId, 'repositoryId'), resolveVersion(b), b.terms, b.paths);
       default:
         break;
     }

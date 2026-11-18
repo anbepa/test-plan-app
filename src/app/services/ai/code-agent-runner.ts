@@ -60,6 +60,11 @@ export interface CodeAgentGateway {
   search(ref: RepoRef, terms: string[], paths: string[]): Promise<AzureRepoSearchResult>;
   getBranchDiff(ref: RepoRef, baseBranch: string): Promise<AzureBranchDiff>;
   getFileDiff(ref: RepoRef, change: AzureBranchChange, baseCommit: string, targetCommit: string, segments?: FileDiffSegments): Promise<AzureFileDiff>;
+  /**
+   * Límites de search_code del origen (opcional). GitHub busca sobre una sola descarga del repo,
+   * así que acepta todas las rutas en una llamada; Azure lee archivo por archivo (lotes de 30).
+   */
+  searchLimits?(): { batchSize: number; maxFiles: number } | null;
   /** Búsqueda en todos los repos del aplicativo (opcional: sin ella, search_app no está disponible). */
   searchApp?(projectId: string, repoPrefixes: string[], terms: string[]): Promise<AzureAppSearchResult>;
 }
@@ -765,7 +770,8 @@ export class CodeAgentRunner {
             pool: prefix ? repoTree.files.filter((path) => path.toLowerCase().startsWith(prefix)) : repoTree.files,
           }));
           const poolSize = pools.reduce((sum, item) => sum + item.pool.length, 0);
-          const perRepo = Math.max(CODE_AGENT_BUDGET.searchBatchSize, Math.floor(CODE_AGENT_BUDGET.maxSearchFiles / Math.max(1, pools.length)));
+          const limits = this.gateway.searchLimits?.() || { batchSize: CODE_AGENT_BUDGET.searchBatchSize, maxFiles: CODE_AGENT_BUDGET.maxSearchFiles };
+          const perRepo = Math.max(limits.batchSize === CODE_AGENT_BUDGET.searchBatchSize ? CODE_AGENT_BUDGET.searchBatchSize : 1, Math.floor(limits.maxFiles / Math.max(1, pools.length)));
           const plan = pools.map(({ repoTree, pool }) => ({ repoTree, files: this.rankFiles(pool, normalizedTerms).slice(0, perRepo) }));
           const candidateCount = plan.reduce((sum, item) => sum + item.files.length, 0);
           emit({ type: 'tool', message: `🔎 Buscando “${terms.join(', ')}” en ${candidateCount} archivos${plan.length > 1 ? ` de ${plan.length} repos` : ''}` });
@@ -773,8 +779,8 @@ export class CodeAgentRunner {
           // El backend lee hasta 30 archivos por llamada: se reparte en lotes paralelos.
           const batches: { ref: RepoRef; name: string; files: string[] }[] = [];
           for (const { repoTree, files } of plan) {
-            for (let i = 0; i < files.length; i += CODE_AGENT_BUDGET.searchBatchSize) {
-              batches.push({ ref: repoTree.ref, name: repoTree.name, files: files.slice(i, i + CODE_AGENT_BUDGET.searchBatchSize) });
+            for (let i = 0; i < files.length; i += limits.batchSize) {
+              batches.push({ ref: repoTree.ref, name: repoTree.name, files: files.slice(i, i + limits.batchSize) });
             }
           }
           const results = await Promise.all(batches.map((batch) => this.gateway.search(batch.ref, terms, batch.files)
