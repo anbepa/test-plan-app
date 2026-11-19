@@ -171,7 +171,11 @@ async function triggerAzureRelease(
     if (response.status === 403) {
       throw new ApiError(403, 'El PAT de Azure DevOps no tiene permiso para crear releases. Genera uno con permiso Release (Read, write & execute) y actualízalo en Configuración > Azure DevOps.', { code: 'AZURE_PAT_FORBIDDEN' });
     }
-    throw new ApiError(502, `Azure DevOps no pudo crear el release (HTTP ${response.status}).`);
+    // Azure explica el rechazo en "message" (p. ej. variable no editable al crear el release,
+    // definición deshabilitada o artefacto requerido): se muestra para que se pueda corregir.
+    let azureMessage = '';
+    try { azureMessage = String(JSON.parse(errText)?.message || '').trim(); } catch { azureMessage = errText.trim().slice(0, 300); }
+    throw new ApiError(502, `Azure DevOps no pudo crear el release (HTTP ${response.status})${azureMessage ? `: ${azureMessage}` : '.'}`);
   }
 
   const data = await response.json() as any;
