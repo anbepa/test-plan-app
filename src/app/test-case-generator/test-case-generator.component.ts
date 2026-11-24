@@ -17,7 +17,8 @@ import { AzureReposService } from '../services/integrations/azure-repos.service'
 import { CodeExplorerAgentService } from '../services/ai/code-explorer-agent.service';
 import { CriteriaNormalizerService } from '../services/ai/criteria-normalizer.service';
 import { criteriaIds, uncoveredCriteria } from '../services/ai/criteria-normalizer';
-import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, GithubCodeConnection, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../models/code-agent.model';
+import { AzureRepoBranch, AzureRepoProject, AzureRepository, ContextSource, GithubCodeConnection, ExtraCodeTarget, CriterionCodeStatus, WorkItemChangeGroup, WorkItemChanges, changeGroupKey, QaDataResult } from '../models/code-agent.model';
+import { formatQaData, qaDataSummary } from '../shared/utils/qa-data';
 
 interface CoverageRow {
   id: string;
@@ -124,6 +125,18 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   codeHuLimitedUntil: string | null = null;
   /** Exploración automática: se arma al cambiar la HU o el código a analizar (no se repite tras cancelar o fallar). */
   private autoExploreArmed = true;
+
+  // ── Datos reales de QA (stage BD_CONSULTA de Azure DevOps, solo lectura) ──
+  qaDataEnabled = (() => { try { return localStorage.getItem('tcg.qaDataEnabled') === '1'; } catch { return false; } })();
+  qaDataState: 'idle' | 'building' | 'running' | 'done' | 'error' = 'idle';
+  qaDataText = '';
+  qaDataInfo = '';
+  qaDataError: string | null = null;
+  qaDataResult: QaDataResult | null = null;
+  showQaData = false;
+  private qaDataRun = 0;
+  private qaDataTimer: ReturnType<typeof setTimeout> | null = null;
+  private qaDataThen: (() => void) | null = null;
   private autoExploreTimer: ReturnType<typeof setTimeout> | null = null;
   /** Grupos de cambios de la HU que el usuario desmarcó (changeGroupKey). */
   codeExcludedGroups = new Set<string>();
@@ -236,6 +249,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   get generateButtonLabel(): string {
     if (this.normalizingCriteria) return 'Interpretando criterios…';
     if (this.codeExploring) return 'Explorando código…';
+    if (this.qaDataPending) return 'Buscando datos de QA…';
     if (this.loadingScope || this.loadingScenarios) return 'Generando…';
     if (this.usesCodeContext && !this.codeContextText.trim()) return 'Explorar código y generar casos';
     return 'Generar casos de prueba';
@@ -823,6 +837,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     if (this.autoExploreTimer) clearTimeout(this.autoExploreTimer);
+    this.resetQaData();
     this.unbindPointerTracking();
     this.stopAiProgress();
     this.aiStreamSub?.unsubscribe();
@@ -1454,6 +1469,94 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     }, 800);
   }
 
+  get qaDataPending(): boolean {
+    return this.qaDataState === 'building' || this.qaDataState === 'running';
+  }
+
+  onQaDataToggle(enabled: boolean): void {
+    this.qaDataEnabled = enabled;
+    try { localStorage.setItem('tcg.qaDataEnabled', enabled ? '1' : '0'); } catch { /* sin almacenamiento */ }
+    if (enabled && this.codeContextText.trim() && !this.codeExploring && this.qaDataState === 'idle') this.runQaData();
+    if (!enabled) this.resetQaData();
+  }
+
+  /**
+   * Busca en la BD de QA (stage BD_CONSULTA de Azure, solo lectura) registros que cumplan
+   * los datos que piden los casos. Las consultas salen del contexto técnico; el mismo
+   * conjunto de consultas se reutiliza 6 h sin crear otro release.
+   */
+  async runQaData(force = false): Promise<void> {
+    if (!this.codeContextText.trim()) return;
+    const run = ++this.qaDataRun;
+    this.clearQaDataTimer();
+    this.qaDataState = 'building'; this.qaDataError = null; this.qaDataInfo = 'Armando consultas a partir del contexto técnico…';
+    this.cdr.detectChanges();
+    try {
+      const queries = await this.codeExplorerAgent.buildQaDataQueries(this.codeContextText);
+      if (run !== this.qaDataRun) return;
+      if (!queries.length) throw new Error('El contexto técnico no trae tablas de "Datos a preparar" para buscar datos.');
+      this.qaDataInfo = `Consultando ${queries.length} dato(s) en la BD de QA (Azure, 1–2 min)…`;
+      this.qaDataState = 'running';
+      this.cdr.detectChanges();
+      const started = await firstValueFrom(this.azureReposService.startQaData(queries, force));
+      if (run !== this.qaDataRun) return;
+      if (started.status === 'done' && started.result) return this.applyQaData(started.result, !!started.cached);
+      const deadline = Date.now() + 8 * 60_000;
+      const poll = async (): Promise<void> => {
+        if (run !== this.qaDataRun) return;
+        try {
+          const status = await firstValueFrom(this.azureReposService.qaDataStatus(started.releaseId!, started.key!));
+          if (run !== this.qaDataRun) return;
+          if (status.status === 'done' && status.result) return this.applyQaData(status.result, false);
+          if (status.status === 'error') throw new Error(status.message || 'La consulta en Azure falló.');
+          if (Date.now() > deadline) throw new Error('Azure tardó más de 8 minutos en devolver los datos.');
+          this.qaDataTimer = setTimeout(poll, 10_000);
+        } catch (error) {
+          this.failQaData(run, error);
+        }
+      };
+      this.qaDataTimer = setTimeout(poll, 15_000);
+    } catch (error) {
+      this.failQaData(run, error);
+    }
+  }
+
+  private applyQaData(result: QaDataResult, cached: boolean): void {
+    this.qaDataResult = result;
+    this.qaDataText = formatQaData(result);
+    this.qaDataInfo = qaDataSummary(result) + (cached ? ' · reutilizado (menos de 6 h)' : '');
+    this.qaDataState = 'done';
+    this.finishQaData();
+  }
+
+  private failQaData(run: number, error: any): void {
+    if (run !== this.qaDataRun) return;
+    this.qaDataState = 'error';
+    this.qaDataError = error?.error?.message || error?.message || 'No se pudieron consultar los datos de QA.';
+    this.qaDataInfo = '';
+    this.finishQaData();
+  }
+
+  /** La generación que esperaba los datos sigue (con o sin ellos: un fallo no la bloquea). */
+  private finishQaData(): void {
+    this.cdr.detectChanges();
+    const then = this.qaDataThen;
+    this.qaDataThen = null;
+    if (then) then();
+  }
+
+  private clearQaDataTimer(): void {
+    if (this.qaDataTimer) clearTimeout(this.qaDataTimer);
+    this.qaDataTimer = null;
+  }
+
+  resetQaData(): void {
+    this.qaDataRun++;
+    this.clearQaDataTimer();
+    this.qaDataState = 'idle'; this.qaDataText = ''; this.qaDataInfo = ''; this.qaDataError = null; this.qaDataResult = null;
+    this.qaDataThen = null;
+  }
+
   exploreCode(onDone?: () => void): void {
     if (!this.isCodeTargetReady || this.codeExploring) return;
     if (!this.currentDescription.trim()) {
@@ -1521,6 +1624,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
         this.codeExploring = false;
         this.cdr.detectChanges();
         setTimeout(() => this.autoGrowFormTextareas(), 0);
+        if (this.codeContextText.trim() && this.qaDataEnabled) this.runQaData();
         if (this.codeContextText.trim() && onDone) onDone();
       }
     });
@@ -1540,6 +1644,7 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   /** reason: por qué se descarta, para explicarlo en el paso "Contexto técnico". */
   clearCodeContext(reason?: string): void {
     this.autoExploreArmed = true;
+    this.resetQaData();
     this.scheduleAutoExplore();
     if (reason && this.codeContextText.trim()) {
       this.setFlowNotice('context', `Se descartó el contexto técnico porque ${reason}. Se vuelve a explorar automáticamente.`);
@@ -1583,6 +1688,11 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
   }
 
   generateInitialHuAndCases(): void {
+    // Si los datos reales de QA siguen llegando, la generación continúa al terminar (como con el código).
+    if (this.qaDataPending) {
+      this.qaDataThen = () => this.generateInitialHuAndCases();
+      return;
+    }
     this.formError = null; this.errorScope = null; this.errorScenarios = null;
     if (this.isFormInvalidForGeneration()) {
       this.formError = "Por favor, completa todos los campos requeridos.";
@@ -1599,7 +1709,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       return;
     }
     this.criteriaCoverageGap = [];
-    const codeContext = this.usesCodeContext ? this.codeContextText.trim() : '';
+    const codeContext = this.usesCodeContext
+      ? [this.codeContextText.trim(), this.qaDataText.trim()].filter(Boolean).join('\n\n')
+      : '';
     const huData: UIHUData = {
       originalInput: {
         generationMode: this.currentGenerationMode,

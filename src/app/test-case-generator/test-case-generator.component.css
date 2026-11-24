@@ -2182,3 +2182,17 @@ button.code-coverage-chip.is-selected {
   .flow-actionbar-full { display: none; }
   .flow-actionbar-compact { display: inline; }
 }
+
+/* Datos reales de QA (stage BD_CONSULTA) */
+.qa-data-box { margin-top: 12px; padding: 10px 12px; border: 1px solid #e3e8ef; border-radius: 8px; background: #fafbfd; }
+.qa-data-toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; color: #344054; cursor: pointer; }
+.qa-data-toggle input { margin-top: 3px; }
+.qa-data-status { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.qa-data-error { color: #b42318; }
+.qa-data-list { margin-top: 8px; display: grid; gap: 10px; }
+.qa-data-label { margin: 0 0 4px; font-weight: 600; font-size: 0.82rem; color: #1d2939; }
+.qa-data-empty { margin: 0; font-size: 0.8rem; color: #667085; }
+.qa-data-table-wrap { overflow-x: auto; }
+.qa-data-table { border-collapse: collapse; font-size: 0.75rem; min-width: 100%; }
+.qa-data-table th, .qa-data-table td { border: 1px solid #e4e7ec; padding: 3px 6px; text-align: left; white-space: nowrap; }
+.qa-data-table th { background: #f2f4f7; font-weight: 600; }

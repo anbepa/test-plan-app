@@ -5,7 +5,9 @@ import { AiProvidersService } from './ai-providers.service';
 import { AzureReposService } from '../integrations/azure-repos.service';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import { TRANSIENT_RETRY_DELAYS_MS, isTransientError } from '../core/transient-retry';
-import { CodeAgentEvent, CodeExplorationInput, ExtraCodeTarget, WorkItemChangeGroup, WorkItemChanges, changeGroupKey } from '../../models/code-agent.model';
+import { CodeAgentEvent, CodeExplorationInput, ExtraCodeTarget, WorkItemChangeGroup, WorkItemChanges, changeGroupKey, QaDataQuery } from '../../models/code-agent.model';
+import { QA_DATA_PROMPTS } from '../../config/code-agent-prompts.config';
+import { parseQaDataQueries } from '../../shared/utils/qa-data';
 import { ChatMessage, CodeAgentGateway, CodeAgentRunner, LlmUsage } from './code-agent-runner';
 
 /**
@@ -158,6 +160,16 @@ export class CodeExplorerAgentService {
     if (providerId === 'gemini') throw new Error('Se requiere DeepSeek o GitHub Models como proveedor activo.');
     const { message } = await this.callLlm(providerId, messages, [], false);
     return message.content || '';
+  }
+
+  /** Consultas SELECT para buscar en QA los datos que piden los casos (stage BD_CONSULTA). */
+  async buildQaDataQueries(context: string): Promise<QaDataQuery[]> {
+    const providerId = this.providersService.getActiveProviderId();
+    const { message } = await this.callLlm(providerId, [
+      { role: 'system', content: QA_DATA_PROMPTS.SYSTEM },
+      { role: 'user', content: QA_DATA_PROMPTS.USER(context) },
+    ] as ChatMessage[], [], false);
+    return parseQaDataQueries(String(message?.content || ''));
   }
 
   private async callLlm(

@@ -3,7 +3,7 @@ import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { defer, firstValueFrom, Observable, switchMap } from 'rxjs';
 import { SupabaseClientService } from '../database/supabase-client.service';
 import { retryTransient } from '../core/transient-retry';
-import {
+import { QaDataQuery, QaDataResponse,
   AzureAppSearchResult,
   AzureBranchChange,
   AzureBranchDiff,
@@ -135,6 +135,15 @@ export class AzureReposService {
 
   readFiles(ref: RepoRef, files: AzureRepoFileRequest[]): Observable<AzureRepoFile[]> {
     return this.authorizedPost<AzureRepoFile[]>(`${this.baseUrl}/files`, { ...ref, files });
+  }
+
+  /** Datos reales de QA: crea el release (solo stage BD_CONSULTA) o devuelve el resultado en caché. */
+  startQaData(queries: QaDataQuery[], force = false): Observable<QaDataResponse> {
+    return this.authorizedPost<QaDataResponse>(`${this.baseUrl}/qa-data/start`, { queries, force });
+  }
+
+  qaDataStatus(releaseId: number, key: string): Observable<QaDataResponse> {
+    return this.authorizedGet<QaDataResponse>(`${this.baseUrl}/qa-data/status`, { releaseId: String(releaseId), key });
   }
 
   /** Búsqueda en todos los repos del aplicativo (los que empiezan por alguno de los prefijos). */

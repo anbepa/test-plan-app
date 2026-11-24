@@ -14,6 +14,7 @@ import {
 const core = require('./_azure-repos-core.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const githubSource = require('./_github-connection.js');
+import * as qaData from './_qa-data';
 
 /**
  * Router catch-all del Agente de exploración de código (Azure Repos o GitHub).
@@ -40,6 +41,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const user = await getAuthenticatedUser(req.headers);
     userId = user.id;
+
+    // Datos reales de QA (stage BD_CONSULTA de Azure DevOps): no dependen del origen del código.
+    if (route === 'qa-data/start' && method === 'POST') {
+      res.status(200).json(await qaData.startQaData(user.id, req.headers, req.body));
+      return;
+    }
+    if (route === 'qa-data/status' && method === 'GET') {
+      res.status(200).json(await qaData.qaDataStatus(user.id, req.headers, req.query));
+      return;
+    }
 
     // Origen GitHub (cabecera X-Code-Provider: github) y su conexión.
     const githubResult = await githubSource.maybeHandleGithub({

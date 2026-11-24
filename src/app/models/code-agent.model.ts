@@ -249,3 +249,18 @@ export interface CodeAgentEvent {
   context?: string;
   filesReviewed?: string[];
 }
+
+// ── Datos reales de QA (stage BD_CONSULTA de Azure DevOps, solo lectura) ──
+
+export interface QaDataQuery { id: string; label?: string; sql: string; }
+export interface QaDataResultItem { id: string; label?: string; columns?: string[]; rows?: (string | null)[][]; error?: string; }
+export interface QaDataResult { fetchedAt: string | null; results: QaDataResultItem[]; }
+export interface QaDataResponse {
+  status: 'running' | 'done' | 'error';
+  key?: string;
+  releaseId?: number;
+  cached?: boolean;
+  stage?: string;
+  message?: string;
+  result?: QaDataResult;
+}

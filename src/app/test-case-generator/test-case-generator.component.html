@@ -375,6 +375,34 @@
                 </button>
                 <button *ngIf="codeExploring" type="button" class="btn-flow-secondary" (click)="cancelCodeExploration()">Cancelar exploración</button>
               </div>
+              <div class="qa-data-box">
+                <label class="qa-data-toggle">
+                  <input type="checkbox" [checked]="qaDataEnabled" (change)="onQaDataToggle($any($event.target).checked)" />
+                  <span><strong>Buscar datos reales en la BD de QA</strong> · Azure DevOps (stage BD_CONSULTA), solo lectura, 1–2 min. Se reutiliza 6 h.</span>
+                </label>
+                <p *ngIf="qaDataEnabled && qaDataState !== 'idle'" class="code-source-hint qa-data-status" [class.qa-data-error]="qaDataState === 'error'" role="status" aria-live="polite">
+                  <span *ngIf="qaDataPending" class="spinner-inline" aria-hidden="true"></span>
+                  <ng-container *ngIf="qaDataState !== 'error'">{{ qaDataInfo }}</ng-container>
+                  <ng-container *ngIf="qaDataState === 'error'">⚠ {{ qaDataError }} Los casos se generan igual, sin datos reales.</ng-container>
+                  <button *ngIf="qaDataState === 'done' && qaDataResult" type="button" class="code-link-btn" (click)="showQaData = !showQaData" [attr.aria-expanded]="showQaData">
+                    {{ showQaData ? 'Ocultar' : 'Ver' }} datos
+                  </button>
+                  <button *ngIf="qaDataState === 'done' || qaDataState === 'error'" type="button" class="code-link-btn" (click)="runQaData(true)">↻ Actualizar</button>
+                </p>
+                <div *ngIf="showQaData && qaDataResult" class="qa-data-list">
+                  <div *ngFor="let item of qaDataResult.results" class="qa-data-item">
+                    <p class="qa-data-label">{{ item.label || item.id }}</p>
+                    <p *ngIf="item.error" class="qa-data-empty">La consulta falló: {{ item.error }}</p>
+                    <p *ngIf="!item.error && !item.rows?.length" class="qa-data-empty">Sin registros en QA: el caso debe crearlo.</p>
+                    <div *ngIf="item.rows?.length" class="qa-data-table-wrap">
+                      <table class="qa-data-table">
+                        <thead><tr><th *ngFor="let c of item.columns">{{ c }}</th></tr></thead>
+                        <tbody><tr *ngFor="let row of item.rows"><td *ngFor="let v of row">{{ v ?? '∅' }}</td></tr></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
