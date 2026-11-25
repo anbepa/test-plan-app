@@ -36,6 +36,9 @@ export class ExecutionStorageService {
    */
   private storageIndex = new Map<string, string>();
   private storageIndexBuilt = false;
+  private storageIndexBuiltAt = 0;
+  /** Tiempo durante el cual un fallo en el índice se da por definitivo. */
+  private readonly STORAGE_INDEX_TRUST_MS = 2 * 60 * 1000;
   private storageIndexPromise: Promise<void> | null = null;
 
   /** Cached user ID to avoid repeated getUser() calls that trigger NavigatorLock errors */
@@ -381,15 +384,15 @@ export class ExecutionStorageService {
     // Determinar el executionId desde el path del stepId o el contexto
     const executionId = this.extractExecutionIdFromContext(image);
 
-    if (image.type === 'csv') {
-      await this.saveCsvEvidence(userId, executionId, image);
-    } else {
-      await this.saveImageEvidence(userId, executionId, image);
-    }
+    const filePath = image.type === 'csv'
+      ? await this.saveCsvEvidence(userId, executionId, image)
+      : await this.saveImageEvidence(userId, executionId, image);
 
-    // Actualizar caché e invalidar índice (la nueva imagen tiene una ruta nueva)
+    // Actualizar caché y registrar la ruta nueva en el índice. Antes se
+    // invalidaba el índice completo, lo que obligaba a volver a listar todas
+    // las carpetas del bucket tras cada subida.
     this.imageCache.set(image.id, { ...image });
-    this.invalidateStorageIndex();
+    if (filePath) this.storageIndex.set(image.id, filePath);
   }
 
   /**
@@ -440,6 +443,7 @@ export class ExecutionStorageService {
 
         await Promise.all(folderListPromises);
         this.storageIndexBuilt = true;
+        this.storageIndexBuiltAt = Date.now();
       } catch (e) {
         console.warn('buildStorageIndex error:', e);
       } finally {
@@ -456,6 +460,25 @@ export class ExecutionStorageService {
   invalidateStorageIndex(): void {
     this.storageIndex.clear();
     this.storageIndexBuilt = false;
+    this.storageIndexBuiltAt = 0;
+  }
+
+  /**
+   * Ruta de una evidencia en Storage. Si el índice se construyó hace poco, ya
+   * contiene todas las carpetas del usuario y un fallo significa que el archivo
+   * no existe: así se evita volver a listar todas las carpetas por cada imagen
+   * que falta (era la consulta más costosa en la base de datos). Con un índice
+   * más viejo se hace la búsqueda completa por si otra sesión subió archivos.
+   */
+  private async resolveStoragePath(userId: string, imageId: string): Promise<string | null> {
+    const indexed = this.storageIndex.get(imageId);
+    if (indexed) return indexed;
+    const indexIsFresh = this.storageIndexBuilt
+      && Date.now() - this.storageIndexBuiltAt < this.STORAGE_INDEX_TRUST_MS;
+    if (indexIsFresh) return null;
+    const found = await this.findFileInStorage(userId, imageId);
+    if (found) this.storageIndex.set(imageId, found);
+    return found;
   }
 
   /**
@@ -498,7 +521,7 @@ export class ExecutionStorageService {
     // 3. Buscar en Storage
     try {
       const userId = await this.getCurrentUserId();
-      const filePath = this.storageIndex.get(imageId) || await this.findFileInStorage(userId, imageId);
+      const filePath = await this.resolveStoragePath(userId, imageId);
 
       if (!filePath) return null;
 
@@ -577,7 +600,7 @@ export class ExecutionStorageService {
       const userId = await this.getCurrentUserId();
       // Use index first to avoid re-listing folders
       await this.buildStorageIndex();
-      const filePath = this.storageIndex.get(imageId) || await this.findFileInStorage(userId, imageId);
+      const filePath = await this.resolveStoragePath(userId, imageId);
 
       if (filePath) {
         // Borrar imagen + metadata asociada
@@ -811,8 +834,8 @@ export class ExecutionStorageService {
     return 'unassigned';
   }
 
-  private async saveImageEvidence(userId: string, executionId: string, image: AssetEvidence): Promise<void> {
-    if (!image.base64Data) return;
+  private async saveImageEvidence(userId: string, executionId: string, image: AssetEvidence): Promise<string | null> {
+    if (!image.base64Data) return null;
 
     // Comprimir a WebP si es posible
     let fileBlob: Blob;
@@ -864,10 +887,12 @@ export class ExecutionStorageService {
         upsert: true,
         contentType: 'application/json'
       });
+
+    return filePath;
   }
 
-  private async saveCsvEvidence(userId: string, executionId: string, asset: AssetEvidence): Promise<void> {
-    if (!asset.tabularData) return;
+  private async saveCsvEvidence(userId: string, executionId: string, asset: AssetEvidence): Promise<string | null> {
+    if (!asset.tabularData) return null;
     const filePath = `${userId}/${executionId}/${asset.id}.json`;
 
     // Serializar todo el asset (sin base64, porque CSV no tiene)
@@ -896,6 +921,8 @@ export class ExecutionStorageService {
       console.error('❌ Error al subir CSV:', error);
       throw error;
     }
+
+    return filePath;
   }
 
   /**
