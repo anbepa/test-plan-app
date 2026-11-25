@@ -19,20 +19,30 @@
 
     <div class="pe-body">
       <!-- Plan que se exporta -->
-      <div class="plan-meta" *ngIf="testPlanTitle || huCount > 0">
-        <span class="plan-meta-title" *ngIf="testPlanTitle" [title]="testPlanTitle">{{ testPlanTitle }}</span>
+      @if (testPlanTitle || huCount > 0) {
+<div class="plan-meta">
+        @if (testPlanTitle) {
+<span class="plan-meta-title" [title]="testPlanTitle">{{ testPlanTitle }}</span>
+}
         <span class="plan-meta-chips">
-          <span class="meta-chip" *ngIf="huCount > 0">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }}</span>
-          <span class="meta-chip" *ngIf="scenarioCount > 0">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
+          @if (huCount > 0) {
+<span class="meta-chip">{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }}</span>
+}
+          @if (scenarioCount > 0) {
+<span class="meta-chip">{{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</span>
+}
         </span>
       </div>
+}
 
       <!-- Plan de Azure ya validado (se recuerda entre envíos) -->
-      <div class="plan-chip" *ngIf="planValidated">
+      @if (planValidated) {
+<div class="plan-chip">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
         <span class="plan-chip-text">Plan destino <strong>{{ validatedPlan?.planId }}</strong> · {{ validatedPlan?.planTitle }}</span>
         <button type="button" class="plan-chip-change" (click)="resetValidation()" [disabled]="isBusy">Cambiar</button>
       </div>
+}
 
       <ul class="ev-list">
         <!-- Word -->
@@ -50,7 +60,9 @@
               [attr.aria-busy]="wordExporter?.isExporting"
               [disabled]="wordExporter?.isExporting || huCount === 0 || isBusy"
               [title]="huCount === 0 ? 'El plan no tiene historias de usuario' : 'Descargar el plan completo en Word'">
-              <span class="opt-spinner" *ngIf="wordExporter?.isExporting" aria-hidden="true"></span>
+              @if (wordExporter?.isExporting) {
+<span class="opt-spinner" aria-hidden="true"></span>
+}
               {{ wordExporter?.isExporting ? 'Generando…' : 'Descargar' }}
             </button>
           </div>
@@ -86,7 +98,9 @@
             <button type="button" class="opt-btn" (click)="copyToClipboard()" [class.is-done]="copiedToClipboard"
               [disabled]="!previewHtmlContent || isBusy"
               [title]="!previewHtmlContent ? 'No hay contenido de plan para copiar' : 'Copiar el plan al portapapeles'">
-              <svg *ngIf="copiedToClipboard" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              @if (copiedToClipboard) {
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+}
               {{ copiedToClipboard ? 'Copiado' : 'Copiar' }}
             </button>
           </div>
@@ -100,8 +114,12 @@
           <div class="ev-row-text">
             <span class="format-name">Azure DevOps</span>
             <span class="ev-row-meta">
-              <ng-container *ngIf="!sendCompleted">Actualiza el título y la descripción de un plan de pruebas</ng-container>
-              <span class="sent-status" *ngIf="sendCompleted">Enviado al plan {{ validatedPlan?.planId }}</span>
+              @if (!sendCompleted) {
+Actualiza el título y la descripción de un plan de pruebas
+}
+              @if (sendCompleted) {
+<span class="sent-status">Enviado al plan {{ validatedPlan?.planId }}</span>
+}
             </span>
           </div>
           <div class="ev-row-actions">
@@ -113,9 +131,11 @@
         </li>
       </ul>
 
-      <p class="empty-note" *ngIf="hasNoScenarios" role="status">
+      @if (hasNoScenarios) {
+<p class="empty-note" role="status">
         Aún no hay escenarios generados: la descarga en PDF no está disponible.
       </p>
+}
 
       <!-- WordExporter oculto (instancia para llamar sus métodos) -->
       <div style="display:none">
@@ -134,15 +154,18 @@
     </div>
 
     <!-- Aviso persistente mientras hay un proceso en curso -->
-    <div class="pe-processing" *ngIf="isBusy" role="status" aria-live="polite">
+    @if (isBusy) {
+<div class="pe-processing" role="status" aria-live="polite">
       <span class="opt-spinner" aria-hidden="true"></span>
       {{ isSending ? 'Enviando el plan a Azure DevOps…' : 'Validando el plan en Azure DevOps…' }}
     </div>
+}
   </div>
 </div>
 
 <!-- Sub-modal: Enviar a Azure DevOps -->
-<div class="upload-modal-backdrop" *ngIf="showAzureModal" (click)="closeAzureModal()">
+@if (showAzureModal) {
+<div class="upload-modal-backdrop" (click)="closeAzureModal()">
   <div class="upload-modal" role="dialog" aria-modal="true" aria-labelledby="plan-azure-title" (click)="$event.stopPropagation()">
     <div class="upload-modal-header">
       <span class="format-icon azure" aria-hidden="true">
@@ -156,15 +179,18 @@
 
     <form class="upload-modal-body" id="plan-azure-form" (ngSubmit)="azurePrimaryAction()">
       <!-- Enviado -->
-      <div class="sent-box" *ngIf="sendCompleted" role="status" aria-live="polite">
+      @if (sendCompleted) {
+<div class="sent-box" role="status" aria-live="polite">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
         <div>
           <strong>Plan actualizado</strong>
           <p>Se envió al plan <strong>{{ validatedPlan?.planId }}</strong> · {{ validatedPlan?.planTitle }}.</p>
         </div>
       </div>
+}
 
-      <ng-container *ngIf="!sendCompleted">
+      @if (!sendCompleted) {
+
         <!-- ID del plan -->
         <div class="form-field">
           <label for="plan-export-plan-id" class="plan-id-label">ID del Plan de Pruebas</label>
@@ -182,41 +208,61 @@
               [attr.aria-invalid]="!!validationError"
               aria-describedby="plan-export-plan-id-hint"
               [disabled]="isBusy || planValidated" />
-            <button *ngIf="planValidated" type="button" class="plan-id-change" (click)="resetValidation()" [disabled]="isBusy">Cambiar</button>
+            @if (planValidated) {
+<button type="button" class="plan-id-change" (click)="resetValidation()" [disabled]="isBusy">Cambiar</button>
+}
           </div>
-          <p class="plan-id-hint" *ngIf="planValidated" id="plan-export-plan-id-hint">
+          @if (planValidated) {
+<p class="plan-id-hint" id="plan-export-plan-id-hint">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
             Plan validado: <strong>{{ validatedPlan?.planTitle }}</strong>
           </p>
-          <p class="plan-id-hint muted" *ngIf="!planValidated" id="plan-export-plan-id-hint">
+}
+          @if (!planValidated) {
+<p class="plan-id-hint muted" id="plan-export-plan-id-hint">
             Lo encuentras en la URL de Azure DevOps <span class="mono">…?planId=<strong>7695070</strong></span>
           </p>
+}
         </div>
 
         <!-- Qué se enviará -->
-        <div class="form-field" *ngIf="planValidated">
+        @if (planValidated) {
+<div class="form-field">
           <span class="plan-id-label">Se enviará</span>
           <dl class="send-summary">
             <div><dt>Título</dt><dd>{{ testPlanTitle || 'Plan de Pruebas' }}</dd></div>
-            <div *ngIf="huCount > 0"><dt>Alcance</dt><dd>{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</dd></div>
+            @if (huCount > 0) {
+<div><dt>Alcance</dt><dd>{{ huCount }} {{ huCount === 1 ? 'HU' : 'HUs' }} · {{ scenarioCount }} {{ scenarioCount === 1 ? 'escenario' : 'escenarios' }}</dd></div>
+}
           </dl>
           <p class="warn-note" role="note">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Se reemplazarán el título y la descripción actuales del plan {{ validatedPlan?.planId }} en Azure DevOps.
           </p>
         </div>
+}
 
-        <p class="error-note" *ngIf="validationError" role="alert">{{ getValidationErrorMessage() }}</p>
-        <p class="error-note" *ngIf="sendError" role="alert">{{ sendError }}</p>
-      </ng-container>
+        @if (validationError) {
+<p class="error-note" role="alert">{{ getValidationErrorMessage() }}</p>
+}
+        @if (sendError) {
+<p class="error-note" role="alert">{{ sendError }}</p>
+}
+      
+}
     </form>
 
     <div class="upload-modal-footer">
-      <button type="button" class="opt-btn" *ngIf="!sendCompleted" (click)="closeAzureModal()" [disabled]="isBusy">Cancelar</button>
+      @if (!sendCompleted) {
+<button type="button" class="opt-btn" (click)="closeAzureModal()" [disabled]="isBusy">Cancelar</button>
+}
       <button type="submit" form="plan-azure-form" class="opt-btn primary" [disabled]="azurePrimaryDisabled" [attr.aria-busy]="isBusy">
-        <span class="opt-spinner light" *ngIf="isBusy" aria-hidden="true"></span>
+        @if (isBusy) {
+<span class="opt-spinner light" aria-hidden="true"></span>
+}
         {{ azurePrimaryLabel }}
       </button>
     </div>
   </div>
 </div>
+}

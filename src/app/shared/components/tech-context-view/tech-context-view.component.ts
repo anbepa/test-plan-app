@@ -1,6 +1,6 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, HostListener, Input, OnDestroy, QueryList, ViewChildren } from '@angular/core';
 import { Subscription } from 'rxjs';
-import { CommonModule } from '@angular/common';
+
 import { MarkdownLitePipe, sourceCell } from '../../pipes/markdown-lite.pipe';
 import { TechContextModel, parseTechContext } from '../../utils/tech-context-parser';
 
@@ -12,7 +12,7 @@ import { TechContextModel, parseTechContext } from '../../utils/tech-context-par
 @Component({
   selector: 'app-tech-context-view',
   standalone: true,
-  imports: [CommonModule, MarkdownLitePipe],
+  imports: [MarkdownLitePipe],
   templateUrl: './tech-context-view.component.html',
   styleUrls: ['./tech-context-view.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -105,9 +105,5 @@ export class TechContextViewComponent implements AfterViewInit, OnDestroy {
 
   get unconfirmed(): number {
     return this.model.equivalences.filter((item) => !item.confirmed).length;
-  }
-
-  trackByIndex(index: number): number {
-    return index;
   }
 }

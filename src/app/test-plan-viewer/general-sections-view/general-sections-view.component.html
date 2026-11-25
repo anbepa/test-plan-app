@@ -12,16 +12,20 @@
   </div>
 
   <!-- Carga -->
-  <div *ngIf="isLoading" class="loading-state">
+  @if (isLoading) {
+<div class="loading-state">
     <div class="spinner"></div>
     <p>Cargando secciones generales...</p>
   </div>
+}
 
   <!-- Contenido -->
-  <div *ngIf="!isLoading" class="sections-layout">
+  @if (!isLoading) {
+<div class="sections-layout">
     <div class="sections-grid">
 
-      <div *ngFor="let section of sections"
+      @for (section of sections; track section) {
+<div
         class="section-card"
         [class.editing-card]="editingSectionKey === section.key"
         [class.loading-card]="section.loadingAI">
@@ -33,15 +37,19 @@
           <div class="card-actions">
 
             <!-- Badge "Mejorando…" durante la llamada IA -->
-            <span *ngIf="section.loadingAI" class="badge-improving">
+            @if (section.loadingAI) {
+<span class="badge-improving">
               <span class="spinner-mini"></span>
               Mejorando…
             </span>
+}
 
             <!-- Modo VISTA: Editar + IA (los controles de guardar/cancelar se movieron al pie del editor) -->
-            <ng-container *ngIf="editingSectionKey !== section.key && !section.loadingAI">
-              <button
-                *ngIf="section.editable"
+            @if (editingSectionKey !== section.key && !section.loadingAI) {
+
+              @if (section.editable) {
+<button
+               
                 class="icon-btn icon-btn-edit"
                 (click)="startEditing(section)"
                 title="Editar"
@@ -51,9 +59,11 @@
                   <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z"/>
                 </svg>
               </button>
+}
               <!-- Acción IA: ícono estándar ✦ (sparkle) con etiqueta explícita -->
-              <button
-                *ngIf="section.aiEnabled"
+              @if (section.aiEnabled) {
+<button
+               
                 class="icon-btn icon-btn-ai"
                 (click)="improveWithAI(section)"
                 title="Mejorar con IA"
@@ -64,7 +74,9 @@
                 </svg>
                 <span class="icon-btn-label">Mejorar con IA</span>
               </button>
-            </ng-container>
+}
+            
+}
 
           </div>
         </div>
@@ -73,8 +85,9 @@
         <div class="card-body">
 
           <!-- Vista: edit-in-place. El texto se muestra directo; hover indica editable (borde suave + cursor lápiz) -->
-          <pre
-            *ngIf="editingSectionKey !== section.key"
+          @if (editingSectionKey !== section.key) {
+<pre
+           
             class="section-text"
             [class.text-clickable]="section.editable && !section.loadingAI"
             (click)="section.editable && !section.loadingAI ? startEditing(section) : null"
@@ -82,9 +95,11 @@
             [attr.tabindex]="section.editable && !section.loadingAI ? 0 : null"
             (keydown.enter)="section.editable && !section.loadingAI ? startEditing(section) : null"
             [title]="section.editable && !section.loadingAI ? 'Haz clic para editar' : ''">{{ section.value || 'Sin información' }}</pre>
+}
 
           <!-- Edición inline (edit-in-place): sin caja anidada; la tarjeta ya está resaltada -->
-          <ng-container *ngIf="editingSectionKey === section.key">
+          @if (editingSectionKey === section.key) {
+
             <textarea
               #inlineEditor
               [ngModel]="editingBuffer"
@@ -108,19 +123,24 @@
                 </button>
               </div>
             </div>
-          </ng-container>
+          
+}
 
           <!-- Error IA -->
-          <div *ngIf="section.errorAI && editingSectionKey !== section.key" class="status-error">
+          @if (section.errorAI && editingSectionKey !== section.key) {
+<div class="status-error">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
               <path fill-rule="evenodd" d="M8 15A7 7 0 108 1a7 7 0 000 14zm-.75-9.25a.75.75 0 011.5 0v3.5a.75.75 0 01-1.5 0v-3.5zm.75 6.5a.75.75 0 110-1.5.75.75 0 010 1.5z" clip-rule="evenodd"/>
             </svg>
             {{ section.errorAI }}
           </div>
+}
 
         </div>
       </div>
+}
 
     </div>
   </div>
+}
 </div>

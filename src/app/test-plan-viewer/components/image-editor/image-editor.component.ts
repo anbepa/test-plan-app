@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output, ViewChild, ElementRef, AfterViewInit, HostListener, DoCheck, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { FABRIC_CDN_URL, loadScript } from '../../../shared/utils/load-script';
 
@@ -15,7 +15,7 @@ interface DrawingTool {
 @Component({
   selector: 'app-image-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './image-editor.component.html',
   styleUrls: ['./image-editor.component.css']
 })

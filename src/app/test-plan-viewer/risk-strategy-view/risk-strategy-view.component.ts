@@ -1,5 +1,5 @@
 import { Component, OnInit, AfterViewChecked, AfterViewInit, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, finalize, of, tap } from 'rxjs';
@@ -14,7 +14,7 @@ import { RiskStrategyData } from '../components/general-sections/general-section
 @Component({
   selector: 'app-risk-strategy-view',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './risk-strategy-view.component.html',
   styleUrls: ['./risk-strategy-view.component.css']
 })

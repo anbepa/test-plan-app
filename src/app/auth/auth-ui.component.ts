@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+
 import { Component, DestroyRef, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -8,7 +8,7 @@ import { AuthService } from '../services/auth/auth.service';
 @Component({
   selector: 'app-auth-ui',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   template: `
     <section class="auth-wrapper">
       <div class="auth-shell">
@@ -76,8 +76,12 @@ import { AuthService } from '../services/auth/auth.service';
             </button>
           </form>
 
-          <p class="message error" *ngIf="errorMessage">{{ errorMessage }}</p>
-          <p class="message success" *ngIf="successMessage">{{ successMessage }}</p>
+          @if (errorMessage) {
+<p class="message error">{{ errorMessage }}</p>
+}
+          @if (successMessage) {
+<p class="message success">{{ successMessage }}</p>
+}
         </section>
       </div>
     </section>

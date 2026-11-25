@@ -1,4 +1,5 @@
-<ng-container *ngIf="!embedded; else embeddedBody">
+@if (!embedded) {
+
   <div class="modal-overlay" (click)="closeIfClickOutside($event)">
     <div class="modal-content evidence-upload-modal">
       <!-- Header -->
@@ -15,14 +16,15 @@
       <ng-container *ngTemplateOutlet="embeddedBody"></ng-container>
     </div>
   </div>
-</ng-container>
 
-<ng-template #embeddedBody>
+} @else {
+
     <!-- Body -->
     <div class="modal-body">
 
       <!-- Indicador de pasos: orienta al usuario sobre dónde está en el flujo -->
-      <ol class="upload-stepper" *ngIf="!uploadCompleted && !uploadError" aria-label="Progreso del proceso de subida">
+      @if (!uploadCompleted && !uploadError) {
+<ol class="upload-stepper" aria-label="Progreso del proceso de subida">
         <li class="upload-step"
           [class.active]="!planValidated && !isUploading"
           [class.done]="planValidated || isUploading"
@@ -46,9 +48,11 @@
           <span class="step-label">Subida</span>
         </li>
       </ol>
+}
 
       <!-- Paso 1: Ingreso de Plan ID (solo si se quiere adjuntar Word/PDF al plan) -->
-      <div class="upload-section" *ngIf="!planValidated && !isUploading">
+      @if (!planValidated && !isUploading) {
+<div class="upload-section">
         <div class="form-group">
           <label for="planId">ID del Plan de Pruebas de Azure DevOps *</label>
           <input 
@@ -66,7 +70,8 @@
         </div>
 
         <!-- Errores de validación -->
-        <div class="error-message" *ngIf="validationError" role="alert">
+        @if (validationError) {
+<div class="error-message" role="alert">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/>
           </svg>
@@ -75,6 +80,7 @@
             <p>{{ getValidationErrorMessage() }}</p>
           </div>
         </div>
+}
 
         <!-- Botones de acción -->
         <div class="form-actions">
@@ -86,18 +92,24 @@
             [attr.aria-busy]="isValidating"
             [title]="!inputPlanId ? 'Ingresa el ID del plan para continuar' : 'Validar el plan en Azure DevOps'"
             [disabled]="!inputPlanId || isValidating">
-            <ng-container *ngIf="!isValidating">
+            @if (!isValidating) {
+
               Validar plan
-            </ng-container>
-            <ng-container *ngIf="isValidating">
+            
+}
+            @if (isValidating) {
+
               <span class="btn-spinner" aria-hidden="true"></span> Validando...
-            </ng-container>
+            
+}
           </button>
         </div>
       </div>
+}
 
       <!-- Paso 2: Selección de evidencias -->
-      <div class="upload-section" *ngIf="planValidated && !isUploading && !uploadCompleted && !uploadError">
+      @if (planValidated && !isUploading && !uploadCompleted && !uploadError) {
+<div class="upload-section">
 
         <!-- Pill del plan validado -->
         <div class="plan-validated-pill">
@@ -160,9 +172,11 @@
             </label>
 
           </div>
-          <small class="formats-hint" *ngIf="!hasSelectedFormat()" role="alert">
+          @if (!hasSelectedFormat()) {
+<small class="formats-hint" role="alert">
             Selecciona al menos una evidencia para continuar.
           </small>
+}
         </div>
 
         <!-- Nombre del archivo ZIP -->
@@ -189,9 +203,11 @@
           </button>
         </div>
       </div>
+}
 
       <!-- Paso 3: Progreso de carga -->
-      <div class="upload-section" *ngIf="isUploading">
+      @if (isUploading) {
+<div class="upload-section">
         <div class="progress-container" role="status" aria-live="polite">
           <h3>Generando y subiendo evidencias...</h3>
           <div class="progress-message">{{ currentPhaseMessage }}</div>
@@ -202,9 +218,11 @@
           <p class="progress-note">Puede tardar unos minutos. No cierres esta ventana.</p>
         </div>
       </div>
+}
 
       <!-- Resultado: Éxito -->
-      <div class="upload-section" *ngIf="uploadCompleted && !uploadError">
+      @if (uploadCompleted && !uploadError) {
+<div class="upload-section">
         <div class="success-message" role="status" aria-live="polite">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="20 6 9 17 4 12"/>
@@ -214,25 +232,31 @@
         </div>
 
         <!-- Resumen del plan vinculado -->
-        <div class="plan-validated-pill" *ngIf="validatedPlan">
+        @if (validatedPlan) {
+<div class="plan-validated-pill">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
           <span>Plan <strong>{{ validatedPlan.planId }}</strong> — {{ validatedPlan.planTitle }}</span>
         </div>
+}
 
         <div class="form-actions">
           <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
-          <button *ngIf="validatedPlan?.sourceUrl" (click)="openPlanInDevOps()" class="btn btn-primary" type="button"
+          @if (validatedPlan?.sourceUrl) {
+<button (click)="openPlanInDevOps()" class="btn btn-primary" type="button"
             title="Abrir el plan en Azure DevOps">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="margin-right:4px">
               <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
             Abrir en DevOps
           </button>
+}
         </div>
       </div>
+}
 
       <!-- Resultado: Error -->
-      <div class="upload-section" *ngIf="uploadError && !uploadCompleted">
+      @if (uploadError && !uploadCompleted) {
+<div class="upload-section">
         <div class="error-section" role="alert">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="12" cy="12" r="10"/>
@@ -246,5 +270,263 @@
           <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
         </div>
       </div>
+}
+    </div>
+
+}
+
+<ng-template #embeddedBody>
+    <!-- Body -->
+    <div class="modal-body">
+
+      <!-- Indicador de pasos: orienta al usuario sobre dónde está en el flujo -->
+      @if (!uploadCompleted && !uploadError) {
+<ol class="upload-stepper" aria-label="Progreso del proceso de subida">
+        <li class="upload-step"
+          [class.active]="!planValidated && !isUploading"
+          [class.done]="planValidated || isUploading"
+          [attr.aria-current]="(!planValidated && !isUploading) ? 'step' : null">
+          <span class="step-dot">1</span>
+          <span class="step-label">Plan</span>
+        </li>
+        <li class="step-line" aria-hidden="true"></li>
+        <li class="upload-step"
+          [class.active]="planValidated && !isUploading"
+          [class.done]="isUploading"
+          [attr.aria-current]="(planValidated && !isUploading) ? 'step' : null">
+          <span class="step-dot">2</span>
+          <span class="step-label">Formatos</span>
+        </li>
+        <li class="step-line" aria-hidden="true"></li>
+        <li class="upload-step"
+          [class.active]="isUploading"
+          [attr.aria-current]="isUploading ? 'step' : null">
+          <span class="step-dot">3</span>
+          <span class="step-label">Subida</span>
+        </li>
+      </ol>
+}
+
+      <!-- Paso 1: Ingreso de Plan ID (solo si se quiere adjuntar Word/PDF al plan) -->
+      @if (!planValidated && !isUploading) {
+<div class="upload-section">
+        <div class="form-group">
+          <label for="planId">ID del Plan de Pruebas de Azure DevOps *</label>
+          <input 
+            id="planId"
+            type="text" 
+            inputmode="numeric"
+            autocomplete="off"
+            [(ngModel)]="inputPlanId"
+            (keyup.enter)="validatePlan()"
+            placeholder="Ej: 7695070"
+            class="form-input"
+            [class.has-error]="!!validationError"
+            [attr.aria-invalid]="!!validationError"
+            [disabled]="isValidating">
+        </div>
+
+        <!-- Errores de validación -->
+        @if (validationError) {
+<div class="error-message" role="alert">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+          <div>
+            <strong>Error de validación</strong>
+            <p>{{ getValidationErrorMessage() }}</p>
+          </div>
+        </div>
+}
+
+        <!-- Botones de acción -->
+        <div class="form-actions">
+          <button (click)="close()" class="btn btn-secondary" type="button">Cancelar</button>
+          <button 
+            (click)="validatePlan()" 
+            class="btn btn-primary"
+            type="button"
+            [attr.aria-busy]="isValidating"
+            [title]="!inputPlanId ? 'Ingresa el ID del plan para continuar' : 'Validar el plan en Azure DevOps'"
+            [disabled]="!inputPlanId || isValidating">
+            @if (!isValidating) {
+
+              Validar plan
+            
+}
+            @if (isValidating) {
+
+              <span class="btn-spinner" aria-hidden="true"></span> Validando...
+            
+}
+          </button>
+        </div>
+      </div>
+}
+
+      <!-- Paso 2: Selección de evidencias -->
+      @if (planValidated && !isUploading && !uploadCompleted && !uploadError) {
+<div class="upload-section">
+
+        <!-- Pill del plan validado -->
+        <div class="plan-validated-pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Plan <strong>{{ validatedPlan?.planId }}</strong> — {{ validatedPlan?.planTitle }}</span>
+        </div>
+
+        <!-- Selección de evidencias a incluir -->
+        <div class="evidence-formats">
+          <label class="formats-title">Formatos a incluir:</label>
+
+          <div class="format-options">
+
+            <label class="format-option" [class.selected]="selectedFormats.docx">
+              <input type="checkbox" [(ngModel)]="selectedFormats.docx" />
+              <span class="opt-icon opt-icon-word">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+              </span>
+              <span class="format-text">
+                <strong>Word</strong>
+                <small>.docx</small>
+              </span>
+            </label>
+
+            <label class="format-option" [class.selected]="selectedFormats.pdf">
+              <input type="checkbox" [(ngModel)]="selectedFormats.pdf" />
+              <span class="opt-icon opt-icon-pdf">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="13" y2="17"/>
+                </svg>
+              </span>
+              <span class="format-text">
+                <strong>PDF</strong>
+                <small>.pdf</small>
+              </span>
+            </label>
+
+            <label class="format-option" [class.selected]="selectedFormats.excel">
+              <input type="checkbox" [(ngModel)]="selectedFormats.excel" />
+              <span class="opt-icon opt-icon-excel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="19"/>
+                  <line x1="16" y1="13" x2="8" y2="19"/>
+                </svg>
+              </span>
+              <span class="format-text">
+                <strong>Excel</strong>
+                <small title="Imágenes ajustadas a celda">.xlsx</small>
+              </span>
+            </label>
+
+          </div>
+          @if (!hasSelectedFormat()) {
+<small class="formats-hint" role="alert">
+            Selecciona al menos una evidencia para continuar.
+          </small>
+}
+        </div>
+
+        <!-- Nombre del archivo ZIP -->
+        <div class="zip-name-group">
+          <label for="fileName">Nombre del archivo</label>
+          <input
+            id="fileName"
+            type="text"
+            class="form-input"
+            autocomplete="off"
+            aria-describedby="fileName-help"
+            [(ngModel)]="inputFileName"
+            placeholder="Evidencia_EVC00057" />
+          <small class="help-text" id="fileName-help">Se adjunta al plan en su formato (.docx, .pdf, .xlsx)</small>
+        </div>
+
+        <!-- Botones -->
+        <div class="form-actions">
+          <button (click)="resetToPlantId()" class="btn btn-secondary" type="button">Cambiar plan</button>
+          <button (click)="startUpload()" class="btn btn-primary" type="button"
+            [title]="!hasSelectedFormat() ? 'Selecciona al menos un formato' : 'Generar los documentos y adjuntarlos al plan'"
+            [disabled]="!hasSelectedFormat()">
+            Publicar evidencia
+          </button>
+        </div>
+      </div>
+}
+
+      <!-- Paso 3: Progreso de carga -->
+      @if (isUploading) {
+<div class="upload-section">
+        <div class="progress-container" role="status" aria-live="polite">
+          <h3>Generando y subiendo evidencias...</h3>
+          <div class="progress-message">{{ currentPhaseMessage }}</div>
+          <!-- Barra indeterminada: el proceso no expone porcentaje real -->
+          <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+            <div class="progress-indeterminate"></div>
+          </div>
+          <p class="progress-note">Puede tardar unos minutos. No cierres esta ventana.</p>
+        </div>
+      </div>
+}
+
+      <!-- Resultado: Éxito -->
+      @if (uploadCompleted && !uploadError) {
+<div class="upload-section">
+        <div class="success-message" role="status" aria-live="polite">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <h3>Evidencia publicada</h3>
+          <p>Las evidencias se generaron y vincularon correctamente al plan de Azure DevOps.</p>
+        </div>
+
+        <!-- Resumen del plan vinculado -->
+        @if (validatedPlan) {
+<div class="plan-validated-pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Plan <strong>{{ validatedPlan.planId }}</strong> — {{ validatedPlan.planTitle }}</span>
+        </div>
+}
+
+        <div class="form-actions">
+          <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
+          @if (validatedPlan?.sourceUrl) {
+<button (click)="openPlanInDevOps()" class="btn btn-primary" type="button"
+            title="Abrir el plan en Azure DevOps">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="margin-right:4px">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Abrir en DevOps
+          </button>
+}
+        </div>
+      </div>
+}
+
+      <!-- Resultado: Error -->
+      @if (uploadError && !uploadCompleted) {
+<div class="upload-section">
+        <div class="error-section" role="alert">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+          <h3>Error en la carga</h3>
+          <p>{{ uploadError }}</p>
+        </div>
+
+        <div class="form-actions">
+          <button (click)="resetToPlantId()" class="btn btn-secondary" type="button">Cambiar plan</button>
+          <button (click)="close()" class="btn btn-secondary" type="button">Cerrar</button>
+        </div>
+      </div>
+}
     </div>
 </ng-template>

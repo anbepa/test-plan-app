@@ -15,13 +15,15 @@
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.azure" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.azure" id="panel-azure" role="region" aria-labelledby="toggle-azure" [attr.aria-busy]="isBusy">
+    @if (accordionOpen.azure) {
+<div class="config-card" id="panel-azure" role="region" aria-labelledby="toggle-azure" [attr.aria-busy]="isBusy">
       <div class="card-header">
         <h3 class="card-title sr-only">Azure DevOps</h3>
         <span class="connection-badge" [attr.data-tone]="azureStatusTone">{{ azureStatusLabel }}</span>
       </div>
 
-      <div class="inline-status-grid" *ngIf="connection">
+      @if (connection) {
+<div class="inline-status-grid">
         <div class="inline-status-item">
           <span class="inline-status-label">Organización</span>
           <strong class="inline-status-value">{{ connection.organization }}</strong>
@@ -35,11 +37,14 @@
           <strong class="inline-status-value">{{ connection.lastValidatedAt ? (connection.lastValidatedAt | date:'dd/MM/yyyy HH:mm') : 'Sin validación reciente' }}</strong>
         </div>
       </div>
+}
 
-      <p *ngIf="connection?.status === 'expired' || connection?.status === 'invalid'" class="message error" role="alert">
+      @if (connection?.status === 'expired' || connection?.status === 'invalid') {
+<p class="message error" role="alert">
         Azure DevOps rechazó el token {{ connection?.tokenHint }}: está vencido o fue revocado. Genera un PAT nuevo
         (permisos Work Items, Test Management y Release: Read, write &amp; execute), pégalo abajo y guarda la conexión.
       </p>
+}
 
       <div class="form-grid">
         <div class="form-group">
@@ -94,6 +99,7 @@
         </button>
       </div>
     </div>
+}
   </div>
 
   <!-- SECCIÓN: GitHub como origen del código de la HU -->
@@ -105,7 +111,8 @@
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.githubCode" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.githubCode" id="panel-githubCode" role="region" aria-labelledby="toggle-githubCode" [attr.aria-busy]="githubCodeBusy">
+    @if (accordionOpen.githubCode) {
+<div class="config-card" id="panel-githubCode" role="region" aria-labelledby="toggle-githubCode" [attr.aria-busy]="githubCodeBusy">
       <div class="card-header">
         <h3 class="card-title sr-only">GitHub (código de la HU)</h3>
         <span class="connection-badge" [attr.data-tone]="githubCodeStatusTone">{{ githubCodeStatusLabel }}</span>
@@ -115,7 +122,8 @@
         y ramas con el ID en el nombre. Si no encuentra nada, eliges el repositorio y la rama a mano.
       </p>
 
-      <div class="inline-status-grid" *ngIf="githubCode">
+      @if (githubCode) {
+<div class="inline-status-grid">
         <div class="inline-status-item">
           <span class="inline-status-label">Organización</span>
           <strong class="inline-status-value">{{ githubCode.owner }}</strong>
@@ -129,10 +137,13 @@
           <strong class="inline-status-value">{{ githubCode.tokenHint }}</strong>
         </div>
       </div>
+}
 
-      <p *ngIf="githubCode?.status === 'expired' || githubCode?.status === 'invalid'" class="message error" role="alert">
+      @if (githubCode?.status === 'expired' || githubCode?.status === 'invalid') {
+<p class="message error" role="alert">
         GitHub rechazó el token {{ githubCode?.tokenHint }}: está vencido o fue revocado. Pega uno nuevo y guarda.
       </p>
+}
 
       <div class="form-grid">
         <div class="form-group">
@@ -169,7 +180,8 @@
 
       </div>
 
-      <div *ngIf="githubCode" class="code-index-box" aria-live="polite">
+      @if (githubCode) {
+<div class="code-index-box" aria-live="polite">
         <h4 class="code-index-title">Índice de código del aplicativo</h4>
         <p class="field-hint">
           El agente busca en el índice en vez de la búsqueda de código de GitHub (que permite ~10 búsquedas por minuto).
@@ -182,17 +194,32 @@
           <button type="button" class="btn-secondary" (click)="checkCodeIndex()" [disabled]="indexBusy">Revisar</button>
           <button type="button" class="btn-primary" (click)="buildCodeIndex()" [disabled]="indexBusy">Indexar ahora</button>
         </div>
-        <p *ngIf="indexPlan" class="field-hint">
+        @if (indexPlan) {
+<p class="field-hint">
           {{ indexPlan.indexedRepos }} de {{ indexPlan.repos }} repos indexados · {{ indexPlan.files }} líneas
-          <ng-container *ngIf="indexPlan.lastIndexedAt"> · última actualización {{ indexPlan.lastIndexedAt | date:'dd/MM/yyyy HH:mm' }}</ng-container>
-          <ng-container *ngIf="indexPlan.pending.length"> · {{ indexPlan.pending.length }} pendiente(s)</ng-container>
+          @if (indexPlan.lastIndexedAt) {
+ · última actualización {{ indexPlan.lastIndexedAt | date:'dd/MM/yyyy HH:mm' }}
+}
+          @if (indexPlan.pending.length) {
+ · {{ indexPlan.pending.length }} pendiente(s)
+}
         </p>
-        <p *ngIf="indexProgress" class="field-hint" role="status">{{ indexProgress }}</p>
-        <p *ngIf="indexError" class="message error" role="alert">{{ indexError }}</p>
+}
+        @if (indexProgress) {
+<p class="field-hint" role="status">{{ indexProgress }}</p>
+}
+        @if (indexError) {
+<p class="message error" role="alert">{{ indexError }}</p>
+}
       </div>
+}
 
-      <p *ngIf="githubCodeInfo" class="message success" role="status">{{ githubCodeInfo }}</p>
-      <p *ngIf="githubCodeError" class="message error" role="alert">{{ githubCodeError }}</p>
+      @if (githubCodeInfo) {
+<p class="message success" role="status">{{ githubCodeInfo }}</p>
+}
+      @if (githubCodeError) {
+<p class="message error" role="alert">{{ githubCodeError }}</p>
+}
 
       <div class="actions-row">
         <button class="btn-primary" type="button" (click)="saveGithubCode()" [disabled]="githubCodeBusy">
@@ -203,6 +230,7 @@
         </button>
       </div>
     </div>
+}
   </div>
 
   <!-- SECCIÓN 2: GitHub Models (Copilot) -->
@@ -214,12 +242,14 @@
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.github" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.github" id="panel-github" role="region" aria-labelledby="toggle-github" [attr.aria-busy]="isGithubBusy">
+    @if (accordionOpen.github) {
+<div class="config-card" id="panel-github" role="region" aria-labelledby="toggle-github" [attr.aria-busy]="isGithubBusy">
       <div class="card-header">
         <h3 class="card-title sr-only">GitHub Models (Copilot)</h3>
         <div class="card-header-actions">
           <!-- Toggle global de activación, junto al título -->
-          <div class="header-toggle" *ngIf="githubConnection">
+          @if (githubConnection) {
+<div class="header-toggle">
             <span class="header-toggle-text" id="githubEnabled-label">Usar GitHub Models</span>
             <label class="switch">
               <input
@@ -234,12 +264,14 @@
               <span class="slider"></span>
             </label>
           </div>
+}
           <span class="connection-badge" [attr.data-tone]="githubStatusTone">{{ githubStatusLabel }}</span>
         </div>
       </div>
 
       <!-- Panel de autorización del Device Flow -->
-      <div class="github-device-panel" *ngIf="githubConnecting && githubUserCode" role="status" aria-live="polite">
+      @if (githubConnecting && githubUserCode) {
+<div class="github-device-panel" role="status" aria-live="polite">
         <p class="device-instructions">
           Se abrió GitHub en una pestaña nueva. Introduce este código para autorizar:
         </p>
@@ -261,9 +293,11 @@
         </p>
         <button class="btn-secondary" type="button" (click)="cancelGithubConnect()">Cancelar</button>
       </div>
+}
 
       <!-- Preferencias (solo con conexión activa) -->
-      <div class="form-grid" *ngIf="githubConnection">
+      @if (githubConnection) {
+<div class="form-grid">
         <div class="form-group full-width">
           <label for="githubModel">Modelo</label>
           <div class="input-with-action">
@@ -276,9 +310,11 @@
               [disabled]="isGithubBusy || githubModels.length === 0"
               aria-describedby="githubModel-hint">
               <option value="" disabled>{{ loadingGithubModels ? 'Cargando modelos...' : 'Selecciona un modelo' }}</option>
-              <option *ngFor="let model of githubModels" [value]="model.id">
+              @for (model of githubModels; track model) {
+<option [value]="model.id">
                 {{ model.displayName }}{{ model.publisher ? ' (' + model.publisher + ')' : '' }}
               </option>
+}
             </select>
             <!-- Refrescar modelos como ícono discreto de recarga junto al desplegable -->
             <button
@@ -295,29 +331,35 @@
           </p>
         </div>
       </div>
+}
 
       <div class="actions-row">
         <!-- Sin conexión: botón de conectar (Device Flow) -->
-        <button
+        @if (!githubConnection) {
+<button
           class="btn-primary"
           type="button"
-          *ngIf="!githubConnection"
+         
           (click)="connectWithGithub()"
           [disabled]="isGithubBusy">
           {{ githubConnecting ? 'Esperando autorización...' : 'Conectar con GitHub Copilot' }}
         </button>
+}
 
         <!-- Con conexión: reconectar (primario) + menú secundario (•••) + desconectar -->
-        <button
+        @if (githubConnection) {
+<button
           class="btn-secondary"
           type="button"
-          *ngIf="githubConnection"
+         
           (click)="connectWithGithub()"
           [disabled]="isGithubBusy">
           {{ githubConnecting ? 'Esperando autorización...' : 'Reconectar cuenta' }}
         </button>
+}
 
-        <div class="overflow-menu" *ngIf="githubConnection">
+        @if (githubConnection) {
+<div class="overflow-menu">
           <button
             type="button"
             class="btn-secondary overflow-menu-trigger"
@@ -328,7 +370,8 @@
             [disabled]="isGithubBusy"
             title="Más acciones"
             aria-label="Más acciones">•••</button>
-          <div class="overflow-menu-list" id="github-overflow-menu" role="menu" *ngIf="githubMenuOpen">
+          @if (githubMenuOpen) {
+<div class="overflow-menu-list" id="github-overflow-menu" role="menu">
             <button
               type="button"
               class="overflow-menu-item"
@@ -338,17 +381,26 @@
               {{ validatingGithub ? 'Validando...' : 'Validar conexión' }}
             </button>
           </div>
+}
         </div>
+}
 
-        <button class="btn-danger" type="button" *ngIf="githubConnection" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection"
+        @if (githubConnection) {
+<button class="btn-danger" type="button" (click)="requestDisconnect('github')" [disabled]="isGithubBusy || !githubConnection"
                 [title]="!githubConnection ? 'No hay conexión activa para desconectar' : 'Elimina la conexión con GitHub'">
           {{ disconnectingGithub ? 'Desconectando...' : 'Desconectar' }}
         </button>
+}
       </div>
 
-      <p *ngIf="githubInfoMessage" class="message success" role="status" aria-live="polite">{{ githubInfoMessage }}</p>
-      <p *ngIf="githubErrorMessage" class="message error" role="alert">{{ githubErrorMessage }}</p>
+      @if (githubInfoMessage) {
+<p class="message success" role="status" aria-live="polite">{{ githubInfoMessage }}</p>
+}
+      @if (githubErrorMessage) {
+<p class="message error" role="alert">{{ githubErrorMessage }}</p>
+}
     </div>
+}
   </div>
 
   <h3 class="config-group-title">Datos de los planes</h3>
@@ -362,7 +414,8 @@
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.global" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.global" id="panel-global" role="region" aria-labelledby="toggle-global">
+    @if (accordionOpen.global) {
+<div class="config-card" id="panel-global" role="region" aria-labelledby="toggle-global">
       <h3 class="card-title">Nombre, repositorio y equipo de los planes</h3>
       <p class="card-description">Se aplican automáticamente a cada plan que crees: el <strong>nombre del test plan</strong> y las secciones <strong>Repositorio</strong> y <strong>Equipo de trabajo</strong>.</p>
       <p class="persistence-status" [attr.data-source]="generalMeta.source" role="status">
@@ -383,14 +436,20 @@
             [placeholder]="defaultPlanTitleTemplate">
           <p class="field-hint" id="planTitleTemplate-hint">
             Marcadores:
-            <button type="button" class="token-chip" *ngFor="let ph of planTitlePlaceholders"
+            @for (ph of planTitlePlaceholders; track ph) {
+<button type="button" class="token-chip"
                     (click)="insertPlanTitleToken(ph.token)" [title]="'Insertar ' + ph.token">{{ ph.token }}</button>
+}
             <span class="token-desc">{{ '{HU}' }} = ID de la HU · {{ '{SPRINT}' }} = número del sprint (sin repetir “Sprint”).</span>
           </p>
-          <p class="title-preview" id="planTitleTemplate-preview" *ngIf="!planTitleTemplateError">
+          @if (!planTitleTemplateError) {
+<p class="title-preview" id="planTitleTemplate-preview">
             Vista previa: <strong>{{ planTitlePreview }}</strong>
           </p>
-          <p class="field-error" *ngIf="planTitleTemplateError" role="alert">{{ planTitleTemplateError }}</p>
+}
+          @if (planTitleTemplateError) {
+<p class="field-error" role="alert">{{ planTitleTemplateError }}</p>
+}
         </div>
 
         <div class="form-group full-width">
@@ -407,7 +466,8 @@
 
         <div class="form-group full-width">
           <label>Equipo de trabajo</label>
-          <table class="team-config-table" *ngIf="hasTeamRows">
+          @if (hasTeamRows) {
+<table class="team-config-table">
             <thead>
               <tr>
                 <th scope="col">Rol</th>
@@ -416,7 +476,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let row of teamRows; let i = index">
+              @for (row of teamRows; track row; let i = $index) {
+<tr>
                 <td data-label="Rol">
                   <input
                     class="form-control"
@@ -444,11 +505,15 @@
                     (click)="removeTeamRow(i)">✕</button>
                 </td>
               </tr>
+}
             </tbody>
           </table>
-          <p class="empty-note" *ngIf="!hasTeamRows">
+}
+          @if (!hasTeamRows) {
+<p class="empty-note">
             Aún no hay integrantes. Agrega al menos uno para que aparezca en el plan exportado.
           </p>
+}
           <button type="button" class="btn-add-row" (click)="addTeamRow()">+ Agregar integrante</button>
         </div>
       </div>
@@ -459,12 +524,19 @@
                 [title]="generalDirty ? 'Guardar en tu cuenta' : 'No hay cambios por guardar'">
           {{ savingGeneral ? 'Guardando...' : 'Guardar parámetros' }}
         </button>
-        <span class="dirty-hint" *ngIf="generalDirty && !savingGeneral" role="status">Tienes cambios sin guardar</span>
+        @if (generalDirty && !savingGeneral) {
+<span class="dirty-hint" role="status">Tienes cambios sin guardar</span>
+}
       </div>
 
-      <p *ngIf="generalInfoMessage" class="message success" role="status" aria-live="polite">{{ generalInfoMessage }}</p>
-      <p *ngIf="generalErrorMessage" class="message error" role="alert">{{ generalErrorMessage }}</p>
+      @if (generalInfoMessage) {
+<p class="message success" role="status" aria-live="polite">{{ generalInfoMessage }}</p>
+}
+      @if (generalErrorMessage) {
+<p class="message error" role="alert">{{ generalErrorMessage }}</p>
+}
     </div>
+}
   </div>
 
   <!-- SECCIÓN 5: Nombre Célula -->
@@ -476,13 +548,15 @@
       </span>
       <span class="section-arrow" [class.open]="accordionOpen.cells" aria-hidden="true">▾</span>
     </button>
-    <div class="config-card" *ngIf="accordionOpen.cells" id="panel-cells" role="region" aria-labelledby="toggle-cells" [attr.aria-busy]="savingCells">
+    @if (accordionOpen.cells) {
+<div class="config-card" id="panel-cells" role="region" aria-labelledby="toggle-cells" [attr.aria-busy]="savingCells">
       <h3 class="card-title">Células</h3>
       <p class="card-description">Opciones del campo <strong>Nombre Célula</strong> al crear un plan. Se guardan en tu cuenta.</p>
       <div class="form-grid">
         <div class="form-group full-width">
           <label>Células disponibles</label>
-          <table class="team-config-table" *ngIf="hasCellRows">
+          @if (hasCellRows) {
+<table class="team-config-table">
             <thead>
               <tr>
                 <th scope="col">Célula</th>
@@ -490,7 +564,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let cell of cellRows; let i = index">
+              @for (cell of cellRows; track cell; let i = $index) {
+<tr>
                 <td>
                   <input
                     class="form-control"
@@ -509,11 +584,15 @@
                     (click)="removeCellRow(i)">✕</button>
                 </td>
               </tr>
+}
             </tbody>
           </table>
-          <p class="empty-note" *ngIf="!hasCellRows">
+}
+          @if (!hasCellRows) {
+<p class="empty-note">
             No hay células configuradas. Agrega una o restaura los valores por defecto.
           </p>
+}
           <button type="button" class="btn-add-row" (click)="addCellRow()">+ Agregar célula</button>
         </div>
       </div>
@@ -527,9 +606,14 @@
         </button>
       </div>
 
-      <p *ngIf="cellsInfoMessage" class="message success" role="status" aria-live="polite">{{ cellsInfoMessage }}</p>
-      <p *ngIf="cellsErrorMessage" class="message error" role="alert">{{ cellsErrorMessage }}</p>
+      @if (cellsInfoMessage) {
+<p class="message success" role="status" aria-live="polite">{{ cellsInfoMessage }}</p>
+}
+      @if (cellsErrorMessage) {
+<p class="message error" role="alert">{{ cellsErrorMessage }}</p>
+}
     </div>
+}
   </div>
 
   <app-confirmation-modal

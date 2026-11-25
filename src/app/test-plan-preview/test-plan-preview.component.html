@@ -20,8 +20,9 @@
     </div>
 
     <!-- Modal de Exportación y Envío a Azure DevOps -->
-    <app-plan-export-modal
-        *ngIf="showExportModal"
+    @if (showExportModal) {
+<app-plan-export-modal
+       
         [testPlanTitle]="testPlan?.title || ''"
         [previewHtmlContent]="previewHtmlContent"
         [repositoryLink]="repositoryLink"
@@ -33,20 +34,27 @@
         [huList]="huList"
         (onClose)="closeExportModal()">
     </app-plan-export-modal>
+}
 
     <div class="preview-content-wrapper">
-        <div *ngIf="isLoading" class="loading-state">
+        @if (isLoading) {
+<div class="loading-state">
             <div class="spinner"></div>
             <p>Cargando previsualización...</p>
         </div>
+}
 
-        <div *ngIf="errorMessage" class="error-state">
+        @if (errorMessage) {
+<div class="error-state">
             <p>{{ errorMessage }}</p>
             <button (click)="goBack()" class="button-secondary">Volver al listado</button>
         </div>
+}
 
-        <div *ngIf="!isLoading && !errorMessage" class="document-preview">
+        @if (!isLoading && !errorMessage) {
+<div class="document-preview">
             <div class="paper-sheet" [innerHTML]="previewHtmlContent"></div>
         </div>
+}
     </div>
 </div>

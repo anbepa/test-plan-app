@@ -1,5 +1,5 @@
 import { Component, OnInit, ChangeDetectorRef, HostListener } from '@angular/core';
-import { CommonModule, Location } from '@angular/common';
+import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { HUData, DetailedTestCase, TestCaseStep } from '../models/hu-data.model';
@@ -12,7 +12,7 @@ import { HuSyncService } from '../services/core/hu-sync.service';
 @Component({
   selector: 'app-test-case-refiner',
   standalone: true,
-  imports: [CommonModule, FormsModule, ConfirmationModalComponent],
+  imports: [FormsModule, ConfirmationModalComponent],
   templateUrl: './test-case-refiner.component.html',
   styleUrls: ['./test-case-refiner.component.css']
 })

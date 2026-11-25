@@ -12,20 +12,25 @@
   </div>
 
   <!-- Loading State -->
-  <div *ngIf="isLoading" class="loading-state">
+  @if (isLoading) {
+<div class="loading-state">
     <div class="loading-spinner"></div>
     <p>Cargando ejecución...</p>
   </div>
+}
 
   <!-- Content -->
-  <ng-container *ngIf="!isLoading">
-    <div *ngIf="execution; else noExecution" class="exec-body">
+  @if (!isLoading) {
+
+    @if (execution) {
+<div class="exec-body">
 
       <!-- Title bar -->
       <div class="exec-titlebar">
         <div class="exec-title-left">
           <h2 class="exec-title">{{ execution.huTitle }}</h2>
-          <div class="exec-meta" *ngIf="stats">
+          @if (stats) {
+<div class="exec-meta">
             <div class="stat-pill stat-pill-evidence" title="Evidencias adjuntas en el plan">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
               <span class="stat-pill-value">{{ stats.totalImages }}</span>
@@ -37,10 +42,13 @@
               </div>
               <span class="progress-pct">{{ stats.completionPercentage | number:'1.0-0' }}%</span>
             </div>
-            <span *ngIf="isHydratingEvidence" class="hydrating-badge">
+            @if (isHydratingEvidence) {
+<span class="hydrating-badge">
               <span class="hydrating-spinner"></span> Cargando imágenes…
             </span>
+}
           </div>
+}
         </div>
         <div class="exec-title-right">
           <div class="tb-actions">
@@ -64,7 +72,8 @@
         </div>
 
         <!-- Filtros (estado + búsqueda) a la izquierda; acción "Agregar escenario" a la derecha -->
-        <div class="tab-controls" *ngIf="activeTab === 'test-cases'">
+        @if (activeTab === 'test-cases') {
+<div class="tab-controls">
           <div class="filter-pills">
             <select class="filter-select" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
               <option value="all">Todos ({{ execution.testCases.length }})</option>
@@ -76,9 +85,11 @@
             <div class="search-input-wrap">
               <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input class="search-input" type="text" placeholder="Buscar..." [(ngModel)]="searchQuery" (ngModelChange)="onFilterChange()" />
-              <button *ngIf="searchQuery" class="search-clear-btn" (click)="searchQuery = ''; onFilterChange()" title="Limpiar búsqueda">
+              @if (searchQuery) {
+<button class="search-clear-btn" (click)="searchQuery = ''; onFilterChange()" title="Limpiar búsqueda">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
+}
             </div>
           </div>
           <button type="button" class="btn-add-testcase-top" (click)="addTestCase($event)" title="Agregar un escenario en blanco">
@@ -86,10 +97,12 @@
             Agregar escenario
           </button>
         </div>
+}
       </div>
 
       <!-- ════════════ TEST CASES TAB ════════════ -->
-      <div *ngIf="activeTab === 'test-cases'" class="tab-content">
+      @if (activeTab === 'test-cases') {
+<div class="tab-content">
         <div class="tc-table-container">
 
           <!-- Table header -->
@@ -102,7 +115,8 @@
           </div>
 
           <!-- Accordion rows -->
-          <div *ngFor="let tc of paginatedTestCases; let i = index; trackBy: trackByTestCaseId"
+          @for (tc of paginatedTestCases; track trackByTestCaseId(i, tc); let i = $index) {
+<div
                class="tc-row" [class.tc-row-expanded]="expandedTestCaseIndex === getOriginalIndex(tc)">
 
             <!-- Collapsed row header -->
@@ -144,8 +158,9 @@
                   </svg>
                 </button>
 
-                <div class="act-menu-panel"
-                     *ngIf="openActionsMenuId === tc.testCaseId"
+                @if (openActionsMenuId === tc.testCaseId) {
+<div class="act-menu-panel"
+                    
                      role="menu"
                      aria-label="Acciones del caso de prueba"
                      [style.top.px]="actionsMenuPos.top"
@@ -219,11 +234,13 @@
                     <span class="act-menu-text">Eliminar de esta ejecución</span>
                   </button>
                 </div>
+}
               </div>
             </div>
 
             <!-- Expanded body -->
-            <div class="tc-row-body" *ngIf="expandedTestCaseIndex === getOriginalIndex(tc)">
+            @if (expandedTestCaseIndex === getOriginalIndex(tc)) {
+<div class="tc-row-body">
               <div class="tc-detail-panel">
 
                 <!-- Steps -->
@@ -231,7 +248,8 @@
                   <span class="steps-section-label">Pasos de Prueba</span>
                 </div>
 
-                <div *ngFor="let step of tc.steps; let si = index" class="step-item"
+                @for (step of tc.steps; track step; let si = $index) {
+<div class="step-item"
                      [class.step-item-active]="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)"
                      draggable="true"
                      (dragstart)="onStepDragStart(getOriginalIndex(tc), si)"
@@ -252,12 +270,14 @@
                              (click)="editingStepId === step.stepId ? $event.stopPropagation() : null"
                              (blur)="finishEditingStepAction(step, $event)"
                              #stepSpan>{{ step.accion }}</div>
-                        <button *ngIf="editingStepId !== step.stepId"
+                        @if (editingStepId !== step.stepId) {
+<button
                                 class="btn-edit-step-minimal"
                                 (click)="startEditingStepAction(step, $event, stepSpan); $event.stopPropagation()"
                                 title="Editar paso">
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         </button>
+}
                       </div>
                     </div>
 
@@ -286,19 +306,24 @@
                   </div>
 
                   <!-- Evidence zone (active step only) -->
-                  <div class="step-evidence-zone"
-                       *ngIf="activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)">
+                  @if (activeStepIndex === si && activeTestCaseIndex === getOriginalIndex(tc)) {
+<div class="step-evidence-zone"
+                      >
                     <div class="evidence-zone-header">
                       <div class="btn-group-segmented">
                       <div class="upload-dropdown">
                         <button (click)="openUploadMenu($event)" class="btn-upload btn-unified">
                           + Subir Evidencia <span class="chevron">▾</span>
                         </button>
-                        <div class="upload-menu-backdrop" *ngIf="showUploadMenu" (click)="showUploadMenu = false"></div>
-                        <div class="upload-menu upload-menu-fixed" *ngIf="showUploadMenu" [style.top.px]="uploadMenuPos.top" [style.left.px]="uploadMenuPos.left">
+                        @if (showUploadMenu) {
+<div class="upload-menu-backdrop" (click)="showUploadMenu = false"></div>
+}
+                        @if (showUploadMenu) {
+<div class="upload-menu upload-menu-fixed" [style.top.px]="uploadMenuPos.top" [style.left.px]="uploadMenuPos.left">
                           <button (click)="triggerFileInput(); showUploadMenu = false" class="menu-item">📷 Subir Foto</button>
                           <button (click)="triggerCsvInput(); showUploadMenu = false" class="menu-item">📄 Subir CSV</button>
                         </div>
+}
                       </div>
                       <button (click)="pasteImageFromClipboard()" class="btn-upload btn-upload-secondary">Pegar imagen</button>
                       <div class="report-settings-dropdown">
@@ -307,8 +332,11 @@
                             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
                           </svg>
                         </button>
-                        <div class="upload-menu-backdrop" *ngIf="showReportSettings" (click)="showReportSettings = false"></div>
-                        <div class="upload-menu upload-menu-fixed report-settings-popover" *ngIf="showReportSettings" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
+                        @if (showReportSettings) {
+<div class="upload-menu-backdrop" (click)="showReportSettings = false"></div>
+}
+                        @if (showReportSettings) {
+<div class="upload-menu upload-menu-fixed report-settings-popover" [style.top.px]="reportSettingsPos.top" [style.left.px]="reportSettingsPos.left">
                           <div class="popover-header">Ajustes de Reporte</div>
                           <div class="popover-body">
                             <div class="popover-grid-inputs">
@@ -326,6 +354,7 @@
                             </div>
                           </div>
                         </div>
+}
                       </div>
                       </div><!-- /btn-group-segmented -->
                       <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" hidden />
@@ -337,11 +366,14 @@
                     </div>
 
                     <!-- Gallery -->
-                    <div class="ev-gallery" *ngIf="step.evidences.length > 0; else noEv">
-                      <div class="ev-thumb" *ngFor="let ev of step.evidences">
+                    @if (step.evidences.length > 0) {
+<div class="ev-gallery">
+                      @for (ev of step.evidences; track ev) {
+<div class="ev-thumb">
                         <!-- Descripción sutil de la evidencia (ARRIBA) -->
                         <div class="ev-description-wrap">
-                          <ng-container *ngIf="editingDescriptionId === ev.id; else descReadMode">
+                          @if (editingDescriptionId === ev.id) {
+
                             <input
                               class="ev-description-input"
                               type="text"
@@ -354,8 +386,9 @@
                               (keydown.escape)="editingDescriptionId = null"
                               (click)="$event.stopPropagation()"
                               autofocus />
-                          </ng-container>
-                          <ng-template #descReadMode>
+                          
+} @else {
+
                             <button
                               class="ev-description-btn"
                               [class.ev-description-has-text]="ev.description"
@@ -364,27 +397,43 @@
                               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                               <span class="ev-description-text">{{ ev.description || 'Descripción...' }}</span>
                             </button>
-                          </ng-template>
+                          
+}
+                          
                         </div>
                         
                         <div class="ev-thumb-img-wrap">
-                          <ng-container *ngIf="ev.type === 'image'; else csvThumb">
-                            <ng-container *ngIf="ev.base64Data; else imgSkeletonStd">
+                          @if (ev.type === 'image') {
+
+                            @if (ev.base64Data) {
+
                               <img [src]="ev.base64Data" alt="Evidencia" (click)="openImageViewer(ev)" />
-                            </ng-container>
-                            <ng-template #imgSkeletonStd>
+                            
+} @else {
+
                               <div class="ev-skeleton" (click)="hydrateAndOpen(ev)">
                                 <span class="ev-skeleton-spinner"></span>
                                 <span class="ev-skeleton-text">Cargando…</span>
                               </div>
-                            </ng-template>
-                          </ng-container>
-                          <ng-template #csvThumb>
+                            
+}
+                            
+                          
+} @else {
+
                             <div class="csv-thumb-preview" (click)="openAssetEditor(ev)">
                               <div class="csv-icon">📊</div>
-                              <div class="csv-peek" *ngIf="ev.tabularData"><table><tr *ngFor="let row of ev.tabularData.slice(0,3)"><td *ngFor="let cell of row.slice(0,2)">{{cell}}</td></tr></table></div>
+                              @if (ev.tabularData) {
+<div class="csv-peek"><table>@for (row of ev.tabularData.slice(0,3); track row) {
+<tr>@for (cell of row.slice(0,2); track cell) {
+<td>{{cell}}</td>
+}</tr>
+}</table></div>
+}
                             </div>
-                          </ng-template>
+                          
+}
+                          
                           <div class="ev-thumb-actions">
                             <button (click)="openImageViewer(ev)" title="Ver">👁️</button>
                             <button (click)="openAssetEditor(ev)" title="Editar">✏️</button>
@@ -392,12 +441,18 @@
                           </div>
                         </div>
                       </div>
+}
                     </div>
-                    <ng-template #noEv>
+} @else {
+
                       <div class="ev-empty">Sin evidencias para este paso.</div>
-                    </ng-template>
+                    
+}
+                    
                   </div>
-                </div><!-- /step-item -->
+}
+                </div>
+}<!-- /step-item -->
 
                 <!-- Botón: Agregar paso al escenario -->
                 <div class="add-step-row">
@@ -408,41 +463,57 @@
                 </div>
 
               </div>
-            </div><!-- /tc-row-body -->
-          </div><!-- /tc-row -->
+            </div>
+}<!-- /tc-row-body -->
+          </div>
+}<!-- /tc-row -->
 
-          <div class="tc-empty-state" *ngIf="filteredTestCases.length === 0">
+          @if (filteredTestCases.length === 0) {
+<div class="tc-empty-state">
             <p>No se encontraron casos de prueba con el filtro seleccionado.</p>
           </div>
+}
 
           <!-- Pagination -->
-          <div *ngIf="!isLoading && filteredTestCases.length > 0" class="pagination-container">
+          @if (!isLoading && filteredTestCases.length > 0) {
+<div class="pagination-container">
             <div class="pagination-info">
               <p>Mostrando <strong>{{ (currentPage - 1) * pageSize + 1 }}</strong> - <strong>{{ Math.min(currentPage * pageSize, filteredTestCases.length) }}</strong> de <strong>{{ filteredTestCases.length }}</strong> casos</p>
             </div>
-            <div class="pagination-controls" *ngIf="totalPages > 1">
+            @if (totalPages > 1) {
+<div class="pagination-controls">
               <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
               </button>
               <div class="pagination-numbers">
-                <ng-container *ngFor="let page of visiblePages">
-                  <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">
+                @for (page of visiblePages; track page) {
+
+                  @if (page > 0) {
+<button class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">
                     {{ page }}
                   </button>
-                  <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
-                </ng-container>
+}
+                  @if (page === -1) {
+<span class="pagination-ellipsis">...</span>
+}
+                
+}
               </div>
               <button class="pagination-button pagination-next" [disabled]="currentPage === totalPages" (click)="nextPage()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
               </button>
             </div>
+}
           </div>
+}
         </div>
-      </div><!-- /test-cases tab -->
+      </div>
+}<!-- /test-cases tab -->
 
 
       <!-- ════════════ SUMMARY TAB ════════════ -->
-      <div *ngIf="activeTab === 'summary'" class="tab-content summary-tab">
+      @if (activeTab === 'summary') {
+<div class="tab-content summary-tab">
 
         <!-- Progress Overview (no cards, single bar with legend) -->
         <div class="summary-section">
@@ -510,13 +581,12 @@
           </div>
         </div>
 
-      </div><!-- /summary tab -->
+      </div>
+}<!-- /summary tab -->
 
-    </div><!-- /exec-body -->
-  </ng-container>
+    </div>
+} @else {
 
-  <!-- No Execution -->
-  <ng-template #noExecution>
     <div class="empty-state">
       <p>No hay ejecución en progreso</p>
       <div class="empty-actions">
@@ -524,7 +594,13 @@
         <button (click)="goBack()" class="btn-tb-sec">Volver</button>
       </div>
     </div>
-  </ng-template>
+  
+}<!-- /exec-body -->
+  
+}
+
+  <!-- No Execution -->
+  
 
   <!-- Confirmation Modal -->
   <app-confirmation-modal [isOpen]="showDeleteModal" title="Eliminar ejecución"
@@ -540,7 +616,8 @@
   </app-confirmation-modal>
 
   <!-- Serenity History Modal -->
-  <div *ngIf="showSerenityHistory" class="modal-backdrop" (click)="closeSerenityHistory()">
+  @if (showSerenityHistory) {
+<div class="modal-backdrop" (click)="closeSerenityHistory()">
     <div class="modal-box serenity-history-modal" (click)="$event.stopPropagation()"
       role="dialog" aria-modal="true" aria-labelledby="serenity-history-title">
       <div class="modal-top">
@@ -559,14 +636,17 @@
       </div>
       <div class="serenity-history-body">
         <!-- Skeleton mientras carga -->
-        <div *ngIf="isLoadingSerenityHistory && serenityHistory.length === 0" class="sh-skeleton" aria-hidden="true">
+        @if (isLoadingSerenityHistory && serenityHistory.length === 0) {
+<div class="sh-skeleton" aria-hidden="true">
           <div class="sh-skeleton-line w40"></div>
           <div class="sh-skeleton-line w70"></div>
           <div class="sh-skeleton-line w55"></div>
         </div>
+}
 
         <!-- Vacío -->
-        <div *ngIf="!isLoadingSerenityHistory && serenityHistory.length === 0" class="serenity-history-empty">
+        @if (!isLoadingSerenityHistory && serenityHistory.length === 0) {
+<div class="serenity-history-empty">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -574,14 +654,18 @@
           <p>Aún no se ha generado ningún reporte</p>
           <small>Genera uno desde <strong>Gestionar evidencias → Reporte Serenity → Generar reporte</strong>. El proceso corre en Azure DevOps y puede tardar varios minutos.</small>
         </div>
+}
 
-        <div *ngFor="let r of serenityHistory" class="sh-card" [class.is-pending]="r.status === 'pending'">
+        @for (r of serenityHistory; track r) {
+<div class="sh-card" [class.is-pending]="r.status === 'pending'">
           <div class="sh-card-row">
             <div class="sh-card-field">
               <span class="sh-card-label">Generado</span>
               <span class="sh-card-value sh-date" [title]="formatSerenityDate(r.generatedAt)">
                 {{ formatSerenityDate(r.generatedAt) }}
-                <em class="sh-relative" *ngIf="formatSerenityRelative(r.generatedAt)">{{ formatSerenityRelative(r.generatedAt) }}</em>
+                @if (formatSerenityRelative(r.generatedAt)) {
+<em class="sh-relative">{{ formatSerenityRelative(r.generatedAt) }}</em>
+}
               </span>
             </div>
             <div class="sh-card-field">
@@ -599,32 +683,41 @@
           </div>
 
           <!-- Aviso contextual mientras el pipeline sigue corriendo -->
-          <p class="sh-pending-note" *ngIf="r.status === 'pending' && !r.artifactDownloadUrl">
+          @if (r.status === 'pending' && !r.artifactDownloadUrl) {
+<p class="sh-pending-note">
             El pipeline de Azure DevOps está generando el reporte. El estado se actualiza automáticamente cada 5 segundos; puedes cerrar esta ventana y volver más tarde.
           </p>
+}
 
           <div class="sh-actions">
-            <span *ngIf="!r.artifactDownloadUrl && r.status === 'pending'" class="sh-auto-refresh" title="Actualizando estado automáticamente">
+            @if (!r.artifactDownloadUrl && r.status === 'pending') {
+<span class="sh-auto-refresh" title="Actualizando estado automáticamente">
               <svg class="sh-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/></svg>
               Actualizando...
             </span>
+}
             <button class="sh-btn sh-btn-del" type="button" title="Eliminar del historial"
               [disabled]="isAttaching" (click)="removeFromHistory(r.id)">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
               Eliminar
             </button>
-            <button *ngIf="lastAttachedReportId === r.id && lastAttachedPlanUrl" class="sh-btn sh-btn-azure"
+            @if (lastAttachedReportId === r.id && lastAttachedPlanUrl) {
+<button class="sh-btn sh-btn-azure"
               type="button" title="Abrir el plan en Azure DevOps" (click)="openAttachedPlanInDevOps()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               Abrir en DevOps
             </button>
+}
           </div>
           <!-- Formulario de vinculación a plan -->
-          <div *ngIf="attachingReportId === r.id" class="sh-attach-form">
-            <div class="sh-attach-hint" *ngIf="lastValidatedPlanId">
+          @if (attachingReportId === r.id) {
+<div class="sh-attach-form">
+            @if (lastValidatedPlanId) {
+<div class="sh-attach-hint">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
               Usando el plan ya validado <strong>{{ lastValidatedPlanId }}</strong>. Puedes cambiarlo si es necesario.
             </div>
+}
             <label class="sh-field-label" for="sh-plan-id">ID del Plan de Pruebas</label>
             <input id="sh-plan-id" type="text" class="form-input" [(ngModel)]="attachPlanIdInput"
               inputmode="numeric" autocomplete="off"
@@ -648,13 +741,17 @@
               <button class="btn btn-secondary btn-sm" type="button" [disabled]="isAttaching" (click)="cancelAttachToPlan()">Cancelar</button>
             </div>
           </div>
+}
         </div>
+}
       </div>
     </div>
   </div>
+}
 
   <!-- Image Editor Modal -->
-  <div *ngIf="showImageEditor" class="modal-backdrop" (click)="showImageEditor = false; pendingImageDescription = ''">
+  @if (showImageEditor) {
+<div class="modal-backdrop" (click)="showImageEditor = false; pendingImageDescription = ''">
     <div class="modal-box" (click)="$event.stopPropagation()">
       <div class="modal-top">
         <span>{{ editingImageId ? 'Editar imagen' : 'Nueva imagen' }}</span>
@@ -674,22 +771,28 @@
         [editorStateJson]="selectedImage?.editorStateJson" (imageSaved)="onImageSaved($event)"></app-image-editor>
     </div>
   </div>
+}
 
   <!-- Image Viewer Modal -->
-  <div *ngIf="showImageViewer" class="modal-backdrop" (click)="showImageViewer = false">
+  @if (showImageViewer) {
+<div class="modal-backdrop" (click)="showImageViewer = false">
     <div class="modal-box viewer-modal" (click)="$event.stopPropagation()">
       <div class="modal-top">
         <span>Vista Previa de Evidencia</span>
         <button class="modal-close" (click)="showImageViewer = false">✕</button>
       </div>
       <div class="viewer-body">
-        <img *ngIf="previewImage" [src]="previewImage.base64Data" class="full-size-preview" alt="Vista previa" />
+        @if (previewImage) {
+<img [src]="previewImage.base64Data" class="full-size-preview" alt="Vista previa" />
+}
       </div>
     </div>
   </div>
+}
 
   <!-- Data Editor Modal -->
-  <div *ngIf="showDataEditor" class="modal-backdrop" (click)="showDataEditor = false">
+  @if (showDataEditor) {
+<div class="modal-backdrop" (click)="showDataEditor = false">
     <div class="modal-box data-modal" (click)="$event.stopPropagation()">
       <div class="modal-top">
         <span class="modal-title-strong">
@@ -703,17 +806,21 @@
       </app-data-editor>
     </div>
   </div>
+}
 
   <!-- Global Loading Overlay -->
-  <div class="global-loading-overlay" *ngIf="isParsingFile">
+  @if (isParsingFile) {
+<div class="global-loading-overlay">
     <div class="loading-box">
       <div class="loading-spinner"></div>
       <p>{{ loadingText }}</p>
     </div>
   </div>
+}
 
   <!-- Export Progress Overlay -->
-  <div class="global-loading-overlay export-progress-overlay" *ngIf="isExporting">
+  @if (isExporting) {
+<div class="global-loading-overlay export-progress-overlay">
     <div class="loading-box export-progress-box">
       <div class="export-icon">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -730,9 +837,11 @@
       <p class="export-hint">No cierres esta ventana</p>
     </div>
   </div>
+}
 
   <!-- Serenity report progress overlay -->
-  <div class="global-loading-overlay export-progress-overlay" *ngIf="isExportingSerenity">
+  @if (isExportingSerenity) {
+<div class="global-loading-overlay export-progress-overlay">
     <div class="loading-box export-progress-box">
       <div class="export-icon serenity-icon">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -749,4 +858,5 @@
       <p class="export-hint">No cierres esta ventana</p>
     </div>
   </div>
+}
 </div>

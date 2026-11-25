@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+
 import { Component, OnDestroy, OnInit, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -16,7 +16,7 @@ import { AiUnifiedService } from '../../services/ai/ai-unified.service';
 @Component({
   selector: 'app-hu-scenarios-view',
   standalone: true,
-  imports: [CommonModule, FormsModule, ExcelMatrixExporterComponent, ConfirmationModalComponent],
+  imports: [FormsModule, ExcelMatrixExporterComponent, ConfirmationModalComponent],
   templateUrl: './hu-scenarios-view.component.html',
   styleUrls: ['./hu-scenarios-view.component.css']
 })

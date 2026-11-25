@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, Inject, PLATFORM_ID, ElementRef, AfterViewChecked } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -18,7 +18,7 @@ export interface RiskStrategyData {
 @Component({
     selector: 'app-general-sections',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [FormsModule],
     templateUrl: './general-sections.component.html',
     styleUrls: ['./general-sections.component.css']
 })

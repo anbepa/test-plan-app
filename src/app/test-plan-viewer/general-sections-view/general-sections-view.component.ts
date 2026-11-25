@@ -1,5 +1,5 @@
 import { compactStaticSectionText } from '../../shared/utils/static-section-text';
-import { CommonModule } from '@angular/common';
+
 import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -24,7 +24,7 @@ interface SectionItem {
 @Component({
   selector: 'app-general-sections-view',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './general-sections-view.component.html',
   styleUrls: ['./general-sections-view.component.css']
 })

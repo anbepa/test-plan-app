@@ -1,23 +1,29 @@
 <!-- src/app/test-plan-viewer/test-plan-viewer.component.html -->
 <div class="viewer-container">
     <!-- VISTA DE LISTA -->
-    <div *ngIf="!selectedTestPlan" class="list-view">
+    @if (!selectedTestPlan) {
+<div class="list-view">
 
       <!-- Encabezado de la lista -->
-      <div class="title-bar" *ngIf="!isLoading && !errorMessage">
+      @if (!isLoading && !errorMessage) {
+<div class="title-bar">
         <div>
           <h2 class="section-title">Planes de Prueba</h2>
         </div>
       </div>
+}
 
       <!-- Loading State -->
-    <div *ngIf="isLoading" class="loading-state">
+    @if (isLoading) {
+<div class="loading-state">
       <div class="spinner"></div>
       <p>Cargando planes de prueba...</p>
     </div>
+}
 
     <!-- Error State -->
-    <div *ngIf="!isLoading && errorMessage" class="error-state">
+    @if (!isLoading && errorMessage) {
+<div class="error-state">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="error-icon">
         <path fill-rule="evenodd"
           d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
@@ -34,9 +40,11 @@
         Reintentar
       </button>
     </div>
+}
 
     <!-- Empty State -->
-    <div *ngIf="!isLoading && !errorMessage && testPlans.length === 0" class="empty-state">
+    @if (!isLoading && !errorMessage && testPlans.length === 0) {
+<div class="empty-state">
       <div class="empty-icon-wrapper">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
           class="empty-icon">
@@ -54,9 +62,11 @@
         Crear Test Plan
       </button>
     </div>
+}
 
     <!-- Barra de búsqueda y filtros -->
-    <div *ngIf="!isLoading && !errorMessage && testPlans.length > 0" class="filters-bar">
+    @if (!isLoading && !errorMessage && testPlans.length > 0) {
+<div class="filters-bar">
       <div class="search-container">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="search-icon">
           <path fill-rule="evenodd"
@@ -65,12 +75,14 @@
         </svg>
         <input type="text" class="search-input" placeholder="Buscar por nombre o HU..." [(ngModel)]="searchQuery"
           (input)="onSearchChange()">
-        <button *ngIf="searchQuery" class="clear-search" (click)="searchQuery = ''; onSearchChange()">
+        @if (searchQuery) {
+<button class="clear-search" (click)="searchQuery = ''; onSearchChange()">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
             <path
               d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
           </svg>
         </button>
+}
       </div>
 
       <div class="filter-group">
@@ -84,7 +96,9 @@
         </label>
         <select class="filter-select" [(ngModel)]="selectedSprintFilter" (change)="onSprintFilterChange()">
           <option value="all">Todos los Sprints</option>
-          <option *ngFor="let sprint of getAvailableSprints()" [value]="sprint">{{ sprint }}</option>
+          @for (sprint of getAvailableSprints(); track sprint) {
+<option [value]="sprint">{{ sprint }}</option>
+}
         </select>
       </div>
 
@@ -98,7 +112,9 @@
         </label>
         <select class="filter-select" [(ngModel)]="selectedCellFilter" (change)="onCellFilterChange()">
           <option value="all">Todas las Células</option>
-          <option *ngFor="let cell of getAvailableCells()" [value]="cell">{{ cell }}</option>
+          @for (cell of getAvailableCells(); track cell) {
+<option [value]="cell">{{ cell }}</option>
+}
         </select>
       </div>
 
@@ -107,9 +123,11 @@
         <span class="count-text">{{ filteredTestPlans.length === 1 ? 'resultado' : 'resultados' }}</span>
       </div>
     </div>
+}
 
     <!-- Tabla de resultados -->
-    <div *ngIf="!isLoading && !errorMessage && paginatedTestPlans.length > 0" class="table-results-wrapper">
+    @if (!isLoading && !errorMessage && paginatedTestPlans.length > 0) {
+<div class="table-results-wrapper">
 
       <div class="table-container">
         <table class="plans-table">
@@ -128,7 +146,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let testPlan of paginatedTestPlans" [class.row-selected]="isPlanSelected(testPlan)">
+            @for (testPlan of paginatedTestPlans; track testPlan) {
+<tr [class.row-selected]="isPlanSelected(testPlan)">
               <td class="check-col" data-label="Seleccionar">
                 <input type="checkbox" [checked]="isPlanSelected(testPlan)"
                   (change)="onPlanSelectionChange(testPlan, $any($event.target).checked)">
@@ -144,13 +163,16 @@
                <td class="col-num" data-label="Número de casos">{{ getTestCaseCount(testPlan) }}</td>
                <td class="col-num" data-label="Número de pasos">{{ getTotalStepsCount(testPlan) }}</td>
             </tr>
+}
           </tbody>
         </table>
       </div>
     </div>
+}
 
     <!-- Barra flotante de borrado masivo -->
-    <div class="bulk-delete-bar" *ngIf="selectedPlanIds.length > 0">
+    @if (selectedPlanIds.length > 0) {
+<div class="bulk-delete-bar">
       <span class="bulk-count">{{ selectedPlanIds.length }} plan{{ selectedPlanIds.length !== 1 ? 'es' : '' }} seleccionado{{ selectedPlanIds.length !== 1 ? 's' : '' }}</span>
       <button class="bulk-delete-btn" (click)="deleteSelectedPlans()">
         <span class="icon-trash-white"></span>
@@ -160,9 +182,11 @@
         Cancelar
       </button>
     </div>
+}
 
     <!-- Sin resultados de búsqueda -->
-    <div *ngIf="!isLoading && !errorMessage && testPlans.length > 0 && filteredTestPlans.length === 0"
+    @if (!isLoading && !errorMessage && testPlans.length > 0 && filteredTestPlans.length === 0) {
+<div
       class="no-results">
       <div class="no-results-icon">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -177,9 +201,11 @@
         Limpiar filtros
       </button>
     </div>
+}
 
     <!-- PAGINADOR -->
-    <div *ngIf="!isLoading && !errorMessage && filteredTestPlans.length > 0" class="pagination-container">
+    @if (!isLoading && !errorMessage && filteredTestPlans.length > 0) {
+<div class="pagination-container">
       <div class="pagination-info">
         <p>
           Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> -
@@ -189,7 +215,8 @@
         </p>
       </div>
 
-      <div class="pagination-controls" *ngIf="totalPages > 1">
+      @if (totalPages > 1) {
+<div class="pagination-controls">
         <!-- Botón Anterior -->
         <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()"
           title="Página anterior">
@@ -202,13 +229,19 @@
 
         <!-- Números de página -->
         <div class="pagination-numbers">
-          <ng-container *ngFor="let page of getPageNumbers()">
-            <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage"
+          @for (page of getPageNumbers(); track page) {
+
+            @if (page > 0) {
+<button class="pagination-number" [class.active]="page === currentPage"
               [disabled]="page === currentPage" (click)="goToPage(page)">
               {{ page }}
             </button>
-            <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
-          </ng-container>
+}
+            @if (page === -1) {
+<span class="pagination-ellipsis">...</span>
+}
+          
+}
         </div>
 
         <!-- Botón Siguiente -->
@@ -221,11 +254,15 @@
           </svg>
         </button>
       </div>
+}
     </div>
+}
   </div>
+}
 
   <!-- VISTA DETALLADA / EDICIÓN -->
-  <div *ngIf="selectedTestPlan" class="detail-view">
+  @if (selectedTestPlan) {
+<div class="detail-view">
     <!-- Cabecera mejorada estilo Apple/Linear/Notion -->
     <div class="detail-header">
       <div class="header-container">
@@ -273,7 +310,8 @@
             </button>
           </div>
 
-          <div class="table-container hu-table-container" *ngIf="huList.length > 0">
+          @if (huList.length > 0) {
+<div class="table-container hu-table-container">
             <table class="plans-table hu-table">
               <thead>
                 <tr>
@@ -288,7 +326,8 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let hu of paginatedHuList; let i = index; trackBy: trackHuById"
+                @for (hu of paginatedHuList; track trackHuById(i, hu); let i = $index) {
+<tr
                   [class.row-selected]="isHuSelected(hu)">
                   <td class="check-col" data-label="Seleccionar">
                     <input type="checkbox" [checked]="isHuSelected(hu)"
@@ -299,12 +338,15 @@
                   <td data-label="Técnica">{{ getHuTechnique(hu) }}</td>
                   <td class="col-num" data-label="Número de casos">{{ hu.testCasesCount || (hu.detailedTestCases?.length || 0) }}</td>
                 </tr>
+}
               </tbody>
             </table>
           </div>
+}
 
           <!-- Floating bulk action bar -->
-          <div class="bulk-delete-bar" *ngIf="selectedHuIds.length > 0">
+          @if (selectedHuIds.length > 0) {
+<div class="bulk-delete-bar">
             <span class="bulk-count">{{ selectedHuIds.length }} {{ selectedHuIds.length === 1 ? 'HU seleccionada' : 'HUs seleccionadas' }}</span>
             <button type="button" class="bulk-delete-btn" (click)="requestDeleteSelectedHU()">
               <span class="icon-trash-white"></span>
@@ -312,8 +354,10 @@
             </button>
             <button type="button" class="bulk-cancel-btn" (click)="selectedHuIds = []">Cancelar</button>
           </div>
+}
 
-          <div class="pagination-container" *ngIf="huList.length > 0">
+          @if (huList.length > 0) {
+<div class="pagination-container">
             <div class="pagination-info">
               <p>
                 Mostrando <strong>{{ (huCurrentPage - 1) * huItemsPerPage + 1 }}</strong> -
@@ -322,7 +366,8 @@
               </p>
             </div>
 
-            <div class="pagination-controls" *ngIf="huTotalPages > 1">
+            @if (huTotalPages > 1) {
+<div class="pagination-controls">
               <button class="pagination-button pagination-prev" [disabled]="huCurrentPage === 1"
                 (click)="previousHuPage()" title="Página anterior">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -333,13 +378,19 @@
               </button>
 
               <div class="pagination-numbers">
-                <ng-container *ngFor="let page of getHuPageNumbers()">
-                  <button *ngIf="page > 0" class="pagination-number" [class.active]="page === huCurrentPage"
+                @for (page of getHuPageNumbers(); track page) {
+
+                  @if (page > 0) {
+<button class="pagination-number" [class.active]="page === huCurrentPage"
                     [disabled]="page === huCurrentPage" (click)="goToHuPage(page)">
                     {{ page }}
                   </button>
-                  <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
-                </ng-container>
+}
+                  @if (page === -1) {
+<span class="pagination-ellipsis">...</span>
+}
+                
+}
               </div>
 
               <button class="pagination-button pagination-next" [disabled]="huCurrentPage === huTotalPages"
@@ -351,10 +402,13 @@
                 </svg>
               </button>
             </div>
+}
           </div>
+}
 
           <!-- Empty state when no HUs -->
-          <div *ngIf="huList.length === 0" class="no-hu-state">
+          @if (huList.length === 0) {
+<div class="no-hu-state">
             <div class="empty-hu-icon">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -364,6 +418,7 @@
             <h3>No hay historias de usuario</h3>
             <p>Comienza haciendo clic en "Añadir nueva hu" para crear la primera</p>
           </div>
+}
         </div>
       </section>
 
@@ -373,6 +428,7 @@
     <!-- Componente oculto para exportar matriz -->
     <app-excel-matrix-exporter #matrixExporter></app-excel-matrix-exporter>
   </div>
+}
 </div>
 
 <!-- Modal de Confirmación de Eliminación -->

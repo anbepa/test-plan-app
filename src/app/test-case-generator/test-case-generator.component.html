@@ -5,19 +5,32 @@
       <div class="header-main">
         <div class="header-text-column">
           <h2 id="test-case-form-section-title" class="section-title">
-            <span *ngIf="componentState === 'initialForm'">Generar casos de prueba</span>
-            <span *ngIf="componentState === 'previewingGenerated'">Previsualización de Casos</span>
-            <span *ngIf="componentState === 'editingForRefinement'">Editando/Refinando Casos</span>
-            <span *ngIf="componentState === 'submitting'">Enviando</span>
+            @if (componentState === 'initialForm') {
+<span>Generar casos de prueba</span>
+}
+            @if (componentState === 'previewingGenerated') {
+<span>Previsualización de Casos</span>
+}
+            @if (componentState === 'editingForRefinement') {
+<span>Editando/Refinando Casos</span>
+}
+            @if (componentState === 'submitting') {
+<span>Enviando</span>
+}
           </h2>
           <div class="header-subtitle-row">
-            <span *ngIf="componentState !== 'initialForm' && generatedHUData" class="hu-subtitle">{{
+            @if (componentState !== 'initialForm' && generatedHUData) {
+<span class="hu-subtitle">{{
               generatedHUData.title }}</span>
-            <span *ngIf="componentState === 'initialForm'" class="subtitle-inline">Importa la HU, revisa sus criterios y genera la matriz.</span>
+}
+            @if (componentState === 'initialForm') {
+<span class="subtitle-inline">Importa la HU, revisa sus criterios y genera la matriz.</span>
+}
           </div>
         </div>
       </div>
-      <button *ngIf="componentState !== 'initialForm'" type="button" (click)="handleCancelGeneration()"
+      @if (componentState !== 'initialForm') {
+<button type="button" (click)="handleCancelGeneration()"
         class="btn-cancel-compact" [disabled]="componentState === 'submitting'"
         title="Descartar todos los cambios generados y volver al formulario inicial">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -25,55 +38,84 @@
         </svg>
         <span>Descartar y volver</span>
       </button>
+}
     </div>
   </div>
 
   <!-- FORMULARIO INICIAL: flujo de trabajo por pasos -->
-  <form (ngSubmit)="generateInitialHuAndCases()" #huForm="ngForm" *ngIf="componentState === 'initialForm'" class="flow-form">
-    <ng-container *ngIf="currentGenerationMode === 'text'">
+  @if (componentState === 'initialForm') {
+<form (ngSubmit)="generateInitialHuAndCases()" #huForm="ngForm" class="flow-form">
+    @if (currentGenerationMode === 'text') {
+
       <!-- Tipo de generación: define qué pasos tiene el flujo -->
       <div class="flow-mode" role="radiogroup" aria-labelledby="tcContextSourceLabel">
         <span class="flow-mode-label" id="tcContextSourceLabel">¿Con qué generas los casos?</span>
         <div class="code-source-options">
-          <label *ngFor="let option of contextSourceOptions" class="code-source-option"
+          @for (option of contextSourceOptions; track option) {
+<label class="code-source-option"
             [class.is-active]="contextSource === option.value" [title]="option.hint">
             <input type="radio" name="contextSource" [value]="option.value" [ngModel]="contextSource"
               (ngModelChange)="onContextSourceChange($event)" [disabled]="codeExploring || loadingScenarios">
             <span>{{ option.label }}</span>
           </label>
+}
         </div>
         <p class="code-source-hint">
-          <ng-container *ngFor="let option of contextSourceOptions"><span *ngIf="option.value === contextSource">{{ option.hint }}</span></ng-container>
+          @for (option of contextSourceOptions; track option) {
+@if (option.value === contextSource) {
+<span>{{ option.hint }}</span>
+}
+}
         </p>
       </div>
 
       <ng-template #stepHeader let-step let-help="help">
         <header class="flow-step-header">
           <span class="flow-step-num" aria-hidden="true">
-            <span *ngIf="step.status === 'running'" class="spinner-inline"></span>
-            <ng-container *ngIf="step.status === 'done'">✓</ng-container>
-            <ng-container *ngIf="step.status === 'stale'">!</ng-container>
-            <ng-container *ngIf="step.status !== 'running' && step.status !== 'done' && step.status !== 'stale'">{{ step.num }}</ng-container>
+            @if (step.status === 'running') {
+<span class="spinner-inline"></span>
+}
+            @if (step.status === 'done') {
+✓
+}
+            @if (step.status === 'stale') {
+!
+}
+            @if (step.status !== 'running' && step.status !== 'done' && step.status !== 'stale') {
+{{ step.num }}
+}
           </span>
           <div class="flow-step-heading">
             <h3>{{ step.title }}</h3>
             <!-- Resumido: lo que contiene el paso; abierto: para qué sirve -->
-            <p *ngIf="isStepCollapsed(step.id); else stepHelp" class="flow-step-summary" [title]="step.summary">{{ step.summary }}</p>
-            <ng-template #stepHelp><p>{{ help }}</p></ng-template>
+            @if (isStepCollapsed(step.id)) {
+<p class="flow-step-summary" [title]="step.summary">{{ step.summary }}</p>
+} @else {
+<p>{{ help }}</p>
+}
+            
           </div>
-          <span *ngIf="step.status === 'running' || step.status === 'stale' || step.status === 'optional'" class="flow-status-chip" [ngClass]="'is-' + step.status">
-            <span *ngIf="step.status === 'running'" class="spinner-inline"></span>{{ step.statusLabel }}
+          @if (step.status === 'running' || step.status === 'stale' || step.status === 'optional') {
+<span class="flow-status-chip" [ngClass]="'is-' + step.status">
+            @if (step.status === 'running') {
+<span class="spinner-inline"></span>
+}{{ step.statusLabel }}
           </span>
-          <button *ngIf="canToggleStep(step.id)" type="button" class="flow-step-toggle" (click)="toggleStep(step.id)"
+}
+          @if (canToggleStep(step.id)) {
+<button type="button" class="flow-step-toggle" (click)="toggleStep(step.id)"
             [attr.aria-expanded]="!isStepCollapsed(step.id)" [attr.aria-controls]="'flow-body-' + step.id">
             {{ isStepCollapsed(step.id) ? 'Editar' : 'Contraer' }}
           </button>
+}
         </header>
-        <div *ngIf="flowNotice(step.id) as notice" class="flow-notice" role="status">
+        @if (flowNotice(step.id); as notice) {
+<div class="flow-notice" role="status">
           <span class="flow-notice-icon" aria-hidden="true">ℹ</span>
           <span>{{ notice }}</span>
           <button type="button" class="flow-notice-close" (click)="dismissFlowNotice(step.id)" aria-label="Cerrar aviso">×</button>
         </div>
+}
       </ng-template>
 
       <!-- PASO: HISTORIA DE USUARIO -->
@@ -93,59 +135,79 @@
                     [disabled]="azureImportLoading"
                     [attr.aria-label]="azureImportLoading ? 'Importando desde Azure DevOps' : 'Importar desde Azure DevOps'"
                     title="Importar desde Azure DevOps">
-                    <span *ngIf="azureImportLoading" class="spinner spinner-dark"></span>
-                    <svg *ngIf="!azureImportLoading" class="id-hybrid-import-icon" xmlns="http://www.w3.org/2000/svg"
+                    @if (azureImportLoading) {
+<span class="spinner spinner-dark"></span>
+}
+                    @if (!azureImportLoading) {
+<svg class="id-hybrid-import-icon" xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
                     </svg>
+}
                     <span class="id-hybrid-import-label">{{ azureImportLoading ? 'Importando...' : 'Importar' }}</span>
                   </button>
                 </div>
-                <div
-                  *ngIf="huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)"
+                @if (huForm.controls['currentHuId']?.invalid && (huForm.controls['currentHuId']?.dirty || huForm.controls['currentHuId']?.touched || huForm.submitted)) {
+<div
+                 
                   class="validation-error" role="alert">
                   ID de la HU es requerido.
                 </div>
-                <div *ngIf="azureImportErrorMessage" class="import-feedback import-error" role="alert">
+}
+                @if (azureImportErrorMessage) {
+<div class="import-feedback import-error" role="alert">
                   {{ azureImportErrorMessage }}
-                  <a *ngIf="isPatError(azureImportErrorMessage)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+                  @if (isPatError(azureImportErrorMessage)) {
+<a routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+}
                 </div>
-                <div *ngIf="azureNodeNameWarning" class="import-feedback import-warning" role="alert">
+}
+                @if (azureNodeNameWarning) {
+<div class="import-feedback import-warning" role="alert">
                   {{ azureNodeNameWarning }}
                 </div>
+}
               </div>
               <div class="form-group metadata-title-group">
                 <label for="tcCurrentHuTitleText">Título de la HU:<span class="required-indicator">*</span></label>
                 <input id="tcCurrentHuTitleText" type="text" name="currentHuTitle" [(ngModel)]="currentHuTitle" required
                   placeholder="Ej: Como usuario, quiero..." class="form-control">
-                <div
-                  *ngIf="huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)"
+                @if (huForm.controls['currentHuTitle']?.invalid && (huForm.controls['currentHuTitle']?.dirty || huForm.controls['currentHuTitle']?.touched || huForm.submitted)) {
+<div
+                 
                   class="validation-error" role="alert">
                   Título de la HU es requerido.
                 </div>
+}
               </div>
               <div class="form-group">
                 <label for="tcCellName">Nombre Célula:<span class="required-indicator">*</span></label>
                 <select id="tcCellName" name="cellName" [(ngModel)]="cellName" (ngModelChange)="onCellNameChange($event)"
                   required class="form-control">
                   <option value="" disabled selected>Seleccione una célula</option>
-                  <option *ngFor="let cell of cellOptions" [value]="cell">{{ cell }}</option>
+                  @for (cell of cellOptions; track cell) {
+<option [value]="cell">{{ cell }}</option>
+}
                 </select>
-                <div
-                  *ngIf="huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)"
+                @if (huForm.controls['cellName']?.invalid && (huForm.controls['cellName']?.dirty || huForm.controls['cellName']?.touched || huForm.submitted)) {
+<div
+                 
                   class="validation-error" role="alert">
                   Nombre de Célula es requerido.
                 </div>
+}
               </div>
               <div class="form-group">
                 <label for="tcCurrentSprint">Sprint:<span class="required-indicator">*</span></label>
                 <input id="tcCurrentSprint" type="text" name="currentSprint" [(ngModel)]="currentSprint" required
                   placeholder="Ej: Sprint 1" class="form-control">
-                <div
-                  *ngIf="huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)"
+                @if (huForm.controls['currentSprint']?.invalid && (huForm.controls['currentSprint']?.dirty || huForm.controls['currentSprint']?.touched || huForm.submitted)) {
+<div
+                 
                   class="validation-error" role="alert">
                   Sprint es requerido.
                 </div>
+}
               </div>
             </div>
           </div>
@@ -155,11 +217,13 @@
             <textarea id="tcCurrentDescription" name="currentDescription" [(ngModel)]="currentDescription" rows="3"
               required placeholder="Ej: La HU describe la funcionalidad..." class="form-control auto-grow"
               (input)="autoGrowTextarea($event.target)"></textarea>
-            <div
-              *ngIf="huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)"
+            @if (huForm.controls['currentDescription']?.invalid && (huForm.controls['currentDescription']?.dirty || huForm.controls['currentDescription']?.touched || huForm.submitted)) {
+<div
+             
               class="validation-error" role="alert">
               Descripción de la HU es requerida.
             </div>
+}
           </div>
         </div>
       </section>
@@ -170,45 +234,61 @@
         <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('criteria'), help: 'Importa o escribe los criterios de aceptación de la HU.' }"></ng-container>
         <div class="flow-step-body" id="flow-body-criteria" [hidden]="isStepCollapsed('criteria')">
           <div class="form-group full-width">
-            <label for="tcCurrentAcceptanceCriteria">Criterios de aceptación de la HU<span *ngIf="contextSource === 'code'"> (opcional)</span>:<span
-                *ngIf="contextSource !== 'code'" class="required-indicator">*</span></label>
-            <div class="md-box-header" *ngIf="currentAcceptanceCriteria.trim()">
+            <label for="tcCurrentAcceptanceCriteria">Criterios de aceptación de la HU@if (contextSource === 'code') {
+<span> (opcional)</span>
+}:@if (contextSource !== 'code') {
+<span
+                class="required-indicator">*</span>
+}</label>
+            @if (currentAcceptanceCriteria.trim()) {
+<div class="md-box-header">
               <div class="md-toggle" role="group" aria-label="Modo de visualización de criterios">
                 <button type="button" [class.is-active]="!criteriaEditing" (click)="criteriaEditing = false">Vista</button>
                 <button type="button" [class.is-active]="criteriaEditing" (click)="editCriteria()">Editar</button>
               </div>
             </div>
-            <div *ngIf="!criteriaEditing && currentAcceptanceCriteria.trim()"
+}
+            @if (!criteriaEditing && currentAcceptanceCriteria.trim()) {
+<div
               id="tcCriteriaOriginalPreview" class="form-control md-preview"
               [innerHTML]="currentAcceptanceCriteria | markdownLite" (dblclick)="editCriteria()"
               title="Doble clic para editar"></div>
+}
             <textarea [hidden]="!criteriaEditing && !!currentAcceptanceCriteria.trim()" id="tcCurrentAcceptanceCriteria" name="currentAcceptanceCriteria"
               [(ngModel)]="currentAcceptanceCriteria" rows="4" [required]="contextSource !== 'code'"
               [placeholder]="contextSource === 'code' ? 'Opcional: el agente derivará las reglas desde el código.' : 'Ej: - Dado que...'"
               class="form-control auto-grow" (input)="autoGrowTextarea($event.target)" (blur)="refreshNormalizedCriteria()"></textarea>
-            <div
-              *ngIf="huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)"
+            @if (huForm.controls['currentAcceptanceCriteria']?.invalid && (huForm.controls['currentAcceptanceCriteria']?.dirty || huForm.controls['currentAcceptanceCriteria']?.touched || huForm.submitted)) {
+<div
+             
               class="validation-error" role="alert">
               Criterios de Aceptación son requeridos.
             </div>
+}
 
           </div>
 
         </div>
       </section>
 
-      <ng-container *ngIf="usesCodeContext">
+      @if (usesCodeContext) {
+
         <!-- PASO: CÓDIGO DE LA HU -->
         <section class="flow-step" id="flow-step-code" [ngClass]="'is-' + flowStep('code').status"
         [class.is-collapsed]="isStepCollapsed('code')" (focusin)="onStepFocusIn('code', $event)" (focusout)="onStepFocusOut('code', $event)">
           <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('code'), help: 'Código de GitHub donde se desarrolló la HU.' }"></ng-container>
           <div class="flow-step-body" id="flow-body-code" [hidden]="isStepCollapsed('code')">
-            <p *ngIf="!currentHuId.trim() && !isCodeTargetReady" class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
-              <div *ngIf="usesCodeContext" class="code-target-panel" aria-live="polite">
-                <p *ngIf="githubCodeMissing" class="code-source-hint code-change-warning" role="status">
+            @if (!currentHuId.trim() && !isCodeTargetReady) {
+<p class="flow-lock-hint">Indica el ID de la HU en el paso {{ flowStep('hu').num }} y pulsa Importar: el código se busca automáticamente.</p>
+}
+              @if (usesCodeContext) {
+<div class="code-target-panel" aria-live="polite">
+                @if (githubCodeMissing) {
+<p class="code-source-hint code-change-warning" role="status">
                   El código de la HU se lee de GitHub y aún no tienes la conexión: configúrala en
                   <a routerLink="/configuracion">Configuración → GitHub (código de la HU)</a>.
                 </p>
+}
                 <!-- Consultando PRs/commits de la HU -->
                 <!-- Selectores de proyecto, repositorio y rama (se reutilizan al agregar ramas) -->
                 <ng-template #targetPicker>
@@ -218,7 +298,9 @@
                       <select id="tcCodeProject" name="codeProject" class="form-control" [ngModel]="codeProject"
                         (ngModelChange)="keepStepOpen('code'); onCodeProjectChange($event)" [disabled]="codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && !codeProjects.length ? 'Cargando...' : 'Seleccione la organización' }}</option>
-                        <option *ngFor="let project of codeProjects" [value]="project.name">{{ project.name }}</option>
+                        @for (project of codeProjects; track project) {
+<option [value]="project.name">{{ project.name }}</option>
+}
                       </select>
                     </div>
                     <div class="form-group">
@@ -226,7 +308,9 @@
                       <select id="tcCodeRepository" name="codeRepositoryId" class="form-control" [ngModel]="codeRepositoryId"
                         (ngModelChange)="keepStepOpen('code'); onCodeRepositoryChange($event)" [disabled]="!codeProject || codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && codeProject && !codeRepositories.length ? 'Cargando...' : 'Seleccione un repositorio' }}</option>
-                        <option *ngFor="let repo of codeRepositories" [value]="repo.id">{{ repo.name }}</option>
+                        @for (repo of codeRepositories; track repo) {
+<option [value]="repo.id">{{ repo.name }}</option>
+}
                       </select>
                     </div>
                     <div class="form-group">
@@ -234,24 +318,36 @@
                       <select id="tcCodeBranch" name="codeBranch" class="form-control" [ngModel]="codeBranch"
                         (ngModelChange)="keepStepOpen('code'); onCodeBranchChange($event)" [disabled]="!codeRepositoryId || codeLoadingTarget || codeExploring">
                         <option value="">{{ codeLoadingTarget && codeRepositoryId && !codeBranches.length ? 'Cargando...' : 'Seleccione una rama' }}</option>
-                        <option *ngFor="let branch of codeBranches" [value]="branch.name">{{ branch.name }}</option>
+                        @for (branch of codeBranches; track branch) {
+<option [value]="branch.name">{{ branch.name }}</option>
+}
                       </select>
                     </div>
                   </div>
-                  <div *ngIf="isManualCodeTargetReady && extraBaseBranch" class="form-group code-base-branch">
+                  @if (isManualCodeTargetReady && extraBaseBranch) {
+<div class="form-group code-base-branch">
                     <label for="tcCodeBaseBranch">Comparar contra:</label>
                     <select id="tcCodeBaseBranch" name="codeBaseBranch" class="form-control" [ngModel]="extraBaseBranch"
                       (ngModelChange)="codeBaseBranchChoice = $event" [disabled]="codeExploring">
-                      <ng-container *ngFor="let branch of codeBranches"><option *ngIf="branch.name !== codeBranch" [value]="branch.name">{{ branch.name }}</option></ng-container>
+                      @for (branch of codeBranches; track branch) {
+@if (branch.name !== codeBranch) {
+<option [value]="branch.name">{{ branch.name }}</option>
+}
+}
                     </select>
-                    <p class="code-source-hint">Se analizan los cambios de la rama desde que salió de esta. <ng-container *ngIf="extraBaseBranchIsSuggested">Sugerida por {{ codeHuChangeGroups.length ? 'la HU o el repositorio' : 'el repositorio' }}.</ng-container></p>
+                    <p class="code-source-hint">Se analizan los cambios de la rama desde que salió de esta. @if (extraBaseBranchIsSuggested) {
+Sugerida por {{ codeHuChangeGroups.length ? 'la HU o el repositorio' : 'el repositorio' }}.
+}</p>
                   </div>
+}
                 </ng-template>
 
                 <!-- Ramas agregadas a mano: se analizan junto con los cambios de la HU -->
                 <ng-template #extraTargetsList>
-                  <ul *ngIf="codeExtraTargets.length" class="code-change-list code-extra-list">
-                    <li *ngFor="let target of codeExtraTargets; let i = index; trackBy: trackExtraTarget">
+                  @if (codeExtraTargets.length) {
+<ul class="code-change-list code-extra-list">
+                    @for (target of codeExtraTargets; track trackExtraTarget(i, target); let i = $index) {
+<li>
                       <span class="code-change-toggle"><span class="code-change-repo">{{ target.repositoryName }}</span></span>
                       <span class="code-change-branch">{{ target.branch }} → {{ target.baseBranch }}</span>
                       <span class="code-change-meta">
@@ -259,17 +355,24 @@
                         <button type="button" class="code-link-btn" (click)="removeExtraTarget(i)" [disabled]="codeExploring" [attr.aria-label]="'Quitar la rama ' + target.branch">Quitar</button>
                       </span>
                     </li>
+}
                   </ul>
+}
                 </ng-template>
 
-                <div *ngIf="codeLoadingHuChanges" class="code-target-card is-loading">
+                @if (codeLoadingHuChanges) {
+<div class="code-target-card is-loading">
                   <span class="spinner-inline"></span>
                   Buscando el código de la HU {{ currentHuId }} en GitHub (PRs y ramas con su ID)…
                 </div>
+}
 
-                <p *ngIf="codeHuLimitedNote" class="code-source-hint code-change-warning" role="status">{{ codeHuLimitedNote }}</p>
+                @if (codeHuLimitedNote) {
+<p class="code-source-hint code-change-warning" role="status">{{ codeHuLimitedNote }}</p>
+}
                 <!-- La HU tiene PRs/commits: se analizan esos cambios, sin elegir rama -->
-                <div *ngIf="!codeLoadingHuChanges && showsHuChangeset" class="code-target-card is-ok">
+                @if (!codeLoadingHuChanges && showsHuChangeset) {
+<div class="code-target-card is-ok">
                   <div class="code-target-card-header">
                     <span class="code-target-card-title">Código de la HU {{ codeHuChanges?.workItemId }}</span>
                     <span class="code-target-card-actions">
@@ -279,68 +382,116 @@
                   </div>
                   <p class="code-source-hint">Repositorios donde se desarrolló la HU. Desmarca los que no quieras analizar.</p>
                   <ul class="code-change-list">
-                    <li *ngFor="let group of codeHuChangeGroups" [class.is-excluded]="!isChangeGroupSelected(group)">
+                    @for (group of codeHuChangeGroups; track group) {
+<li [class.is-excluded]="!isChangeGroupSelected(group)">
                       <label class="code-change-toggle">
                         <input type="checkbox" [checked]="isChangeGroupSelected(group)" (change)="toggleChangeGroup(group)" [disabled]="codeExploring">
                         <span class="code-change-repo">{{ group.repositoryName }}</span>
                       </label>
-                      <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}<ng-container *ngIf="group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch"> → {{ group.targetBranch }}</ng-container></span>
+                      <span class="code-change-branch">{{ group.sourceBranches[0] || group.targetBranch }}@if (group.sourceBranches[0] && group.sourceBranches[0] !== group.targetBranch) {
+ → {{ group.targetBranch }}
+}</span>
                       <span class="code-change-meta">
-                        último commit <code>{{ group.lastCommit | slice:0:8 }}</code><ng-container *ngIf="group.lastDate"> · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}</ng-container>
+                        último commit <code>{{ group.lastCommit | slice:0:8 }}</code>@if (group.lastDate) {
+ · {{ group.lastDate | date:'dd/MM/yyyy HH:mm' }}
+}
                         · {{ group.prs.length ? changeGroupPrs(group) : group.kind === 'branch' ? 'commits sin PR' : group.commits.length + ' commit(s)' }} · {{ group.files.length }} archivo(s)
-                        <ng-container *ngIf="group.extraOver"> · cambios adicionales a {{ group.extraOver }}</ng-container>
-                        <ng-container *ngIf="group.alsoMergedInto.length"> · también en {{ group.alsoMergedInto.join(', ') }}</ng-container>
+                        @if (group.extraOver) {
+ · cambios adicionales a {{ group.extraOver }}
+}
+                        @if (group.alsoMergedInto.length) {
+ · también en {{ group.alsoMergedInto.join(', ') }}
+}
                       </span>
                     </li>
+}
                   </ul>
                   <ng-container *ngTemplateOutlet="extraTargetsList"></ng-container>
-                  <div *ngIf="codeAddingTarget" class="code-add-target">
+                  @if (codeAddingTarget) {
+<div class="code-add-target">
                     <p class="code-source-hint">Elige otra rama para analizarla <strong>junto con</strong> los cambios de la HU.</p>
                     <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
-                    <p *ngIf="extraTargetProblem" class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
-                    <p *ngIf="canAddExtraTarget" class="code-source-hint">Se tomarán los cambios de <strong>{{ codeBranch }}</strong> desde que salió de <strong>{{ extraBaseBranch }}</strong>.</p>
+                    @if (extraTargetProblem) {
+<p class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
+}
+                    @if (canAddExtraTarget) {
+<p class="code-source-hint">Se tomarán los cambios de <strong>{{ codeBranch }}</strong> desde que salió de <strong>{{ extraBaseBranch }}</strong>.</p>
+}
                     <div class="code-add-target-actions">
                       <button type="button" class="button-primary compact-action" (click)="addExtraTarget()" [disabled]="!canAddExtraTarget || codeExploring">Agregar</button>
                       <button type="button" class="code-link-btn" (click)="cancelAddingTarget()">Cancelar</button>
                     </div>
                   </div>
-                  <p *ngIf="!usesHuChangeset && !codeExtraTargets.length && !pendingExtraTarget" class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
-                  <details *ngIf="codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length" class="code-change-discarded">
+}
+                  @if (!usesHuChangeset && !codeExtraTargets.length && !pendingExtraTarget) {
+<p class="code-source-hint code-change-warning">Marca al menos un repositorio para analizar.</p>
+}
+                  @if (codeHuChanges?.omitted?.length || codeHuChanges?.emptyBranches?.length) {
+<details class="code-change-discarded">
                     <summary>No se analiza: {{ (codeHuChanges?.omitted?.length || 0) + (codeHuChanges?.emptyBranches?.length || 0) }} elemento(s) vinculados que no son código de la HU</summary>
                     <ul>
-                      <li *ngFor="let pr of codeHuChanges?.omitted">PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
-                      <li *ngFor="let branch of codeHuChanges?.emptyBranches">Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
+                      @for (pr of codeHuChanges?.omitted; track pr) {
+<li>PR {{ pr.prId }} · {{ pr.repositoryName }} — {{ pr.reason }}</li>
+}
+                      @for (branch of codeHuChanges?.emptyBranches; track branch) {
+<li>Rama <code>{{ branch.branch }}</code> · {{ branch.repositoryName }} — {{ branch.reason }}</li>
+}
                     </ul>
                   </details>
+}
                 </div>
+}
 
                 <!-- Sin PRs/commits (o el usuario prefiere otra rama): repositorio y rama -->
-                <ng-container *ngIf="!codeLoadingHuChanges && !showsHuChangeset && showsManualPicker">
-                  <p *ngIf="huHasNoChangeset" class="code-source-hint">No se encontraron en GitHub PRs ni ramas con el ID de la HU: elige el repositorio y la rama.</p>
+                @if (!codeLoadingHuChanges && !showsHuChangeset && showsManualPicker) {
+
+                  @if (huHasNoChangeset) {
+<p class="code-source-hint">No se encontraron en GitHub PRs ni ramas con el ID de la HU: elige el repositorio y la rama.</p>
+}
                   <ng-container *ngTemplateOutlet="targetPicker"></ng-container>
-                  <p *ngIf="isManualCodeTargetReady && !codeExtraTargets.length" class="code-source-hint">
-                    Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code><ng-container *ngIf="extraBaseBranch">, solo con los cambios hechos desde que salió de <strong>{{ extraBaseBranch }}</strong></ng-container>.
+                  @if (isManualCodeTargetReady && !codeExtraTargets.length) {
+<p class="code-source-hint">
+                    Se analizará <strong>{{ codeBranch }}</strong> hasta su último commit <code>{{ codeSelectedCommit | slice:0:8 }}</code>@if (extraBaseBranch) {
+, solo con los cambios hechos desde que salió de <strong>{{ extraBaseBranch }}</strong>
+}.
                   </p>
+}
                   <ng-container *ngTemplateOutlet="extraTargetsList"></ng-container>
-                  <p *ngIf="isManualCodeTargetReady && extraTargetProblem && codeExtraTargets.length" class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
-                  <div *ngIf="isManualCodeTargetReady" class="code-add-target-actions">
+                  @if (isManualCodeTargetReady && extraTargetProblem && codeExtraTargets.length) {
+<p class="code-source-hint code-change-warning" role="status">{{ extraTargetProblem }}</p>
+}
+                  @if (isManualCodeTargetReady) {
+<div class="code-add-target-actions">
                     <button type="button" class="code-link-btn" (click)="addExtraTarget()" [disabled]="!canAddExtraTarget || codeExploring"
                             title="Suma esta rama a la lista para poder elegir otro repositorio y otra rama">+ Agregar otra rama</button>
                   </div>
-                  <p *ngIf="codeExtraTargets.length && !isManualCodeTargetReady" class="code-source-hint">Elige otra rama para sumarla, o genera con las {{ codeExtraTargets.length }} de la lista.</p>
-                  <div *ngIf="!hasHuChangeset && codeLinkedBranchHint" class="code-source-hint">{{ codeLinkedBranchHint }}</div>
-                  <button *ngIf="hasHuChangeset" type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
+}
+                  @if (codeExtraTargets.length && !isManualCodeTargetReady) {
+<p class="code-source-hint">Elige otra rama para sumarla, o genera con las {{ codeExtraTargets.length }} de la lista.</p>
+}
+                  @if (!hasHuChangeset && codeLinkedBranchHint) {
+<div class="code-source-hint">{{ codeLinkedBranchHint }}</div>
+}
+                  @if (hasHuChangeset) {
+<button type="button" class="code-link-btn code-link-back" (click)="useHuChangeset()" [disabled]="codeExploring">
                     ← Volver a los cambios de la HU
                   </button>
-                </ng-container>
+}
+                
+}
               </div>
-              <div *ngIf="usesCodeContext && codeTargetError" class="import-feedback import-error" role="alert">
+}
+              @if (usesCodeContext && codeTargetError) {
+<div class="import-feedback import-error" role="alert">
                 {{ codeTargetError }}
                 <span class="import-error-actions">
-                  <a *ngIf="isPatError(codeTargetError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+                  @if (isPatError(codeTargetError)) {
+<a routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+}
                   <button type="button" class="code-link-btn" (click)="loadCodeProjects()">Reintentar</button>
                 </span>
               </div>
+}
           </div>
         </section>
 
@@ -348,107 +499,171 @@
         <section class="flow-step" id="flow-step-context" [ngClass]="'is-' + flowStep('context').status" aria-live="polite">
           <ng-container *ngTemplateOutlet="stepHeader; context: { $implicit: flowStep('context'), help: 'Un agente revisa el código y explica cómo se ejecuta cada criterio.' }"></ng-container>
           <div class="flow-step-body">
-            <p *ngIf="isCodeContextStale" class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
+            @if (isCodeContextStale) {
+<p class="flow-inline-warning">Los criterios o la descripción cambiaron después de explorar. Vuelve a explorar para que la cobertura use los CA actuales.</p>
+}
             <div class="code-agent-bar">
-              <p *ngIf="isCodeTargetReady && !codeContextText && !codeExploring && !codeAgentError" class="code-source-hint">
-                <ng-container *ngIf="contextSource === 'criteria-code'; else codeOnlyHint">
+              @if (isCodeTargetReady && !codeContextText && !codeExploring && !codeAgentError) {
+<p class="code-source-hint">
+                @if (contextSource === 'criteria-code') {
+
                   Contrasta cada criterio con el código: Implementado, Parcial, Diferente o Sin evidencia.
-                </ng-container>
-                <ng-template #codeOnlyHint>Reconstruye las reglas observables desde el código.</ng-template>
+                
+} @else {
+Reconstruye las reglas observables desde el código.
+}
+                
                 <span class="code-agent-optional">Se explora automáticamente en cuanto la HU y su código están listos (1–3 min); revisa el contexto y luego genera los casos.</span>
               </p>
-              <p *ngIf="codeExploring" class="code-source-hint code-agent-meta">El agente está revisando el código de la HU; suele tardar entre 1 y 3 minutos.</p>
-              <p *ngIf="codeContextText && !codeExploring" class="code-source-hint code-agent-meta">
-                <span *ngIf="codeFilesReviewed.length">{{ codeFilesReviewed.length }} archivos revisados</span>
-                <ng-container *ngIf="codeAgentLog.length">
-                  <span *ngIf="codeFilesReviewed.length" aria-hidden="true"> · </span>
+}
+              @if (codeExploring) {
+<p class="code-source-hint code-agent-meta">El agente está revisando el código de la HU; suele tardar entre 1 y 3 minutos.</p>
+}
+              @if (codeContextText && !codeExploring) {
+<p class="code-source-hint code-agent-meta">
+                @if (codeFilesReviewed.length) {
+<span>{{ codeFilesReviewed.length }} archivos revisados</span>
+}
+                @if (codeAgentLog.length) {
+
+                  @if (codeFilesReviewed.length) {
+<span aria-hidden="true"> · </span>
+}
                   <button type="button" class="code-link-btn" (click)="showAgentLog = !showAgentLog" [attr.aria-expanded]="showAgentLog">
                     {{ showAgentLog ? 'Ocultar' : 'Ver' }} pasos del agente ({{ codeAgentLog.length }})
                   </button>
-                </ng-container>
+                
+}
               </p>
+}
               <div class="code-agent-actions">
-                <button *ngIf="!codeExploring && (codeContextText || codeAgentError)" type="button" class="btn-flow-secondary" (click)="exploreCode()"
+                @if (!codeExploring && (codeContextText || codeAgentError)) {
+<button type="button" class="btn-flow-secondary" (click)="exploreCode()"
                   [disabled]="!isCodeTargetReady || !currentDescription || loadingScenarios"
                   title="Los criterios siguen mandando: un criterio sin evidencia o diferente genera igual su escenario, marcado para reportar defecto si falla.">
                   {{ codeContextText ? '↻ Volver a explorar' : 'Reintentar exploración' }}
                 </button>
-                <button *ngIf="codeExploring" type="button" class="btn-flow-secondary" (click)="cancelCodeExploration()">Cancelar exploración</button>
+}
+                @if (codeExploring) {
+<button type="button" class="btn-flow-secondary" (click)="cancelCodeExploration()">Cancelar exploración</button>
+}
               </div>
             </div>
 
-            <ul *ngIf="codeAgentLog.length && codeExploring" class="code-agent-log">
-              <li *ngFor="let line of codeAgentLog; let last = last" [class.is-current]="last">
-                <span *ngIf="last" class="spinner-inline"></span>{{ line }}
+            @if (codeAgentLog.length && codeExploring) {
+<ul class="code-agent-log">
+              @for (line of codeAgentLog; track line; let last = $last) {
+<li [class.is-current]="last">
+                @if (last) {
+<span class="spinner-inline"></span>
+}{{ line }}
               </li>
+}
             </ul>
-            <ul *ngIf="codeAgentLog.length && !codeExploring && showAgentLog" class="code-agent-log">
-              <li *ngFor="let line of codeAgentLog">{{ line }}</li>
+}
+            @if (codeAgentLog.length && !codeExploring && showAgentLog) {
+<ul class="code-agent-log">
+              @for (line of codeAgentLog; track line) {
+<li>{{ line }}</li>
+}
             </ul>
+}
 
-            <div *ngIf="codeAgentError" class="import-feedback import-error" role="alert">{{ codeAgentError }}
-              <a *ngIf="isPatError(codeAgentError)" routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a></div>
+            @if (codeAgentError) {
+<div class="import-feedback import-error" role="alert">{{ codeAgentError }}
+              @if (isPatError(codeAgentError)) {
+<a routerLink="/configuracion" class="import-error-link">Actualizar el PAT en Configuración</a>
+}</div>
+}
 
-            <ng-container *ngIf="codeContextText">
-              <div *ngIf="!codeContextEditing && codeCoverageRows.length" class="coverage-editor">
+            @if (codeContextText) {
+
+              @if (!codeContextEditing && codeCoverageRows.length) {
+<div class="coverage-editor">
                 <div class="coverage-editor-title">
                   <span>Cobertura de criterios en el código</span>
-                  <div *ngIf="codeCoverageSummary.length" class="code-coverage-chips" aria-label="Resumen de cobertura">
-                    <button type="button" *ngFor="let item of codeCoverageSummary; trackBy: trackByLabel" class="code-coverage-chip" [ngClass]="item.css"
+                  @if (codeCoverageSummary.length) {
+<div class="code-coverage-chips" aria-label="Resumen de cobertura">
+                    @for (item of codeCoverageSummary; track trackByLabel($index, item)) {
+<button type="button" class="code-coverage-chip" [ngClass]="item.css"
                       [class.is-selected]="coverageFilter === item.key" [attr.aria-pressed]="coverageFilter === item.key"
                       (click)="toggleCoverageFilter(item.key)" [title]="coverageFilter === item.key ? 'Mostrar todos' : 'Mostrar solo ' + item.label.toLowerCase()">{{ item.label }}: {{ item.count }}</button>
-                    <button *ngIf="coverageFilter" type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
+}
+                    @if (coverageFilter) {
+<button type="button" class="code-link-btn coverage-filter-clear" (click)="coverageFilter = null">Ver todos</button>
+}
                   </div>
+}
                 </div>
                 <p class="coverage-editor-hint">Si no estás de acuerdo con un estado, cámbialo: se usa al generar.</p>
                 <div class="md-table-wrap">
                   <table class="md-table coverage-table">
                     <thead><tr><th>CA</th><th>Criterio</th><th>Estado</th><th>Detalle</th></tr></thead>
                     <tbody>
-                      <tr *ngFor="let row of visibleCoverageRows; trackBy: trackCoverageRow">
+                      @for (row of visibleCoverageRows; track trackCoverageRow($index, row)) {
+<tr>
                         <td class="md-id">{{ row.id }}</td>
                         <td>{{ row.criterion }}</td>
                         <td>
                           <select class="coverage-status-select" [ngClass]="coverageStatusCss(row.status)" [ngModel]="row.status"
                             [ngModelOptions]="{ standalone: true }" (ngModelChange)="setCoverageStatus(row.id, $event)"
                             [attr.aria-label]="'Estado de ' + row.id" [disabled]="codeExploring || loadingScenarios">
-                            <option *ngFor="let status of coverageStatuses" [value]="status">{{ status }}</option>
+                            @for (status of coverageStatuses; track status) {
+<option [value]="status">{{ status }}</option>
+}
                           </select>
                         </td>
-                        <td class="coverage-detail"><ng-container *ngFor="let part of row.detailParts"><code *ngIf="part.code">{{ part.text }}</code><ng-container *ngIf="!part.code">{{ part.text }}</ng-container></ng-container></td>
+                        <td class="coverage-detail">@for (part of row.detailParts; track part) {
+@if (part.code) {
+<code>{{ part.text }}</code>
+}@if (!part.code) {
+{{ part.text }}
+}
+}</td>
                       </tr>
+}
                     </tbody>
                   </table>
                 </div>
               </div>
+}
               <!-- Resumen técnico: plegado cuando hay tabla de cobertura, que es lo que se revisa -->
               <div class="code-context-head">
-                <button *ngIf="codeCoverageRows.length && !codeContextEditing; else contextTitle" type="button" class="criteria-original-toggle"
+                @if (codeCoverageRows.length && !codeContextEditing) {
+<button type="button" class="criteria-original-toggle"
                   (click)="showCodeContextText = !showCodeContextText" [attr.aria-expanded]="showCodeContextText" aria-controls="tcCodeContextPreview">
                   <span class="criteria-original-caret" [class.is-open]="showCodeContextText" aria-hidden="true">›</span>
                   Resumen técnico del agente
                 </button>
-                <ng-template #contextTitle><span class="criteria-original-toggle">Resumen técnico del agente</span></ng-template>
+} @else {
+<span class="criteria-original-toggle">Resumen técnico del agente</span>
+}
+                
                 <span class="code-context-note">Se envía como {{ contextSource === 'code' ? 'fuente principal' : 'complemento de los criterios' }}</span>
                 <div class="md-toggle" role="group" aria-label="Modo de visualización del contexto técnico">
                   <button type="button" [class.is-active]="!codeContextEditing" (click)="codeContextEditing = false">Vista</button>
                   <button type="button" [class.is-active]="codeContextEditing" (click)="editCodeContext()">Editar</button>
                 </div>
               </div>
-              <div *ngIf="!codeContextEditing && (showCodeContextText || !codeCoverageRows.length)" id="tcCodeContextPreview"
+              @if (!codeContextEditing && (showCodeContextText || !codeCoverageRows.length)) {
+<div id="tcCodeContextPreview"
                 class="code-context-visual" (dblclick)="editCodeContext()" title="Doble clic para editar">
                 <app-tech-context-view [context]="codeContextText"></app-tech-context-view>
               </div>
+}
               <textarea [hidden]="!codeContextEditing" id="tcCodeContext" name="codeContextText" [(ngModel)]="codeContextText" rows="8"
                 class="form-control auto-grow code-context-textarea" (input)="autoGrowTextarea($event.target)"
                 [disabled]="codeExploring"></textarea>
-            </ng-container>
+            
+}
           </div>
         </section>
-      </ng-container>
+      
+}
 
       <!-- HUs guardadas temporalmente: permite crear el plan sin generar otra HU -->
-      <div class="saved-hus-banner" *ngIf="accumulatedHUsCount > 0" role="status">
+      @if (accumulatedHUsCount > 0) {
+<div class="saved-hus-banner" role="status">
         <p class="saved-hus-text">
           <strong>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }}</strong>
           temporalmente, aún sin añadir al plan. Genera otra HU o confírmala{{ accumulatedHUsCount > 1 ? 's' : '' }} ya.
@@ -458,80 +673,123 @@
           Confirmar y añadir al plan
         </button>
       </div>
+}
 
       <!-- Barra de acción fija: qué falta o qué se enviará, junto al botón de generar -->
       <div class="flow-actionbar" id="flow-step-generate">
-        <div *ngIf="formError" class="error-message initial-form-error" role="alert">
+        @if (formError) {
+<div class="error-message initial-form-error" role="alert">
           <p>{{formError}}</p>
         </div>
+}
         <div class="flow-actionbar-row">
           <p class="flow-actionbar-status" aria-live="polite">
-            <ng-container *ngIf="generateBlockers.length; else readyToGenerate">
+            @if (generateBlockers.length) {
+
               <span class="flow-actionbar-full">
                 <span class="flow-actionbar-label">Falta:</span>
-                <ng-container *ngFor="let blocker of generateBlockers; let last = last; trackBy: trackByLabel">
-                  <button type="button" class="code-link-btn" (click)="scrollToFlowStep(blocker.step)">{{ blocker.label }}</button><span *ngIf="!last">, </span>
-                </ng-container>
+                @for (blocker of generateBlockers; track trackByLabel($index, blocker); let last = $last) {
+
+                  <button type="button" class="code-link-btn" (click)="scrollToFlowStep(blocker.step)">{{ blocker.label }}</button>@if (!last) {
+<span>, </span>
+}
+                
+}
               </span>
               <button type="button" class="code-link-btn flow-actionbar-compact" (click)="scrollToFlowStep(generateBlockers[0].step)"
                 [attr.aria-label]="'Faltan: ' + generateBlockers.length + '. Ir a ' + generateBlockers[0].label">
                 {{ generateBlockers.length === 1 ? 'Falta: ' + generateBlockers[0].label : 'Faltan ' + generateBlockers.length + ' datos' }}
               </button>
-            </ng-container>
-            <ng-template #readyToGenerate>
-              <span *ngIf="isFlowBusy; else readyMark" class="spinner-inline" aria-hidden="true"></span>
-              <ng-template #readyMark><span class="flow-actionbar-ready" aria-hidden="true">✓</span></ng-template>
+            
+} @else {
+
+              @if (isFlowBusy) {
+<span class="spinner-inline" aria-hidden="true"></span>
+} @else {
+<span class="flow-actionbar-ready" aria-hidden="true">✓</span>
+}
+              
               {{ generateSummary || (isFlowBusy ? 'Preparando criterios…' : 'Listo para generar') }}
-            </ng-template>
+            
+}
+            
           </p>
           <button type="submit" class="button-primary compact-action"
             [disabled]="isFormInvalidForGeneration() || loadingScope || loadingScenarios || normalizingCriteria">
-            <span *ngIf="loadingScope || loadingScenarios || codeExploring || normalizingCriteria" class="spinner"></span>
+            @if (loadingScope || loadingScenarios || codeExploring || normalizingCriteria) {
+<span class="spinner"></span>
+}
             {{ generateButtonLabel }}
           </button>
         </div>
       </div>
-    </ng-container>
+    
+}
   </form>
+}
 
   <!-- SECCIÓN DE PREVISUALIZACIÓN Y/O EDICIÓN/REFINAMIENTO -->
-  <div
-    *ngIf="generatedHUData && (componentState === 'previewingGenerated' || componentState === 'editingForRefinement' || componentState === 'submitting')">
-    <div *ngIf="errorScope || errorScenarios" class="error-message generated-data-error" role="alert">
-      <p *ngIf="errorScope">Error en Alcance: {{ errorScope }}</p>
-      <p *ngIf="errorScenarios">Error en Escenarios: {{ errorScenarios }}</p>
+  @if (generatedHUData && (componentState === 'previewingGenerated' || componentState === 'editingForRefinement' || componentState === 'submitting')) {
+<div
+   >
+    @if (errorScope || errorScenarios) {
+<div class="error-message generated-data-error" role="alert">
+      @if (errorScope) {
+<p>Error en Alcance: {{ errorScope }}</p>
+}
+      @if (errorScenarios) {
+<p>Error en Escenarios: {{ errorScenarios }}</p>
+}
     </div>
+}
 
     <div class="generated-test-cases-editor">
-      <h3 *ngIf="componentState !== 'submitting' && componentState === 'previewingGenerated'">Alcance y Casos de Prueba
+      @if (componentState !== 'submitting' && componentState === 'previewingGenerated') {
+<h3>Alcance y Casos de Prueba
       </h3>
-      <h3 *ngIf="componentState === 'editingForRefinement'">Casos de Prueba</h3>
-      <h3 *ngIf="componentState === 'submitting'">Procesando...</h3>
+}
+      @if (componentState === 'editingForRefinement') {
+<h3>Casos de Prueba</h3>
+}
+      @if (componentState === 'submitting') {
+<h3>Procesando...</h3>
+}
 
-      <div *ngIf="componentState === 'previewingGenerated' && generatedHUData" class="scope-display-section">
+      @if (componentState === 'previewingGenerated' && generatedHUData) {
+<div class="scope-display-section">
         <div class="scope-header" (click)="generatedHUData.isScopeDetailsOpen = !generatedHUData.isScopeDetailsOpen" role="button" [attr.aria-expanded]="generatedHUData.isScopeDetailsOpen">
           <h4>Alcance Generado</h4>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="collapse-icon" [class.collapsed]="!generatedHUData.isScopeDetailsOpen">
             <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
           </svg>
         </div>
-        <div class="scope-content" [class.loading-text]="loadingScope" *ngIf="generatedHUData.isScopeDetailsOpen">
-          <span *ngIf="loadingScope" class="spinner-inline"></span>
+        @if (generatedHUData.isScopeDetailsOpen) {
+<div class="scope-content" [class.loading-text]="loadingScope">
+          @if (loadingScope) {
+<span class="spinner-inline"></span>
+}
           {{ loadingScope ? 'Cargando alcance...' : (generatedHUData.generatedScope || 'No se pudo generar el alcance o
           no aplica.') }}
         </div>
+}
       </div>
+}
 
       <!-- MODO PREVISUALIZACIÓN -->
-      <ng-container *ngIf="componentState === 'previewingGenerated'">
+      @if (componentState === 'previewingGenerated') {
 
-        <p class="criteria-coverage-gap" role="status" *ngIf="!loadingScenarios && criteriaCoverageGap.length">
+
+        @if (!loadingScenarios && criteriaCoverageGap.length) {
+<p class="criteria-coverage-gap" role="status">
           ⚠ {{ criteriaCoverageGap.length }} criterio{{ criteriaCoverageGap.length > 1 ? 's' : '' }} sin escenario: {{ criteriaCoverageGap.join(', ') }}. Revísalo{{ criteriaCoverageGap.length > 1 ? 's' : '' }} antes de añadir la HU al plan.
         </p>
+}
 
         <!-- Acciones arriba de la tabla -->
-        <div class="preview-top-actions" *ngIf="!loadingScenarios && (generatedHUData.detailedTestCases.length || 0) > 0 && !errorScenarios">
-          <div class="hu-counter-badge" *ngIf="accumulatedHUsCount > 0"
+        @if (!loadingScenarios && (generatedHUData.detailedTestCases.length || 0) > 0 && !errorScenarios) {
+<div class="preview-top-actions">
+          @if (accumulatedHUsCount > 0) {
+<div class="hu-counter-badge"
             title="HUs guardadas temporalmente. Usa 'Confirmar y Añadir al Plan' para guardar en base de datos.">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="badge-icon">
               <path fill-rule="evenodd"
@@ -540,6 +798,7 @@
             </svg>
             <span>{{ accumulatedHUsCount }} HU{{ accumulatedHUsCount > 1 ? 's' : '' }} guardada{{ accumulatedHUsCount > 1 ? 's' : '' }}</span>
           </div>
+}
           <button type="button" (click)="saveCurrentHU()" class="btn-preview-action btn-preview-secondary has-tooltip"
             [disabled]="loadingScenarios || loadingScope"
             data-tooltip="Guardado temporal (solo en navegador). No se guarda en base de datos aún.">
@@ -559,8 +818,10 @@
             Confirmar y Añadir al Plan
           </button>
         </div>
-        <div
-          *ngIf="!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios"
+}
+        @if (!loadingScenarios && generatedHUData.detailedTestCases && generatedHUData.detailedTestCases.length > 0 && !errorScenarios) {
+<div
+         
           class="preview-table-container">
           <h4>Casos de Prueba Generados ({{ generatedHUData.detailedTestCases.length }})</h4>
           <table class="detailed-test-cases-table preview-only-table">
@@ -574,43 +835,59 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let tc of generatedHUData.detailedTestCases; let i = index">
+              @for (tc of generatedHUData.detailedTestCases; track tc; let i = $index) {
+<tr>
                 <td data-label="ID Caso">{{ generatedHUData.id }}_CP{{ i + 1 }}</td>
                 <td data-label="Escenario de Prueba">{{ tc.title }}</td>
                 <td data-label="Precondiciones">
                   <pre class="table-pre">{{ tc.preconditions }}</pre>
                 </td>
                 <td data-label="Paso a Paso">
-                  <ol *ngIf="tc.steps && tc.steps.length > 0">
-                    <li *ngFor="let step of tc.steps">{{ step.accion }}</li>
+                  @if (tc.steps && tc.steps.length > 0) {
+<ol>
+                    @for (step of tc.steps; track step) {
+<li>{{ step.accion }}</li>
+}
                   </ol>
-                  <span *ngIf="!tc.steps || tc.steps.length === 0">N/A</span>
+}
+                  @if (!tc.steps || tc.steps.length === 0) {
+<span>N/A</span>
+}
                 </td>
                 <td data-label="Resultado Esperado">
                   <pre class="table-pre">{{ tc.expectedResults }}</pre>
                 </td>
               </tr>
+}
             </tbody>
           </table>
         </div>
-        <div *ngIf="loadingScenarios" class="loading-message-full-editor"><span class="spinner"></span> Cargando
+}
+        @if (loadingScenarios) {
+<div class="loading-message-full-editor"><span class="spinner"></span> Cargando
           Casos...</div>
-        <div
-          *ngIf="!loadingScenarios && (!generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || errorScenarios)"
+}
+        @if (!loadingScenarios && (!generatedHUData.detailedTestCases || generatedHUData.detailedTestCases.length === 0 || errorScenarios)) {
+<div
+         
           class="no-content-message">
           <p>{{ errorScenarios || 'No se generaron casos de prueba o la respuesta fue vacía.'}}</p>
         </div>
-      </ng-container>
+}
+      
+}
 
       <!-- MODO EDICIÓN PARA REFINAMIENTO (NUEVO COMPONENTE) -->
-      <ng-container *ngIf="componentState === 'editingForRefinement'">
+      @if (componentState === 'editingForRefinement') {
+
         <app-test-case-editor [testCases]="generatedHUData.detailedTestCases" [huId]="generatedHUData.id || 'temp'"
           [isLoading]="loadingScenarios" [isRefining]="loadingScenarios" [(refinementTechnique)]="refinementTechnique"
           [(userRefinementContext)]="userRefinementContext" [showRefinementControls]="true"
           (refineWithAI)="handleRefineWithAI($event)" (testCasesChanged)="handleTestCasesChanged($event)"
           (cancel)="cancelRefinementEditing()">
         </app-test-case-editor>
-      </ng-container>
+      
+}
 
       <!-- Acciones Finales -->
       <!-- Advertencia de guardado temporal - Ahora se muestra en tooltips de los botones -->
@@ -624,11 +901,14 @@
             </div>
         </div> -->
 
-      <div *ngIf="componentState === 'submitting'" class="loading-message-full-editor">
+      @if (componentState === 'submitting') {
+<div class="loading-message-full-editor">
         <span class="spinner"></span> Enviando al plan de pruebas...
       </div>
+}
     </div>
   </div>
+}
 
   <!-- Modal de Guardado -->
 </div>

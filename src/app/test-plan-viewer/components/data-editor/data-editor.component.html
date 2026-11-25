@@ -4,15 +4,19 @@
         <div class="tool-group">
             <span class="group-label">RESALTAR FILA</span>
             <div class="color-swatches">
-                <button *ngFor="let c of highlightColors; let i = index"
+                @for (c of highlightColors; track c; let i = $index) {
+<button
                     class="swatch-btn"
                     [class.swatch-clear]="c.value === 'transparent'"
                     [style.background]="c.value === 'transparent' ? '#fff' : c.value"
                     [class.active]="selectedColor === c.value"
                     [title]="c.name"
                     (click)="selectedColor = c.value">
-                    <svg *ngIf="c.value === 'transparent'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    @if (c.value === 'transparent') {
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+}
                 </button>
+}
             </div>
             <!-- Tooltip hint -->
             <div class="hint-wrap" title="Haz clic en la franja izquierda para pintar la fila">
@@ -37,7 +41,8 @@
             <div class="table-window" [style.transform]="'translateY(' + topSpacerHeight + 'px)'">
                 <table>
                     <tbody>
-                        <tr *ngFor="let row of virtualRows; trackBy: trackByFn"
+                        @for (row of virtualRows; track trackByFn($index, row)) {
+<tr
                             [class.is-header-row]="hasHeader && row.index === 0"
                             [style.background-color]="localRowColors[row.index]">
 
@@ -45,23 +50,28 @@
                                 [title]="'Pintar fila ' + (row.index + 1)">
                             </td>
 
-                            <td *ngFor="let cell of row.data; let c = index; trackBy: trackByFn"
+                            @for (cell of row.data; track trackByFn(c, cell); let c = $index) {
+<td
                                 [class.cell-numeric]="!( hasHeader && row.index === 0) && isNumericColumn(c)">
                                 <input type="text" [(ngModel)]="localData[row.index][c]" class="cell-editor-input"
                                     [class.input-numeric]="!(hasHeader && row.index === 0) && isNumericColumn(c)" />
                             </td>
+}
                         </tr>
+}
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <div class="loading-overlay" *ngIf="isLoading">
+        @if (isLoading) {
+<div class="loading-overlay">
             <div class="loading-content">
                 <div class="spinner"></div>
                 <span>Cargando datos...</span>
             </div>
         </div>
+}
     </div>
 
     <!-- Footer actions -->

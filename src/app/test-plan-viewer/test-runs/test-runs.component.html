@@ -31,7 +31,9 @@
       <div class="filter-group">
         <select class="filter-select" [(ngModel)]="statusFilter" (change)="onStatusFilterChange()">
           <option value="all">Todos los estados</option>
-          <option *ngFor="let s of statusOptions" [value]="s">{{ getStatusLabel(s) }}</option>
+          @for (s of statusOptions; track s) {
+<option [value]="s">{{ getStatusLabel(s) }}</option>
+}
         </select>
         <select class="filter-select" [(ngModel)]="sortOrder" (change)="onSortChange()">
           <option value="newest">Más recientes</option>
@@ -40,12 +42,15 @@
       </div>
     </div>
 
-    <div *ngIf="isLoading" class="loading-state">
+    @if (isLoading) {
+<div class="loading-state">
       <div class="spinner"></div>
       <p>Cargando ejecuciones...</p>
     </div>
+}
 
-    <div *ngIf="!isLoading && paginatedRuns.length > 0" class="table-results-wrapper">
+    @if (!isLoading && paginatedRuns.length > 0) {
+<div class="table-results-wrapper">
       <div class="table-container">
         <table class="plans-table">
           <thead>
@@ -63,7 +68,8 @@
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let run of paginatedRuns" [class.row-selected]="isRunSelected(run)">
+            @for (run of paginatedRuns; track run) {
+<tr [class.row-selected]="isRunSelected(run)">
               <td class="check-col" data-label="Seleccionar">
                 <input type="checkbox" [checked]="isRunSelected(run)"
                   (change)="onRunSelectionChange(run, $any($event.target).checked)">
@@ -96,13 +102,16 @@
                 </button>
               </td>
             </tr>
+}
           </tbody>
         </table>
       </div>
     </div>
+}
 
     <!-- Barra flotante de eliminación masiva -->
-    <div class="bulk-delete-bar" *ngIf="selectedRunIds.length > 0">
+    @if (selectedRunIds.length > 0) {
+<div class="bulk-delete-bar">
       <span class="bulk-count">{{ selectedRunIds.length }} ejecución{{ selectedRunIds.length !== 1 ? 'es' : '' }} seleccionada{{ selectedRunIds.length !== 1 ? 's' : '' }}</span>
       <button class="bulk-delete-btn" (click)="deleteSelectedRuns()">
         <span class="icon-trash-white"></span>
@@ -112,18 +121,24 @@
         Cancelar
       </button>
     </div>
+}
 
-    <div *ngIf="!isLoading && testRuns.length === 0" class="empty-state">
+    @if (!isLoading && testRuns.length === 0) {
+<div class="empty-state">
       <h3>No hay ejecuciones</h3>
       <p>Crea tu primera ejecución para comenzar a rastrear el progreso.</p>
       <button type="button" class="button-primary" (click)="openCreateModal()">Crear Ejecución</button>
     </div>
+}
 
-    <div *ngIf="!isLoading && testRuns.length > 0 && filteredRuns.length === 0" class="no-results">
+    @if (!isLoading && testRuns.length > 0 && filteredRuns.length === 0) {
+<div class="no-results">
       <p>No se encontraron ejecuciones que coincidan con tu búsqueda.</p>
     </div>
+}
 
-    <div *ngIf="!isLoading && filteredRuns.length > 0" class="pagination-container">
+    @if (!isLoading && filteredRuns.length > 0) {
+<div class="pagination-container">
       <div class="pagination-info">
         <p>
           Mostrando <strong>{{ (currentPage - 1) * itemsPerPage + 1 }}</strong> al
@@ -131,22 +146,32 @@
           <strong>{{ filteredRuns.length }}</strong> {{ filteredRuns.length === 1 ? 'ejecución' : 'ejecuciones' }}
         </p>
       </div>
-      <div class="pagination-controls" *ngIf="totalPages > 1">
+      @if (totalPages > 1) {
+<div class="pagination-controls">
         <button class="pagination-button pagination-prev" [disabled]="currentPage === 1" (click)="previousPage()">‹ Anterior</button>
         <div class="pagination-numbers">
-          <ng-container *ngFor="let page of getPageNumbers()">
-            <button *ngIf="page > 0" class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">{{ page }}</button>
-            <span *ngIf="page === -1" class="pagination-ellipsis">...</span>
-          </ng-container>
+          @for (page of getPageNumbers(); track page) {
+
+            @if (page > 0) {
+<button class="pagination-number" [class.active]="page === currentPage" (click)="goToPage(page)">{{ page }}</button>
+}
+            @if (page === -1) {
+<span class="pagination-ellipsis">...</span>
+}
+          
+}
         </div>
         <button class="pagination-button pagination-next" [disabled]="currentPage === totalPages" (click)="nextPage()">Siguiente ›</button>
       </div>
+}
     </div>
+}
   </div>
 </div>
 
 <!-- MODAL CREAR EJECUCIÓN -->
-<div class="modal-overlay" *ngIf="showCreateModal" (click)="closeCreateModal()">
+@if (showCreateModal) {
+<div class="modal-overlay" (click)="closeCreateModal()">
   <div class="modal-container" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h3>Nueva Ejecución</h3>
@@ -156,7 +181,8 @@
       <button type="button" class="modal-tab" [class.active]="createModalTab === 'run'" (click)="createModalTab = 'run'">EJECUCIÓN</button>
       <button type="button" class="modal-tab" [class.active]="createModalTab === 'notes'" (click)="createModalTab = 'notes'">NOTAS</button>
     </div>
-    <div class="modal-body" *ngIf="createModalTab === 'run'">
+    @if (createModalTab === 'run') {
+<div class="modal-body">
       <div class="modal-form-grid">
         <div class="modal-form-left">
           <div class="form-group">
@@ -166,11 +192,15 @@
           <div class="form-group">
             <label class="form-label">Etiquetas</label>
             <div class="tags-input-wrapper">
-              <div class="tags-list" *ngIf="newRunTags.length > 0">
-                <span class="tag-chip" *ngFor="let tag of newRunTags; let i = index">
+              @if (newRunTags.length > 0) {
+<div class="tags-list">
+                @for (tag of newRunTags; track tag; let i = $index) {
+<span class="tag-chip">
                   {{ tag }} <button type="button" class="tag-remove" (click)="removeTag(i)">×</button>
                 </span>
+}
               </div>
+}
               <input type="text" class="form-input" placeholder="Agregar etiquetas..." [(ngModel)]="tagInput" (keydown)="onTagKeydown($event)" [disabled]="newRunTags.length >= 10">
               <span class="tags-hint">{{ newRunTags.length }}/10 etiquetas • Presiona Enter para crear</span>
             </div>
@@ -189,26 +219,33 @@
                 Seleccionar casos específicos:
               </label>
             </div>
-            <div class="tc-selection-summary" *ngIf="!newRunIncludeAll">
+            @if (!newRunIncludeAll) {
+<div class="tc-selection-summary">
               <span class="tc-count">{{ newRunSelectedTestCaseIds.length === 0 ? 'Ningún caso seleccionado' : newRunSelectedTestCaseIds.length + ' caso(s) seleccionado(s)' }}</span>
               <button type="button" class="tc-select-link" (click)="openTestCaseSelector()">seleccionar casos ›</button>
             </div>
+}
           </div>
           <div class="form-group">
             <label class="form-label">Estado</label>
             <select class="form-input form-select" [(ngModel)]="newRunStatus">
-              <option *ngFor="let s of statusOptions" [value]="s">{{ getStatusLabel(s) }}</option>
+              @for (s of statusOptions; track s) {
+<option [value]="s">{{ getStatusLabel(s) }}</option>
+}
             </select>
           </div>
         </div>
       </div>
     </div>
-    <div class="modal-body" *ngIf="createModalTab === 'notes'">
+}
+    @if (createModalTab === 'notes') {
+<div class="modal-body">
       <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea class="form-textarea" rows="8" placeholder="Agregar notas para esta ejecución..." [(ngModel)]="newRunNotes"></textarea>
       </div>
     </div>
+}
     <div class="modal-footer">
       <button type="button" class="button-cancel" (click)="closeCreateModal()">Cancelar</button>
       <button type="button" class="button-primary" (click)="createTestRun()" [disabled]="!newRunName.trim() || isCreating">
@@ -217,9 +254,11 @@
     </div>
   </div>
 </div>
+}
 
 <!-- SELECTOR DE CASOS DE PRUEBA -->
-<div class="modal-overlay" *ngIf="showTestCaseSelector" (click)="closeTestCaseSelector()">
+@if (showTestCaseSelector) {
+<div class="modal-overlay" (click)="closeTestCaseSelector()">
   <div class="modal-container tc-selector-modal" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h3>Seleccionar Casos de Prueba</h3>
@@ -237,13 +276,15 @@
           <button type="button" class="tc-select-all-link" (click)="selectAllTestCases()">Seleccionar todos</button>
         </div>
         <div class="tc-list">
-          <div class="tc-list-item" *ngFor="let tc of filteredTestCasesForSelector; let i = index" (click)="toggleTestCaseSelection(tc)">
+          @for (tc of filteredTestCasesForSelector; track tc; let i = $index) {
+<div class="tc-list-item" (click)="toggleTestCaseSelection(tc)">
             <div class="tc-radio" [class.selected]="isTestCaseSelected(tc)"></div>
             <div class="tc-item-info">
               <span class="tc-item-title">{{ tc.title }}</span>
               <span class="tc-item-id">{{ getTestCaseShortId(tc, i) }}</span>
             </div>
           </div>
+}
         </div>
         <div class="tc-selector-count">{{ newRunSelectedTestCaseIds.length }} de {{ testCases.length }} casos seleccionados</div>
       </div>
@@ -254,6 +295,7 @@
     </div>
   </div>
 </div>
+}
 
 <!-- Modal de Confirmación de Eliminación -->
 <app-confirmation-modal

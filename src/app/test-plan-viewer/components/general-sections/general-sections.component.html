@@ -1,21 +1,28 @@
 <div class="static-plan-sections-container">
-    <div class="section-header" *ngIf="!showOnlyRisk">
+    @if (!showOnlyRisk) {
+<div class="section-header">
         <h2>Secciones Generales del Plan</h2>
     </div>
+}
 
     <!-- Repositorio -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingRepositoryLink || isRepositoryLinkDetailsOpen">
         <summary class="plan-section-summary">
             Repositorio Pruebas VSTS
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingRepositoryLink">
+            @if (!editingRepositoryLink) {
+<div>
                 <pre
                     class="static-text"><a [href]="repositoryLink.split(' ')[0]" target="_blank" rel="noopener noreferrer">{{ repositoryLink }}</a></pre>
             </div>
-            <div *ngIf="editingRepositoryLink">
+}
+            @if (editingRepositoryLink) {
+<div>
                 <textarea [(ngModel)]="tempRepositoryLink" rows="2" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('repositoryLink')" class="button-secondary">
                     {{ editingRepositoryLink ? 'Guardar' : 'Editar' }}
@@ -23,23 +30,33 @@
             </div>
         </div>
     </details>
+}
 
     <!-- Fuera del Alcance -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingOutOfScope || isOutOfScopeDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingOutOfScope || isOutOfScopeDetailsOpen">
         <summary class="plan-section-summary">
             Fuera del Alcance
             <span class="summary-indicators">
-                <span *ngIf="loadingOutOfScopeAI" class="spinner-small"></span>
-                <span *ngIf="errorOutOfScopeAI" class="error-status-icon" [title]="errorOutOfScopeAI">⚠️</span>
+                @if (loadingOutOfScopeAI) {
+<span class="spinner-small"></span>
+}
+                @if (errorOutOfScopeAI) {
+<span class="error-status-icon" [title]="errorOutOfScopeAI">⚠️</span>
+}
             </span>
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingOutOfScope">
+            @if (!editingOutOfScope) {
+<div>
                 <pre class="static-text">{{ outOfScopeContent }}</pre>
             </div>
-            <div *ngIf="editingOutOfScope">
+}
+            @if (editingOutOfScope) {
+<div>
                 <textarea [(ngModel)]="tempOutOfScopeContent" rows="4" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('outOfScope')" class="button-secondary"
                     [disabled]="anyAILoading">
@@ -47,58 +64,82 @@
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('outOfScope')" class="button-generate"
                     [disabled]="anyAILoading || editingOutOfScope">
-                    <span *ngIf="loadingOutOfScopeAI" class="spinner-inline"></span>
+                    @if (loadingOutOfScopeAI) {
+<span class="spinner-inline"></span>
+}
                     Mejorar con IA
                 </button>
             </div>
         </div>
     </details>
+}
 
     <!-- Estrategia -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingStrategy || isStrategyDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingStrategy || isStrategyDetailsOpen">
         <summary class="plan-section-summary">
             Estrategia
             <span class="summary-indicators">
-                <span *ngIf="loadingStrategyAI" class="spinner-small"></span>
-                <span *ngIf="errorStrategyAI" class="error-status-icon" [title]="errorStrategyAI">⚠️</span>
+                @if (loadingStrategyAI) {
+<span class="spinner-small"></span>
+}
+                @if (errorStrategyAI) {
+<span class="error-status-icon" [title]="errorStrategyAI">⚠️</span>
+}
             </span>
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingStrategy">
+            @if (!editingStrategy) {
+<div>
                 <pre class="static-text">{{ strategyContent }}</pre>
             </div>
-            <div *ngIf="editingStrategy">
+}
+            @if (editingStrategy) {
+<div>
                 <textarea [(ngModel)]="tempStrategyContent" rows="8" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('strategy')" class="button-secondary" [disabled]="anyAILoading">
                     {{ editingStrategy ? 'Guardar' : 'Editar' }}
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('strategy')" class="button-generate"
                     [disabled]="anyAILoading || editingStrategy">
-                    <span *ngIf="loadingStrategyAI" class="spinner-inline"></span>
+                    @if (loadingStrategyAI) {
+<span class="spinner-inline"></span>
+}
                     Mejorar con IA
                 </button>
             </div>
         </div>
     </details>
+}
 
     <!-- Limitaciones -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingLimitations || isLimitationsDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingLimitations || isLimitationsDetailsOpen">
         <summary class="plan-section-summary">
             Limitaciones
             <span class="summary-indicators">
-                <span *ngIf="loadingLimitationsAI" class="spinner-small"></span>
-                <span *ngIf="errorLimitationsAI" class="error-status-icon" [title]="errorLimitationsAI">⚠️</span>
+                @if (loadingLimitationsAI) {
+<span class="spinner-small"></span>
+}
+                @if (errorLimitationsAI) {
+<span class="error-status-icon" [title]="errorLimitationsAI">⚠️</span>
+}
             </span>
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingLimitations">
+            @if (!editingLimitations) {
+<div>
                 <pre class="static-text">{{ limitationsContent }}</pre>
             </div>
-            <div *ngIf="editingLimitations">
+}
+            @if (editingLimitations) {
+<div>
                 <textarea [(ngModel)]="tempLimitationsContent" rows="4" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('limitations')" class="button-secondary"
                     [disabled]="anyAILoading">
@@ -106,29 +147,41 @@
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('limitations')" class="button-generate"
                     [disabled]="anyAILoading || editingLimitations">
-                    <span *ngIf="loadingLimitationsAI" class="spinner-inline"></span>
+                    @if (loadingLimitationsAI) {
+<span class="spinner-inline"></span>
+}
                     Mejorar con IA
                 </button>
             </div>
         </div>
     </details>
+}
 
     <!-- Supuestos -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingAssumptions || isAssumptionsDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingAssumptions || isAssumptionsDetailsOpen">
         <summary class="plan-section-summary">
             Supuestos
             <span class="summary-indicators">
-                <span *ngIf="loadingAssumptionsAI" class="spinner-small"></span>
-                <span *ngIf="errorAssumptionsAI" class="error-status-icon" [title]="errorAssumptionsAI">⚠️</span>
+                @if (loadingAssumptionsAI) {
+<span class="spinner-small"></span>
+}
+                @if (errorAssumptionsAI) {
+<span class="error-status-icon" [title]="errorAssumptionsAI">⚠️</span>
+}
             </span>
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingAssumptions">
+            @if (!editingAssumptions) {
+<div>
                 <pre class="static-text">{{ assumptionsContent }}</pre>
             </div>
-            <div *ngIf="editingAssumptions">
+}
+            @if (editingAssumptions) {
+<div>
                 <textarea [(ngModel)]="tempAssumptionsContent" rows="8" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('assumptions')" class="button-secondary"
                     [disabled]="anyAILoading">
@@ -136,36 +189,50 @@
                 </button>
                 <button (click)="regenerateStaticSectionWithAI('assumptions')" class="button-generate"
                     [disabled]="anyAILoading || editingAssumptions">
-                    <span *ngIf="loadingAssumptionsAI" class="spinner-inline"></span>
+                    @if (loadingAssumptionsAI) {
+<span class="spinner-inline"></span>
+}
                     Mejorar con IA
                 </button>
             </div>
         </div>
     </details>
+}
 
     <!-- Equipo -->
-    <details *ngIf="!showOnlyRisk" class="plan-section-details static-block" [open]="editingTeam || isTeamDetailsOpen">
+    @if (!showOnlyRisk) {
+<details class="plan-section-details static-block" [open]="editingTeam || isTeamDetailsOpen">
         <summary class="plan-section-summary">
             Equipo de Trabajo
         </summary>
         <div class="plan-section-content">
-            <div *ngIf="!editingTeam">
-                <table *ngIf="teamRows.length; else noTeam" class="team-view-table">
+            @if (!editingTeam) {
+<div>
+                @if (teamRows.length) {
+<table class="team-view-table">
                     <thead>
                         <tr><th>Rol</th><th>Nombre</th></tr>
                     </thead>
                     <tbody>
-                        <tr *ngFor="let r of teamRows">
+                        @for (r of teamRows; track r) {
+<tr>
                             <td>{{ r.role }}</td>
                             <td>{{ r.name }}</td>
                         </tr>
+}
                     </tbody>
                 </table>
-                <ng-template #noTeam><pre class="static-text">No especificado</pre></ng-template>
+} @else {
+<pre class="static-text">No especificado</pre>
+}
+                
             </div>
-            <div *ngIf="editingTeam">
+}
+            @if (editingTeam) {
+<div>
                 <textarea [(ngModel)]="tempTeamContent" rows="8" class="scrollable-content"></textarea>
             </div>
+}
             <div class="actions">
                 <button (click)="toggleStaticEdit('team')" class="button-secondary">
                     {{ editingTeam ? 'Guardar' : 'Editar' }}
@@ -173,14 +240,19 @@
             </div>
         </div>
     </details>
+}
 
     <!-- Riesgos Para la Estrategia de Pruebas -->
     <details class="plan-section-details static-block" [open]="isRiskDetailsOpen" (toggle)="onRiskDetailsToggle($event)">
         <summary class="plan-section-summary">
             Riesgos Para la Estrategia de Pruebas
             <span class="summary-indicators">
-                <span *ngIf="loadingRiskAI" class="spinner-small"></span>
-                <span *ngIf="errorRiskAI" class="error-status-icon" [title]="errorRiskAI">⚠️</span>
+                @if (loadingRiskAI) {
+<span class="spinner-small"></span>
+}
+                @if (errorRiskAI) {
+<span class="error-status-icon" [title]="errorRiskAI">⚠️</span>
+}
             </span>
         </summary>
 
@@ -200,13 +272,17 @@
                             [class.copied]="copiedFieldKey === 'probabilidadDe'"
                             [attr.aria-label]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'"
                             [title]="copiedFieldKey === 'probabilidadDe' ? 'Copiado' : 'Copiar'">
-                            <svg *ngIf="copiedFieldKey !== 'probabilidadDe'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            @if (copiedFieldKey !== 'probabilidadDe') {
+<svg class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <rect x="9" y="9" width="11" height="11" rx="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
-                            <svg *ngIf="copiedFieldKey === 'probabilidadDe'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+}
+                            @if (copiedFieldKey === 'probabilidadDe') {
+<svg class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
+}
                         </button>
                     </div>
                 </div>
@@ -224,13 +300,17 @@
                             [class.copied]="copiedFieldKey === 'puedeOcurrir'"
                             [attr.aria-label]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'"
                             [title]="copiedFieldKey === 'puedeOcurrir' ? 'Copiado' : 'Copiar'">
-                            <svg *ngIf="copiedFieldKey !== 'puedeOcurrir'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            @if (copiedFieldKey !== 'puedeOcurrir') {
+<svg class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <rect x="9" y="9" width="11" height="11" rx="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
-                            <svg *ngIf="copiedFieldKey === 'puedeOcurrir'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+}
+                            @if (copiedFieldKey === 'puedeOcurrir') {
+<svg class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
+}
                         </button>
                     </div>
                 </div>
@@ -249,13 +329,17 @@
                             [class.copied]="copiedFieldKey === 'loQuePodriaOcasionar'"
                             [attr.aria-label]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'"
                             [title]="copiedFieldKey === 'loQuePodriaOcasionar' ? 'Copiado' : 'Copiar'">
-                            <svg *ngIf="copiedFieldKey !== 'loQuePodriaOcasionar'" class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            @if (copiedFieldKey !== 'loQuePodriaOcasionar') {
+<svg class="icon-copy" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <rect x="9" y="9" width="11" height="11" rx="2"></rect>
                                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                             </svg>
-                            <svg *ngIf="copiedFieldKey === 'loQuePodriaOcasionar'" class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+}
+                            @if (copiedFieldKey === 'loQuePodriaOcasionar') {
+<svg class="icon-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
+}
                         </button>
                     </div>
                 </div>
@@ -273,7 +357,9 @@
                     </div>
                     <select class="field-control" [(ngModel)]="localRiskData.impacto" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                         <option value="">Seleccione una opción</option>
-                        <option *ngFor="let impact of impactOptions" [value]="impact">{{ impact }}</option>
+                        @for (impact of impactOptions; track impact) {
+<option [value]="impact">{{ impact }}</option>
+}
                     </select>
                 </div>
 
@@ -287,7 +373,9 @@
                     </div>
                     <select class="field-control" [(ngModel)]="localRiskData.probabilidad" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                         <option value="">Seleccione una opción</option>
-                        <option *ngFor="let probability of probabilityOptions" [value]="probability">{{ probability }}</option>
+                        @for (probability of probabilityOptions; track probability) {
+<option [value]="probability">{{ probability }}</option>
+}
                     </select>
                 </div>
             </div>
@@ -295,7 +383,8 @@
             <h3 class="risk-subtitle">PLAN DE MITIGACIÓN</h3>
             <div class="risk-scenarios-block">
                 <h4>Escenarios Positivos (mínimo 2)</h4>
-                <div *ngFor="let scenario of localRiskData.positiveScenarios; let i = index" class="risk-group">
+                @for (scenario of localRiskData.positiveScenarios; track scenario; let i = $index) {
+<div class="risk-group">
                     <div class="field-label-row">
                         <label class="field-label">Escenario positivo {{ i + 1 }} con el que cubres el riesgo:</label>
                         <button type="button" class="copy-field-btn"
@@ -307,18 +396,24 @@
                     <div class="scenario-row">
                         <select class="field-control" [(ngModel)]="localRiskData.positiveScenarios[i]" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                             <option value="">Seleccione un escenario</option>
-                            <option *ngFor="let option of getScenarioOptions(localRiskData.positiveScenarios, i)" [value]="option">{{ option }}</option>
+                            @for (option of getScenarioOptions(localRiskData.positiveScenarios, i); track option) {
+<option [value]="option">{{ option }}</option>
+}
                         </select>
-                        <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.positiveScenarios.length > 2"
+                        @if (localRiskData.positiveScenarios.length > 2) {
+<button type="button" class="button-secondary button-icon"
                             (click)="removePositiveScenario(i)" [disabled]="loadingRiskAI">−</button>
+}
                     </div>
                 </div>
+}
                 <button type="button" class="button-link-add" (click)="addPositiveScenario()" [disabled]="loadingRiskAI">+ Agregar</button>
             </div>
 
             <div class="risk-scenarios-block">
                 <h4>Escenarios Alternos (mínimo 1)</h4>
-                <div *ngFor="let scenario of localRiskData.alternateScenarios; let i = index" class="risk-group">
+                @for (scenario of localRiskData.alternateScenarios; track scenario; let i = $index) {
+<div class="risk-group">
                     <div class="field-label-row">
                         <label class="field-label">Escenario alterno {{ i + 1 }} con el que cubres el riesgo:</label>
                         <button type="button" class="copy-field-btn"
@@ -330,22 +425,31 @@
                     <div class="scenario-row">
                         <select class="field-control" [(ngModel)]="localRiskData.alternateScenarios[i]" (ngModelChange)="onRiskFieldChange()" [disabled]="loadingRiskAI">
                             <option value="">Seleccione un escenario</option>
-                            <option *ngFor="let option of getScenarioOptions(localRiskData.alternateScenarios, i)" [value]="option">{{ option }}</option>
+                            @for (option of getScenarioOptions(localRiskData.alternateScenarios, i); track option) {
+<option [value]="option">{{ option }}</option>
+}
                         </select>
-                        <button type="button" class="button-secondary button-icon" *ngIf="localRiskData.alternateScenarios.length > 1"
+                        @if (localRiskData.alternateScenarios.length > 1) {
+<button type="button" class="button-secondary button-icon"
                             (click)="removeAlternateScenario(i)" [disabled]="loadingRiskAI">−</button>
+}
                     </div>
                 </div>
+}
                 <button type="button" class="button-link-add" (click)="addAlternateScenario()" [disabled]="loadingRiskAI">+ Agregar</button>
             </div>
 
             <div class="actions">
                 <button class="button-secondary" (click)="requestRiskGeneration()" [disabled]="anyAILoading">
-                    <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
+                    @if (loadingRiskAI) {
+<span class="spinner-inline"></span>
+}
                     Genera con IA
                 </button>
                 <button class="button-generate" (click)="requestRiskRegeneration()" [disabled]="anyAILoading">
-                    <span *ngIf="loadingRiskAI" class="spinner-inline"></span>
+                    @if (loadingRiskAI) {
+<span class="spinner-inline"></span>
+}
                     Regenerar con IA
                 </button>
             </div>

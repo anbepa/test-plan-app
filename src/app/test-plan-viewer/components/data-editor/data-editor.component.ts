@@ -1,11 +1,11 @@
 import { Component, EventEmitter, Input, OnInit, Output, ViewChild, ElementRef, AfterViewInit, OnDestroy, NgZone, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 
 @Component({
     selector: 'app-data-editor',
     standalone: true,
-    imports: [CommonModule, FormsModule],
+    imports: [FormsModule],
     templateUrl: './data-editor.component.html',
     styleUrls: ['./data-editor.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,

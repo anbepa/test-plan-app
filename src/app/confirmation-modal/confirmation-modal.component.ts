@@ -1,10 +1,10 @@
 import { Component, EventEmitter, Input, Output, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 
 @Component({
     selector: 'app-confirmation-modal',
     standalone: true,
-    imports: [CommonModule],
+    imports: [],
     templateUrl: './confirmation-modal.component.html',
     styleUrls: ['./confirmation-modal.component.css']
 })

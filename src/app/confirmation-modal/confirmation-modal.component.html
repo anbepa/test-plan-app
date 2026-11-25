@@ -1,28 +1,38 @@
-<div class="modal-overlay" *ngIf="isOpen" (click)="onOverlayClick()">
+@if (isOpen) {
+<div class="modal-overlay" (click)="onOverlayClick()">
     <div class="modal-container" (click)="$event.stopPropagation()">
         <div class="modal-header">
             <div class="modal-title-block">
                 <h3 class="modal-title">{{ title }}</h3>
                 <!-- Contexto inmediato (código de historia) como subtítulo -->
-                <p class="modal-subtitle" *ngIf="isProgressMode && message?.trim()">{{ message }}</p>
+                @if (isProgressMode && message?.trim()) {
+<p class="modal-subtitle">{{ message }}</p>
+}
             </div>
-            <button class="close-button" *ngIf="!isProgressMode" (click)="onCancel()" aria-label="Cerrar">
+            @if (!isProgressMode) {
+<button class="close-button" (click)="onCancel()" aria-label="Cerrar">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
-            <button class="close-button" *ngIf="isProgressMode && allowCancelProgress" (click)="onCancelProgress()" aria-label="Cancelar generación" title="Cancelar generación">
+}
+            @if (isProgressMode && allowCancelProgress) {
+<button class="close-button" (click)="onCancelProgress()" aria-label="Cancelar generación" title="Cancelar generación">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
+}
         </div>
 
-        <div class="modal-body" *ngIf="!isProgressMode">
+        @if (!isProgressMode) {
+<div class="modal-body">
             <p>{{ message }}</p>
         </div>
+}
 
-        <div class="modal-body progress-body" *ngIf="isProgressMode">
+        @if (isProgressMode) {
+<div class="modal-body progress-body">
             <!-- Robot + Speech + Thought Bubble Layout -->
             <div class="robot-scene">
                 <!-- Top: Thought Bubble (box) -->
@@ -30,7 +40,8 @@
                     <div class="thought-bubble-content">
                         <!-- Tabular Data: Solo se muestra durante el análisis -->
                     <!-- Copilot-style Accordion for Thought -->
-                    <div class="thought-accordion-container" *ngIf="streamingPhase === 'thinking'">
+                    @if (streamingPhase === 'thinking') {
+<div class="thought-accordion-container">
                         <div class="thought-accordion-header" (click)="toggleThought()">
                             <span class="thought-accordion-title">
                                 Pensamiento de la IA
@@ -41,86 +52,129 @@
                         </div>
                         
                         <!-- Accordion Body (Parent Level) -->
-                        <div class="thought-accordion-body" *ngIf="isThoughtExpanded">
-                            <div class="thought-phase-item" *ngFor="let phase of thoughtHierarchy; trackBy: trackByPhase">
+                        @if (isThoughtExpanded) {
+<div class="thought-accordion-body">
+                            @for (phase of thoughtHierarchy; track trackByPhase($index, phase)) {
+<div class="thought-phase-item">
                                 <!-- Phase Header (Child Level) -->
                                 <div class="phase-header" (click)="togglePhase(phase.id, $event)">
                                     <div class="phase-status-icon" [class.done]="phase.done">
-                                        <svg *ngIf="phase.done" viewBox="0 0 20 20" fill="currentColor">
+                                        @if (phase.done) {
+<svg viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                                         </svg>
-                                        <span *ngIf="!phase.done" class="phase-spinner"></span>
+}
+                                        @if (!phase.done) {
+<span class="phase-spinner"></span>
+}
                                     </div>
                                     <span class="phase-title" [class.done-text]="phase.done">{{ phase.label }}</span>
-                                    <svg class="phase-chevron" [class.expanded]="expandedPhases[phase.id]" *ngIf="phase.thoughts.length > 0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    @if (phase.thoughts.length > 0) {
+<svg class="phase-chevron" [class.expanded]="expandedPhases[phase.id]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                                         <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
                                     </svg>
+}
                                 </div>
                                 
                                 <!-- Phase Thoughts (Grandchild Level) -->
-                                <ul class="phase-thoughts-list" *ngIf="expandedPhases[phase.id] && phase.thoughts.length > 0">
-                                    <li *ngFor="let thought of phase.thoughts; trackBy: trackByThought" class="phase-thought-item">{{ thought }}</li>
+                                @if (expandedPhases[phase.id] && phase.thoughts.length > 0) {
+<ul class="phase-thoughts-list">
+                                    @for (thought of phase.thoughts; track trackByThought($index, thought)) {
+<li class="phase-thought-item">{{ thought }}</li>
+}
                                 </ul>
+}
                             </div>
+}
                         </div>
+}
                     </div>
+}
 
 
 
                     <!-- During generating: show detected case titles -->
-                    <div class="thought-cases" *ngIf="streamingPhase === 'generating' || streamingCaseTitles.length > 0">
-                        <div class="thought-cases-header" *ngIf="!isAcceptancePhase">
+                    @if (streamingPhase === 'generating' || streamingCaseTitles.length > 0) {
+<div class="thought-cases">
+                        @if (!isAcceptancePhase) {
+<div class="thought-cases-header">
                             <span>{{ streamingCaseTitles.length }} caso{{ streamingCaseTitles.length !== 1 ? 's' : '' }} identificado{{ streamingCaseTitles.length !== 1 ? 's' : '' }}…</span>
                         </div>
-                        <div class="thought-cases-header" *ngIf="isAcceptancePhase">
+}
+                        @if (isAcceptancePhase) {
+<div class="thought-cases-header">
                             <span>{{ acceptedScenarioIndices.length }}/{{ streamingCaseTitles.length }} escenario{{ streamingCaseTitles.length !== 1 ? 's' : '' }} aceptado{{ acceptedScenarioIndices.length !== 1 ? 's' : '' }}</span>
                         </div>
+}
                         <ul class="thought-cases-list">
-                            <li *ngFor="let title of streamingCaseTitles; let i = index" class="thought-case-item" [class.accepted]="acceptedScenarioIndices.includes(i)">
-                                <span class="tc-num" *ngIf="!acceptedScenarioIndices.includes(i)">{{ i + 1 }}</span>
-                                <span class="tc-check" *ngIf="acceptedScenarioIndices.includes(i)">
+                            @for (title of streamingCaseTitles; track title; let i = $index) {
+<li class="thought-case-item" [class.accepted]="acceptedScenarioIndices.includes(i)">
+                                @if (!acceptedScenarioIndices.includes(i)) {
+<span class="tc-num">{{ i + 1 }}</span>
+}
+                                @if (acceptedScenarioIndices.includes(i)) {
+<span class="tc-check">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                                 </span>
+}
                                 <span class="tc-title" [class.accepted-title]="acceptedScenarioIndices.includes(i)">{{ title }}</span>
                             </li>
+}
                         </ul>
                     </div>
+}
 
                     <!-- Idle state placeholder -->
-                    <p class="thought-placeholder" *ngIf="streamingPhase === 'idle' && reasoningInsights.length === 0 && streamingCaseTitles.length === 0">
+                    @if (streamingPhase === 'idle' && reasoningInsights.length === 0 && streamingCaseTitles.length === 0) {
+<p class="thought-placeholder">
                         Preparando análisis…
                     </p>
+}
                 </div>
             </div>
 
                 <!-- Spinner limpio + etiqueta de etapa -->
                 <div class="gen-loader">
                     <span class="gen-spinner" aria-hidden="true"></span>
-                    <span class="gen-loader-label" *ngIf="streamingPhaseLabel">{{ streamingPhaseLabel }}</span>
+                    @if (streamingPhaseLabel) {
+<span class="gen-loader-label">{{ streamingPhaseLabel }}</span>
+}
                 </div>
             </div>
 
             <!-- Progress bar -->
-            <div class="progress-track" *ngIf="showProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="isAcceptancePhase ? acceptancePercent : streamProgressPercent" aria-label="Progreso en curso">
+            @if (showProgressBar) {
+<div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="isAcceptancePhase ? acceptancePercent : streamProgressPercent" aria-label="Progreso en curso">
                 <span class="progress-indeterminate" [class.acceptance-bar]="isAcceptancePhase" [style.width.%]="isAcceptancePhase ? acceptancePercent : streamProgress"></span>
-                <span class="progress-percent" *ngIf="streamingPhase !== 'idle' || isAcceptancePhase">{{ isAcceptancePhase ? acceptancePercent : streamProgressPercent }}%</span>
+                @if (streamingPhase !== 'idle' || isAcceptancePhase) {
+<span class="progress-percent">{{ isAcceptancePhase ? acceptancePercent : streamProgressPercent }}%</span>
+}
             </div>
+}
 
             <!-- Hint estático mientras no hay tokens aún -->
-            <p class="progress-hint" *ngIf="streamingPhase === 'idle' && progressHint?.trim()">{{ progressHint }}</p>
+            @if (streamingPhase === 'idle' && progressHint?.trim()) {
+<p class="progress-hint">{{ progressHint }}</p>
+}
 
             <!-- Acción de control del usuario -->
-            <div class="progress-actions" *ngIf="allowCancelProgress">
+            @if (allowCancelProgress) {
+<div class="progress-actions">
                 <button type="button" class="btn-cancel-progress" (click)="onCancelProgress()">{{ cancelProgressText }}</button>
             </div>
+}
         </div>
+}
 
-        <div class="modal-footer" *ngIf="!isProgressMode">
+        @if (!isProgressMode) {
+<div class="modal-footer">
             <button class="btn-cancel" (click)="onCancel()">{{ cancelText }}</button>
             <button class="btn-confirm btn-primary"
                 (click)="onConfirm()">
                 {{ confirmText }}
             </button>
         </div>
+}
     </div>
 </div>
+}

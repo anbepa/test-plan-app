@@ -1,7 +1,7 @@
 import { compactStaticSectionText, isAiEnhanceableSection } from '../shared/utils/static-section-text';
 import { Component, Inject, PLATFORM_ID, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { HUData, GenerationMode, DetailedTestCase } from '../models/hu-data.model';
 import { AiUnifiedService } from '../services/ai/ai-unified.service';
@@ -23,11 +23,10 @@ type StaticSectionBaseName = 'repositoryLink' | 'outOfScope' | 'strategy' | 'lim
   styleUrls: ['./test-plan-generator.component.css'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     TestCaseGeneratorComponent,
-    ExcelMatrixExporterComponent,
-  ],
+    ExcelMatrixExporterComponent
+],
 })
 export class TestPlanGeneratorComponent {
   @ViewChild('matrixExporter') matrixExporter!: ExcelMatrixExporterComponent;

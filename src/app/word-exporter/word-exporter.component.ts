@@ -1,5 +1,5 @@
 import { Component, Input, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import type { Paragraph, Table, TableRow } from 'docx';
 import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
@@ -12,7 +12,7 @@ let D: typeof import('docx');
 
 @Component({
   selector: 'app-word-exporter',
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './word-exporter.component.html',
   styleUrl: './word-exporter.component.css'
 })

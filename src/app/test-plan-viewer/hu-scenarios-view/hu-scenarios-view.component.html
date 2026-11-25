@@ -9,28 +9,36 @@
     </div>
   </div>
 
-  <div *ngIf="hu; else emptyState" class="scenarios-content">
-    <div class="context-block" *ngIf="!isEditingMode">
+  @if (hu) {
+<div class="scenarios-content">
+    @if (!isEditingMode) {
+<div class="context-block">
       <p><strong>HU:</strong> {{ hu.id }} - {{ hu.title }}</p>
     </div>
+}
 
     <!-- Collapsible scope panel -->
-    <div class="plan-section-block" *ngIf="hu.generatedScope && hu.generatedScope.trim()">
+    @if (hu.generatedScope && hu.generatedScope.trim()) {
+<div class="plan-section-block">
       <button type="button" class="scope-toggle" (click)="scopeExpanded = !scopeExpanded">
         <span class="scope-toggle-title">Alcance Generado</span>
         <span class="scope-toggle-chevron" [class.rotated]="scopeExpanded">
           <span class="icon-chevron"></span>
         </span>
       </button>
-      <div class="plan-section-content" *ngIf="scopeExpanded">
+      @if (scopeExpanded) {
+<div class="plan-section-content">
         <div class="generated-text">{{ hu.generatedScope }}</div>
       </div>
+}
     </div>
+}
 
     <div class="test-cases-section">
 
       <!-- ==================== MODO NORMAL (solo lectura) ==================== -->
-      <ng-container *ngIf="!isEditingMode">
+      @if (!isEditingMode) {
+
         <div class="actions table-actions">
           <button (click)="editHuScenarios()" class="button-ai-primary">
             Editar Matriz
@@ -50,48 +58,65 @@
                 <span class="icon-chevron"></span>
               </span>
             </button>
-            <div class="export-menu-panel" *ngIf="exportMenuOpen" role="menu" (click)="$event.stopPropagation()">
+            @if (exportMenuOpen) {
+<div class="export-menu-panel" role="menu" (click)="$event.stopPropagation()">
               <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('pdf', $event)">Descargar escenarios PDF</button>
               <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('docx', $event)">Exportar como .docx</button>
               <button type="button" class="export-menu-item" role="menuitem" (click)="exportMatrix('xlsx', $event)">Exportar como .xlsx</button>
             </div>
+}
           </div>
         </div>
 
-        <section class="refine-panel" *ngIf="isRefinePanelOpen" aria-labelledby="refinePanelTitle">
+        @if (isRefinePanelOpen) {
+<section class="refine-panel" aria-labelledby="refinePanelTitle">
           <h3 id="refinePanelTitle" class="refine-panel-title">Editar Matriz con IA y Contexto</h3>
           <p class="refine-panel-hint">Indica qué quieres ajustar, ampliar o priorizar. La IA aplica tu indicación y conserva lo que no la afecta.</p>
           <textarea class="refine-panel-textarea" rows="4" [(ngModel)]="refineContext" [disabled]="isRefining"
             placeholder="Ej: Prioriza casos negativos de las validaciones de negocio y deja máximo 5 escenarios."></textarea>
           <div class="refine-panel-tags">
-            <button type="button" *ngFor="let tag of refineQuickTags" class="refine-tag" [class.is-active]="isRefineTagActive(tag)"
+            @for (tag of refineQuickTags; track tag) {
+<button type="button" class="refine-tag" [class.is-active]="isRefineTagActive(tag)"
               [attr.aria-pressed]="isRefineTagActive(tag)" (click)="toggleRefineTag(tag)" [disabled]="isRefining">
               {{ isRefineTagActive(tag) ? '✓' : '+' }} {{ tag }}
             </button>
+}
           </div>
           <p class="refine-panel-warning">Reemplazará los {{ hu.detailedTestCases?.length || 0 }} escenarios actuales de la matriz.</p>
-          <p class="refine-panel-error" *ngIf="refineError" role="alert">{{ refineError }}</p>
+          @if (refineError) {
+<p class="refine-panel-error" role="alert">{{ refineError }}</p>
+}
           <div class="refine-panel-actions">
             <button type="button" class="button-secondary" (click)="closeRefinePanel()" [disabled]="isRefining">Cancelar</button>
             <button type="button" class="button-primary" (click)="refineWithContext()" [disabled]="isRefining || !refineContext.trim()">
-              <span *ngIf="isRefining" class="refine-spinner" aria-hidden="true"></span>
+              @if (isRefining) {
+<span class="refine-spinner" aria-hidden="true"></span>
+}
               {{ isRefining ? 'Aplicando…' : '✦ Aplicar con IA y guardar' }}
             </button>
           </div>
-          <p class="refine-panel-progress" *ngIf="isRefining" aria-live="polite">Aplicando tu indicación a los escenarios… puede tardar hasta un minuto.</p>
+          @if (isRefining) {
+<p class="refine-panel-progress" aria-live="polite">Aplicando tu indicación a los escenarios… puede tardar hasta un minuto.</p>
+}
         </section>
+}
 
         <!-- Loading state for scenarios -->
-        <div *ngIf="isLoadingScenarios" class="loading-scenarios-container">
+        @if (isLoadingScenarios) {
+<div class="loading-scenarios-container">
           <div class="scenarios-spinner"></div>
           <p>Cargando escenarios desde la base de datos...</p>
         </div>
+}
 
-        <div *ngIf="!isLoadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)" class="no-test-cases-state">
+        @if (!isLoadingScenarios && (!hu.detailedTestCases || hu.detailedTestCases.length === 0)) {
+<div class="no-test-cases-state">
           <p class="no-tc-message">Esta HU no tiene casos de prueba. Usa <strong>Editar Matriz</strong> para agregarlos.</p>
         </div>
+}
 
-        <div *ngIf="!isLoadingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0">
+        @if (!isLoadingScenarios && hu.detailedTestCases && hu.detailedTestCases.length > 0) {
+<div>
           <div class="tc-header-bar">
             <h4 class="section-subtitle">Casos de Prueba ({{ hu.detailedTestCases.length }})</h4>
             <div class="tc-search-wrap">
@@ -111,25 +136,34 @@
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let tc of filteredTestCases(); let i = index" [class.row-even]="i % 2 === 1">
+                @for (tc of filteredTestCases(); track tc; let i = $index) {
+<tr [class.row-even]="i % 2 === 1">
                   <td data-label="ID Caso" class="id-col">{{ hu.id }}_CP{{ getOriginalIndex(tc) + 1 }}</td>
                   <td data-label="Escenario de Prueba (Titulo)" class="title-col">{{ tc.title }}</td>
                   <td data-label="Precondiciones"><pre class="table-pre">{{ tc.preconditions }}</pre></td>
                   <td data-label="Paso a Paso">
-                    <ol class="step-list"><li *ngFor="let step of tc.steps">{{ step.accion }}</li></ol>
+                    <ol class="step-list">@for (step of tc.steps; track step) {
+<li>{{ step.accion }}</li>
+}</ol>
                   </td>
                   <td data-label="Resultado Esperado">
-                    <ul class="result-list"><li *ngFor="let line of splitLines(tc.expectedResults)">{{ line }}</li></ul>
+                    <ul class="result-list">@for (line of splitLines(tc.expectedResults); track line) {
+<li>{{ line }}</li>
+}</ul>
                   </td>
                 </tr>
+}
               </tbody>
             </table>
           </div>
         </div>
-      </ng-container>
+}
+      
+}
 
       <!-- ==================== MODO EDICION (trasladado de refiner) ==================== -->
-      <ng-container *ngIf="isEditingMode">
+      @if (isEditingMode) {
+
         <div class="actions table-actions" style="margin-top:0;margin-bottom:1rem;">
           <button (click)="addNewTestCase()" [disabled]="isLoading" class="button-secondary">
             + Agregar Caso
@@ -139,7 +173,8 @@
           </button>
         </div>
 
-        <div class="test-cases-section" *ngIf="hu.detailedTestCases && hu.detailedTestCases.length > 0">
+        @if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
+<div class="test-cases-section">
           <div class="detailed-test-cases-table-container">
             <table class="detailed-test-cases-table">
               <thead>
@@ -158,7 +193,8 @@
                 </tr>
               </thead>
               <tbody>
-                <ng-container *ngFor="let tc of hu.detailedTestCases; let i = index">
+                @for (tc of hu.detailedTestCases; track tc; let i = $index) {
+
                   <tr [class.row-editing]="isEditingTestCase(i)" [class.row-selected]="isTestCaseSelected(i)">
                     <td class="check-col" data-label="Seleccionar">
                       <input type="checkbox" [checked]="isTestCaseSelected(i)"
@@ -167,22 +203,32 @@
                     </td>
                     <td data-label="ID Caso">{{ hu.id }}_CP{{ i + 1 }}</td>
                     <td data-label="Escenario de Prueba (Titulo)">
-                      <ng-container *ngIf="isEditingTestCase(i); else readTitle">
+                      @if (isEditingTestCase(i)) {
+
                         <textarea class="table-field" rows="2" [(ngModel)]="tc.title" [disabled]="isLoading"></textarea>
-                      </ng-container>
-                      <ng-template #readTitle>{{ tc.title }}</ng-template>
+                      
+} @else {
+{{ tc.title }}
+}
+                      
                     </td>
                     <td data-label="Precondiciones">
-                      <ng-container *ngIf="isEditingTestCase(i); else readPreconditions">
+                      @if (isEditingTestCase(i)) {
+
                         <textarea class="table-field" rows="4" [(ngModel)]="tc.preconditions" [disabled]="isLoading"></textarea>
-                      </ng-container>
-                      <ng-template #readPreconditions><pre class="table-pre">{{ tc.preconditions }}</pre></ng-template>
+                      
+} @else {
+<pre class="table-pre">{{ tc.preconditions }}</pre>
+}
+                      
                     </td>
                     <td data-label="Paso a Paso">
-                      <ng-container *ngIf="isEditingTestCase(i); else readSteps">
+                      @if (isEditingTestCase(i)) {
+
                         <div class="steps-editor" [attr.data-tc-index]="i">
-                          <div class="step-editor-row"
-                            *ngFor="let step of tc.steps; let stepIndex = index; let first = first; let last = last"
+                          @for (step of tc.steps; track step; let stepIndex = $index; let first = $first; let last = $last) {
+<div class="step-editor-row"
+                           
                             [class.is-dragging]="dragStep?.tc === i && dragStep?.index === stepIndex"
                             [class.drop-above]="stepDropPosition(i, stepIndex) === 'above'"
                             [class.drop-below]="stepDropPosition(i, stepIndex) === 'below'"
@@ -213,24 +259,35 @@
                               </button>
                             </div>
                           </div>
+}
                           <div class="steps-footer">
                             <button class="step-btn-add" type="button" (click)="addStepToTestCase(i)" [disabled]="isLoading">+ Agregar paso</button>
                             <span class="steps-hint"><kbd>Enter</kbd> nuevo paso · <kbd>Shift</kbd>+<kbd>Enter</kbd> salto de línea · <kbd>Alt</kbd>+<kbd>↑↓</kbd> mover</span>
                           </div>
                         </div>
-                      </ng-container>
-                      <ng-template #readSteps>
-                        <ul class="steps-readonly"><li *ngFor="let step of tc.steps">{{ step.accion }}</li></ul>
-                      </ng-template>
+                      
+} @else {
+
+                        <ul class="steps-readonly">@for (step of tc.steps; track step) {
+<li>{{ step.accion }}</li>
+}</ul>
+                      
+}
+                      
                     </td>
                     <td data-label="Resultado Esperado">
-                      <ng-container *ngIf="isEditingTestCase(i); else readExpected">
+                      @if (isEditingTestCase(i)) {
+
                         <textarea class="table-field" rows="4" [(ngModel)]="tc.expectedResults" [disabled]="isLoading"></textarea>
-                      </ng-container>
-                      <ng-template #readExpected><pre class="table-pre">{{ tc.expectedResults }}</pre></ng-template>
+                      
+} @else {
+<pre class="table-pre">{{ tc.expectedResults }}</pre>
+}
+                      
                     </td>
                     <td class="actions-col" data-label="Acciones">
-                      <div class="row-actions" *ngIf="isEditingTestCase(i); else menuActions">
+                      @if (isEditingTestCase(i)) {
+<div class="row-actions">
                         <button class="action-btn-save" (click)="saveEditTestCase(i)" [disabled]="isLoading" title="Guardar cambios">
                           ✓
                         </button>
@@ -238,22 +295,27 @@
                           ✕
                         </button>
                       </div>
-                      <ng-template #menuActions>
+} @else {
+
                         <div class="row-actions-inline">
                           <button type="button" class="row-edit-btn" title="Editar caso"
                             (click)="handleMenuEdit(i, $event)" [disabled]="isLoading">
                             <span class="icon-pencil-blue"></span>
                           </button>
                         </div>
-                      </ng-template>
+                      
+}
+                      
                     </td>
                   </tr>
-                </ng-container>
+                
+}
               </tbody>
             </table>
           </div>
 
-          <div class="bulk-delete-bar" *ngIf="selectedTestCaseIndexes.length > 0">
+          @if (selectedTestCaseIndexes.length > 0) {
+<div class="bulk-delete-bar">
             <span class="bulk-count">
               {{ selectedTestCaseIndexes.length }}
               {{ selectedTestCaseIndexes.length === 1 ? 'caso seleccionado' : 'casos seleccionados' }}
@@ -266,24 +328,32 @@
             <button type="button" class="bulk-cancel-btn" (click)="selectedTestCaseIndexes = []"
               [disabled]="isLoading">Cancelar</button>
           </div>
+}
         </div>
+}
 
-        <div *ngIf="!hu.detailedTestCases || hu.detailedTestCases.length === 0" class="empty-state">
+        @if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+<div class="empty-state">
           <h3>No hay casos de prueba</h3>
           <p>Usa "+ Agregar Caso" para crear un escenario.</p>
         </div>
-      </ng-container>
+}
+      
+}
 
     </div>
   </div>
+} @else {
 
-  <ng-template #emptyState>
     <div class="empty-state">
       <h3>No hay datos para mostrar</h3>
       <p>Regresa a la tabla de HU y selecciona una HU para ver sus escenarios.</p>
       <button class="button-secondary" (click)="goBackToHuTable()">Regresar</button>
     </div>
-  </ng-template>
+  
+}
+
+  
 
   <app-excel-matrix-exporter #matrixExporter></app-excel-matrix-exporter>
 

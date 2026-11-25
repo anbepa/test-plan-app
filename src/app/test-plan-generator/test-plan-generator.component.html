@@ -1,5 +1,6 @@
 <div class="container">
-  <div class="subpage-breadcrumb" *ngIf="isAppendMode">
+  @if (isAppendMode) {
+<div class="subpage-breadcrumb">
     <button type="button" class="breadcrumb-button" (click)="goToPlansList()">
       ← Lista de Planes
     </button>
@@ -8,17 +9,21 @@
     <span class="breadcrumb-separator">/</span>
     <button type="button" class="breadcrumb-button breadcrumb-current" (click)="goToCurrentPage()">Añadir nueva HU</button>
   </div>
+}
 
   <!-- Componente de Generación -->
-  <app-test-case-generator *ngIf="showTestCaseGenerator" [initialGenerationMode]="currentGenerationMode!"
+  @if (showTestCaseGenerator) {
+<app-test-case-generator [initialGenerationMode]="currentGenerationMode!"
     [initialSprint]="generatorInitialSprint" [initialCellName]="generatorInitialCellName"
     [accumulatedHUsCount]="huList.length" (huSaved)="onHuSavedFromChild($event)"
     (huGenerated)="onHuGeneratedFromChild($event)" (generationCancelled)="onGenerationCancelledFromChild()"
     (cellNameChanged)="onCellNameChanged($event)">
   </app-test-case-generator>
+}
 
   <!-- Modal de Éxito -->
-  <div class="success-modal-overlay" *ngIf="showSuccessModal">
+  @if (showSuccessModal) {
+<div class="success-modal-overlay">
     <div class="success-modal">
       <div class="success-icon">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -35,9 +40,11 @@
       </div>
     </div>
   </div>
+}
 
   <!-- Modal de Confirmación -->
-  <div class="confirm-modal-overlay" *ngIf="showConfirmModal" (click)="closeConfirmModal()">
+  @if (showConfirmModal) {
+<div class="confirm-modal-overlay" (click)="closeConfirmModal()">
     <div class="confirm-modal" (click)="$event.stopPropagation()">
       <div class="confirm-modal-header">
         <h3>{{ confirmModalTitle }}</h3>
@@ -55,6 +62,7 @@
       </div>
     </div>
   </div>
+}
 
   <!-- Componente invisible para exportar matrices -->
   <app-excel-matrix-exporter #matrixExporter style="display: none;"></app-excel-matrix-exporter>

@@ -47,7 +47,8 @@
           (change)="onSizeChange()" title="Tamaño del trazo" aria-label="Tamaño del trazo" />
         <span class="size-badge" aria-hidden="true">{{ strokeWidth }}px</span>
         <div class="preset-colors" role="group" aria-label="Colores predefinidos">
-          <button type="button" *ngFor="let c of presetColors"
+          @for (c of presetColors; track c) {
+<button type="button"
             (click)="setPresetColor(c)"
             class="color-swatch"
             [class.color-swatch-active]="strokeColor === c"
@@ -56,6 +57,7 @@
             [attr.aria-label]="'Color ' + c"
             [attr.aria-pressed]="strokeColor === c">
           </button>
+}
         </div>
       </div>
 

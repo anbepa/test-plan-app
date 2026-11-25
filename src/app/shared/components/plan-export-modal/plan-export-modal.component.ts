@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, HostListener, ElementRef, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { HUData } from '../../../models/hu-data.model';
 import { ValidatedPlanInfo, PlanValidationError } from '../../../models/azure-devops-evidence.model';
@@ -10,7 +10,7 @@ import { WordExporterComponent } from '../../../word-exporter/word-exporter.comp
 @Component({
   selector: 'app-plan-export-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, WordExporterComponent],
+  imports: [FormsModule, WordExporterComponent],
   templateUrl: './plan-export-modal.component.html',
   styleUrls: ['./plan-export-modal.component.css']
 })

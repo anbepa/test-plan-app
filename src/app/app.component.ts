@@ -30,16 +30,20 @@ interface MenuItem {
     AuthUiComponent
   ],
   template: `
-    <ng-container *ngIf="authService.loading$ | async; else authStateLoaded">
-      <div class="auth-loading">Cargando sesión...</div>
-    </ng-container>
+    @if (authService.loading$ | async) {
 
-    <ng-template #authStateLoaded>
-      <ng-container *ngIf="isAuthenticated$ | async; else authScreen">
+      <div class="auth-loading">Cargando sesión...</div>
+    
+} @else {
+
+      @if (isAuthenticated$ | async) {
+
         <div class="app-container">
           <app-toast></app-toast>
 
-          <div class="sidebar-overlay" *ngIf="sidebarOpen && isMobile" (click)="closeSidebar()"></div>
+          @if (sidebarOpen && isMobile) {
+<div class="sidebar-overlay" (click)="closeSidebar()"></div>
+}
 
           <aside
             class="sidebar"
@@ -51,7 +55,8 @@ interface MenuItem {
 
             <nav class="sidebar-nav">
               <div class="logo-section">
-                <a class="app-logo" *ngIf="isSidebarExpandedView" (click)="goToWelcome()" style="cursor:pointer">
+                @if (isSidebarExpandedView) {
+<a class="app-logo" (click)="goToWelcome()" style="cursor:pointer">
                   <div class="logo-svg-wrap">
                     <svg width="38" height="38" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <rect width="64" height="64" rx="14" fill="#0071e3"/>
@@ -69,8 +74,10 @@ interface MenuItem {
                     <span class="logo-tagline">Gestor QA</span>
                   </div>
                 </a>
+}
 
-                <a class="logo-compact" *ngIf="!isSidebarExpandedView" (click)="goToWelcome()" style="cursor:pointer">
+                @if (!isSidebarExpandedView) {
+<a class="logo-compact" (click)="goToWelcome()" style="cursor:pointer">
                   <div class="logo-isotipo">
                     <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <rect width="64" height="64" rx="14" fill="#0071e3"/>
@@ -83,6 +90,7 @@ interface MenuItem {
                     </svg>
                   </div>
                 </a>
+}
               </div>
 
               <div class="menu-header">
@@ -107,9 +115,11 @@ interface MenuItem {
               </div>
 
               <ul class="menu-list">
-                <li *ngFor="let item of menuItems; let i = index" class="menu-item">
-                  <a
-                    *ngIf="!item.subItems"
+                @for (item of menuItems; track item; let i = $index) {
+<li class="menu-item">
+                  @if (!item.subItems) {
+<a
+                   
                     [routerLink]="item.route"
                     [class.active]="isMenuItemActive(item.route || '')"
                     class="menu-link"
@@ -117,25 +127,35 @@ interface MenuItem {
                     [attr.title]="getCollapsedOnlyTitle(item.label)">
 
                     <span class="menu-icon">
-                      <svg *ngIf="i === 0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      @if (i === 0) {
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
-                      <svg *ngIf="i === 1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+}
+                      @if (i === 1) {
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
-                      <svg *ngIf="i === 2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+}
+                      @if (i === 2) {
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <svg *ngIf="i === 3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+}
+                      @if (i === 3) {
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.37 2.37 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.351 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.37 2.37 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.351 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.37-2.37 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.351 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.37-2.37 1.724 1.724 0 002.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
+}
                     </span>
                     <span class="menu-label">{{ item.label }}</span>
                   </a>
+}
 
-                  <div *ngIf="item.subItems" class="menu-group">
+                  @if (item.subItems) {
+<div class="menu-group">
                     <button
                       class="menu-link menu-parent"
                       (click)="toggleSubmenu(item)"
@@ -154,8 +174,10 @@ interface MenuItem {
                       </svg>
                     </button>
 
-                    <ul class="submenu" *ngIf="item.expanded">
-                      <li *ngFor="let subItem of item.subItems" class="submenu-item">
+                    @if (item.expanded) {
+<ul class="submenu">
+                      @for (subItem of item.subItems; track subItem) {
+<li class="submenu-item">
                         <a
                           [routerLink]="subItem.route"
                           routerLinkActive="active"
@@ -165,17 +187,26 @@ interface MenuItem {
                           <span class="submenu-label">{{ subItem.label }}</span>
                         </a>
                       </li>
+}
                     </ul>
+}
                   </div>
+}
                 </li>
+}
               </ul>
             </nav>
 
-            <div class="sidebar-user" *ngIf="authService.user$ | async as user">
+            @if (authService.user$ | async; as user) {
+<div class="sidebar-user">
               <div class="user-row">
                 <div class="user-avatar-wrap">
-                  <img *ngIf="getAvatarUrl(user)" [src]="getAvatarUrl(user)" alt="Avatar" class="user-avatar" />
-                  <div *ngIf="!getAvatarUrl(user)" class="user-avatar-fallback">{{ (getDisplayName(user) || user.email || '?')[0].toUpperCase() }}</div>
+                  @if (getAvatarUrl(user)) {
+<img [src]="getAvatarUrl(user)" alt="Avatar" class="user-avatar" />
+}
+                  @if (!getAvatarUrl(user)) {
+<div class="user-avatar-fallback">{{ (getDisplayName(user) || user.email || '?')[0].toUpperCase() }}</div>
+}
                 </div>
                 <div class="user-meta">
                   <div class="user-name">{{ getDisplayName(user) }}</div>
@@ -192,6 +223,7 @@ interface MenuItem {
                 </button>
               </div>
             </div>
+}
           </aside>
 
           <header class="header">
@@ -207,12 +239,18 @@ interface MenuItem {
             <router-outlet></router-outlet>
           </main>
         </div>
-      </ng-container>
-    </ng-template>
+      
+} @else {
 
-    <ng-template #authScreen>
       <app-auth-ui></app-auth-ui>
-    </ng-template>
+    
+}
+    
+}
+
+    
+
+    
   `,
   styleUrls: ['./app.component.css']
 })

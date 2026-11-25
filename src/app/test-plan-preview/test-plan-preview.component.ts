@@ -1,5 +1,5 @@
 import { Component, OnInit, HostListener } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations } from '../services/database/database.service';
 import { ToastService } from '../services/core/toast.service';
@@ -11,7 +11,7 @@ import { PlanExportModalComponent } from '../shared/components/plan-export-modal
 @Component({
     selector: 'app-test-plan-preview',
     standalone: true,
-    imports: [CommonModule, PlanExportModalComponent],
+    imports: [PlanExportModalComponent],
     templateUrl: './test-plan-preview.component.html',
     styleUrls: ['./test-plan-preview.component.css']
 })

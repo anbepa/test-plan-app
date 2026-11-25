@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { DetailedTestCase, TestCaseStep, HUData } from '../models/hu-data.model';
 import { ConfirmationModalComponent } from '../confirmation-modal/confirmation-modal.component';
@@ -13,7 +13,7 @@ export interface UIDetailedTestCase extends DetailedTestCase {
   templateUrl: './test-case-editor.component.html',
   styleUrls: ['./test-case-editor.component.css'],
   standalone: true,
-  imports: [CommonModule, FormsModule, ConfirmationModalComponent]
+  imports: [FormsModule, ConfirmationModalComponent]
 })
 export class TestCaseEditorComponent implements OnInit, OnDestroy {
   private readonly AUTO_TECHNIQUE = 'Automática';

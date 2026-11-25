@@ -1,6 +1,6 @@
 import { compactStaticSectionText, isAiEnhanceableSection } from '../shared/utils/static-section-text';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, HostListener } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink, NavigationEnd } from '@angular/router';
 import { DatabaseService, DbTestPlanWithRelations, DbTestPlan, DbUserStoryWithRelations } from '../services/database/database.service';
@@ -20,7 +20,7 @@ import { StaticSectionName, RiskStrategyData } from './components/general-sectio
 @Component({
   selector: 'app-test-plan-viewer',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, ExcelMatrixExporterComponent, ConfirmationModalComponent],
+  imports: [FormsModule, RouterLink, ExcelMatrixExporterComponent, ConfirmationModalComponent],
   templateUrl: './test-plan-viewer.component.html',
   styleUrls: ['./test-plan-viewer.component.css']
 })

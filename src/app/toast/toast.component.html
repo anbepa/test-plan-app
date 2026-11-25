@@ -1,6 +1,7 @@
 <!-- Toast Container - Estilo Apple/iOS -->
 <div class="toast-container">
-  <div *ngFor="let toast of toasts$ | async" class="toast toast-{{ toast.type }}">
+  @for (toast of toasts$ | async; track toast) {
+<div class="toast toast-{{ toast.type }}">
 
     <div class="toast-content">
       <!-- Icon -->
@@ -10,22 +11,29 @@
       <div class="toast-message">{{ toast.message }}</div>
 
       <!-- Action Button (opcional) -->
-      <button *ngIf="toast.action" class="toast-action" (click)="toast.action.callback(); dismiss(toast.id)">
+      @if (toast.action) {
+<button class="toast-action" (click)="toast.action.callback(); dismiss(toast.id)">
         {{ toast.action.text }}
       </button>
+}
 
       <!-- Close Button (solo si no es loading) -->
-      <button *ngIf="toast.type !== 'loading'" class="toast-close" (click)="dismiss(toast.id)" aria-label="Cerrar">
+      @if (toast.type !== 'loading') {
+<button class="toast-close" (click)="dismiss(toast.id)" aria-label="Cerrar">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
           <path
             d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
         </svg>
       </button>
+}
     </div>
 
     <!-- Progress bar para loading -->
-    <div *ngIf="toast.type === 'loading'" class="toast-progress">
+    @if (toast.type === 'loading') {
+<div class="toast-progress">
       <div class="toast-progress-bar"></div>
     </div>
+}
   </div>
+}
 </div>

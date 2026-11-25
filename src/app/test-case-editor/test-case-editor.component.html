@@ -1,6 +1,7 @@
 <div class="test-case-editor-container" [class.loading-active]="isLoading">
   <!-- Sticky Header with Refinement Controls -->
-  <div class="sticky-header" *ngIf="showRefinementControls">
+  @if (showRefinementControls) {
+<div class="sticky-header">
     <!-- Grouped Refinement Card -->
     <div class="refinement-card">
       <div class="refinement-card-header">
@@ -38,30 +39,37 @@
         <button type="button" class="btn-refine-ai prominent-ai-btn animated-ai-btn"
           (click)="onRefineWithAI()"
           [disabled]="isLoading" title="Generar pasos con IA">
-          <svg *ngIf="!isLoading" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+          @if (!isLoading) {
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
             class="btn-icon ai-icon-animated">
             <path fill-rule="evenodd"
               d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
               clip-rule="evenodd" />
           </svg>
-          <span *ngIf="isLoading" class="spinner-ai">
+}
+          @if (isLoading) {
+<span class="spinner-ai">
             <span class="spinner-dot"></span>
             <span class="spinner-dot"></span>
             <span class="spinner-dot"></span>
           </span>
+}
           {{ isLoading ? 'Generando casos' : 'Refinar con IA' }}
         </button>
       </div>
     </div>
   </div>
+}
 
   <!-- 8. Separated Test Cases Section -->
   <div class="test-cases-section-wrapper" [class.loading-cases]="isLoading">
     <!-- Premium Loading Overlay - Localized -->
-    <div class="loading-overlay-premium" *ngIf="isRefining">
+    @if (isRefining) {
+<div class="loading-overlay-premium">
       <div class="spinner-ai-premium"></div>
       <p class="loading-text-premium">La IA está trabajando en tus casos...</p>
     </div>
+}
 
     <div class="section-divider"></div>
 
@@ -70,7 +78,8 @@
         Casos de Prueba ({{ testCases.length }})
       </h4>
       <div class="header-actions">
-        <button type="button" class="btn-delete-all" (click)="deleteAllTestCases()" *ngIf="testCases.length > 0"
+        @if (testCases.length > 0) {
+<button type="button" class="btn-delete-all" (click)="deleteAllTestCases()"
           [disabled]="isLoading" title="Eliminar todos los casos">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
             <path fill-rule="evenodd"
@@ -79,6 +88,7 @@
           </svg>
           Eliminar todos
         </button>
+}
         <button type="button" class="btn-add-test-case" (click)="addTestCase()" [disabled]="isLoading">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="btn-icon">
             <path
@@ -90,7 +100,8 @@
     </div>
 
     <!-- 10. Smart Empty State -->
-    <div class="empty-test-cases smart-empty-state" *ngIf="testCases.length === 0">
+    @if (testCases.length === 0) {
+<div class="empty-test-cases smart-empty-state">
       <div class="empty-icon"></div>
       <p class="empty-title">No hay casos de prueba aún</p>
       <p class="empty-description">Crea tu primer caso para comenzar</p>
@@ -102,11 +113,14 @@
         Añadir Caso
       </button>
     </div>
+}
 
     <!-- 9. Scrollable Test Cases Container -->
-    <div class="test-cases-scroll-container" *ngIf="testCases.length > 0">
+    @if (testCases.length > 0) {
+<div class="test-cases-scroll-container">
       <!-- 4. Mini Cards for Test Cases -->
-      <div *ngFor="let tc of testCases; let tcIndex = index" class="test-case-mini-card"
+      @for (tc of testCases; track tc; let tcIndex = $index) {
+<div class="test-case-mini-card"
         [class.expanded]="tc.isExpanded">
 
         <!-- Card Header -->
@@ -115,9 +129,11 @@
             <span class="case-badge">{{ tcIndex + 1 }}</span>
             <div class="case-info">
               <span class="case-title">{{ tc.title || 'Sin título' }}</span>
-              <span class="case-subtitle" *ngIf="tc.steps && tc.steps.length > 0">
+              @if (tc.steps && tc.steps.length > 0) {
+<span class="case-subtitle">
                 {{ tc.steps.length }} {{ tc.steps.length === 1 ? 'paso' : 'pasos' }}
               </span>
+}
             </div>
           </div>
           <div class="mini-card-actions" (click)="$event.stopPropagation()">
@@ -140,7 +156,8 @@
         </div>
 
         <!-- Card Content with Accordion Animation -->
-        <div class="mini-card-content" *ngIf="tc.isExpanded">
+        @if (tc.isExpanded) {
+<div class="mini-card-content">
           <div class="card-divider"></div>
           <form class="test-case-form">
 
@@ -175,16 +192,20 @@
               </div>
 
               <!-- 10. Smart Empty State for Steps -->
-              <div class="no-steps smart-empty-state-small" *ngIf="!tc.steps || tc.steps.length === 0">
+              @if (!tc.steps || tc.steps.length === 0) {
+<div class="no-steps smart-empty-state-small">
                 <span class="empty-icon-small"></span>
                 <p>Este caso aún no tiene pasos.</p>
                 <button type="button" class="btn-empty-action-small" (click)="addStep(tc)" [disabled]="isLoading">
                   + Añadir Paso
                 </button>
               </div>
+}
 
-              <div class="steps-list" *ngIf="tc.steps && tc.steps.length > 0">
-                <div *ngFor="let step of tc.steps; let stepIndex = index" class="step-item"
+              @if (tc.steps && tc.steps.length > 0) {
+<div class="steps-list">
+                @for (step of tc.steps; track step; let stepIndex = $index) {
+<div class="step-item"
                   [class.dragging]="draggedStep === step && draggedStepTestCase === tc"
                   [class.drag-over]="dragOverStepId === (huId + '-tc' + tcIndex + '-step' + stepIndex)" draggable="true"
                   (dragstart)="onStepDragStart($event, step, tc)" (dragover)="onStepDragOver($event, step, tc)"
@@ -219,7 +240,9 @@
                     </button>
                   </div>
                 </div>
+}
               </div>
+}
             </div>
 
             <!-- Expected Results -->
@@ -233,8 +256,11 @@
 
           </form>
         </div>
+}
       </div>
+}
     </div>
+}
   </div>
 </div>
 
