@@ -390,13 +390,42 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
     }
   }
 
-  saveCanvas(): void {
+  async saveCanvas(): Promise<void> {
     if (!this.canvas) return;
     this.canvas.discardActiveObject();
     this.canvas.renderAll();
     const base64 = this.canvas.toDataURL({ format: 'png', quality: 1, multiplier: 1 / this.currentZoom });
-    const stateJson = JSON.stringify(this.canvas.toJSON());
+    const state = this.canvas.toJSON();
+    // El estado guarda la imagen original de fondo para poder seguir editando.
+    // Se recomprime a WebP: en PNG/base64 el .meta.json pesaba más que la imagen.
+    const bg = state?.backgroundImage;
+    if (bg?.src) bg.src = await this.compressDataUrl(bg.src);
+    const stateJson = JSON.stringify(state);
     this.imageSaved.emit({ base64, stateJson });
+  }
+
+  /** Recomprime una data URL a WebP; si no reduce tamaño, devuelve la original. */
+  private compressDataUrl(src: string): Promise<string> {
+    if (!src.startsWith('data:image/') || src.startsWith('data:image/webp')) {
+      return Promise.resolve(src);
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth;
+          c.height = img.naturalHeight;
+          c.getContext('2d')!.drawImage(img, 0, 0);
+          const webp = c.toDataURL('image/webp', 0.9);
+          resolve(webp.startsWith('data:image/webp') && webp.length < src.length ? webp : src);
+        } catch {
+          resolve(src);
+        }
+      };
+      img.onerror = () => resolve(src);
+      img.src = src;
+    });
   }
 
   downloadImage(): void {

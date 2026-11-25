@@ -120,7 +120,7 @@ async function replacePreviousReports(userId: string, executionId: string | null
 
     let query = adminClient
       .from('serenity_report_results')
-      .select('id')
+      .select('id, artifact_download_url')
       .eq('user_id', userId);
 
     query = executionId ? query.eq('execution_id', executionId) : query.is('execution_id', null);
@@ -129,6 +129,18 @@ async function replacePreviousReports(userId: string, executionId: string | null
 
     if (oldRows && oldRows.length > 0) {
       await Promise.all(oldRows.map((row: any) => deleteBundleFromStorage(userId, row.id).catch(() => {})));
+
+      // También el .zip del reporte: antes solo se borraba la fila y el zip
+      // quedaba huérfano en Storage (cientos de MB en la capa gratuita).
+      const zipsByBucket = new Map<string, string[]>();
+      for (const row of oldRows as any[]) {
+        const location = parseStorageObjectUrl(row.artifact_download_url);
+        if (!location) continue;
+        zipsByBucket.set(location.bucket, [...(zipsByBucket.get(location.bucket) || []), location.path]);
+      }
+      await Promise.all([...zipsByBucket].map(([bucket, paths]) =>
+        adminClient.storage.from(bucket).remove(paths).catch(() => {})
+      ));
 
       let deleteQuery = adminClient
         .from('serenity_report_results')
