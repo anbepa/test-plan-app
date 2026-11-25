@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, Output, ViewChild, ElementRef, AfterViewInit, HostListener, DoCheck, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { FABRIC_CDN_URL, loadScript } from '../../../shared/utils/load-script';
+
 declare const fabric: any;
 
 type ToolName = 'pen' | 'circle' | 'line' | 'rectangle' | 'arrow' | 'text' | 'eraser' | 'highlighter';
@@ -56,7 +58,13 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
     this.onColorChange();
   }
 
-  ngAfterViewInit(): void {
+  private destroyed = false;
+
+  async ngAfterViewInit(): Promise<void> {
+    // fabric.js solo se descarga cuando se abre el editor.
+    await loadScript(FABRIC_CDN_URL);
+    if (this.destroyed) return;
+
     this.canvas = new fabric.Canvas('fabricCanvas', {
       selection: false,
       preserveObjectStacking: true
@@ -76,6 +84,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     if (this.canvas) {
       this.canvas.dispose();
     }
@@ -179,6 +188,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   setZoom(zoomLevel: number): void {
+    if (!this.canvas) return;
     const bgImage = this.canvas.backgroundImage as any;
     if (!bgImage) return;
 
@@ -193,7 +203,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
 
   selectTool(tool: ToolName): void {
     this.selectedTool = tool;
-    this.setupTool();
+    if (this.canvas) this.setupTool();
   }
 
   private setupTool() {
@@ -351,6 +361,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent) {
+    if (!this.canvas) return;
     // Si estás escribiendo en una caja de texto, no borres el objeto.
     const activeObj = this.canvas.getActiveObject();
     if (activeObj && activeObj.type === 'i-text' && (activeObj as any).isEditing) {
@@ -369,6 +380,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   clearCanvas(): void {
+    if (!this.canvas) return;
     this.canvas.clear();
     const baseToClear = this.clearBase64 || this.imageBase64;
     if (baseToClear) {
@@ -379,6 +391,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   saveCanvas(): void {
+    if (!this.canvas) return;
     this.canvas.discardActiveObject();
     this.canvas.renderAll();
     const base64 = this.canvas.toDataURL({ format: 'png', quality: 1, multiplier: 1 / this.currentZoom });
@@ -387,6 +400,7 @@ export class ImageEditorComponent implements AfterViewInit, DoCheck, OnDestroy {
   }
 
   downloadImage(): void {
+    if (!this.canvas) return;
     this.canvas.discardActiveObject();
     this.canvas.renderAll();
     const link = document.createElement('a');

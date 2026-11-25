@@ -2,7 +2,7 @@
 
 import { Component, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import * as ExcelJS from 'exceljs';
+import type * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { HUData } from '../models/hu-data.model';
 import { ToastService } from '../services/core/toast.service';
@@ -67,7 +67,9 @@ export class ExcelMatrixExporterComponent {
     }
 
     try {
-      const workbook = new ExcelJS.Workbook();
+      const excelModule: any = await import('exceljs');
+      const Excel = (excelModule.default ?? excelModule) as typeof ExcelJS;
+      const workbook = new Excel.Workbook();
       workbook.creator = 'Test Plan App';
       workbook.created = new Date();
 

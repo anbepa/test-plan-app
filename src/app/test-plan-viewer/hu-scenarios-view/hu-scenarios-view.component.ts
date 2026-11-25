@@ -630,9 +630,12 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     this.exportMenuOpen = !this.exportMenuOpen;
   }
 
-  exportMatrix(format: 'docx' | 'xlsx' | 'pdf', event: Event): void {
+  async exportMatrix(format: 'docx' | 'xlsx' | 'pdf', event: Event): Promise<void> {
     event.stopPropagation();
     if (!this.hu) return;
+
+    // Cerrar el menú antes de esperar la carga de la librería de exportación.
+    this.exportMenuOpen = false;
 
     if (format === 'docx') {
       this.exportService.exportToDOCX(this.hu);
@@ -641,15 +644,13 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
     } else if (format === 'pdf') {
       try {
         // Solo los escenarios de ESTA HU, no los del plan completo.
-        this.exportService.exportScenariosToPDF(this.hu, this.testPlanTitle);
+        await this.exportService.exportScenariosToPDF(this.hu, this.testPlanTitle);
         this.toastService.success('Escenarios PDF descargados exitosamente');
       } catch (error: any) {
         console.error('Error generando escenarios PDF:', error);
         this.toastService.error(error?.message || 'Error al generar el PDF de escenarios');
       }
     }
-
-    this.exportMenuOpen = false;
   }
 
   filteredTestCases(): DetailedTestCase[] {

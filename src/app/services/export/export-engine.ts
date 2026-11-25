@@ -1,0 +1,1492 @@
+import * as ExcelJS from 'exceljs';
+import { HUData, PlanExecution, TestCaseExecution, ExecutionStep, AssetEvidence } from '../../models/hu-data.model';
+import { ExecutionStorageService } from '../database/execution-storage-supabase.service';
+import { saveAs } from 'file-saver';
+import {
+    AlignmentType,
+    BorderStyle,
+    Document,
+    Packer,
+    Paragraph,
+    Table,
+    TableCell,
+    TableRow,
+    TextRun,
+    WidthType,
+    ImageRun,
+    TableLayoutType,
+    InternalHyperlink,
+    HeadingLevel,
+    BookmarkStart,
+    BookmarkEnd,
+    ShadingType
+} from 'docx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+import { escapeFilename } from './export-utils';
+
+/**
+ * Implementación pesada de las exportaciones (DOCX, PDF, XLSX).
+ * Se carga bajo demanda desde ExportService con import() dinámico para que
+ * exceljs, docx y jspdf no formen parte de los chunks de las pantallas.
+ */
+export class ExportEngine {
+
+    private readonly CUSTOM_PAGE_SIZE_TWIP = 31675; // 55.8 cm
+    private readonly EVIDENCE_PLACEHOLDER = 'Imagen de la evidencias';
+
+    constructor(private storageService: ExecutionStorageService) { }
+
+    /**
+     * Exporta los escenarios de UNA sola HU a PDF (matriz de ejecución).
+     *
+     * Replica el formato de `WordExporterComponent.downloadScenariosPdf()` usado en el
+     * preview del plan, pero acotado exclusivamente a los casos de prueba de la HU
+     * recibida (NO incluye el resto de HUs del plan de pruebas).
+     */
+    exportScenariosToPDF(hu: HUData, planTitle?: string): void {
+        if (!hu?.detailedTestCases || hu.detailedTestCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        const norm = (value: string | undefined | null): string =>
+            (value ?? '').replace(/\s+/g, ' ').trim();
+
+        const formatSteps = (steps: Array<{ numero_paso?: number; accion: string }> | undefined): string => {
+            if (!steps || steps.length === 0) return 'No hay pasos definidos';
+            return steps.map((step, i) => `${step.numero_paso ?? i + 1}. ${norm(step.accion)}`).join(' ');
+        };
+
+        const tableRows: string[][] = hu.detailedTestCases.map((tc, index) => ([
+            `${hu.id}_CP${index + 1}`,
+            norm(tc.title) || 'Sin escenario',
+            norm(tc.preconditions) || 'No especificadas',
+            formatSteps(tc.steps as any),
+            norm(tc.expectedResults) || 'No especificados'
+        ]));
+
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+        const margin = 44;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const contentWidth = pageWidth - (margin * 2);
+        const idWidth = 80;
+        const scenarioWidth = 150;
+        const preconditionsWidth = 170;
+        const stepsWidth = 190;
+        const expectedWidth = Math.max(contentWidth - (idWidth + scenarioWidth + preconditionsWidth + stepsWidth), 130);
+
+        const heading = `Matriz de Ejecución - ${hu.id}${hu.title ? ' - ' + hu.title : ''}`;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(heading, margin, margin, { maxWidth: contentWidth });
+
+        if (planTitle) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.text(`Plan de pruebas: ${planTitle}`, margin, margin + 16, { maxWidth: contentWidth });
+        }
+
+        autoTable(doc, {
+            startY: margin + (planTitle ? 34 : 20),
+            margin: { top: margin, right: margin, bottom: margin, left: margin },
+            head: [['ID Caso', 'Escenario', 'Precondiciones', 'Pasos', 'Resultado Esperado']],
+            body: tableRows,
+            theme: 'grid',
+            styles: {
+                font: 'helvetica',
+                fontSize: 10,
+                cellPadding: 6,
+                overflow: 'linebreak',
+                valign: 'top',
+                textColor: [17, 24, 39],
+                lineColor: [120, 120, 120],
+                lineWidth: 0.5
+            },
+            headStyles: {
+                fillColor: [235, 235, 235],
+                textColor: [17, 24, 39],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: idWidth, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: scenarioWidth },
+                2: { cellWidth: preconditionsWidth },
+                3: { cellWidth: stepsWidth },
+                4: { cellWidth: expectedWidth }
+            },
+            rowPageBreak: 'avoid',
+            showHead: 'everyPage'
+        });
+
+        doc.save(escapeFilename(`Matriz_Ejecucion_${hu.id}_${Date.now()}.pdf`));
+    }
+
+    /**
+     * Exporta una HU como matriz de evidencias en formato DOCX
+     * Reglas:
+     * - Página personalizada: 55.8cm x 55.8cm
+     * - 1 página por test case
+     * - Título por página: "N. <escenario>"
+     * - Tabla de 2 columnas con tantas filas como pasos
+     *   - Columna 1: número de paso
+     *   - Columna 2: espacio de evidencias
+     */
+    async exportToDOCX(hu: HUData): Promise<void> {
+        if (!hu.detailedTestCases || hu.detailedTestCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        const children: Array<Paragraph | Table> = [];
+
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS (Normas APA) ---
+        children.push(new Paragraph({
+            text: `Nombre de hu: ${hu.title}`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        children.push(new Paragraph({
+            text: "Matriz de Escenarios de Prueba",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        const scenariosHeader = new TableRow({
+            children: [
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
+                }),
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
+                })
+            ]
+        });
+
+        const scenariosRows = hu.detailedTestCases.map((tc, idx) => {
+            const scenarioId = `Scenario_${idx + 1}`;
+            return new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ text: `${idx + 1}`, alignment: AlignmentType.CENTER })]
+                    }),
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new InternalHyperlink({
+                                        children: [
+                                            new TextRun({
+                                                text: tc.title || `Escenario ${idx + 1}`,
+                                                color: "2E74B5",
+                                                bold: true
+                                            })
+                                        ],
+                                        anchor: scenarioId
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+        });
+
+        children.push(new Table({
+            layout: TableLayoutType.AUTOFIT,
+            alignment: AlignmentType.CENTER,
+            rows: [scenariosHeader, ...scenariosRows]
+        }));
+
+        // --- CONTENIDO DE ESCENARIOS ---
+        hu.detailedTestCases.forEach((testCase, index) => {
+            const scenarioNumber = index + 1;
+            const scenarioId = `Scenario_${scenarioNumber}`;
+            const scenarioTitle = testCase.title?.trim()
+                ? `${scenarioNumber}. ${testCase.title.trim()}`
+                : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            children.push(new Paragraph({
+                children: [
+                    new BookmarkStart(scenarioId, index),
+                    new TextRun({
+                        text: scenarioTitle,
+                        color: "2E74B5",
+                        bold: true
+                    }),
+                    new BookmarkEnd(index)
+                ],
+                heading: HeadingLevel.HEADING_1,
+                pageBreakBefore: true,
+                spacing: { after: 240 }
+            }));
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+
+            const stepRows = (validSteps.length > 0 ? validSteps : [{ numero_paso: 1, accion: '' }]).map((step, stepIndex) => {
+                const stepNumber = step?.numero_paso ?? (stepIndex + 1);
+                const stepAction = step?.accion?.trim() || `Paso ${stepNumber}`;
+                return new TableRow({
+                    children: [
+                        new TableCell({
+                            width: { size: 25, type: WidthType.PERCENTAGE },
+                            children: [
+                                new Paragraph({
+                                    text: `${stepNumber}. ${stepAction}`,
+                                    alignment: AlignmentType.LEFT
+                                })
+                            ]
+                        }),
+                        new TableCell({
+                            width: { size: 75, type: WidthType.PERCENTAGE },
+                            children: [
+                                new Paragraph({
+                                    alignment: AlignmentType.CENTER,
+                                    spacing: { before: 120, after: 120 },
+                                    children: [
+                                        new TextRun({
+                                            text: this.EVIDENCE_PLACEHOLDER,
+                                            bold: true,
+                                            underline: {}
+                                        })
+                                    ]
+                                }),
+                                new Paragraph('')
+                            ]
+                        })
+                    ]
+                });
+            });
+
+            const headerRow = new TableRow({
+                children: [
+                    new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({
+                                        text: 'Paso a paso',
+                                        bold: true,
+                                        underline: {}
+                                    })
+                                ]
+                            })
+                        ]
+                    }),
+                    new TableCell({
+                        width: { size: 75, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({
+                                        text: 'Evidencias',
+                                        bold: true,
+                                        underline: {}
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+
+            const rows = [headerRow, ...stepRows];
+
+            children.push(new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows
+            }));
+
+            children.push(new Paragraph({
+                spacing: { before: 200, after: 200 },
+                children: [
+                    new TextRun({ text: 'Resultado Esperado: ', bold: true }),
+                    new TextRun({ text: testCase.expectedResults || 'N/A' })
+                ]
+            }));
+        });
+
+        const doc = new Document({
+            sections: [
+                {
+                    properties: {
+                        page: {
+                            size: {
+                                width: this.CUSTOM_PAGE_SIZE_TWIP,
+                                height: this.CUSTOM_PAGE_SIZE_TWIP
+                            }
+                        }
+                    },
+                    children
+                }
+            ]
+        });
+
+        const blob = await Packer.toBlob(doc);
+        const filename = escapeFilename(`Matriz - ${hu.title}.docx`);
+        saveAs(blob, filename);
+    }
+
+    /**
+     * Exporta una ejecución del plan con evidencias en formato DOCX.
+     * Mismo formato que exportToDOCX: página 55.8cm, tabla 25/75%, 1 página por escenario.
+     * La columna de evidencias contiene las imágenes reales subidas por el usuario.
+     */
+    async exportExecutionToDOCX(
+        execution: PlanExecution,
+        hu: HUData | null,
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
+        if (!execution.testCases || execution.testCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        // Asegurar que el índice de Storage esté construido UNA sola vez antes del loop
+        await this.storageService.buildStorageIndex();
+        const total = execution.testCases.length;
+
+        const children: Array<Paragraph | Table> = [];
+
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS (Normas APA) ---
+        children.push(new Paragraph({
+            text: `Nombre de hu: ${hu?.title || execution.huTitle}`,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        children.push(new Paragraph({
+            text: "Reporte de Ejecución de Pruebas",
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 }
+        }));
+
+        const scenariosHeader = new TableRow({
+            children: [
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "N°", bold: true })], alignment: AlignmentType.CENTER })]
+                }),
+                new TableCell({
+                    children: [new Paragraph({ children: [new TextRun({ text: "Escenario de Prueba", bold: true })], alignment: AlignmentType.CENTER })]
+                })
+            ]
+        });
+
+        const scenariosRows = execution.testCases.map((tc, idx) => {
+            const scenarioId = `Exec_Scenario_${idx + 1}`;
+            return new TableRow({
+                children: [
+                    new TableCell({
+                        children: [new Paragraph({ text: `${idx + 1}`, alignment: AlignmentType.CENTER })]
+                    }),
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: [
+                                    new InternalHyperlink({
+                                        children: [
+                                            new TextRun({
+                                                text: tc.title || `Escenario ${idx + 1}`,
+                                                color: "2E74B5",
+                                                bold: true
+                                            })
+                                        ],
+                                        anchor: scenarioId
+                                    })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+        });
+
+        children.push(new Table({
+            layout: TableLayoutType.AUTOFIT,
+            alignment: AlignmentType.CENTER,
+            rows: [scenariosHeader, ...scenariosRows]
+        }));
+
+        // --- CONTENIDO DE ESCENARIOS ---
+        for (let index = 0; index < execution.testCases.length; index++) {
+            const testCase = execution.testCases[index];
+            const scenarioNumber = index + 1;
+            const scenarioId = `Exec_Scenario_${scenarioNumber}`;
+            const scenarioTitle = testCase.title?.trim()
+                ? `${scenarioNumber}. ${testCase.title.trim()}`
+                : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            // ── Opción B: hidratar solo las evidencias de este test-case ──
+            const allStepEvidences = testCase.steps.flatMap(s => s.evidences || []);
+            if (allStepEvidences.length > 0) {
+                await this.storageService.hydrateStepEvidence(allStepEvidences);
+            }
+
+            // Reportar progreso al componente
+            onProgress?.(index + 1, total);
+
+            children.push(new Paragraph({
+                children: [
+                    new BookmarkStart(scenarioId, index),
+                    new TextRun({
+                        text: scenarioTitle,
+                        color: "2E74B5",
+                        bold: true
+                    }),
+                    new BookmarkEnd(index)
+                ],
+                heading: HeadingLevel.HEADING_1,
+                pageBreakBefore: true,
+                spacing: { after: 240 }
+            }));
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+            const stepsToRender = validSteps.length > 0
+                ? validSteps
+                : [{ numero_paso: 1, accion: '', status: 'pending' as const, stepId: '', evidences: [], notes: '' }];
+
+            const stepRows = stepsToRender.flatMap((step, stepIndex) => {
+                const stepNumber = step.numero_paso ?? (stepIndex + 1);
+                const stepAction = step.accion?.trim() || `Paso ${stepNumber}`;
+
+                const cols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                const rows = Math.max(1, Number((step as any).evidenceRows) || 1);
+                const isGrid = cols > 1 || rows > 1;
+
+                // Leer evidencias desde caché (ya hidratadas arriba)
+                const hydratedEvidences = (step.evidences || []).map(ev => {
+                    const cached = this.storageService.getCachedImage(ev.id);
+                    return cached ? { ...ev, base64Data: cached.base64Data } : ev;
+                });
+
+                const mainRow = new TableRow({
+                    children: [
+                        new TableCell({
+                            width: { size: 25, type: WidthType.PERCENTAGE },
+                            children: [
+                                new Paragraph({
+                                    text: `${stepNumber}. ${stepAction}`,
+                                    alignment: AlignmentType.LEFT
+                                })
+                            ]
+                        }),
+                        new TableCell({
+                            width: { size: 75, type: WidthType.PERCENTAGE },
+                            margins: isGrid ? { top: 0, bottom: 0, left: 0, right: 0 } : undefined,
+                            children: this.buildEvidenceGrid(hydratedEvidences, cols, rows, step.notes)
+                        })
+                    ]
+                });
+
+                return [mainRow];
+            });
+
+            // Encabezado de tabla — idéntico a exportToDOCX
+            const headerRow = new TableRow({
+                children: [
+                    new TableCell({
+                        width: { size: 25, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({ text: 'Paso a paso', bold: true, underline: {} })
+                                ]
+                            })
+                        ]
+                    }),
+                    new TableCell({
+                        width: { size: 75, type: WidthType.PERCENTAGE },
+                        children: [
+                            new Paragraph({
+                                alignment: AlignmentType.CENTER,
+                                children: [
+                                    new TextRun({ text: 'Evidencias', bold: true, underline: {} })
+                                ]
+                            })
+                        ]
+                    })
+                ]
+            });
+
+            children.push(new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [headerRow, ...stepRows]
+            }));
+
+            children.push(new Paragraph({
+                spacing: { before: 200, after: 200 },
+                children: [
+                    new TextRun({ text: 'Resultado Esperado: ', bold: true }),
+                    new TextRun({ text: testCase.expectedResults || 'N/A' })
+                ]
+            }));
+        }
+
+        const doc = new Document({
+            sections: [{
+                properties: {
+                    page: {
+                        size: {
+                            width: this.CUSTOM_PAGE_SIZE_TWIP,
+                            height: this.CUSTOM_PAGE_SIZE_TWIP,
+                        },
+                    },
+                },
+                children: children,
+            }],
+        });
+
+        const blob = await Packer.toBlob(doc);
+        const filename = escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.docx`);
+        if (returnBlob) {
+            return blob;
+        }
+        saveAs(blob, filename);
+    }
+
+    /**
+     * Construye un grid anidado (tabla) para las evidencias si el usuario ha configurado cols > 1 o rows > 1
+     */
+    private buildEvidenceGrid(evidences: any[], cols: number = 1, rows: number = 1, notes?: string): Array<Paragraph | Table> {
+        if (!evidences || evidences.length === 0) {
+            return this.buildEvidenceCellContent(evidences, notes);
+        }
+
+        const validCols = Math.max(1, cols || 1);
+        let validRows = Math.max(1, rows || 1);
+
+        // Auto-calcular filas necesarias para no perder evidencias
+        const requiredRows = Math.ceil(evidences.length / validCols);
+        if (requiredRows > validRows) {
+            validRows = requiredRows;
+        }
+
+        if (validCols === 1 && validRows === 1) {
+            return this.buildEvidenceCellContent(evidences, notes);
+        }
+
+        const paragraphs: Array<Paragraph | Table> = [];
+        const tableRows: TableRow[] = [];
+        let evIndex = 0;
+
+        for (let r = 0; r < validRows; r++) {
+            const tableCells: TableCell[] = [];
+            for (let c = 0; c < validCols; c++) {
+                const cellEvidences = (evIndex < evidences.length) ? [evidences[evIndex]] : [];
+                tableCells.push(new TableCell({
+                    width: { size: 100 / validCols, type: WidthType.PERCENTAGE },
+                    children: this.buildEvidenceCellContent(cellEvidences, undefined, true, validCols) as any
+                }));
+                evIndex++;
+            }
+            tableRows.push(new TableRow({ children: tableCells }));
+        }
+
+        paragraphs.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.FIXED,
+            borders: {
+                top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "000000" }
+            },
+            rows: tableRows
+        }));
+
+        if (notes?.trim()) {
+            paragraphs.push(new Paragraph({
+                spacing: { before: 60, after: 60 },
+                children: [
+                    new TextRun({ text: 'Nota: ', bold: true }),
+                    new TextRun({ text: notes, italics: true })
+                ]
+            }));
+        }
+
+        return paragraphs;
+    }
+
+    /**
+     * Construye el contenido de la celda de evidencias.
+     * Si hay imágenes, las incrusta; si no, muestra el placeholder.
+     */
+    private buildEvidenceCellContent(evidences: any[], notes?: string, isNestedCell: boolean = false, cols: number = 1): (Paragraph | Table)[] {
+        const paragraphs: (Paragraph | Table)[] = [];
+
+        if (!evidences || evidences.length === 0) {
+            if (isNestedCell) {
+                // Dejar espacio vacío, pero con un size o spacing para que la celda mantenga forma visible
+                return [new Paragraph({
+                    text: ' ',
+                    spacing: { before: 200, after: 200 }
+                })];
+            } else {
+                paragraphs.push(new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 120, after: 120 },
+                    children: [
+                        new TextRun({
+                            text: this.EVIDENCE_PLACEHOLDER,
+                            bold: true,
+                            underline: {}
+                        })
+                    ]
+                }));
+                paragraphs.push(new Paragraph(''));
+            }
+        } else {
+            evidences.forEach((evidence) => {
+                try {
+                    if (evidence.type === 'csv' && evidence.tabularData) {
+                        paragraphs.push(...this.buildTabularDataParagraphs(evidence));
+                        return;
+                    }
+
+                    const dataUrl: string = evidence.base64Data;
+                    if (!dataUrl) return;
+
+                    // Extraer mime type y datos base64 del data URL
+                    const mimeMatch = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                    if (!mimeMatch) throw new Error('Formato base64 inválido');
+
+                    const mimeType = mimeMatch[1]; // ej: "image/png", "image/jpeg"
+                    const base64Str = mimeMatch[2];
+
+                    // Convertir base64 a Uint8Array (compatible con browser, sin Buffer)
+                    const binaryStr = atob(base64Str);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+
+                    // Tipo para docx: extraer "png", "jpg", etc.
+                    const imgType = mimeType.split('/')[1]?.replace('jpeg', 'jpg') as any || 'png';
+
+                    const dims = this.scaleImageDimensions(
+                        evidence.naturalWidth || 1280,
+                        evidence.naturalHeight || 720,
+                        isNestedCell ? Math.max(100, 900 / cols) : 900,
+                        isNestedCell ? 450 : 675
+                    );
+
+                    // Descripción de la imagen (si existe) (ahora ARRIBA de la imagen)
+                    if (evidence.description?.trim()) {
+                        paragraphs.push(new Paragraph({
+                            alignment: AlignmentType.CENTER,
+                            spacing: { before: 120, after: 60 },
+                            children: [
+                                new TextRun({
+                                    text: evidence.description.trim(),
+                                    italics: true,
+                                    size: 18,
+                                    color: '555555'
+                                })
+                            ]
+                        }));
+                    }
+
+                    paragraphs.push(new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: evidence.description?.trim() ? 0 : 120, after: 120 },
+                        children: [
+                            new ImageRun({
+                                data: bytes,
+                                transformation: { width: dims.width, height: dims.height },
+                                type: imgType
+                            })
+                        ]
+                    }));
+                } catch (err) {
+                    console.error('Error al incrustar evidencia en DOCX:', err);
+                    paragraphs.push(new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        spacing: { before: 120, after: 120 },
+                        children: [
+                            new TextRun({
+                                text: `[Error al cargar ${evidence.type === 'csv' ? 'datos' : 'imagen'}]`,
+                                bold: true,
+                                color: "FF0000"
+                            })
+                        ]
+                    }));
+                }
+            });
+        }
+
+        if (notes?.trim()) {
+            paragraphs.push(new Paragraph({
+                spacing: { before: 60, after: 60 },
+                children: [
+                    new TextRun({ text: 'Nota: ', bold: true }),
+                    new TextRun({ text: notes, italics: true })
+                ]
+            }));
+        }
+
+        return paragraphs;
+    }
+
+    /**
+     * Crea una tabla de Word a partir de AssetEvidence de tipo CSV.
+     */
+    private buildTabularDataParagraphs(evidence: AssetEvidence): (Paragraph | Table)[] {
+        if (!evidence.tabularData || evidence.tabularData.length === 0) return [];
+
+        const hasHeader = evidence.csvConfig?.hasHeader ?? true;
+        const rows: TableRow[] = [];
+
+        evidence.tabularData.forEach((row, rIndex) => {
+            const rowColor = (evidence.rowColors && evidence.rowColors[rIndex] && evidence.rowColors[rIndex] !== 'transparent')
+                ? evidence.rowColors[rIndex].replace('#', '')
+                : undefined;
+
+            const cells: TableCell[] = row.map((cell) => {
+                const fill = rowColor || ((hasHeader && rIndex === 0) ? "F1F5F9" : undefined);
+
+                return new TableCell({
+                    shading: fill ? { fill: fill.toUpperCase(), type: ShadingType.CLEAR } : undefined,
+                    children: [
+                        new Paragraph({
+                            children: [
+                                new TextRun({
+                                    text: String(cell || ''),
+                                    bold: (hasHeader && rIndex === 0),
+                                    size: 16 // 8pt aprox
+                                })
+                            ],
+                            alignment: AlignmentType.CENTER
+                        })
+                    ]
+                });
+            });
+            rows.push(new TableRow({ children: cells }));
+        });
+
+        const wordTable = new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: rows,
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" }
+            }
+        });
+
+        return [
+            wordTable,
+            new Paragraph('') // Espaciador
+        ];
+    }
+
+    /**
+     * Escala dimensiones manteniendo proporción dentro del máximo indicado.
+     */
+    private scaleImageDimensions(
+        w: number, h: number, maxW: number, maxH: number
+    ): { width: number; height: number } {
+        if (w <= 0 || h <= 0) return { width: maxW, height: maxH };
+        const ratio = Math.min(maxW / w, maxH / h, 1);
+        return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
+    }
+
+    /**
+     * Exporta la ejecución completa a PDF, imitando el diseño de DOCX.
+     */
+    async exportExecutionToPDF(
+        execution: PlanExecution,
+        hu: HUData | null,
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
+        if (!execution || !execution.testCases || execution.testCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        // Asegurar que el índice de Storage esté construido una sola vez
+        await this.storageService.buildStorageIndex();
+        const total = execution.testCases.length;
+
+        // Tamaño personalizado cuadrado: 1583.75 pt (55.8 cm)
+        const pageSize = 1583.75;
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'pt',
+            format: [pageSize, pageSize]
+        });
+        const margin = 72; // Margen de 1 pulgada (72 pt)
+
+        // --- PRIMERA PÁGINA: TABLA DE ESCENARIOS (Normas APA) ---
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        const mainTitle = `Nombre de hu: ${hu?.title || execution.huTitle}`;
+        const titleWidth = doc.getTextWidth(mainTitle);
+        doc.text(mainTitle, (pageSize - titleWidth) / 2, margin + 50);
+
+        doc.setFontSize(18);
+        const subTitle = "Reporte de Ejecución de Pruebas";
+        const subTitleWidth = doc.getTextWidth(subTitle);
+        doc.text(subTitle, (pageSize - subTitleWidth) / 2, margin + 100);
+
+        // Tabla de escenarios
+        const summaryHeaders = [['N°', 'Escenario de Pruebas']];
+        const summaryBody = execution.testCases.map((tc, idx) => [
+            (idx + 1).toString(),
+            tc.title || `Escenario ${idx + 1}`
+        ]);
+
+        autoTable(doc, {
+            startY: margin + 160,
+            margin: { left: margin, right: margin },
+            head: summaryHeaders,
+            body: summaryBody,
+            theme: 'grid',
+            headStyles: { fillColor: [46, 116, 181], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+            bodyStyles: { textColor: [0, 0, 0], font: 'helvetica', fontSize: 11 },
+            columnStyles: {
+                0: { cellWidth: 50, halign: 'center' },
+                1: { cellWidth: 'auto' }
+            },
+            styles: {
+                lineWidth: 0.5,
+                lineColor: [0, 0, 0]
+            }
+        });
+
+        // --- CONTENIDO DE ESCENARIOS ---
+        for (let index = 0; index < execution.testCases.length; index++) {
+            const testCase = execution.testCases[index];
+            const scenarioNumber = index + 1;
+            const scenarioTitle = testCase.title?.trim()
+                ? `${scenarioNumber}. ${testCase.title.trim()}`
+                : `${scenarioNumber}. Escenario ${scenarioNumber}`;
+
+            // Hydrate step evidences
+            const allStepEvidences = testCase.steps.flatMap(s => s.evidences || []);
+            if (allStepEvidences.length > 0) {
+                await this.storageService.hydrateStepEvidence(allStepEvidences);
+            }
+
+            // Report progress
+            onProgress?.(index + 1, total);
+
+            // Add new page for each scenario
+            doc.addPage();
+
+            // Scenario Title at top left of new page — wrapped to avoid overflow
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor(46, 116, 181); // #2E74B5
+            const titleLines = doc.splitTextToSize(scenarioTitle, pageSize - 2 * margin);
+            doc.text(titleLines, margin, margin + 20);
+
+            // Reset text color
+            doc.setTextColor(0, 0, 0);
+
+            // Line height for font size 18 is ~22 pt; push table down if title wraps
+            const titleBlockHeight = titleLines.length * 22;
+            const tableStartY = margin + 20 + titleBlockHeight + 10;
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+            const stepsToRender = validSteps.length > 0
+                ? validSteps
+                : [{ numero_paso: 1, accion: '', status: 'pending' as const, stepId: '', evidences: [], notes: '' }];
+
+            const tableBody = [];
+            const stepLayouts: any[] = []; // Guardar info de layout por fila
+
+            const cellWidthCol1 = 359.94; // 25% of printable width
+            const cellWidthCol2 = 1079.81; // 75% of printable width
+            const innerPadding = 25;
+
+            for (let sIdx = 0; sIdx < stepsToRender.length; sIdx++) {
+                const step = stepsToRender[sIdx];
+                const stepNumber = step.numero_paso ?? (sIdx + 1);
+                const stepAction = step.accion?.trim() || `Paso ${stepNumber}`;
+
+                const cols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                const rowsConfig = Math.max(1, Number((step as any).evidenceRows) || 1);
+
+                // Get hydrated evidences
+                const hydratedEvidences = (step.evidences || []).map(ev => {
+                    const cached = this.storageService.getCachedImage(ev.id);
+                    return cached ? { ...ev, base64Data: cached.base64Data } : ev;
+                });
+
+                // Calculate layout details for evidences in column 2
+                // Calculate grid size
+                let validCols = cols;
+                let validRows = rowsConfig;
+                if (hydratedEvidences.length > 0) {
+                    const reqRows = Math.ceil(hydratedEvidences.length / validCols);
+                    if (reqRows > validRows) {
+                        validRows = reqRows;
+                    }
+                }
+
+                const colWidth = (cellWidthCol2 - (validCols + 1) * innerPadding) / validCols;
+                const maxW = Math.min(colWidth, validCols === 1 ? 900 : 900 / validCols);
+                const maxH = validCols === 1
+                    ? (validRows === 1 ? 675 : Math.min(675, 1100 / validRows))
+                    : Math.min(450, 1100 / validRows);
+
+                // Build grid arrays
+                const grid: any[][] = [];
+                const rowHeights: number[] = [];
+                let evIndex = 0;
+
+                if (hydratedEvidences.length === 0) {
+                    // Empty evidence layout
+                    rowHeights.push(40); // Height of placeholder text
+                } else {
+                    for (let r = 0; r < validRows; r++) {
+                        let maxRowHeight = 0;
+                        const gridRow = [];
+                        for (let c = 0; c < validCols; c++) {
+                            const ev = (evIndex < hydratedEvidences.length) ? hydratedEvidences[evIndex] : null;
+                            gridRow.push(ev);
+                            if (ev) {
+                                let h = 0;
+                                if (ev.type === 'csv') {
+                                    h = (ev.tabularData?.length || 0) * 18 + 10;
+                                } else {
+                                    // image dimensions
+                                    const imgW = ev.naturalWidth || 1280;
+                                    const imgH = ev.naturalHeight || 720;
+                                    const dims = this.scaleImageDimensions(imgW, imgH, maxW, maxH);
+                                    h = dims.height + (validCols === 1 && validRows === 1 ? 20 : 0);
+                                    if (ev.description?.trim()) h += 20; // Espacio extra para el texto
+                                }
+                                if (h > maxRowHeight) maxRowHeight = h;
+                            }
+                            evIndex++;
+                        }
+                        grid.push(gridRow);
+                        rowHeights.push(maxRowHeight);
+                    }
+                }
+
+                const notesHeight = step.notes?.trim() ? 25 : 0;
+                const totalCellHeight = rowHeights.reduce((sum, val) => sum + val, 0) + (rowHeights.length + 1) * innerPadding + notesHeight;
+
+                tableBody.push([
+                    { content: `${stepNumber}. ${stepAction}`, styles: { minCellHeight: totalCellHeight } },
+                    { content: hydratedEvidences.length === 0 ? this.EVIDENCE_PLACEHOLDER : '', styles: { minCellHeight: totalCellHeight } }
+                ]);
+
+                stepLayouts.push({
+                    rowIndex: sIdx,
+                    evidences: hydratedEvidences,
+                    grid,
+                    rowHeights,
+                    cols: validCols,
+                    rows: validRows,
+                    colWidth,
+                    maxW,
+                    maxH,
+                    notes: step.notes
+                });
+            }
+
+            autoTable(doc, {
+                startY: tableStartY,
+                margin: { left: margin, right: margin },
+                head: [['Paso a paso', 'Evidencias']],
+                body: tableBody,
+                theme: 'grid',
+                rowPageBreak: 'avoid',
+                headStyles: { fillColor: [46, 116, 181], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+                styles: {
+                    lineWidth: 0.5,
+                    lineColor: [0, 0, 0],
+                    textColor: [0, 0, 0],
+                    font: 'helvetica',
+                    fontSize: 11,
+                    valign: 'top',
+                    cellPadding: 8
+                },
+                columnStyles: {
+                    0: { cellWidth: cellWidthCol1 },
+                    1: { cellWidth: cellWidthCol2 }
+                },
+                didDrawCell: (data) => {
+                    if (data.section === 'body' && data.column.index === 1) {
+                        const layout = stepLayouts.find(l => l.rowIndex === data.row.index);
+                        if (!layout) return;
+
+                        const cellX = data.cell.x;
+                        const cellY = data.cell.y;
+
+                        if (layout.evidences.length === 0) {
+                            // Draw placeholder text vertically centered in cell
+                            doc.setFont('helvetica', 'bold');
+                            doc.setFontSize(11);
+                            // Draw text underlined
+                            const textW = doc.getTextWidth(this.EVIDENCE_PLACEHOLDER);
+                            const textX = cellX + (cellWidthCol2 - textW) / 2;
+                            const textY = cellY + (data.cell.height + 11) / 2 - 3;
+                            doc.text(this.EVIDENCE_PLACEHOLDER, textX, textY);
+                            // Draw underline line
+                            doc.setDrawColor(0);
+                            doc.setLineWidth(0.5);
+                            doc.line(textX, textY + 2, textX + textW, textY + 2);
+                        } else {
+                            // Draw grid of evidences
+                            let currentY = cellY + innerPadding;
+                            for (let r = 0; r < layout.rows; r++) {
+                                const rowH = layout.rowHeights[r];
+                                for (let c = 0; c < layout.cols; c++) {
+                                    const currentX = cellX + innerPadding + c * (layout.colWidth + innerPadding);
+                                    const ev = layout.grid[r]?.[c];
+
+                                    // Draw grid cell border whenever grid has more than 1 slot
+                                    if (layout.cols > 1 || layout.rows > 1) {
+                                        doc.setDrawColor(0);
+                                        doc.setLineWidth(0.5);
+                                        doc.rect(currentX, currentY, layout.colWidth, rowH);
+                                    }
+
+                                    if (ev) {
+                                        if (ev.type === 'csv') {
+                                            // Draw subtable using autoTable nested.
+                                            // IMPORTANT: do NOT use tableWidth — with many columns that
+                                            // makes each column a few pt wide (headers split character-by-character).
+                                            // Instead constrain via right margin so autoTable distributes
+                                            // column widths proportionally within the available slot.
+                                            const hasHeader = ev.csvConfig?.hasHeader ?? true;
+                                            const csvRightMargin = pageSize - (currentX + layout.colWidth);
+                                            autoTable(doc, {
+                                                startY: currentY,
+                                                margin: { left: currentX, right: Math.max(csvRightMargin, 0) },
+                                                head: hasHeader ? [ev.tabularData[0]] : undefined,
+                                                body: hasHeader ? ev.tabularData.slice(1) : ev.tabularData,
+                                                theme: 'grid',
+                                                styles: {
+                                                    fontSize: 6,
+                                                    cellPadding: 1.5,
+                                                    lineWidth: 0.3,
+                                                    lineColor: [226, 232, 240],
+                                                    overflow: 'linebreak',
+                                                    minCellWidth: 15
+                                                },
+                                                headStyles: {
+                                                    fillColor: [241, 245, 249],
+                                                    textColor: [0, 0, 0],
+                                                    fontStyle: 'bold',
+                                                    fontSize: 6
+                                                },
+                                                didParseCell: (cellData) => {
+                                                    const rIdx = cellData.row.index + (hasHeader ? 1 : 0);
+                                                    if (ev.rowColors && ev.rowColors[rIdx] && ev.rowColors[rIdx] !== 'transparent') {
+                                                        const hex = ev.rowColors[rIdx].replace('#', '');
+                                                        const rVal = parseInt(hex.substring(0, 2), 16);
+                                                        const gVal = parseInt(hex.substring(2, 4), 16);
+                                                        const bVal = parseInt(hex.substring(4, 6), 16);
+                                                        cellData.cell.styles.fillColor = [rVal, gVal, bVal];
+                                                    }
+                                                }
+                                            });
+
+                                        } else if (ev.base64Data) {
+                                            // Draw image (and optional description above it)
+                                            try {
+                                                const format = ev.base64Data.match(/data:image\/([a-zA-Z]+);/)?.[1] || 'PNG';
+                                                const imgW = ev.naturalWidth || 1280;
+                                                const imgH = ev.naturalHeight || 720;
+                                                const dims = this.scaleImageDimensions(imgW, imgH, layout.maxW, layout.maxH);
+
+                                                const descStr = ev.description?.trim() || '';
+                                                const descLineH = descStr ? 20 : 0;
+                                                const p = 8; // padding inside the border
+
+                                                // ─── 1. Dibujar borde PRIMERO — siempre cubriendo la celda de la grilla ───
+                                                doc.setDrawColor(0);
+                                                doc.setLineWidth(0.5);
+                                                doc.rect(currentX, currentY, layout.colWidth, rowH);
+
+                                                // ─── 2. Descripción ARRIBA (dentro del borde) ───
+                                                if (descStr) {
+                                                    doc.setFont('helvetica', 'italic');
+                                                    doc.setFontSize(9);
+                                                    doc.setTextColor(85, 85, 85);
+                                                    const descW = doc.getTextWidth(descStr);
+                                                    const descX = currentX + (layout.colWidth - descW) / 2;
+                                                    doc.text(descStr, descX, currentY + p + 10);
+                                                    doc.setTextColor(0, 0, 0);
+                                                }
+
+                                                // ─── 3. Imagen centrada DEBAJO de la descripción ───
+                                                const availH = rowH - descLineH - 2 * p;
+                                                const availW = layout.colWidth - 2 * p;
+                                                const fitDims = this.scaleImageDimensions(imgW, imgH, availW, availH);
+                                                const imageX = currentX + (layout.colWidth - fitDims.width) / 2;
+                                                const imgY = currentY + descLineH + p + Math.max(0, (availH - fitDims.height) / 2);
+                                                doc.addImage(ev.base64Data, format, imageX, imgY, fitDims.width, fitDims.height);
+
+                                            } catch (err) {
+                                                console.error('Error drawing image inside autoTable cell:', err);
+                                            }
+                                        }
+                                    }
+                                }
+                                currentY += rowH + innerPadding;
+                            }
+
+                            // Draw notes if any
+                            if (layout.notes?.trim()) {
+                                doc.setFont('helvetica', 'bold');
+                                doc.setFontSize(10);
+                                const notesX = cellX + innerPadding;
+                                const notesY = currentY;
+                                doc.text('Nota: ', notesX, notesY);
+                                const labelW = doc.getTextWidth('Nota: ');
+                                doc.setFont('helvetica', 'italic');
+                                doc.text(layout.notes, notesX + labelW, notesY);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Resultado Esperado (Usando autoTable para asegurar ajuste perfecto y saltos de página)
+            const finalY = (doc as any).lastAutoTable.finalY;
+            autoTable(doc, {
+                startY: finalY + 30,
+                margin: { left: margin, right: margin },
+                body: [
+                    [
+                        { content: 'Resultado Esperado:', styles: { fontStyle: 'bold', cellWidth: 120 } },
+                        { content: testCase.expectedResults || 'N/A', styles: { fontStyle: 'normal' } }
+                    ]
+                ],
+                theme: 'plain',
+                styles: { fontSize: 11, cellPadding: 5, overflow: 'linebreak' }
+            });
+        }
+
+        const filename = escapeFilename(`Ejecución - ${hu?.title || execution.huTitle}.pdf`);
+        if (returnBlob) {
+            return doc.output('blob');
+        }
+        doc.save(filename);
+    }
+
+    /**
+     * Exporta una ejecución del plan con evidencias en formato XLSX (Excel).
+     *
+     * Requisito clave: NO se ajusta la imagen al tamaño de la celda; es la CELDA la
+     * que se ajusta al tamaño con el que entra la imagen. Para lograrlo, cada imagen
+     * ocupa su propia fila cuya altura se fija según el alto (escalado) de la imagen,
+     * y el ancho de la columna "Evidencias" se amplía al ancho de la imagen más ancha.
+     * La imagen se ancla con su tamaño real en píxeles (`ext`), por lo que no se
+     * deforma. La columna "Paso a paso" se combina verticalmente sobre las filas de
+     * evidencia del mismo paso.
+     *
+     * Replica la información de exportExecutionToDOCX/PDF (título HU, tabla de
+     * escenarios y, por escenario, tabla "Paso a paso | Evidencias").
+     */
+    async exportExecutionToXLSX(
+        execution: PlanExecution,
+        hu: HUData | null,
+        onProgress?: (current: number, total: number) => void,
+        returnBlob = false
+    ): Promise<void | Blob> {
+        if (!execution || !execution.testCases || execution.testCases.length === 0) {
+            throw new Error('No hay casos de prueba para exportar');
+        }
+
+        await this.storageService.buildStorageIndex();
+        const total = execution.testCases.length;
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Test Plan App';
+        workbook.created = new Date();
+
+        const HEADER_FILL = 'FF2E74B5';
+        const HEADER_TEXT = 'FFFFFFFF';
+        const BORDER = 'FF9AA5B1';
+        const thin = { style: 'thin' as const, color: { argb: BORDER } };
+        const allBorders = { top: thin, bottom: thin, left: thin, right: thin };
+
+        const STEP_COL_WIDTH = 45;      // Columna "Paso a paso"
+        const MIN_EVID_COL_WIDTH = 60;  // Ancho mínimo de "Evidencias"
+        const PX_PER_CHAR = 7;          // px por unidad de ancho de Excel (aprox.)
+        const PT_PER_PX = 0.75;         // px→pt para alto de fila (aprox.)
+        const MAX_IMG_W = 900;          // Máximo ancho de imagen (px)
+        const MAX_IMG_H = 675;          // Máximo alto de imagen (px)
+        const IMG_PAD = 8;              // Padding alrededor de la imagen (px)
+
+        // ── HOJA RESUMEN ──────────────────────────────────────────────
+        const summary = workbook.addWorksheet('Escenarios', {
+            views: [{ showGridLines: false }],
+            pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+        });
+        summary.columns = [{ width: 8 }, { width: 90 }];
+
+        const huTitle = hu?.title || execution.huTitle;
+        const t1 = summary.addRow([`Nombre de hu: ${huTitle}`]);
+        t1.font = { bold: true, size: 16 };
+        summary.mergeCells(t1.number, 1, t1.number, 2);
+        t1.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        t1.height = 26;
+
+        const t2 = summary.addRow(['Reporte de Ejecución de Pruebas']);
+        t2.font = { bold: true, size: 13 };
+        summary.mergeCells(t2.number, 1, t2.number, 2);
+        t2.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+        summary.addRow([]);
+
+        const sHead = summary.addRow(['N°', 'Escenario de Prueba']);
+        sHead.eachCell(cell => {
+            cell.font = { bold: true, color: { argb: HEADER_TEXT } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = allBorders;
+        });
+        execution.testCases.forEach((tc, idx) => {
+            const r = summary.addRow([idx + 1, tc.title || `Escenario ${idx + 1}`]);
+            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            r.getCell(2).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+            r.eachCell(cell => (cell.border = allBorders));
+        });
+
+        // ── UNA HOJA POR ESCENARIO ────────────────────────────────────
+        for (let index = 0; index < execution.testCases.length; index++) {
+            const testCase = execution.testCases[index];
+            const scenarioNumber = index + 1;
+
+            const allStepEvidences = testCase.steps.flatMap(s => s.evidences || []);
+            if (allStepEvidences.length > 0) {
+                await this.storageService.hydrateStepEvidence(allStepEvidences);
+            }
+            onProgress?.(index + 1, total);
+
+            let sheetName = `${scenarioNumber}. ${testCase.title || 'Escenario ' + scenarioNumber}`
+                .replace(/[\\/?*[\]:]/g, '-');
+            if (sheetName.length > 31) sheetName = sheetName.substring(0, 31);
+
+            const sheet = workbook.addWorksheet(sheetName, {
+                views: [{ showGridLines: false }],
+                pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+            });
+
+            const validSteps = Array.isArray(testCase.steps) ? testCase.steps : [];
+            const stepsToRender = validSteps.length > 0
+                ? validSteps
+                : [{ numero_paso: 1, accion: '', status: 'pending' as const, stepId: '', evidences: [], notes: '' }];
+
+            // ── Nº MÁXIMO DE COLUMNAS DEL GRID EN EL ESCENARIO ──────────────
+            // La hoja tendrá 1 (Paso a paso) + maxGridCols columnas físicas, de
+            // modo que el encabezado y el título cubran todo el ancho aunque los
+            // pasos tengan distinto nº de columnas de evidencias.
+            const maxGridCols = Math.max(
+                1,
+                ...stepsToRender.map(st => Math.max(1, Number((st as any).evidenceColumns) || 1))
+            );
+            const lastGridCol = 1 + maxGridCols; // índice de columna Excel (1-based)
+
+            // Ancho de cada sub-columna de evidencias: reparte un lienzo amplio
+            // entre las columnas para que las imágenes se vean grandes.
+            const EVID_CANVAS_PX = 980;                       // ancho total del área de evidencias
+            const perColPx = Math.floor(EVID_CANVAS_PX / maxGridCols);
+            const evidColWidthChars = Math.max(24, Math.ceil((perColPx + IMG_PAD * 2) / PX_PER_CHAR));
+
+            sheet.getColumn(1).width = STEP_COL_WIDTH;
+            for (let c = 0; c < maxGridCols; c++) {
+                sheet.getColumn(2 + c).width = evidColWidthChars;
+            }
+
+            // Título del escenario (cubre todas las columnas)
+            const titleRow = sheet.addRow([`${scenarioNumber}. ${testCase.title || 'Escenario ' + scenarioNumber}`]);
+            titleRow.font = { bold: true, size: 14, color: { argb: 'FF2E74B5' } };
+            sheet.mergeCells(titleRow.number, 1, titleRow.number, lastGridCol);
+            titleRow.getCell(1).alignment = { vertical: 'middle', wrapText: true };
+            titleRow.height = 22;
+            sheet.addRow([]);
+
+            // Encabezado de tabla: "Paso a paso" | "Evidencias" (merge sobre el grid)
+            const headRow = sheet.addRow(['Paso a paso', 'Evidencias']);
+            headRow.getCell(1).font = { bold: true, color: { argb: HEADER_TEXT } };
+            headRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+            headRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            headRow.getCell(1).border = allBorders;
+            if (maxGridCols > 1) sheet.mergeCells(headRow.number, 2, headRow.number, lastGridCol);
+            for (let c = 0; c < maxGridCols; c++) {
+                const cell = headRow.getCell(2 + c);
+                cell.font = { bold: true, color: { argb: HEADER_TEXT } };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                cell.border = allBorders;
+            }
+            headRow.height = 20;
+
+            for (let sIdx = 0; sIdx < stepsToRender.length; sIdx++) {
+                const step = stepsToRender[sIdx];
+                const stepNumber = step.numero_paso ?? (sIdx + 1);
+                const stepAction = step.accion?.trim() || `Paso ${stepNumber}`;
+
+                const hydratedEvidences = (step.evidences || []).map(ev => {
+                    const cached = this.storageService.getCachedImage(ev.id);
+                    return cached ? { ...ev, base64Data: cached.base64Data } : ev;
+                });
+
+                const imageEvidences = hydratedEvidences.filter(
+                    (ev: any) => ev.type !== 'csv' && typeof ev.base64Data === 'string' && ev.base64Data
+                );
+
+                // Configuración de la cuadrícula "Ajustes de reporte" (COLS x FILAS)
+                const gridCols = Math.max(1, Number((step as any).evidenceColumns) || 1);
+                let gridRows = Math.max(1, Number((step as any).evidenceRows) || 1);
+                if (imageEvidences.length > 0) {
+                    const requiredRows = Math.ceil(imageEvidences.length / gridCols);
+                    if (requiredRows > gridRows) gridRows = requiredRows;
+                }
+
+                // Ancho real (px) que ocupa cada celda del grid de ESTE paso.
+                // Si el paso usa menos columnas que maxGridCols, cada celda del
+                // paso abarca varias sub-columnas físicas (span) para llenar el ancho.
+                const spanPerCell = Math.max(1, Math.floor(maxGridCols / gridCols));
+                const cellPx = perColPx * spanPerCell;
+                const CELL_MAX_W = Math.max(200, cellPx - IMG_PAD * 2);
+                const CELL_MAX_H = MAX_IMG_H;
+
+                const firstRowIndex = sheet.rowCount + 1;
+
+                if (imageEvidences.length === 0) {
+                    // Sin imagen: fila con placeholder (celda evidencias sobre todo el grid)
+                    const row = sheet.addRow([`${stepNumber}. ${stepAction}`, this.EVIDENCE_PLACEHOLDER]);
+                    row.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    row.getCell(1).border = allBorders;
+                    if (maxGridCols > 1) sheet.mergeCells(row.number, 2, row.number, lastGridCol);
+                    row.getCell(2).font = { italic: true, color: { argb: 'FF6B7280' } };
+                    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                    for (let c = 0; c < maxGridCols; c++) row.getCell(2 + c).border = allBorders;
+                    row.height = Math.max(30, Math.min(120, Math.ceil(stepAction.length / 40) * 15 + 20));
+                } else {
+                    // ── Cuadrícula de evidencias (1 imagen por celda, llenado por filas) ──
+                    let evIdx = 0;
+                    for (let r = 0; r < gridRows; r++) {
+                        // 1) Fila de descripciones (si alguna imagen de la fila la tiene)
+                        const evRow: any[] = [];
+                        for (let c = 0; c < gridCols; c++) evRow.push(imageEvidences[evIdx + c]);
+                        const hasAnyDesc = evRow.some(ev => ev && (ev.description || '').trim());
+                        if (hasAnyDesc) {
+                            const dRow = sheet.addRow([]);
+                            dRow.getCell(1).border = allBorders;
+                            for (let c = 0; c < gridCols; c++) {
+                                const physCol = 2 + c * spanPerCell;
+                                const physEnd = (c === gridCols - 1) ? lastGridCol : (physCol + spanPerCell - 1);
+                                if (physEnd > physCol) sheet.mergeCells(dRow.number, physCol, dRow.number, physEnd);
+                                const ev = evRow[c];
+                                const cell = dRow.getCell(physCol);
+                                cell.value = ev ? ((ev.description || '').trim()) : '';
+                                cell.font = { italic: true, bold: true, color: { argb: 'FF2E74B5' } };
+                                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                                for (let pc = physCol; pc <= physEnd; pc++) dRow.getCell(pc).border = allBorders;
+                            }
+                            const maxDescLen = Math.max(0, ...evRow.map(ev => ev ? (ev.description || '').trim().length : 0));
+                            dRow.height = Math.max(18, Math.min(80, Math.ceil(maxDescLen / (evidColWidthChars * spanPerCell / 1.2)) * 15 + 6));
+                        }
+
+                        // 2) Fila de imágenes
+                        const imgRow = sheet.addRow([]);
+                        const imgRowIndex = imgRow.number;
+                        imgRow.getCell(1).border = allBorders;
+                        let maxCellH = 0;
+                        // Pre-calcular alto de la fila (según imagen más alta)
+                        const cellDims: Array<{ w: number; h: number; ext: 'png' | 'jpeg' | 'gif'; b64: string } | null> = [];
+                        for (let c = 0; c < gridCols; c++) {
+                            const ev = evRow[c];
+                            if (!ev) { cellDims.push(null); continue; }
+                            const dims = this.scaleImageDimensions(
+                                ev.naturalWidth || 1280, ev.naturalHeight || 720, CELL_MAX_W, CELL_MAX_H
+                            );
+                            maxCellH = Math.max(maxCellH, dims.height);
+                            const b64 = ev.base64Data as string;
+                            const mime = b64.match(/^data:image\/([a-zA-Z]+);base64,/)?.[1] || 'png';
+                            const ext = (mime.toLowerCase() === 'jpeg' ? 'jpeg' : mime.toLowerCase()) as 'png' | 'jpeg' | 'gif';
+                            const base64Only = b64.includes(',') ? b64.split(',')[1] : b64;
+                            cellDims.push({ w: dims.width, h: dims.height, ext, b64: base64Only });
+                        }
+                        const rowHeightPt = Math.max(24, Math.round((maxCellH + IMG_PAD * 2) * PT_PER_PX));
+                        imgRow.height = rowHeightPt;
+
+                        for (let c = 0; c < gridCols; c++) {
+                            const physCol = 2 + c * spanPerCell;
+                            const physEnd = (c === gridCols - 1) ? lastGridCol : (physCol + spanPerCell - 1);
+                            if (physEnd > physCol) sheet.mergeCells(imgRowIndex, physCol, imgRowIndex, physEnd);
+                            for (let pc = physCol; pc <= physEnd; pc++) imgRow.getCell(pc).border = allBorders;
+
+                            const cd = cellDims[c];
+                            if (!cd) continue;
+                            const imageId = workbook.addImage({ base64: cd.b64, extension: cd.ext });
+                            const spanWidthChars = evidColWidthChars * (physEnd - physCol + 1);
+                            const colOffset = IMG_PAD / (spanWidthChars * PX_PER_CHAR);
+                            const rowOffset = (IMG_PAD * PT_PER_PX) / rowHeightPt;
+                            sheet.addImage(imageId, {
+                                tl: { col: (physCol - 1) + colOffset, row: (imgRowIndex - 1) + rowOffset } as any,
+                                ext: { width: cd.w, height: cd.h },
+                                editAs: 'oneCell'
+                            });
+                        }
+                        evIdx += gridCols;
+                    }
+                }
+
+                // Combinar verticalmente la columna "Paso a paso" sobre todas las filas del paso
+                const lastRowIndex = sheet.rowCount;
+                if (lastRowIndex >= firstRowIndex && imageEvidences.length > 0) {
+                    if (lastRowIndex > firstRowIndex) {
+                        sheet.mergeCells(firstRowIndex, 1, lastRowIndex, 1);
+                    }
+                    const stepCell = sheet.getCell(firstRowIndex, 1);
+                    stepCell.value = `${stepNumber}. ${stepAction}`;
+                    stepCell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                    stepCell.border = allBorders;
+                }
+
+                // Nota del paso (si existe): fila que abarca todas las columnas
+                if (step.notes?.trim()) {
+                    const noteRow = sheet.addRow([`Nota: ${step.notes.trim()}`]);
+                    sheet.mergeCells(noteRow.number, 1, noteRow.number, lastGridCol);
+                    noteRow.getCell(1).font = { italic: true, color: { argb: 'FF555555' } };
+                    noteRow.getCell(1).alignment = { vertical: 'top', wrapText: true };
+                    noteRow.getCell(1).border = allBorders;
+                }
+            }
+
+            // Resultado esperado
+            sheet.addRow([]);
+            const resRow = sheet.addRow([`Resultado Esperado: ${testCase.expectedResults || 'N/A'}`]);
+            resRow.getCell(1).font = { bold: true };
+            sheet.mergeCells(resRow.number, 1, resRow.number, 2);
+            resRow.getCell(1).alignment = { vertical: 'top', wrapText: true };
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        if (returnBlob) {
+            return blob;
+        }
+        const filename = escapeFilename(`Ejecución - ${huTitle}.xlsx`);
+        saveAs(blob, filename);
+    }
+
+}

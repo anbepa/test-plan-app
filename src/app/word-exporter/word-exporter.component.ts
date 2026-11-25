@@ -1,11 +1,14 @@
 import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, TabStopPosition, TabStopType } from 'docx';
-import { Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import type { Paragraph, Table, TableRow } from 'docx';
 import { ToastService } from '../services/core/toast.service';
 import { HUData } from '../models/hu-data.model';
+
+/**
+ * Módulo `docx` cargado bajo demanda en exportToWord(). Los métodos que
+ * construyen el documento solo se llaman después de esa carga.
+ */
+let D: typeof import('docx');
 
 @Component({
   selector: 'app-word-exporter',
@@ -50,13 +53,17 @@ export class WordExporterComponent {
       .join(' ');
   }
 
-  downloadScenariosPdf(): void {
+  async downloadScenariosPdf(): Promise<void> {
     if (!this.testPlanTitle || this.huList.length === 0) {
       this.toastService.warning('No hay información completa para generar los escenarios');
       return;
     }
 
     try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+      ]);
       const tableRows: string[][] = [];
 
       this.huList.forEach(hu => {
@@ -153,11 +160,13 @@ export class WordExporterComponent {
     try {
       this.isExporting = true;
 
+      D = await import('docx');
+
       // Generar contenido usando la misma lógica que updatePreview() del test-plan-viewer
       const docContent = this.generateWordContent();
 
       // Crear documento Word con formato APA
-      const doc = new Document({
+      const doc = new D.Document({
         sections: [
           {
             properties: {
@@ -176,7 +185,7 @@ export class WordExporterComponent {
       });
 
       // Generar y descargar archivo
-      const blob = await Packer.toBlob(doc);
+      const blob = await D.Packer.toBlob(doc);
       const fileName = `Plan_de_Pruebas_${this.testPlanTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.docx`;
 
       const url = window.URL.createObjectURL(blob);
@@ -203,20 +212,20 @@ export class WordExporterComponent {
 
     // Título principal (H1)
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: `Plan de Pruebas: ${this.testPlanTitle}`,
-        heading: HeadingLevel.HEADING_1,
-        alignment: AlignmentType.CENTER,
+        heading: D.HeadingLevel.HEADING_1,
+        alignment: D.AlignmentType.CENTER,
         spacing: { after: 400, before: 200 },
       })
     );
 
     // Repositorio al inicio (sin título de sección) - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         children: [
-          new TextRun({ text: "Repositorio: ", bold: true }),
-          new TextRun({ text: this.repositoryLink || 'No especificado' }),
+          new D.TextRun({ text: "Repositorio: ", bold: true }),
+          new D.TextRun({ text: this.repositoryLink || 'No especificado' }),
         ],
         spacing: { after: 240 },
       })
@@ -224,9 +233,9 @@ export class WordExporterComponent {
 
     // 1. ALCANCE - Lista de HUs con su alcance - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "1. ALCANCE",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
@@ -234,9 +243,9 @@ export class WordExporterComponent {
     this.huList.forEach(hu => {
       // Título de HU
       content.push(
-        new Paragraph({
+        new D.Paragraph({
           children: [
-            new TextRun({ text: `HU ${hu.id}`, bold: true }),
+            new D.TextRun({ text: `HU ${hu.id}`, bold: true }),
           ],
           spacing: { after: 120 },
         })
@@ -245,20 +254,20 @@ export class WordExporterComponent {
       // Contenido del alcance - usar generatedScope como en preview
       if (hu.generatedScope) {
         content.push(
-          new Paragraph({
-            children: [new TextRun({ text: hu.generatedScope })],
+          new D.Paragraph({
+            children: [new D.TextRun({ text: hu.generatedScope })],
             spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-            alignment: AlignmentType.LEFT,
+            alignment: D.AlignmentType.LEFT,
             indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
             style: 'Normal',
           })
         );
       } else {
         content.push(
-          new Paragraph({
-            children: [new TextRun({ text: "No se generó alcance para esta HU." })],
+          new D.Paragraph({
+            children: [new D.TextRun({ text: "No se generó alcance para esta HU." })],
             spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-            alignment: AlignmentType.LEFT,
+            alignment: D.AlignmentType.LEFT,
             indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
             style: 'Normal',
           })
@@ -268,17 +277,17 @@ export class WordExporterComponent {
 
     // 2. Fuera de Alcance - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "2. Fuera de Alcance",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
     content.push(
-      new Paragraph({
-        children: [new TextRun({ text: this.outOfScopeContent || 'No especificado' })],
+      new D.Paragraph({
+        children: [new D.TextRun({ text: this.outOfScopeContent || 'No especificado' })],
         spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-        alignment: AlignmentType.LEFT,
+        alignment: D.AlignmentType.LEFT,
         indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
         style: 'Normal',
       })
@@ -286,17 +295,17 @@ export class WordExporterComponent {
 
     // 3. Estrategia - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "3. Estrategia",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
     content.push(
-      new Paragraph({
-        children: [new TextRun({ text: this.strategyContent || 'No especificada' })],
+      new D.Paragraph({
+        children: [new D.TextRun({ text: this.strategyContent || 'No especificada' })],
         spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-        alignment: AlignmentType.LEFT,
+        alignment: D.AlignmentType.LEFT,
         indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
         style: 'Normal',
       })
@@ -304,9 +313,9 @@ export class WordExporterComponent {
 
     // 4. Casos de Prueba - Por HU, solo nombre del escenario - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "4. Casos de Prueba",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
@@ -314,9 +323,9 @@ export class WordExporterComponent {
     this.huList.forEach(hu => {
     // 3. Estrategia - MISMO ORDEN QUE PREVIEW
       content.push(
-        new Paragraph({
+        new D.Paragraph({
           text: `ID ${hu.id}: ${hu.title}`,
-          heading: HeadingLevel.HEADING_3,
+          heading: D.HeadingLevel.HEADING_3,
           spacing: { after: 120, before: 200 },
         })
       );
@@ -325,7 +334,7 @@ export class WordExporterComponent {
       if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
         hu.detailedTestCases.forEach((tc) => {
           content.push(
-            new Paragraph({
+            new D.Paragraph({
               text: tc.title,
               bullet: { level: 0 },
               spacing: { after: 120 },
@@ -334,7 +343,7 @@ export class WordExporterComponent {
         });
       } else {
         content.push(
-          new Paragraph({
+          new D.Paragraph({
             text: "No hay casos de prueba para esta HU.",
             spacing: { after: 120 },
             indent: { firstLine: this.getAPAIndent() },
@@ -345,17 +354,17 @@ export class WordExporterComponent {
 
     // 5. Limitaciones - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "5. Limitaciones",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
     content.push(
-      new Paragraph({
-        children: [new TextRun({ text: this.limitationsContent || 'No especificadas' })],
+      new D.Paragraph({
+        children: [new D.TextRun({ text: this.limitationsContent || 'No especificadas' })],
         spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-        alignment: AlignmentType.LEFT,
+        alignment: D.AlignmentType.LEFT,
         indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
         style: 'Normal',
       })
@@ -363,17 +372,17 @@ export class WordExporterComponent {
 
     // 6. Supuestos - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "6. Supuestos",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
     content.push(
-      new Paragraph({
-        children: [new TextRun({ text: this.assumptionsContent || 'No especificados' })],
+      new D.Paragraph({
+        children: [new D.TextRun({ text: this.assumptionsContent || 'No especificados' })],
         spacing: { after: 240, before: 0, line: 360, lineRule: 'auto' },
-        alignment: AlignmentType.LEFT,
+        alignment: D.AlignmentType.LEFT,
         indent: { left: 0, right: 0, firstLine: 0, hanging: 0 },
         style: 'Normal',
       })
@@ -381,9 +390,9 @@ export class WordExporterComponent {
 
     // 7. Equipo de trabajo - MISMO ORDEN QUE PREVIEW
     content.push(
-      new Paragraph({
+      new D.Paragraph({
         text: "7. Equipo de trabajo",
-        heading: HeadingLevel.HEADING_2,
+        heading: D.HeadingLevel.HEADING_2,
         spacing: { after: 240, before: 400 },
       })
     );
@@ -399,10 +408,10 @@ export class WordExporterComponent {
     this.huList.forEach(hu => {
       // Título de la HU
       paragraphs.push(
-        new Paragraph({
+        new D.Paragraph({
           style: "Heading3",
           children: [
-            new TextRun({
+            new D.TextRun({
               text: `ID ${hu.id}: ${hu.title}`,
               bold: true,
               italics: true,
@@ -414,10 +423,10 @@ export class WordExporterComponent {
       // Contenido de la HU (descripción)
       if (hu.originalInput?.description) {
         paragraphs.push(
-          new Paragraph({
+          new D.Paragraph({
             style: "APAParagraph",
             children: [
-              new TextRun({
+              new D.TextRun({
                 text: hu.originalInput.description,
               }),
             ],
@@ -428,10 +437,10 @@ export class WordExporterComponent {
       // Criterios de aceptación
       if (hu.originalInput?.acceptanceCriteria) {
         paragraphs.push(
-          new Paragraph({
+          new D.Paragraph({
             style: "APAParagraph",
             children: [
-              new TextRun({
+              new D.TextRun({
                 text: `Criterios de aceptación: ${hu.originalInput.acceptanceCriteria}`,
               }),
             ],
@@ -442,10 +451,10 @@ export class WordExporterComponent {
       // Alcance generado
       if (hu.generatedScope) {
         paragraphs.push(
-          new Paragraph({
+          new D.Paragraph({
             style: "APAParagraph",
             children: [
-              new TextRun({
+              new D.TextRun({
                 text: `Alcance: ${hu.generatedScope}`,
               }),
             ],
@@ -463,10 +472,10 @@ export class WordExporterComponent {
     this.huList.forEach(hu => {
       // Título de la HU para casos de prueba
       paragraphs.push(
-        new Paragraph({
+        new D.Paragraph({
           style: "Heading3",
           children: [
-            new TextRun({
+            new D.TextRun({
               text: `ID ${hu.id}: ${hu.title}`,
               bold: true,
               italics: true,
@@ -479,10 +488,10 @@ export class WordExporterComponent {
       if (hu.detailedTestCases && hu.detailedTestCases.length > 0) {
         hu.detailedTestCases.forEach((tc: any, index: number) => {
           paragraphs.push(
-            new Paragraph({
+            new D.Paragraph({
               style: "APAParagraph",
               children: [
-                new TextRun({
+                new D.TextRun({
                   text: `     • ${tc.title}`,
                 }),
               ],
@@ -491,10 +500,10 @@ export class WordExporterComponent {
         });
       } else {
         paragraphs.push(
-          new Paragraph({
+          new D.Paragraph({
             style: "APAParagraph",
             children: [
-              new TextRun({
+              new D.TextRun({
                 text: "     No hay casos de prueba para esta HU.",
               }),
             ],
@@ -512,21 +521,21 @@ export class WordExporterComponent {
     
     // Encabezado de la tabla
     rows.push(
-      new TableRow({
+      new D.TableRow({
         children: [
-          new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: "Rol", bold: true })], alignment: AlignmentType.CENTER })],
-            width: { size: 30, type: WidthType.PERCENTAGE },
+          new D.TableCell({
+            children: [new D.Paragraph({ children: [new D.TextRun({ text: "Rol", bold: true })], alignment: D.AlignmentType.CENTER })],
+            width: { size: 30, type: D.WidthType.PERCENTAGE },
             shading: { fill: 'f0f0f0' },
           }),
-          new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: "Nombre", bold: true })], alignment: AlignmentType.CENTER })],
-            width: { size: 35, type: WidthType.PERCENTAGE },
+          new D.TableCell({
+            children: [new D.Paragraph({ children: [new D.TextRun({ text: "Nombre", bold: true })], alignment: D.AlignmentType.CENTER })],
+            width: { size: 35, type: D.WidthType.PERCENTAGE },
             shading: { fill: 'f0f0f0' },
           }),
-          new TableCell({
-            children: [new Paragraph({ children: [new TextRun({ text: "Responsabilidades", bold: true })], alignment: AlignmentType.CENTER })],
-            width: { size: 35, type: WidthType.PERCENTAGE },
+          new D.TableCell({
+            children: [new D.Paragraph({ children: [new D.TextRun({ text: "Responsabilidades", bold: true })], alignment: D.AlignmentType.CENTER })],
+            width: { size: 35, type: D.WidthType.PERCENTAGE },
             shading: { fill: 'f0f0f0' },
           }),
         ],
@@ -557,33 +566,33 @@ export class WordExporterComponent {
         // Asegurar que el rol no esté vacío
         if (rol) {
           rows.push(
-            new TableRow({
+            new D.TableRow({
               children: [
-                new TableCell({
-                  children: [new Paragraph({ 
-                    children: [new TextRun({ text: rol })], 
-                    alignment: AlignmentType.LEFT, 
+                new D.TableCell({
+                  children: [new D.Paragraph({ 
+                    children: [new D.TextRun({ text: rol })], 
+                    alignment: D.AlignmentType.LEFT, 
                     spacing: { line: 240 },
                   })],
-                  width: { size: 30, type: WidthType.PERCENTAGE },
+                  width: { size: 30, type: D.WidthType.PERCENTAGE },
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
-                new TableCell({
-                  children: [new Paragraph({ 
-                    children: [new TextRun({ text: nombre })], 
-                    alignment: AlignmentType.LEFT, 
+                new D.TableCell({
+                  children: [new D.Paragraph({ 
+                    children: [new D.TextRun({ text: nombre })], 
+                    alignment: D.AlignmentType.LEFT, 
                     spacing: { line: 240 },
                   })],
-                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  width: { size: 35, type: D.WidthType.PERCENTAGE },
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
-                new TableCell({
-                  children: [new Paragraph({ 
-                    children: [new TextRun({ text: '' })], 
-                    alignment: AlignmentType.LEFT, 
+                new D.TableCell({
+                  children: [new D.Paragraph({ 
+                    children: [new D.TextRun({ text: '' })], 
+                    alignment: D.AlignmentType.LEFT, 
                     spacing: { line: 240 },
                   })],
-                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  width: { size: 35, type: D.WidthType.PERCENTAGE },
                   margins: { top: 100, bottom: 100, left: 100, right: 100 },
                 }),
               ],
@@ -594,28 +603,28 @@ export class WordExporterComponent {
     } else {
       // Fila vacía si no hay contenido
       rows.push(
-        new TableRow({
+        new D.TableRow({
           children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'No especificado' })], alignment: AlignmentType.LEFT })],
-              width: { size: 30, type: WidthType.PERCENTAGE },
+            new D.TableCell({
+              children: [new D.Paragraph({ children: [new D.TextRun({ text: 'No especificado' })], alignment: D.AlignmentType.LEFT })],
+              width: { size: 30, type: D.WidthType.PERCENTAGE },
             }),
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: '' })], alignment: AlignmentType.LEFT })],
-              width: { size: 35, type: WidthType.PERCENTAGE },
+            new D.TableCell({
+              children: [new D.Paragraph({ children: [new D.TextRun({ text: '' })], alignment: D.AlignmentType.LEFT })],
+              width: { size: 35, type: D.WidthType.PERCENTAGE },
             }),
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: '' })], alignment: AlignmentType.LEFT })],
-              width: { size: 35, type: WidthType.PERCENTAGE },
+            new D.TableCell({
+              children: [new D.Paragraph({ children: [new D.TextRun({ text: '' })], alignment: D.AlignmentType.LEFT })],
+              width: { size: 35, type: D.WidthType.PERCENTAGE },
             }),
           ],
         })
       );
     }
 
-    return new Table({
+    return new D.Table({
       rows: rows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: 100, type: D.WidthType.PERCENTAGE },
     });
   }
 }

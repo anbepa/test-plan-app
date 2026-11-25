@@ -1,5 +1,4 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
-import * as XLSX from 'xlsx';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -830,6 +829,7 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
           text = new TextDecoder('windows-1252').decode(arrayBuffer);
         }
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.read(text, { type: 'string', cellDates: true });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];

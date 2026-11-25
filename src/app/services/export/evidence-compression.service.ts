@@ -13,7 +13,9 @@ import {
   SerenityZipNameConfig
 } from '../../models/azure-devops-evidence.model';
 
-declare const JSZip: any; // JSZip cargado desde CDN
+import { JSZIP_CDN_URL, loadScript } from '../../shared/utils/load-script';
+
+declare const JSZip: any; // JSZip se carga desde CDN bajo demanda (ensureJSZipLoaded)
 
 @Injectable({
   providedIn: 'root'
@@ -23,9 +25,7 @@ export class EvidenceCompressionService {
   private readonly FORBIDDEN_CHARS_REGEX = /[<>:"|?*\\/]/g;
   private readonly MAX_SAFE_NAME_LENGTH = 200;
 
-  constructor() {
-    this.ensureJSZipLoaded();
-  }
+  constructor() { }
 
   /**
    * Resuelve la plantilla de nombre del ZIP usando variables disponibles
@@ -69,6 +69,8 @@ export class EvidenceCompressionService {
     onProgress?.({ phase: 'preparing' });
 
     try {
+      await this.ensureJSZipLoaded();
+
       // Crear instancia de ZIP
       const zip = new JSZip();
 
@@ -133,6 +135,7 @@ export class EvidenceCompressionService {
     onProgress?.({ phase: 'preparing', totalFiles: files.size });
 
     try {
+      await this.ensureJSZipLoaded();
       const zip = new JSZip();
       const rootFolderName = this.getFileNameWithoutExtension(zipName);
       const rootFolder = zip.folder(rootFolderName);
@@ -182,9 +185,11 @@ export class EvidenceCompressionService {
   /**
    * Valida que JSZip esté disponible
    */
-  private ensureJSZipLoaded(): void {
+  private async ensureJSZipLoaded(): Promise<void> {
+    if (typeof JSZip !== 'undefined') return;
+    await loadScript(JSZIP_CDN_URL);
     if (typeof JSZip === 'undefined') {
-      throw new Error('JSZip no está cargado. Verifica que el script esté incluido en index.html');
+      throw new Error('JSZip no se pudo cargar desde el CDN');
     }
   }
 
