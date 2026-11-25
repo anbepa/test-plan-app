@@ -296,7 +296,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         // --- 1. Intentar cargar por executionId explícito de navegación ---
         const navigationExecutionId = typeof state?.executionId === 'string' ? state.executionId : '';
         if (navigationExecutionId) {
-          console.log(`[EXEC] Intentando carga directa por executionId (state): ${navigationExecutionId}`);
           const directExec = await this.storageService.getExecution(navigationExecutionId);
           if (directExec) {
             this.execution = directExec;
@@ -306,7 +305,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
         // --- 2. Si no hay destino explícito, usar executionId del contexto restaurado ---
         if (!this.execution && !hasExplicitNavigationTarget && restoredContext?.executionId) {
-          console.log(`[EXEC] Intentando carga directa por executionId (contexto): ${restoredContext.executionId}`);
           const directExec = await this.storageService.getExecution(restoredContext.executionId);
           if (directExec) {
             this.execution = directExec;
@@ -320,7 +318,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
           // Si el ID no empieza por 'exec_', asumimos que es un ID de la tabla 'test_runs'
           if (!this.testRunId.startsWith('exec_')) {
-            console.log(`[EXEC] Resolviendo execution_id desde testRunId: ${this.testRunId}`);
             try {
               const { data: runData } = await this.storageService['supabaseClient'].supabase
                 .from('test_runs')
@@ -346,7 +343,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         // --- 4. Fallback: buscar por HU ID (último recurso) ---
         if (!this.execution) {
           const huId = this.hu?.id || restoredContext?.huId || '';
-          console.log(`[EXEC] Fallback: buscando ejecuciones para HU: ${huId}`);
           const allExecutions = await this.storageService.getExecutionsByHU(huId);
 
           if (allExecutions.length > 0) {
@@ -1344,7 +1340,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         const huUuid = this.hu.dbUuid || this.execution?.huDbUuid || (this.hu.id.length > 30 ? this.hu.id : null);
 
         if (huUuid) {
-          console.log(`[SYNC] Forzando descarga de HU ${huUuid} desde DB para asegurar todos los escenarios...`);
           const fullHuDb = await this.databaseService.getUserStoryWithTestCases(huUuid);
           if (fullHuDb) {
             latestHu = {
@@ -1454,8 +1449,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
     const deletedDbIds = new Set(this.execution?.deletedTestCaseDbIds || []);
     const deletedTitles = new Set((this.execution?.deletedTestCaseTitles || []).map(t => t.toLowerCase().trim()));
 
-    console.log(`[SYNC] Iniciando reconciliación. Casos actuales: ${currentCases.length}, Casos HU: ${updatedCases.length}`);
-    console.log(`[SYNC] Escenarios eliminados registrados: IDs=${deletedDbIds.size}, Títulos=${deletedTitles.size}`);
 
     // Mapear casos actuales por dbId y por título para búsquedas rápidas
     const currentByDbId = new Map(currentCases.filter(c => !!c.dbId).map(c => [c.dbId!, c]));
@@ -1467,12 +1460,10 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
       // 1. SI EL CASO ESTÁ MARCADO COMO ELIMINADO (por ID o por TÍTULO), SALTARLO
       if (tc.dbId && deletedDbIds.has(tc.dbId)) {
-        console.log(`[SYNC] 🚫 Saltando caso '${tc.title}' (ID: ${tc.dbId}) porque fue eliminado intencionalmente.`);
         continue;
       }
 
       if (deletedTitles.has(normalizedTcTitle)) {
-        console.log(`[SYNC] 🚫 Saltando caso '${tc.title}' (Título) porque fue eliminado intencionalmente.`);
         continue;
       }
 
@@ -1495,7 +1486,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
         const dbIdExistsSomewhere = tc.dbId && currentCases.some(c => c.dbId === tc.dbId);
 
         if (!titleExistsSomewhere && !dbIdExistsSomewhere && (tc.dbId || tcIndex < currentCases.length)) {
-          console.log(`[SYNC] Saltando caso '${tc.title}' porque no está en la ejecución actual y parece eliminado.`);
           continue;
         }
       }
@@ -1553,7 +1543,6 @@ export class PlanExecutionComponent implements OnInit, OnDestroy {
 
     // Limpiar evidencias huérfanas en segundo plano si hay alguna
     if (orphanedEvidenceIds.length > 0) {
-      console.log(`🧹 Reconciliador detectó ${orphanedEvidenceIds.length} evidencias huérfanas a eliminar:`, orphanedEvidenceIds);
       void this.storageService.cleanupOrphanedImages(orphanedEvidenceIds).catch(err => {
         console.error('❌ Error limpiando evidencias huérfanas:', err);
       });

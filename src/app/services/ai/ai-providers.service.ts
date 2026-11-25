@@ -77,10 +77,8 @@ export class AiProvidersService {
     const savedProviderId = localStorage.getItem(this.STORAGE_KEY);
 
     if (savedProviderId) {
-      console.log(`[AI Providers] Proveedor guardado en localStorage: ${savedProviderId}`);
       this.setActiveProvider(savedProviderId);
     } else {
-      console.log('[AI Providers] Usando proveedor por defecto: deepseek');
     }
   }
 
@@ -105,7 +103,6 @@ export class AiProvidersService {
     // Guardar en localStorage
     localStorage.setItem(this.STORAGE_KEY, providerId);
 
-    console.log(`✅ Proveedor activo cambiado a: ${providerId}`);
   }
 
   /**

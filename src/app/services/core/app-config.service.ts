@@ -83,7 +83,6 @@ export class AppConfigService {
     this.configSubject.next(updated);
     localStorage.setItem('app_configuration', JSON.stringify(updated));
     
-    console.log('✅ Configuración guardada:', updated);
   }
 
   /**

@@ -1632,7 +1632,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       this.streamingContent = '';
       this.startAiProgress();
 
-      console.log('[GENERATION] Iniciando generación con STREAMING...');
 
       let coverageRepair: Promise<void> | null = null;
       this.aiStreamSub = this.aiService.generateTestCasesSmartStream(
@@ -1652,7 +1651,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
             // Parsear el JSON completo una vez terminado el stream
             const result = this.parseStreamResult(event.content);
             if (result && result.testCases && this.generatedHUData) {
-              console.log('[GENERATION] Stream completado. Casos generados:', result.testCases.length);
               this.generatedHUData.generatedScope = result.scope || 'Scope no generado';
 
               const rawTestCases = result.testCases || [];
@@ -1739,7 +1737,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     const gap = [...this.criteriaCoverageGap];
     const current = this.generatedHUData?.detailedTestCases || [];
     if (!gap.length || !this.generatedHUData) return;
-    console.log('[GENERATION] Completando cobertura de:', gap.join(', '));
     const request = `Completa la cobertura de la matriz: genera SOLO casos nuevos que cubran ${gap.join(', ')}. `
       + `Ya existen estos casos (no los repitas): ${current.map((tc) => tc.title).join(' | ')}.`;
     try {
@@ -1753,7 +1750,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       if (!added.length || !this.generatedHUData) return;
       this.generatedHUData.detailedTestCases = [...current, ...added.map((tc: any) => this.toUiTestCase(tc))];
       this.criteriaCoverageGap = uncoveredCriteria(huData.originalInput.acceptanceCriteria || '', this.generatedHUData.detailedTestCases, codeContext);
-      console.log(`[GENERATION] Cobertura completada con ${added.length} caso(s). Pendientes:`, this.criteriaCoverageGap);
     } catch (error) {
       console.warn('[GENERATION] No se pudo completar la cobertura automáticamente:', error);
     }
@@ -2142,13 +2138,10 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       // Preparar datos usando el mismo método que confirmAndEmitHUDataToPlan
       const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
 
-      console.log('💾 GUARDANDO HU INDIVIDUAL (sin crear plan):', dataToEmit.title);
-      console.log('📊 HUs acumuladas antes:', this.accumulatedHUsCount);
 
       // Emitir al padre para que acumule en memoria
       this.huSaved.emit(dataToEmit);
 
-      console.log('📊 HUs acumuladas después:', this.accumulatedHUsCount + 1);
 
       // Nota: El toast de confirmación se muestra en el componente padre (test-plan-generator)
       // para evitar duplicados
@@ -2182,8 +2175,6 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
       // Preparar datos de la HU actual
       const dataToEmit: OriginalHUData = this.prepareHUDataForEmit();
 
-      console.log('📤 CONFIRMANDO Y AÑADIENDO AL PLAN - HU actual:', dataToEmit.title);
-      console.log('📊 Contador de HUs acumuladas antes:', this.accumulatedHUsCount);
 
       // Emitir al padre - esto guardará la HU y creará el plan con toasts
       this.huGenerated.emit(dataToEmit);
@@ -2196,11 +2187,9 @@ export class TestCaseGeneratorComponent implements OnInit, OnDestroy {
     } else {
       // Si no hay HU actual, mostrar mensaje
       console.warn('[WARNING] No hay HU generada para añadir al plan');
-      console.log('[INFO] HUs acumuladas disponibles:', this.accumulatedHUsCount);
 
       // Si hay HUs guardadas previamente, el plan se puede crear igual
       if (this.accumulatedHUsCount > 0) {
-        console.log('[PLAN] Creando plan con HUs guardadas previamente');
 
         // Emitir evento vacío para indicar que se debe crear el plan con las HUs existentes
         this.huGenerated.emit({} as any);

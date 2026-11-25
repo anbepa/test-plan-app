@@ -44,7 +44,6 @@ export class AiUnifiedService {
             return this.deepSeekService;
         }
 
-        console.log(`[AI Unified] Usando proveedor: ${activeProvider.name}`);
 
         switch (activeProvider.id) {
             case 'deepseek':
@@ -54,7 +53,6 @@ export class AiUnifiedService {
             case 'github-models':
                 // Cliente dedicado: llama al backend de inferencia de GitHub Models.
                 // Si falla, withDeepSeekFallback reintenta contra DeepSeek.
-                console.log('[AI Unified] GitHub Models activo — motor efectivo: GitHubModelsService (con fallback a DeepSeek)');
                 return this.githubModelsService;
             default:
                 return this.deepSeekService;
@@ -210,11 +208,9 @@ export class AiUnifiedService {
         // DeepSeek. NO se hace fallback a DeepSeek: el error del proveedor activo
         // se propaga tal cual.
         if (this.isGitHubModelsActive()) {
-            console.log('[AI Unified Stream] GitHub Models activo — generación con streaming (SSE)');
             return this.githubModelsService
                 .generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
         }
-        console.log('[AI Unified Stream] Usando DeepSeek para generación con streaming');
         return this.deepSeekService.generateTestCasesSmartStream(description, acceptanceCriteria, technique, userRequest, codeContext, contextSource);
     }
 
@@ -230,11 +226,9 @@ export class AiUnifiedService {
     ): Observable<StreamEvent> {
         // GitHub Models (Copilot) con streaming real (SSE). Sin fallback a DeepSeek.
         if (this.isGitHubModelsActive()) {
-            console.log('[AI Unified Stream] GitHub Models activo — refinamiento con streaming (SSE)');
             return this.githubModelsService
                 .refineTestCasesDirectStream(originalHuInput, editedTestCases, newTechnique, userReanalysisContext);
         }
-        console.log('[AI Unified Stream] Usando DeepSeek para refinamiento con streaming');
         return this.deepSeekService.refineTestCasesDirectStream(
             originalHuInput, editedTestCases, newTechnique, userReanalysisContext
         );

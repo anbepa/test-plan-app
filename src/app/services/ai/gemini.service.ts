@@ -28,14 +28,10 @@ export class GeminiService {
       contents: [{ parts: [{ text: promptText }] }],
       generationConfig: { maxOutputTokens: 250, temperature: 0.3 }
     };
-    console.log('[SCOPE] Enviando petición de alcance');
     return this.geminiClient.callGemini('generateScope', geminiPayload).pipe(
       map(response => {
-        console.log('[SCOPE] Respuesta recibida:', response);
         const textContent = this.geminiParser.getTextFromParts(response?.candidates?.[0]?.content?.parts).trim();
-        console.log('[SCOPE] Texto extraído:', textContent);
         const limitedText = textContent.split('\n').slice(0, 4).join('\n');
-        console.log('[SCOPE] Texto limitado:', limitedText);
         return limitedText;
       })
     );
@@ -107,7 +103,6 @@ export class GeminiService {
       generationConfig: { maxOutputTokens: 8192, temperature: 0.5 }
     };
 
-    console.log('[Gemini Smart] 🚀 Generando casos con continuación automática...');
     const startTime = Date.now();
 
     return this.geminiClient.callGemini('generateTextCases', payload).pipe(
@@ -126,13 +121,9 @@ export class GeminiService {
         }
 
         const totalTime = Date.now() - startTime;
-        console.log(`[Gemini Smart] Primera llamada completada en ${totalTime}ms`);
-        console.log(`[Gemini Smart] Test cases obtenidos: ${result.completedTestCaseCount}`);
-        console.log(`[Gemini Smart] ¿Posiblemente truncado?: ${result.possiblyTruncated}`);
 
         // Si fue truncado y tenemos test cases parciales, hacer continuación
         if (result.possiblyTruncated && result.completedTestCaseCount > 0) {
-          console.log('[Gemini Smart] 🔄 Respuesta truncada detectada, iniciando continuación...');
           return this.continueGeneration(
             description, acceptanceCriteria, technique, result.parsed, 0
           );
@@ -172,7 +163,6 @@ export class GeminiService {
       generationConfig: { maxOutputTokens: 8192, temperature: 0.3 }
     };
 
-    console.log(`[Gemini Smart] 🔄 Continuación ${continuationCount + 1}/${this.MAX_CONTINUATIONS}...`);
 
     return this.geminiClient.callGemini('generateTextCases', payload).pipe(
       switchMap(response => {
@@ -183,7 +173,6 @@ export class GeminiService {
 
         // Si no devolvió test cases nuevos, la cobertura está completa
         if (newTestCases.length === 0) {
-          console.log('[Gemini Smart] ✅ La IA indicó que no hay más test cases por generar');
           return of(accumulatedResult);
         }
 
@@ -201,7 +190,6 @@ export class GeminiService {
           ...cleanedNewCases
         ];
 
-        console.log(`[Gemini Smart] ✅ Continuación agregó ${cleanedNewCases.length} test cases. Total: ${accumulatedResult.testCases.length}`);
 
         // Si esta continuación también fue truncada, intentar otra
         if (continuationResult.possiblyTruncated && cleanedNewCases.length > 0) {
@@ -227,9 +215,6 @@ export class GeminiService {
     const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
     const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
 
-    console.log('[Gemini Direct Refine] 📋 userReanalysisContext recibido:', JSON.stringify(userReanalysisContext));
-    console.log('[Gemini Direct Refine] 📋 técnica:', newTechnique);
-    console.log('[Gemini Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
     const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
     const payload: any = {

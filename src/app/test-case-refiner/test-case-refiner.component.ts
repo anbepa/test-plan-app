@@ -422,29 +422,24 @@ export class TestCaseRefinerComponent implements OnInit {
     try {
       this.isLoading = true;
 
-      console.log(`[Refiner saveData] 💾 Iniciando guardado. testPlanId=${this.testPlanId}, hu.id=${this.hu.id}, hu.dbUuid=${this.hu.dbUuid}`);
 
       // Try loading metadata. If not found, we'll try to create it.
       try {
         await this.loadUserStoryData(false);
       } catch (loadError: any) {
         console.error(`[Refiner saveData] ⚠️  Error al cargar HU existente:`, loadError.message);
-        console.log(`[Refiner saveData] Procediendo a crear HU nueva...`);
         this.userStoryDbId = null; // Reset to allow creation
       }
 
-      console.log(`[Refiner saveData] Después loadUserStoryData: userStoryDbId=${this.userStoryDbId}`);
 
       this.normalizeDetailedTestCasesForPersistence();
 
       // If still no DB ID, it means this HU hasn't been saved to Supabase yet.
       // We'll create it now.
       if (!this.userStoryDbId) {
-        console.log(`[Refiner saveData] ⚠️  userStoryDbId es null. Creando HU nueva.`);
         await this.createUserStoryInDb();
       } else {
         // If it exists, update metadata first
-        console.log(`[Refiner saveData] ✅ HU ya existe. Actualizando metadatos. userStoryDbId=${this.userStoryDbId}`);
         await this.updateUserStoryMetadata(this.userStoryDbId);
       }
 
@@ -467,7 +462,6 @@ export class TestCaseRefinerComponent implements OnInit {
   private async createUserStoryInDb(): Promise<void> {
     if (!this.hu || !this.testPlanId) return;
 
-    console.log(`[Refiner createUserStoryInDb] 🆕 Creando nueva HU en BD: custom_id=${this.editedHuId || this.hu.id}`);
 
     const payload = {
       test_plan_id: this.testPlanId,
@@ -491,7 +485,6 @@ export class TestCaseRefinerComponent implements OnInit {
     if (data) {
       this.userStoryDbId = data.id;
       this.hu.dbUuid = data.id;
-      console.log(`[Refiner createUserStoryInDb] ✅ HU creada exitosamente. userStoryDbId=${this.userStoryDbId}`);
     }
   }
 
@@ -534,7 +527,6 @@ export class TestCaseRefinerComponent implements OnInit {
     if (!this.hu || !this.testPlanId) return;
 
     const searchBy = this.hu.dbUuid ? 'dbUuid' : 'custom_id+test_plan_id';
-    console.log(`[Refiner loadUserStoryData] Buscando HU por ${searchBy}: hu.id=${this.hu.id}, hu.dbUuid=${this.hu.dbUuid}, testPlanId=${this.testPlanId}`);
 
     let query = this.databaseService.supabase
       .from('user_stories')
@@ -565,10 +557,8 @@ export class TestCaseRefinerComponent implements OnInit {
       `);
 
     if (this.hu.dbUuid) {
-      console.log(`[Refiner loadUserStoryData] Usando dbUuid: ${this.hu.dbUuid}`);
       query = query.eq('id', this.hu.dbUuid);
     } else {
-      console.log(`[Refiner loadUserStoryData] Usando custom_id (${this.hu.id}) + test_plan_id (${this.testPlanId})`);
       query = query.eq('test_plan_id', this.testPlanId).eq('custom_id', this.hu.id);
     }
 
@@ -592,7 +582,6 @@ export class TestCaseRefinerComponent implements OnInit {
       userStory = data;
       this.userStoryDbId = userStory?.id || null;
       if (this.hu && this.userStoryDbId) this.hu.dbUuid = this.userStoryDbId;
-      console.log(`[Refiner loadUserStoryData] ✅ HU encontrada en BD. userStoryDbId=${this.userStoryDbId}`);
     } catch (err: any) {
       console.error(`[Refiner loadUserStoryData] ❌ Excepción capturada:`, err?.message || err);
       // Re-throw to prevent silent failures and duplicate HU creation

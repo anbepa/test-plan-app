@@ -33,7 +33,6 @@ export class SupabaseClientService {
             }
         );
 
-        console.log('✅ SupabaseClientService inicializado con environment.ts');
     }
 
     /**

@@ -122,7 +122,6 @@ export class GeminiClientService {
             // Esperar si es necesario para respetar el rate limit
             if (timeSinceLastRequest < this.MIN_REQUEST_INTERVAL) {
                 const waitTime = this.MIN_REQUEST_INTERVAL - timeSinceLastRequest;
-                console.log(`[Rate Limiting] Esperando ${waitTime}ms antes de la siguiente petición`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
 

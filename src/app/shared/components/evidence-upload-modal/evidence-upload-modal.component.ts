@@ -153,11 +153,9 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.onProcessing.emit({ isProcessing: true, message: 'Validando plan...' });
 
     try {
-      console.log('[validatePlan] Iniciando validación para plan ID:', this.inputPlanId);
       
       const result = await this.evidenceService.validateTestPlan(this.inputPlanId);
       
-      console.log('[validatePlan] Plan validado:', result);
       
       this.validatedPlan = result;
       this.planValidated = true;
@@ -193,7 +191,6 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
     this.onProcessing.emit({ isProcessing: true, message: 'Generando evidencias...' });
 
     try {
-      console.log('[startUpload] Iniciando carga para plan:', this.validatedPlan.planId);
       
       const formats = override?.formats || this.selectedFormats;
       // Word, PDF y Excel se adjuntan en su formato (sin .zip): el nombre es la base y
@@ -207,7 +204,6 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
         .watchProgress()
         .pipe(takeUntil(this.destroy$))
         .subscribe(progress => {
-          console.log('[startUpload] Progreso:', progress);
           this.progress$.next(progress);
         });
 
@@ -223,7 +219,6 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
         }
       );
 
-      console.log('[startUpload] ¡Flujo completado exitosamente!');
       
       this.uploadCompleted = true;
       this.toastService.success('Evidencias subidas y vinculadas correctamente');
@@ -460,7 +455,6 @@ export class EvidenceUploadModalComponent implements OnInit, OnDestroy {
   }
 
   private updateProgress(progress: EvidenceUploadProgress): void {
-    console.log('[updateProgress] Estado:', progress.state);
     
     if (progress.serenityProgress?.phase) {
       this.currentPhaseMessage = `${progress.serenityProgress.phase}... ${progress.serenityProgress.percentage || 0}%`;

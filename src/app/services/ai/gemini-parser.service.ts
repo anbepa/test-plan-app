@@ -53,8 +53,6 @@ export class GeminiParserService {
     public cleanAndParseJSONWithMeta(rawText: string): PartialParseResult {
         let jsonText = rawText.trim();
 
-        console.log('[cleanAndParseJSON] Texto crudo (primeros 500 chars):', jsonText.substring(0, 500));
-        console.log('[cleanAndParseJSON] Longitud total del texto:', jsonText.length);
 
         // 1. Limpiar marcadores de código markdown
         if (jsonText.startsWith("```json")) { jsonText = jsonText.substring(7); }
@@ -102,7 +100,6 @@ export class GeminiParserService {
             const extracted = jsonCandidate.substring(0, endIndex + 1);
             try {
                 const parsed = JSON.parse(extracted);
-                console.log('[cleanAndParseJSON] ✅ JSON extraído y parseado exitosamente');
                 const tcCount = this.countTestCases(parsed);
                 return {
                     parsed,
@@ -120,7 +117,6 @@ export class GeminiParserService {
 
         try {
             const parsed = JSON.parse(textToParse);
-            console.log('[cleanAndParseJSON] ✅ JSON completo parseado exitosamente');
             const tcCount = this.countTestCases(parsed);
             return {
                 parsed,
@@ -139,7 +135,6 @@ export class GeminiParserService {
             try {
                 const repaired = this.repairTruncatedJSON(textToParse);
                 const parsed = JSON.parse(repaired);
-                console.log('[cleanAndParseJSON] ✅ JSON reparado y parseado exitosamente');
                 const tcCount = this.countTestCases(parsed);
                 return {
                     parsed,
@@ -154,7 +149,6 @@ export class GeminiParserService {
                 try {
                     const extracted = this.extractCompletedTestCases(textToParse);
                     if (extracted && extracted.testCases && extracted.testCases.length > 0) {
-                        console.log(`[cleanAndParseJSON] ✅ Extracción parcial exitosa: ${extracted.testCases.length} test cases rescatados`);
                         return {
                             parsed: extracted,
                             wasRepaired: true,
@@ -256,7 +250,6 @@ export class GeminiParserService {
             }
         }
 
-        console.log(`[extractCompletedTestCases] Extraídos ${completedTestCases.length} test cases completos`);
 
         return {
             scope: scope || 'Alcance no disponible (respuesta truncada)',
@@ -391,12 +384,9 @@ export class GeminiParserService {
             }
         }
 
-        console.log('[repairTruncatedJSON] Stack de cierre pendiente:', closingStack);
-        console.log('[repairTruncatedJSON] String abierto:', inString);
 
         // Si estamos dentro de un string truncado, cortar hasta la última posición completa
         if (inString) {
-            console.log('[repairTruncatedJSON] String truncado detectado, cortando hasta última posición válida:', lastCompletePosition);
 
             if (lastCompletePosition === -1) {
                 return "";
@@ -452,7 +442,6 @@ export class GeminiParserService {
             finalRepaired += newStack.pop();
         }
 
-        console.log('[repairTruncatedJSON] JSON reparado (últimos 100 chars):', finalRepaired.substring(Math.max(0, finalRepaired.length - 100)));
 
         return finalRepaired;
     }

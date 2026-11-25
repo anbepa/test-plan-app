@@ -192,7 +192,6 @@ export class ExcelMatrixExporterComponent {
       const fileName = rawFileName.replace(/[\\/:*?"<>|]/g, '-').trim();
       saveAs(blob, fileName);
 
-      console.log(`✅ Archivo Excel generado con ExcelJS: ${fileName}`);
       this.toastService.success('Archivo Excel generado exitosamente');
     } catch (error) {
       console.error('❌ Error generando archivo Excel:', error);

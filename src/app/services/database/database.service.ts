@@ -82,7 +82,6 @@ export class DatabaseService {
     userStories: DbUserStoryWithRelations[]
   ): Promise<string> {
     this.invalidateTestPlanCache();
-    console.log('💾 Iniciando guardado transaccional (RPC) en Supabase...');
 
     try {
       const { data, error } = await this.supabase.rpc('save_complete_test_plan', {
@@ -95,7 +94,6 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log('✅ Test plan guardado exitosamente (RPC):', data.id);
       return data.id;
 
     } catch (error: any) {
@@ -106,7 +104,6 @@ export class DatabaseService {
 
   async saveIndividualUserStory(userStory: DbUserStoryWithRelations): Promise<string> {
     this.invalidateTestPlanCache();
-    console.log('💾 Guardando HU individual en Supabase...');
 
     try {
       const userStoryData: any = {
@@ -134,7 +131,6 @@ export class DatabaseService {
         throw usError;
       }
 
-      console.log(`✅ User story individual guardada: ${usData.id}`);
       const userStoryId = usData.id;
 
       if (userStory.test_cases && userStory.test_cases.length > 0) {
@@ -158,7 +154,6 @@ export class DatabaseService {
             throw tcError;
           }
 
-          console.log(`  ✅ Test case guardado: ${tcData.id}`);
           const testCaseId = tcData.id;
 
           if (tc.test_case_steps && tc.test_case_steps.length > 0) {
@@ -177,12 +172,10 @@ export class DatabaseService {
               throw stepsError;
             }
 
-            console.log(`    ✅ ${stepsData.length} steps guardados`);
           }
         }
       }
 
-      console.log('🎉 HU individual guardada exitosamente!');
       return userStoryId;
 
     } catch (error) {
@@ -195,7 +188,6 @@ export class DatabaseService {
     testPlanId: string,
     userStoryIds: string[]
   ): Promise<void> {
-    console.log(`📎 Asociando ${userStoryIds.length} HUs al test plan ${testPlanId}...`);
 
     try {
       const { error } = await this.supabase
@@ -208,7 +200,6 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log('✅ HUs asociadas exitosamente al test plan');
     } catch (error) {
       console.error('❌ Error al asociar HUs:', error);
       throw error;
@@ -216,7 +207,6 @@ export class DatabaseService {
   }
 
   async getOrphanUserStories(): Promise<DbUserStoryWithRelations[]> {
-    console.log('📥 Obteniendo HUs sin test plan...');
 
     try {
       const { data, error } = await this.supabase
@@ -236,7 +226,6 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log(`✅ ${data?.length || 0} HUs sin test plan encontradas`);
       return data || [];
     } catch (error) {
       console.error('❌ Error al obtener HUs huérfanas:', error);
@@ -247,7 +236,6 @@ export class DatabaseService {
   async getAllTestPlansWithRelations(page: number = 1, pageSize: number = 10): Promise<{ data: any[], count: number }> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
-      console.log(`🔍 Obteniendo test plans desde Supabase (Página ${page}, Tamaño ${pageSize})...`);
 
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
@@ -351,7 +339,6 @@ export class DatabaseService {
   async getTestPlanHeaders(): Promise<any[]> {
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
-      console.log('🔍 Obteniendo resúmenes optimizados de test plans...');
       const { data, error } = await this.supabase
         .from('v_test_plan_summary')
         .select('*')
@@ -360,7 +347,6 @@ export class DatabaseService {
 
       if (error) throw error;
 
-      console.log(`✅ ${data?.length || 0} Resúmenes recuperados de la vista`);
       return data || [];
     } catch (error) {
       console.error('❌ Error al obtener headers desde la vista:', error);
@@ -387,7 +373,6 @@ export class DatabaseService {
   }
 
   async getTestPlanById(id: string): Promise<DbTestPlanWithRelations | null> {
-    console.log(`📥 Obteniendo test plan ${id}...`);
 
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
@@ -412,7 +397,6 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log('✅ Test plan obtenido');
       const sorted = sortPlanRelations(data);
       if (sorted?.id) this.planCache.set(sorted.id, { plan: structuredClone(sorted), at: Date.now() });
       return sorted;
@@ -424,7 +408,6 @@ export class DatabaseService {
   }
 
   async getUserStoryWithTestCases(userStoryId: string): Promise<any | null> {
-    console.log(`📥 Obteniendo detalles completos de HU ${userStoryId}...`);
     try {
       const { data, error } = await this.supabase
         .from('user_stories')
@@ -462,7 +445,6 @@ export class DatabaseService {
 
   async updateTestPlan(id: string, updates: Partial<DbTestPlan>): Promise<boolean> {
     this.invalidateTestPlanCache();
-    console.log(`📝 Actualizando test plan ${id}...`);
 
     try {
       const currentUserId = await this.getCurrentUserIdOrThrow();
@@ -477,7 +459,6 @@ export class DatabaseService {
         throw error;
       }
 
-      console.log('✅ Test plan actualizado');
       return true;
 
     } catch (error) {
@@ -536,7 +517,6 @@ export class DatabaseService {
     userStories: DbUserStoryWithRelations[]
   ): Promise<void> {
     this.invalidateTestPlanCache();
-    console.log('🧠 Smart Update: Iniciando proceso optimizado...');
 
     try {
       await this.updateTestPlan(testPlanId, testPlanData);
@@ -566,12 +546,6 @@ export class DatabaseService {
 
       toDeleteIds.push(...currentHUMap.keys());
 
-      console.log(`📊 Resumen Smart Update:
-        - Nuevos: ${toInsert.length}
-        - Modificados: ${toUpdate.length}
-        - Sin cambios: ${unmodifiedIds.length}
-        - Eliminados: ${toDeleteIds.length}
-      `);
 
       if (toDeleteIds.length > 0) {
         const { data: deletedHUs, error } = await this.supabase
@@ -589,13 +563,11 @@ export class DatabaseService {
           );
         }
 
-        console.log(`🗑️ ${deletedCount} HUs eliminadas`);
       }
 
       if (toInsert.length > 0) {
         toInsert.forEach(hu => hu.test_plan_id = testPlanId);
         await this.persistUserStoriesGraph(testPlanId, toInsert);
-        console.log(`✨ ${toInsert.length} HUs nuevas insertadas`);
       }
 
       if (toUpdate.length > 0) {
@@ -622,10 +594,8 @@ export class DatabaseService {
 
         if (updateError) throw updateError;
 
-        console.log(`📝 ${toUpdate.length} HUs actualizadas (solo metadata, TCs sin tocar)`);
       }
 
-      console.log('🎉 Smart Update completado exitosamente!');
 
     } catch (error) {
       console.error('❌ Error en Smart Update:', error);
@@ -688,7 +658,6 @@ export class DatabaseService {
 
   async smartUpdateUserStoryTestCases(userStoryId: string, testCases: DetailedTestCase[]): Promise<void> {
     this.invalidateTestPlanCache();
-    console.log(`🧠 Smart Update TCs para HU ${userStoryId}. Casos a sincronizar: ${testCases.length}`);
 
     if (!userStoryId) {
       console.error('❌ smartUpdateUserStoryTestCases: userStoryId is missing!');
@@ -976,7 +945,6 @@ export class DatabaseService {
 
   async saveHuScenariosTransactional(userStoryId: string, testCases: DetailedTestCase[]): Promise<any> {
     this.invalidateTestPlanCache();
-    console.log(`🛡️ Guardado transaccional para HU ${userStoryId}...`);
     
     // Preparar el payload para el RPC
     const payload = testCases.map((tc, index) => ({

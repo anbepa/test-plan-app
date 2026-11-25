@@ -803,14 +803,9 @@ export class HuScenariosViewComponent implements OnInit, OnDestroy {
 
     const cases = this.hu!.detailedTestCases || [];
 
-    console.log(`🚀 Intentando guardar HU: ${userStoryId}`, {
-      count: cases.length,
-      cases: cases
-    });
 
     try {
       const result = await this.databaseService.saveHuScenariosTransactional(userStoryId, cases);
-      console.log('✅ Guardado exitoso. Registros en BD:', result);
       // BUG 2: usar mensaje personalizado si se provee (ej. al eliminar),
       // en lugar del generico "N escenarios guardados en base de datos".
       this.toastService.success(successMessage ?? `${cases.length} escenarios guardados en base de datos`);

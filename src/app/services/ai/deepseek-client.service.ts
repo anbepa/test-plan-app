@@ -158,7 +158,6 @@ export class DeepSeekClientService {
                     return;
                 }
 
-                console.log('[DeepSeek Stream] Respuesta HTTP OK, leyendo SSE...');
 
                 const reader = response.body!.getReader();
                 const decoder = new TextDecoder();
@@ -172,7 +171,6 @@ export class DeepSeekClientService {
                     if (!line.startsWith('data: ')) return;
                     const data = line.slice(6).trim();
                     if (data === '[DONE]') {
-                        console.log('[DeepSeek Stream] [DONE] recibido');
                         return;
                     }
                     try {
@@ -222,7 +220,6 @@ export class DeepSeekClientService {
                     }
                     // Procesar resto del buffer si quedó algo
                     if (buffer.trim()) processLine(buffer.trim());
-                    console.log(`[DeepSeek Stream] Stream completado. reasoning: ${accReasoning.length} chars, content: ${accContent.length} chars, finish_reason=${finishReason || 'n/d'}${usageInfo ? `, tokens ${usageInfo}` : ''}, max_tokens=${payload.max_tokens}`);
                     if (finishReason === 'length') {
                         console.warn('[DeepSeek Stream] La respuesta alcanzó max_tokens: puede estar incompleta.');
                     }

@@ -342,19 +342,9 @@ export class TestPlanGeneratorComponent {
         testPlanData.id!
       );
 
-      console.log('💾 Datos del plan a guardar:', {
-        titulo: testPlanData.title,
-        planId: testPlanData.id,
-        cantidadHUs: dbUserStories.length,
-        totalCasos: dbUserStories.reduce(
-          (sum: number, us: DbUserStoryWithRelations) => sum + (us.test_cases?.length || 0),
-          0
-        )
-      });
 
       const planId = await this.databaseService.saveCompleteTestPlan(testPlanData, dbUserStories);
 
-      console.log('[DB] Plan guardado con ID:', planId);
       return planId;
 
     } catch (error) {
@@ -387,13 +377,9 @@ export class TestPlanGeneratorComponent {
     const hasCurrentHu = !!huData?.id && !!huData?.originalInput;
 
     if (hasCurrentHu) {
-      console.log('[PARENT] Recibiendo HU para añadir al plan:', huData.title);
-      console.log('[PARENT] HUs en lista antes de agregar:', this.huList.length);
       this.huList.push(huData);
-      console.log('[PARENT] HUs en lista después de agregar:', this.huList.length);
     }
 
-    console.log('[PARENT] Iniciando guardado en base de datos...');
 
     if (!this.isAppendMode || !this.testPlanTitle) {
       this.updateTestPlanTitle();
@@ -407,14 +393,12 @@ export class TestPlanGeneratorComponent {
       const loadingToastId = this.toastService.loading('Guardando plan de pruebas en la base de datos...');
 
       try {
-        console.log('💾 Persistiendo plan con', this.huList.length, 'HU(s)');
 
         const testPlanId = this.isAppendMode && this.existingTestPlanId
           ? await this.saveExistingTestPlanToDatabase()
           : await this.saveTestPlanToDatabase();
 
         if (testPlanId) {
-          console.log('[DB] Plan guardado exitosamente en BD con ID:', testPlanId);
 
           // Actualizar toast de loading a éxito
           const planTitle = this.testPlanTitle || 'Plan de Pruebas';
@@ -665,9 +649,6 @@ export class TestPlanGeneratorComponent {
     const technique = hu.refinementTechnique || hu.originalInput.selectedTechnique || 'Técnicas generales de prueba';
     const userContext = hu.refinementContext || 'Por favor, refina y mejora los siguientes casos de prueba manteniendo su estructura y agregando más detalles donde sea necesario.';
 
-    console.log('[REFINEMENT] Iniciando refinamiento directo para HU:', hu.id);
-    console.log('[REFINEMENT] Técnica:', technique);
-    console.log('[REFINEMENT] Contexto:', userContext);
 
     this.aiService.refineTestCasesDirect(
       hu.originalInput,
@@ -695,7 +676,6 @@ export class TestPlanGeneratorComponent {
         this.cdr.detectChanges();
       },
       complete: () => {
-        console.log('[REFINEMENT] Refinamiento directo completado');
         hu.loadingScope = false;
         this.updatePreview();
         this.cdr.detectChanges();

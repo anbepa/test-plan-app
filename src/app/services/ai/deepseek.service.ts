@@ -110,7 +110,6 @@ export class DeepSeekService {
             thinking: { type: 'disabled' }
         };
 
-        console.log('[DeepSeek SCOPE] Enviando petición');
         return this.deepSeekClient.callDeepSeek('generateScope', payload).pipe(
             map(response => {
                 const textContent = this.getContentFromResponse(response).trim();
@@ -187,7 +186,6 @@ export class DeepSeekService {
             response_format: { type: 'json_object' }
         };
 
-        console.log('[DeepSeek Direct] 🚀 Generando casos (modo rápido)...');
         const startTime = Date.now();
 
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
@@ -216,7 +214,6 @@ export class DeepSeekService {
                 }
 
                 const totalTime = Date.now() - startTime;
-                console.log(`[DeepSeek Direct] ✅ Completado en ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)`);
 
                 return finalJSON;
             })
@@ -242,7 +239,6 @@ export class DeepSeekService {
             response_format: { type: 'json_object' }
         };
 
-        console.log('[DeepSeek Smart] 🚀 Generando casos con continuación automática...');
         const startTime = Date.now();
 
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
@@ -271,13 +267,9 @@ export class DeepSeekService {
                 }
 
                 const totalTime = Date.now() - startTime;
-                console.log(`[DeepSeek Smart] Primera llamada completada en ${totalTime}ms`);
-                console.log(`[DeepSeek Smart] Test cases obtenidos: ${result.completedTestCaseCount}`);
-                console.log(`[DeepSeek Smart] ¿Posiblemente truncado?: ${result.possiblyTruncated}`);
 
                 // Si fue truncado y tenemos test cases parciales, hacer continuación
                 if (result.possiblyTruncated && result.completedTestCaseCount > 0) {
-                    console.log('[DeepSeek Smart] 🔄 Respuesta truncada detectada, iniciando continuación...');
                     return this.continueGeneration(
                         description, acceptanceCriteria, technique, result.parsed, 0
                     );
@@ -321,7 +313,6 @@ export class DeepSeekService {
             response_format: { type: 'json_object' }
         };
 
-        console.log(`[DeepSeek Smart] 🔄 Continuación ${continuationCount + 1}/${this.MAX_CONTINUATIONS}...`);
 
         return this.deepSeekClient.callDeepSeek('generateTextCases', payload).pipe(
             switchMap(response => {
@@ -332,7 +323,6 @@ export class DeepSeekService {
 
                 // Si no devolvió test cases nuevos, la cobertura está completa
                 if (newTestCases.length === 0) {
-                    console.log('[DeepSeek Smart] ✅ La IA indicó que no hay más test cases por generar');
                     return of(accumulatedResult);
                 }
 
@@ -350,7 +340,6 @@ export class DeepSeekService {
                     ...cleanedNewCases
                 ];
 
-                console.log(`[DeepSeek Smart] ✅ Continuación agregó ${cleanedNewCases.length} test cases. Total: ${accumulatedResult.testCases.length}`);
 
                 // Si esta continuación también fue truncada, intentar otra
                 if (continuationResult.possiblyTruncated && cleanedNewCases.length > 0) {
@@ -376,9 +365,6 @@ export class DeepSeekService {
         const currentCasesStr = JSON.stringify(editedTestCases, null, 2);
         const originalReqStr = `HU: ${originalHuInput.description}\nCA: ${originalHuInput.acceptanceCriteria}`;
 
-        console.log('[DeepSeek Direct Refine] 📋 userReanalysisContext recibido:', JSON.stringify(userReanalysisContext));
-        console.log('[DeepSeek Direct Refine] 📋 técnica:', newTechnique);
-        console.log('[DeepSeek Direct Refine] 📋 casos actuales:', editedTestCases?.length ?? 0);
 
         const promptText = PROMPTS.DIRECT_REFINE_PROMPT(originalReqStr, currentCasesStr, userReanalysisContext, newTechnique, originalHuInput.codeContext, originalHuInput.contextSource);
         const payload: DeepSeekRequest = {
@@ -390,7 +376,6 @@ export class DeepSeekService {
             response_format: { type: 'json_object' }
         };
 
-        console.log('[DeepSeek Direct Refine] 🚀 Refinando casos (modo rápido)...');
         const startTime = Date.now();
 
         return this.deepSeekClient.callDeepSeek('refineDetailedTestCases', payload).pipe(
@@ -409,7 +394,6 @@ export class DeepSeekService {
                 const finalJSON = this.parserService.cleanAndParseJSON(textContent);
 
                 const totalTime = Date.now() - startTime;
-                console.log(`[DeepSeek Direct Refine] ✅ Completado en ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)`);
 
                 return finalJSON;
             })
@@ -441,7 +425,6 @@ export class DeepSeekService {
             thinking: { type: 'disabled' }
         };
 
-        console.log('[DeepSeek Stream] 🚀 Iniciando generación con streaming...');
         return this.deepSeekClient.callDeepSeekStream('generateTextCases', payload);
     }
 
@@ -468,7 +451,6 @@ export class DeepSeekService {
             thinking: { type: 'disabled' }
         };
 
-        console.log('[DeepSeek Stream] 🔄 Iniciando refinamiento con streaming...');
         return this.deepSeekClient.callDeepSeekStream('refineDetailedTestCases', payload);
     }
 

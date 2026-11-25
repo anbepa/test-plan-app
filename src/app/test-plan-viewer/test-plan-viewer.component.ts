@@ -175,9 +175,7 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
 
     try {
-      console.log('🔍 Cargando test plans desde Supabase...');
       this.testPlans = await this.databaseService.getTestPlanHeaders();
-      console.log('✅ Test plans cargados:', this.testPlans.length);
 
       if (this.testPlans.length === 0) {
         this.errorMessage = 'No hay test plans guardados en la base de datos.';
@@ -565,13 +563,11 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     }
 
     try {
-      console.log('🔄 Recargando plan de pruebas:', this.selectedTestPlan.id);
       const fullTestPlan = await this.databaseService.getTestPlanById(this.selectedTestPlan.id);
       if (fullTestPlan) {
         this.selectedTestPlan = fullTestPlan;
         this.convertDbTestPlanToHUList(fullTestPlan);
         this.cdr.detectChanges();
-        console.log('✅ Plan recargado correctamente. HUs:', this.huList.length);
       }
     } catch (error) {
       console.error('❌ Error al recargar el plan:', error);
@@ -1319,7 +1315,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
       };
 
       await this.databaseService.updateTestPlan(this.selectedTestPlan.id, updates);
-      console.log('✅ Metadatos actualizados (Optimizado)');
 
       this.metadataChanged = false;
       return;
@@ -1367,7 +1362,6 @@ export class TestPlanViewerComponent implements OnInit, OnDestroy {
     }));
 
     await this.databaseService.smartUpdateTestPlan(this.selectedTestPlan.id, testPlanData, userStories);
-    console.log('✅ Auto-guardado exitoso en BD con custom_ids:', userStories.map(us => us.custom_id));
 
     this.metadataChanged = false;
     this.structureChanged = false;
