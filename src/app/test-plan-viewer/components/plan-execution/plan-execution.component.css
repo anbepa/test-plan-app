@@ -1422,5 +1422,7 @@
   .step-item-row { flex-wrap: wrap; padding: 8px 10px; row-gap: 6px; }
   .step-main-content { flex-wrap: wrap; flex-basis: calc(100% - 140px); }
   .step-action-wrapper { flex-basis: 100%; order: 2; }
+  .step-action-text { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .step-item-active .step-action-text { display: block; }
   .step-item-actions { opacity: 1; margin-left: auto; }
 }
