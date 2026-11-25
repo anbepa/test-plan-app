@@ -895,12 +895,13 @@ export class ConfiguracionComponent implements OnInit, OnDestroy {
     const cells = this.cellsConfigService.getCurrent();
     this.cellRows = cells.length ? [...cells] : this.cellsConfigService.getDefaults();
     // Refrescar cuando el servicio actualice (login / carga desde BD).
-    this.cellsConfigService.cells$.subscribe((list) => {
+    // Se guarda en generalSubs para cancelarla en ngOnDestroy (cells$ nunca completa).
+    this.generalSubs.push(this.cellsConfigService.cells$.subscribe((list) => {
       // Solo reflejamos cambios externos si el usuario no está editando manualmente.
       if (!this.savingCells) {
         this.cellRows = list.length ? [...list] : this.cellsConfigService.getDefaults();
       }
-    });
+    }));
   }
 
   addCellRow(): void {
