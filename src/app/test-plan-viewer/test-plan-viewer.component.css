@@ -2451,7 +2451,7 @@ button svg,
     grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
-  .hu-table-actions > button { width: 100%; min-width: 0; white-space: normal; justify-content: center; text-align: center; min-height: 44px; }
+  .hu-table-actions > button { width: 100%; min-width: 0; white-space: normal !important; line-height: 1.2; justify-content: center; text-align: center; min-height: 44px; }
   .hu-table-actions > button:first-child { grid-column: 1 / -1; }
 
   .plans-table.hu-table tbody tr {
